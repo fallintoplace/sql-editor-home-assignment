@@ -18,6 +18,8 @@ The launch story must be one memorable workflow, not a list of disconnected feat
 - Metabase: semantic definitions, provider choice, embedded answers, and usage controls.
 - ClickHouse 26.7 web UI: tabs, persistent snapshots, progressive results, richer column diagnostics, and version-matched docs.
 - ClickStack: a ClickHouse-native observability surface that correlates logs, traces, metrics, and sessions.
+- Claude Code: scoped context, reusable playbooks, deterministic lifecycle hooks, checkpoints, and isolated side work.
+- OpenAI coding workspaces: project continuity, read-only review, long-running work, scheduled follow-up, structured tools, and optional UI resources.
 
 ## The moat
 
@@ -84,6 +86,19 @@ The editor is part of the moat because it is where trust is built:
 
 This is the best of mature code editors adapted to ClickHouse. It is deliberately not a generic IDE or shell replacement.
 
+### 8. Durable operating system
+
+Make the workbench repeatable without making it opaque:
+
+- Workspace constitutions and artifact rules are versioned, scoped, and inspectable.
+- Playbooks are reusable workflows with typed inputs, tool permissions, limits, and output artifacts.
+- Review-only passes report prioritized evidence without changing the source.
+- Lifecycle guards protect execute, publish, refresh, export, and notify boundaries.
+- Checkpoints and rewind make failed AI edits and performance experiments recoverable.
+- Long-running investigations and monitors have explicit done criteria, quiet no-change behavior, notification policy, and a link back to the same evidence bundle.
+
+This is the difference between adding an assistant and building a dependable analytical workbench.
+
 ### Competitive borrow-and-beat matrix
 
 | Product pattern | We borrow | We beat it for ClickHouse |
@@ -91,6 +106,7 @@ This is the best of mature code editors adapted to ClickHouse. It is deliberatel
 | Databricks unified SQL editor | File browser, assistant pane, command palette, comments, version history, collaborative results | Server-native progress, cancellation, plans, query IDs, and performance evidence |
 | Snowflake Workspaces | Nested files, database explorer, split panes, current-file history, simultaneous queries | ClickHouse scripts, richer typed results, explicit child lineage, and native diagnostics |
 | Metabase questions and snippets | Query-plus-visualization objects, reusable SQL blocks, parameters, collections | Multi-statement support, result snapshots with execution truth, and transparent drill-through |
+| Claude Code and OpenAI coding workspaces | Scoped context, reusable playbooks, read-only review, guardrails, checkpoints, and background work | SQL-native evidence, ClickHouse permissions, query IDs, and reproducible result lineage |
 
 The claim is not “more buttons.” It is that every borrowed convenience keeps its SQL, permissions, freshness, query ID, and ClickHouse evidence attached.
 
@@ -102,6 +118,9 @@ The claim is not “more buttons.” It is that every borrowed convenience keeps
 - Do not silently copy charts into dashboards. Preserve references or label copies and expose lineage.
 - Do not treat a 64,000-row or 10 MB-style preview as the complete answer. Make row, byte, and expiration limits part of every result contract.
 - Do not hide partial script failure behind one green status. Show every statement’s outcome.
+- Do not make workspace instructions one giant prompt. Show the active context layers and load repeatable procedures on demand.
+- Do not let a model prompt act as a security boundary. Enforce lifecycle guards in the run and publication path.
+- Do not make background work a detached notification. Every notification must reopen the exact revision, run, result, profile, and permission context.
 
 ## Release sequence
 
@@ -110,6 +129,7 @@ The claim is not “more buttons.” It is that every borrowed convenience keeps
 3. **Trustworthy analysis:** reusable result objects, metric contracts, draft/published artifacts, and cross-filter lineage.
 4. **Wow release:** Ask Data, image input, and shareable evidence bundles.
 5. **Serious product:** governance, evaluations, performance copilot, Cloud/ClickStack connections, and self-hosted deployment.
+6. **Durable operating system:** scoped playbooks, review lane, lifecycle guards, checkpoints, isolated experiments, and quiet scheduled monitoring.
 
 Each release has a demo test:
 
@@ -175,6 +195,10 @@ Measure the wedge with outcomes rather than generated content:
 - Percentage of monitors pointing only to published revisions.
 - Percentage of performance explanations backed by an operator profile and a before/after run.
 - Alert recipients who can open the linked evidence without encountering an unexplained permission failure.
+- Percentage of playbook runs with visible inputs, version, limits, and output artifacts.
+- Percentage of blocked actions with a clear rule ID and remediation path.
+- Successful draft recovery after an AI edit or isolated performance experiment.
+- Percentage of no-change monitor runs that stay quiet while preserving an auditable run record.
 
 Kill or redesign features that increase chat volume but do not improve trusted insight, reproducibility, or ClickHouse performance clarity.
 
@@ -204,6 +228,14 @@ Kill or redesign features that increase chat volume but do not improve trusted i
 - [Snowflake Git workspaces](https://docs.snowflake.com/en/user-guide/ui-snowsight/workspaces-git)
 - [Snowflake shared workspaces](https://docs.snowflake.com/en/user-guide/ui-snowsight/workspaces-shared)
 - [Metabase permissions and notifications](https://www.metabase.com/docs/latest/permissions/notifications)
+- [Claude Code steering: rules, skills, hooks, and subagents](https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more)
+- [Claude Code user FAQ](https://support.claude.com/en/articles/14554922-claude-code-user-faq)
+- [OpenAI project workspaces](https://learn.chatgpt.com/docs/projects)
+- [OpenAI scheduled tasks](https://learn.chatgpt.com/docs/automations)
+- [OpenAI long-running work](https://learn.chatgpt.com/docs/long-running-work)
+- [OpenAI code review workflow](https://learn.chatgpt.com/docs/code-review)
+- [OpenAI hooks](https://learn.chatgpt.com/docs/hooks)
+- [OpenAI MCP](https://learn.chatgpt.com/docs/extend/mcp)
 
 ## Thread pickup
 

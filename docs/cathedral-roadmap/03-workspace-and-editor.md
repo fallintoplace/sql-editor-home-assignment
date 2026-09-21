@@ -16,6 +16,8 @@ The workspace should welcome a new ClickHouse user in under one minute while giv
 - Databricks’ new SQL editor: file browser, schema browser, assistant pane, command palette, code folding, comments, version history, and query results in one surface.
 - Snowflake Workspaces: nested folders, file upload, database explorer, split editor/results, current-file versus all-file query history, and two simultaneous queries from one file.
 - Metabase SQL editor: selection execution, formatting, snippets, parameters, saved question history, and a direct path from SQL results to a child visual exploration.
+- Claude Code: scoped project rules, on-demand skills, checkpoints, and deterministic hooks instead of one giant always-loaded instruction file.
+- OpenAI project workspaces: durable project context, review-only changes, background work, and explicit local/cloud execution modes.
 
 ## Adapt for ClickHouse
 
@@ -38,6 +40,8 @@ The shell should feel file-oriented without pretending to be a full notebook run
 - A document can have multiple editor tabs and a visible revision history.
 - Draft changes are local and fast; publishing creates a named revision that can be shared or scheduled later.
 - A command palette supports open, rename, duplicate, restore, move, publish, and compare actions.
+- A context inspector shows the workspace constitution, connection rules, artifact rules, active playbook, schema snapshot, and permission profile used by the current action.
+- SQL experiments can branch from a draft into isolated child documents. Their runs and results remain comparable without changing the parent draft.
 
 The file tree is not decoration. It answers “where did my query go?” and becomes the foundation for reproducible links.
 
@@ -120,6 +124,19 @@ Draft state can be local-first. Server and artifact state must use the APIs from
 
 Keep a local recovery timeline independent of Git or server persistence. Checkpoint before an OpenAI patch, formatting operation, publish, import, or destructive-looking edit. Let the user restore a whole document or selected hunks and label important checkpoints.
 
+Every checkpoint has a reason, parent revision, affected hunks, and restore scope. Rewind restores the draft and workspace presentation without deleting server-side query history or published artifacts.
+
+### Context and playbook model
+
+Do not make users maintain one huge instruction blob. Resolve context in layers:
+
+1. Workspace constitution: dialect, default safety posture, naming conventions, and connection policy.
+2. Connection or schema rules: version-specific behavior, sensitive objects, and approved databases.
+3. Artifact rules: metric, dashboard, dataset, or document-specific constraints.
+4. On-demand playbook: a versioned workflow loaded only for the current action.
+
+The context inspector makes each layer visible and lets the user disable eligible layers before an OpenAI request. Playbooks are reusable folders containing instructions, templates, reference links, and optional scripts; their metadata records owner, version, tools, limits, and required permissions.
+
 The command palette exposes a small ClickHouse task runner:
 
 - Run current statement.
@@ -200,6 +217,12 @@ Do not imply that local revision history is Git, or that a shared workspace has 
 - Switching a Git branch or shared workspace explains what happens to unsaved drafts before changing context.
 - A shared run uses the executing user’s permission snapshot unless a separately configured service identity is visible.
 - A Git-synced file can be pulled, diffed, and exported without losing result lineage.
+- The file tree shows trust state and downstream impact before a user edits a referenced snippet, metric, or dataset.
+- Advanced run settings expose query tags, row/byte limits, wait timeout, and cancellation behavior without cluttering the default editor.
+- The context inspector explains why each rule and playbook was active for a proposal or run.
+- A playbook can be previewed, version-pinned, disabled, and audited without changing the SQL draft.
+- A review-only action can inspect a draft or revision and return findings without modifying text or executing SQL.
+- A failed experiment can be rewound to its checkpoint without deleting the parent document or its query history.
 
 ## Sources
 
@@ -220,6 +243,11 @@ Do not imply that local revision history is Git, or that a shared workspace has 
 - [Metabase SQL snippets](https://www.metabase.com/docs/latest/questions/native-editor/snippets)
 - [Snowflake Git workspaces](https://docs.snowflake.com/en/user-guide/ui-snowsight/workspaces-git)
 - [Snowflake shared workspaces](https://docs.snowflake.com/en/user-guide/ui-snowsight/workspaces-shared)
+- [Claude Code steering: rules, skills, hooks, and subagents](https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more)
+- [Claude Code user FAQ](https://support.claude.com/en/articles/14554922-claude-code-user-faq)
+- [OpenAI project workspaces](https://learn.chatgpt.com/docs/projects)
+- [OpenAI code review workflow](https://learn.chatgpt.com/docs/code-review)
+- [OpenAI build skills](https://learn.chatgpt.com/docs/build-skills)
 
 ## Thread pickup
 

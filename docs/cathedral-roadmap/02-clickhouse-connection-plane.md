@@ -66,6 +66,10 @@ executedAs
 permissionSnapshot
 resultRetention
 retryPolicy
+queryTags
+rowLimit
+byteLimit
+waitTimeout
 ```
 
 For a shared artifact, the user must know whether ClickHouse ran it as the current user, a connection service identity, or an explicitly configured owner identity. A rerun rechecks permission rather than trusting an old snapshot.
@@ -96,6 +100,8 @@ Make the lifecycle idempotent and inspectable:
 - A completed run keeps its result and evidence even if the browser was closed.
 
 Before execution, show a lightweight risk summary: connection, database, selected statement, read-only mode, limits, and whether the query may scan a large amount of data. Do not invent a monetary cost estimate from bytes read.
+
+Limits must be protocol fields, not only SQL decoration. Carry row limit, byte limit, wait timeout, and cancellation policy with the run. Mark a response as truncated when a protocol limit stops output.
 
 ### Query history and result lifetime
 
@@ -137,6 +143,8 @@ Expose connection-backed editor intelligence as capabilities too:
 - Result row/byte limits and whether the server can stream progressive results.
 - Performance-profile support: operator-level timing, rows, bytes, memory, and plan export where available.
 - Scheduled execution and alert primitives, including the identity and permission used by the scheduler.
+- Query tags for workspace, artifact, environment, owner, and cost center.
+- Query-history retention and deletion behavior.
 
 The editor should never present a button that the current connection cannot safely perform. Unsupported actions remain discoverable with a reason and a version or permission hint.
 
@@ -194,6 +202,8 @@ When available, expose the same native details that make the current ClickHouse 
 - History filters never reveal SQL or result data outside the current identity’s permission scope.
 - A performance profile is permission-checked, linked to a query ID, and exportable without exposing credentials.
 - A scheduled run records its revision, parameter values, execution identity, and failure notification policy.
+- Query tags appear in run history and can be filtered without exposing unauthorized SQL.
+- A timeout or output cap produces a distinct cancelled or truncated state, not a generic failure.
 
 ## Sources
 
@@ -202,6 +212,9 @@ When available, expose the same native details that make the current ClickHouse 
 - [ClickHouse 26.7 web workspace](https://clickhouse.com/blog/clickhouse-release-26-07)
 - [ClickStack observability](https://clickhouse.com/clickstack)
 - [ClickHouse system tables](https://clickhouse.com/docs/operations/system-tables)
+- [Databricks query history](https://docs.databricks.com/gcp/en/sql/user/queries/query-history)
+- [Databricks statement execution limits and tags](https://docs.databricks.com/aws/en/dev-tools/sql-execution-tutorial)
+- [Snowflake query history and tags](https://docs.snowflake.com/en/user-guide/ui-snowsight-activity)
 - [ClickHouse concurrency and query telemetry](https://clickhouse.com/resources/engineering/high-concurrency-sizing-user-analytics)
 
 ## Thread pickup

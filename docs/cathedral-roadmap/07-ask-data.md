@@ -94,6 +94,8 @@ Once an answer is trusted, offer a later-stage “Monitor this” action:
 - Preview the next run and show the permission boundary.
 - Send a notification that links to the run, result, and source artifact without embedding unauthorized data.
 
+When the answer uses a metric, model, snippet, or dataset, show whether it is verified, stale, broken, or unverified. If a user asks to change a reusable definition, show downstream impact before generating the follow-up SQL.
+
 ### ClickHouse-specific strengths
 
 The answer should understand and explain:
@@ -141,6 +143,9 @@ The answer should understand and explain:
 - A response records whether its data was shared, cached, expired, or freshly rerun.
 - A monitor can only target a published revision and records its condition, schedule, identity, and notification policy.
 - Monitor failures link back to the same query and result evidence used by the original answer.
+- Ask Data carries workspace, owner, artifact, environment, and cost-center tags into the generated run.
+- An unverified or broken source cannot silently become the basis for a trusted published answer.
+- A definition change offers impact analysis before it creates a new published revision.
 
 ## Sources
 
@@ -151,6 +156,8 @@ The answer should understand and explain:
 - [Databricks AI/BI](https://docs.databricks.com/gcp/en/ai-bi)
 - [Databricks dashboard concepts](https://docs.databricks.com/gcp/en/dashboards/concepts)
 - [Metabase AI usage controls](https://www.metabase.com/docs/latest/ai/usage-controls)
+- [Metabase content verification](https://www.metabase.com/docs/latest/exploration-and-organization/content-verification)
+- [Metabase models](https://www.metabase.com/docs/latest/data-modeling/models)
 - [Visual Studio Code command palette](https://code.visualstudio.com/docs/editing/getting-started/tips-and-tricks)
 - [Zed finding and navigating](https://zed.dev/docs/finding-navigating)
 - [Databricks new SQL editor](https://docs.databricks.com/gcp/en/sql/user/sql-editor/)

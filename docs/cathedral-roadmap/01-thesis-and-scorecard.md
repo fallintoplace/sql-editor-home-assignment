@@ -160,6 +160,10 @@ The current market raises the bar above a good SQL editor:
 - Databricks turns performance into a shareable query profile with operator graphs, top operators, memory, rows processed, and an approved optimization path. Performance analysis should be an artifact, not a tooltip.
 - Snowflake connects workspaces to Git branches and separates private, Git-synced, and role-shared workspaces. We need an explicit storage mode before collaboration becomes confusing.
 - Metabase completes the loop with caching, alerts, subscriptions, collection permissions, and dependency warnings. A saved answer should have a clear path to monitoring, with the creator’s data permissions never hidden.
+- Databricks attaches query tags to history for team and cost attribution, and its statement API makes row limits, byte limits, truncation, wait timeouts, and cancellation explicit.
+- Snowflake surfaces query tags, query insights, cost views, and column-level distribution statistics. “Why is this slow?” should include operational context and data shape, not only elapsed time.
+- Metabase has a useful trust signal: verified questions, models, metrics, and dashboards lose verification when their query changes. Dependency checks warn before an upstream change breaks downstream content.
+- Metabase also promotes curated questions into models or persisted transforms. We should distinguish a live saved query from a deliberately materialized ClickHouse dataset.
 
 ### Editor opponent synthesis
 
@@ -171,6 +175,20 @@ The current market raises the bar above a good SQL editor:
 
 The product decision is **one workbench with several inspectable panes**, not three separate products for editor, BI, and AI.
 
+### Coding-workbench lessons
+
+Claude Code and OpenAI's coding workspace expose a second competitive bar: the assistant is not just a chat box. It has durable project context, reusable procedures, review-only passes, recoverable checkpoints, explicit permissions, and background work.
+
+Adapt those ideas without importing a coding product's vocabulary:
+
+- **Context layers:** workspace constitution, connection or schema rules, artifact-specific rules, and on-demand playbooks. The context inspector shows which layer affected a proposal or run.
+- **Playbooks:** versioned SQL workflows such as explain-latency, import-file, publish-dashboard, and investigate-error. A playbook declares its inputs, tools, limits, output artifacts, and permission needs.
+- **Review lane:** a read-only pass can inspect a draft, result, profile, or published revision and return prioritized findings with evidence. It never edits or executes by itself.
+- **Lifecycle guards:** deterministic checks run before execute, publish, refresh, export, and notify. A natural-language instruction can explain a policy, but it cannot replace the policy enforcement point.
+- **Checkpoints and rewind:** every AI edit, formatting pass, publish, import, and destructive-looking action creates a named restore point. A failed experiment can be discarded without touching the main draft.
+- **Isolated experiments:** alternative SQL proposals and performance trials run as child artifacts with their own query IDs, limits, and lineage, then can be compared or promoted.
+- **Durable work:** a monitor or long-running investigation has a definition of done, a saved revision, an execution identity, and a quiet no-change state. It does not depend on a browser tab staying open.
+
 ### Deeper product contracts
 
 The opponents also reveal the parts users feel when a workspace becomes real:
@@ -181,6 +199,13 @@ The opponents also reveal the parts users feel when a workspace becomes real:
 - **History retention:** local recovery history, shareable revisions, and server query history have separate retention policies.
 - **Copy versus reference:** adding a chart to a report either references the source or creates a labeled copy. It must never silently fork.
 - **Partial scripts:** each statement can succeed, fail, or be cancelled independently, with the overall script status explaining the mix.
+- **Operational tags:** every run can carry workspace, owner, artifact, environment, and cost-center tags.
+- **Trust status:** verified, unverified, stale, broken, and retired are first-class artifact states.
+- **Impact analysis:** changing a column, metric contract, snippet, or dataset shows downstream objects before publication.
+- **Materialization boundary:** live query, cached snapshot, and persisted table are different products with different freshness and cost.
+- **Context provenance:** every proposal and automated run can show the active workspace rules, artifact instructions, playbook version, and schema snapshot that influenced it.
+- **Guard decision:** a blocked action records which deterministic rule denied it, what would satisfy the rule, and who can change that policy.
+- **Review isolation:** review and analysis may inspect evidence, but only an explicit user action can modify a draft or launch a query.
 
 These contracts are more important than matching any competitor’s button placement. They are where our ClickHouse evidence, permissions, and reproducibility become defensible.
 
@@ -312,6 +337,8 @@ If the answer is only “it looks cool,” park it. The cathedral needs a founda
 - [Databricks run and share queries](https://docs.databricks.com/gcp/en/sql/user/sql-editor/run-queries)
 - [Databricks query results](https://docs.databricks.com/gcp/en/sql/user/sql-editor/results)
 - [Databricks query profile](https://docs.databricks.com/gcp/en/sql/user/queries/query-profile)
+- [Databricks query history](https://docs.databricks.com/gcp/en/sql/user/queries/query-history)
+- [Databricks statement execution limits and tags](https://docs.databricks.com/aws/en/dev-tools/sql-execution-tutorial)
 - [Databricks dashboard concepts](https://docs.databricks.com/gcp/en/dashboards/concepts)
 - [Databricks Genie setup and review flow](https://docs.databricks.com/aws/genie/set-up)
 - [Metabase Metabot](https://www.metabase.com/docs/latest/ai/metabot)
@@ -334,10 +361,23 @@ If the answer is only “it looks cool,” park it. The cathedral needs a founda
 - [Metabase dashboards and copies](https://www.metabase.com/docs/latest/dashboards/introduction)
 - [Metabase permissions](https://www.metabase.com/docs/latest/permissions/introduction)
 - [Metabase questions, caching, and alerts](https://www.metabase.com/docs/latest/questions/introduction)
+- [Metabase content verification](https://www.metabase.com/docs/latest/exploration-and-organization/content-verification)
+- [Metabase models and persistence](https://www.metabase.com/docs/latest/data-modeling/models)
 - [Snowflake Git workspaces](https://docs.snowflake.com/en/user-guide/ui-snowsight/workspaces-git)
 - [Snowflake shared workspaces](https://docs.snowflake.com/en/user-guide/ui-snowsight/workspaces-shared)
+- [Snowflake query insights](https://docs.snowflake.com/en/user-guide/query-insights)
+- [Snowflake query history and tags](https://docs.snowflake.com/en/user-guide/ui-snowsight-activity)
 - [OpenAI Responses API](https://developers.openai.com/api/reference/cli/resources/responses/methods/create)
 - [OpenAI developer quickstart](https://developers.openai.com/api/docs/quickstart?site_locale=en)
+- [Claude Code steering: rules, skills, hooks, and subagents](https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more)
+- [Claude Code user FAQ](https://support.claude.com/en/articles/14554922-claude-code-user-faq)
+- [OpenAI project workspaces](https://learn.chatgpt.com/docs/projects)
+- [OpenAI scheduled tasks](https://learn.chatgpt.com/docs/automations)
+- [OpenAI long-running work](https://learn.chatgpt.com/docs/long-running-work)
+- [OpenAI code review workflow](https://learn.chatgpt.com/docs/code-review)
+- [OpenAI build skills](https://learn.chatgpt.com/docs/build-skills)
+- [OpenAI hooks](https://learn.chatgpt.com/docs/hooks)
+- [OpenAI MCP](https://learn.chatgpt.com/docs/extend/mcp)
 - [ClickHouse Click UI](https://github.com/ClickHouse/click-ui)
 - [HyperDX and ClickStack](https://github.com/hyperdxio/hyperdx)
 - [ClickStack](https://clickhouse.com/clickstack)

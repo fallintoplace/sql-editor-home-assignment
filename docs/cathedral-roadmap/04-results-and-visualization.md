@@ -66,6 +66,8 @@ Never use “cached” as a synonym for “current.” A cached result needs the
 - Copying or exporting a result includes the query ID and timestamp when possible.
 - Offer optional column bars, heatmaps, categorical coloring, and pinned columns for fast shape recognition. These decorations never replace the raw value or type.
 - A selected cell, column, or chart mark can become a filter action. Cross-filtering must show the child query and preserve parent lineage.
+- Column inspectors can show mini histograms, null distribution, cardinality, and representative values when the data contract permits it.
+- Any result transformation that triggers a server-side child query shows that it may consume compute; local formatting stays clearly free of database cost.
 
 ### Result as an editor surface
 
@@ -119,6 +121,8 @@ When the connection supports it, save an operator-level profile beside the run:
 
 Profiles can be exported as a portable JSON evidence bundle and re-imported for review without pretending the imported profile is a live run.
 
+A profile may be unavailable for a cached run. Explain that limitation and offer a deliberate fresh rerun with the same parameters and a new query ID.
+
 ### Query-to-result continuity
 
 Preserve editor context across the run:
@@ -169,6 +173,8 @@ Each result tab supports explicit actions: rename, duplicate as a new view, down
 - A partial script result shows per-statement status and does not pretend the whole script succeeded.
 - A query profile is linked to the run and distinguishes cached execution from a fresh profile.
 - A profile can be shared or imported with its source query, query ID, permissions, and non-live status intact.
+- Column statistics identify whether they describe the returned preview, a full result, or a server-side analysis.
+- A cached run cannot be presented as a fresh performance profile.
 
 ## Sources
 

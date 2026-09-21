@@ -70,6 +70,8 @@ draft -> reviewed revision -> published snapshot -> refreshed revision
 - A live shared draft exposes collaborators and comments, while a published snapshot remains immutable.
 - A result or chart added to another artifact is either a reference that follows the source or a labeled copy that can diverge.
 - A schedule or alert references a published revision and produces runs; it never executes an uncommitted draft.
+- A curated artifact can be marked verified by an authorized reviewer; changing its query or metric logic removes verification.
+- A dataset can stay live, use a cached snapshot, or become a persisted ClickHouse table. The storage mode is visible and deliberate.
 
 Do not silently turn every query into a materialized dataset. Promotion is a deliberate product action with a visible storage and freshness consequence.
 
@@ -132,6 +134,8 @@ Keep retention classes separate:
 
 Deletion should move an artifact to recoverable trash first. Permanent purge is a separate, audited action and must explain which downstream links will stop resolving.
 
+Before changing a reusable artifact, show impact analysis: downstream charts, narratives, snippets, monitors, and datasets. Block or warn on known breaking changes such as removed columns, changed types, or invalid parameter contracts.
+
 ### Automation handoff
 
 Scheduling and alerts are downstream of publication:
@@ -168,6 +172,9 @@ Scheduling and alerts are downstream of publication:
 - A schedule cannot target a draft or deleted revision.
 - Pausing, resuming, or changing an alert records who changed it and which published revision it uses.
 - Notification recipients never receive data outside the execution identity’s permissions.
+- Verification disappears after a query or metric definition changes until a reviewer approves it again.
+- A breaking-change preview identifies downstream artifacts before publication.
+- A persisted dataset records the table, refresh run, storage consequence, and rollback path.
 
 ## Sources
 
@@ -184,6 +191,9 @@ Scheduling and alerts are downstream of publication:
 - [Metabase SQL snippets](https://www.metabase.com/docs/latest/questions/native-editor/snippets)
 - [Metabase dashboards](https://www.metabase.com/docs/latest/dashboards/introduction)
 - [Metabase permissions and alerts](https://www.metabase.com/docs/latest/permissions/notifications)
+- [Metabase content verification](https://www.metabase.com/docs/latest/exploration-and-organization/content-verification)
+- [Metabase models and persistence](https://www.metabase.com/docs/latest/data-modeling/models)
+- [Metabase breaking-change checks](https://www.metabase.com/docs/latest/questions/introduction)
 - [ClickHouse SQL Playground](https://clickhouse.com/blog/announcing-the-new-sql-playground)
 
 ## Thread pickup

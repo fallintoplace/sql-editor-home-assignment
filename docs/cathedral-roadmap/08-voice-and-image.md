@@ -50,6 +50,8 @@ Multimodal follow-ups must preserve the same execution semantics as typed follow
 
 “Monitor this” is allowed only as a guided handoff to the published-query monitor flow. Voice or image input may fill a proposed condition, schedule, or recipient list, but publication and notification permissions remain explicit.
 
+If the referenced chart, metric, snippet, or dataset is unverified or broken, multimodal input must surface that warning before turning it into a trusted answer or monitor.
+
 ## Technical boundary
 
 - Image understanding uses a server-side OpenAI request with explicit image input.
@@ -79,6 +81,7 @@ Multimodal follow-ups must preserve the same execution semantics as typed follow
 - A multimodal-created query can be commented on, versioned, and reopened from the same workspace file browser as a typed query.
 - A multimodal filter or save action states whether it creates a view change, child run, reference, or copy before applying it.
 - A multimodal monitor proposal shows the published revision, condition, schedule, execution identity, and recipients before saving.
+- A multimodal action preserves verification status and downstream-impact warnings from the referenced artifact.
 
 ## Sources
 

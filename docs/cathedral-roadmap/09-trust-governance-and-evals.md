@@ -28,6 +28,8 @@ The prototype intentionally allows broad analytical context when the user invoke
 - Workspace trust is separate from database permission. A trusted workspace may still be read-only, and an untrusted workspace cannot silently reuse credentials.
 - OpenAI edit modes distinguish inspect, propose, apply-to-draft, and execute. Only the user can cross into execution.
 - Every applied SQL hunk creates a recoverable history checkpoint before it changes the draft.
+- Instructions, permissions, deterministic guards, and audit records are separate layers. A prompt can explain a rule, but only an enforced policy can block a dangerous action.
+- Context is scoped and inspectable: workspace rules, connection rules, artifact rules, and on-demand playbook context are visible before a model request.
 
 ### AI safety
 
@@ -48,6 +50,8 @@ Treat metric contracts and published artifacts as governed data products:
 - Dataset promotion and refresh require an owner, schedule or manual trigger, retention policy, and permissions.
 - AI tools can be enabled or disabled independently for a workspace or group, with token and message budgets.
 - Audit records distinguish model suggestion, server fact, user edit, user approval, and execution.
+- Playbook runs record version, owner, inputs, tools, context layers, limits, and the resulting artifacts.
+- Review-only passes are read-only and cannot mutate SQL, publish, refresh, export, notify, or execute.
 - Shared result limits are explicit and configurable; collaborators never mistake a bounded preview for complete data.
 - Current-file history and workspace-wide history apply the same connection and permission checks as execution.
 - Script support is capability-driven. Each statement has its own status, limits, query ID, and cancellation path.
@@ -127,6 +131,15 @@ Use HyperDX/ClickStack to correlate frontend errors, API spans, ClickHouse query
 - A reference and a copied chart have different permissions and lineage behavior.
 - Performance profiles require the same query visibility or monitoring permission as the underlying execution.
 - Schedules and alerts cannot run drafts, and recipients receive only data allowed by the configured execution identity.
+- Query tags are treated as observable metadata, not as a place for secrets or uncontrolled user data.
+- Verification is an approval state that is removed by logic changes and restored only by an authorized reviewer.
+- Breaking-change checks cover removed columns, changed types, invalid parameter contracts, and affected downstream artifacts.
+- A pre-run, pre-publish, pre-refresh, or pre-notify guard can deny an action with a stable rule ID, human reason, and remediation path.
+- A guard decision is visible in the run timeline and cannot be bypassed by a follow-up prompt, voice request, image request, or playbook.
+- Context inspection shows every active rule and playbook version, and users can disable only the layers their role permits.
+- A review-only request produces findings without changing SQL, chart configuration, publication state, or connection settings.
+- A checkpoint restores the exact prior draft and panel state while preserving server query history and published revisions.
+- Memory-like workspace context is opt-in, redacted, inspectable, deletable, and excluded from retention when policy or external context requires it.
 
 ## Sources
 
@@ -146,6 +159,11 @@ Use HyperDX/ClickStack to correlate frontend errors, API spans, ClickHouse query
 - [Metabase dashboards and copies](https://www.metabase.com/docs/latest/dashboards/introduction)
 - [Databricks run and share queries](https://docs.databricks.com/gcp/en/sql/user/sql-editor/run-queries)
 - [Snowflake query history](https://docs.snowflake.com/en/user-guide/ui-snowsight-query)
+- [Claude Code steering: rules, skills, hooks, and subagents](https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more)
+- [Claude Code user FAQ](https://support.claude.com/en/articles/14554922-claude-code-user-faq)
+- [OpenAI hooks](https://learn.chatgpt.com/docs/hooks)
+- [OpenAI memories](https://learn.chatgpt.com/docs/customization/memories)
+- [OpenAI MCP](https://learn.chatgpt.com/docs/extend/mcp)
 
 ## Thread pickup
 

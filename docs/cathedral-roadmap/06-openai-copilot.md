@@ -15,6 +15,8 @@ OpenAI is a powerful interaction layer. ClickHouse remains the source of truth f
 - Metabase’s semantic layer and usage controls: definitions can ground answers, while groups can be allowed or denied specific actions and given token or message limits.
 - Databricks’ assistant pane: generated SQL can be inserted or run from the same editor, while comments and version history keep the work reviewable.
 - Metabase snippets and models: reusable SQL and vetted definitions can be inserted into a query with permission-aware references.
+- Claude Code skills and hooks: reusable workflows can be loaded on demand, while deterministic lifecycle checks remain outside the model prompt.
+- OpenAI review workflows and plugins: review can be read-only and prioritized, while structured tools can return typed data and optional UI instead of forcing everything through prose.
 
 ## Adapt for ClickHouse
 
@@ -74,6 +76,21 @@ Keep the provider boundary small: OpenAI is the required first provider, while t
 
 The assistant may inspect and propose. The user-run execution path remains a separate explicit action.
 
+### Reusable SQL playbooks
+
+Add a small playbook registry for repeatable workflows:
+
+- `explain-latency`: gather query log, profile, plan, and before/after comparison.
+- `repair-error`: inspect the server error, schema, and relevant documentation, then propose a diff.
+- `preview-import`: infer file types, show mapping and coercions, and stop before insertion.
+- `publish-monitor`: validate a published revision, schedule, identity, recipient access, and failure policy.
+
+Playbooks are versioned artifacts, not hidden prompt strings. Each declares input types, allowed tools, context limits, output artifacts, and required permissions. Load them on demand and show the active version in the context preview. A playbook can call structured ClickHouse tools and return a typed result without granting the model direct database credentials.
+
+### Read-only review lane
+
+Add a separate review action for a draft, result, performance profile, or published revision. It returns prioritized findings, evidence links, confidence, and a suggested next check. It does not edit the SQL, change a chart, publish, or execute. The user can ask for a follow-up explanation or explicitly convert a finding into a proposal.
+
 ### Review-first interaction
 
 - Render proposed SQL as a diff.
@@ -87,6 +104,7 @@ The assistant may inspect and propose. The user-run execution path remains a sep
 - Support follow-up refinement while retaining the original context package, selected connection, and proposal lineage.
 - Show when schema context was narrowed, truncated, or limited, rather than implying the model saw every object.
 - Add feedback on the SQL proposal and explanation, linked to the prompt version and artifact.
+- Let the user open a review-only pass against the current draft, last executed revision, or a selected diff. Review output is stored as evidence but never becomes an unapproved edit.
 
 Context builders need deterministic limits and fallback behavior:
 
@@ -123,6 +141,8 @@ The mode is visible in the drawer and command palette. A mode change is recorded
 - A user can target a specific table or column from the schema browser and see that reference in the prompt context.
 - A context-cache miss or stale schema refresh is visible and offers a refresh action.
 - A performance proposal links to the profile, affected SQL range, expected evidence, and before-and-after run comparison.
+- A query proposal can suggest operational tags for ownership or cost attribution, but tags are shown as editable metadata rather than hidden prompt instructions.
+- If a referenced metric, snippet, or dataset is unverified or has downstream breakage, the proposal must surface that status before using it as authority.
 
 Use structured output for typed proposals and function calling for controlled operations such as schema lookup. The server executes database operations; the model never receives direct database credentials.
 
@@ -141,6 +161,12 @@ Use structured output for typed proposals and function calling for controlled op
 - Handle unknown objects and incomplete schema context with a useful correction path, not a fabricated identifier.
 - Verify that every applied hunk can be undone through local history.
 - Ensure a proposal from one connection cannot be applied to a draft attached to another connection without confirmation.
+- Do not use an unverified metric or broken dependency as if it were a trusted definition.
+- Preserve query tags and profile links when an accepted proposal becomes a new run.
+- A review-only action cannot mutate SQL, chart configuration, publication state, or connection settings.
+- The active context layers and playbook version are visible before an OpenAI request and retained with the response.
+- A generated playbook action is checked against typed tool permissions and resource limits before execution.
+- Competing proposals can run as isolated child artifacts and be compared without overwriting the parent draft.
 
 ## Sources
 
@@ -156,6 +182,10 @@ Use structured output for typed proposals and function calling for controlled op
 - [Metabase SQL snippets](https://www.metabase.com/docs/latest/questions/native-editor/snippets)
 - [Visual Studio Code code navigation](https://code.visualstudio.com/docs/editing/editingevolved)
 - [JetBrains local history](https://www.jetbrains.com/help/idea/local-history.html)
+- [Claude Code steering: rules, skills, hooks, and subagents](https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more)
+- [OpenAI code review workflow](https://learn.chatgpt.com/docs/code-review)
+- [OpenAI build skills](https://learn.chatgpt.com/docs/build-skills)
+- [OpenAI plugin architecture](https://developers.openai.com/plugins/concepts/plugins)
 
 ## Thread pickup
 

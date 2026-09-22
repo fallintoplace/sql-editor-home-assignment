@@ -93,7 +93,11 @@ export const messages = {
             review: 'Review',
             monitor: 'Monitor',
             addWidget: 'Add widget',
-            resetLayout: 'Reset layout'
+            resetLayout: 'Reset layout',
+            examples: 'Examples',
+            openExample: 'Open example',
+            closeExamples: 'Close examples',
+            examplesDescription: 'Safe read-only starting points. Nothing runs until you press Run.'
         },
         editor: {
             runStatement: 'Run statement',
@@ -258,7 +262,11 @@ export const messages = {
             review: 'Prüfen',
             monitor: 'Überwachen',
             addWidget: 'Widget hinzufügen',
-            resetLayout: 'Layout zurücksetzen'
+            resetLayout: 'Layout zurücksetzen',
+            examples: 'Beispiele',
+            openExample: 'Beispiel öffnen',
+            closeExamples: 'Beispiele schließen',
+            examplesDescription: 'Sichere schreibgeschützte Startpunkte. Nichts läuft, bevor du Ausführen wählst.'
         },
         editor: {
             runStatement: 'Anweisung ausführen',
@@ -423,7 +431,11 @@ export const messages = {
             review: 'Revisar',
             monitor: 'Monitorizar',
             addWidget: 'Añadir widget',
-            resetLayout: 'Restablecer diseño'
+            resetLayout: 'Restablecer diseño',
+            examples: 'Ejemplos',
+            openExample: 'Abrir ejemplo',
+            closeExamples: 'Cerrar ejemplos',
+            examplesDescription: 'Puntos de partida seguros y de solo lectura. Nada se ejecuta hasta pulsar Ejecutar.'
         },
         editor: {
             runStatement: 'Ejecutar instrucción',
@@ -588,7 +600,11 @@ export const messages = {
             review: 'Beoordelen',
             monitor: 'Monitoren',
             addWidget: 'Widget toevoegen',
-            resetLayout: 'Indeling herstellen'
+            resetLayout: 'Indeling herstellen',
+            examples: 'Voorbeelden',
+            openExample: 'Voorbeeld openen',
+            closeExamples: 'Voorbeelden sluiten',
+            examplesDescription: 'Veilige alleen-lezen-startpunten. Er wordt niets uitgevoerd voordat je Uitvoeren kiest.'
         },
         editor: {
             runStatement: 'Instructie uitvoeren',
@@ -753,7 +769,11 @@ export const messages = {
             review: '审阅',
             monitor: '监控',
             addWidget: '添加组件',
-            resetLayout: '重置布局'
+            resetLayout: '重置布局',
+            examples: '示例',
+            openExample: '打开示例',
+            closeExamples: '关闭示例',
+            examplesDescription: '安全的只读起点。点击运行前不会执行任何内容。'
         },
         editor: {
             runStatement: '运行语句',
@@ -918,7 +938,11 @@ export const messages = {
             review: 'Проверка',
             monitor: 'Мониторинг',
             addWidget: 'Добавить виджет',
-            resetLayout: 'Сбросить макет'
+            resetLayout: 'Сбросить макет',
+            examples: 'Примеры',
+            openExample: 'Открыть пример',
+            closeExamples: 'Закрыть примеры',
+            examplesDescription: 'Безопасные запросы только для чтения. Ничего не запускается до нажатия кнопки запуска.'
         },
         editor: {
             runStatement: 'Выполнить оператор',

@@ -79,7 +79,7 @@ function Root() {
         }
     });
     const copy = getCopy(locale);
-    const dark = theme !== 'solarized-light';
+    const dark = !['solarized-light', 'clickhouse-light'].includes(theme);
     useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; document.documentElement.dataset.palette = theme; document.documentElement.style.colorScheme = dark ? 'dark' : 'light'; try {
         localStorage.setItem('cathedral:theme', theme);
     }

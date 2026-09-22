@@ -65,51 +65,60 @@
 
 :root[data-theme="click-dark"] {
     color-scheme: dark;
-    --page: #0d1012;
-    --page-raised: #121619;
-    --panel: #171c20;
-    --panel-raised: #1e252a;
-    --panel-hover: #252e34;
-    --line: #2b353b;
-    --line-bright: #3d4a51;
-    --text: #f1f5f6;
-    --text-soft: #c3cdd1;
-    --muted: #87969d;
-    --accent: #ffd229;
-    --accent-strong: #ffe15a;
-    --accent-action: #ffd229;
-    --accent-ink: #211a00;
-    --green: #72dda5;
-    --amber: #ffc75e;
-    --red: #ff8580;
-    --violet: #c4a8ff;
-    --editor-selection: #ffd22942;
-    --shadow: 0 24px 76px #0009;
+    --page: #101010;
+    --page-raised: #151515;
+    --panel: #1a1a1a;
+    --panel-raised: #212121;
+    --panel-hover: #292929;
+    --line: #303030;
+    --line-bright: #454545;
+    --text: #f5f5f2;
+    --text-soft: #d0d0cb;
+    --muted: #999995;
+    --accent: #eaff00;
+    --accent-strong: #f1ff45;
+    --accent-action: #eaff00;
+    --accent-ink: #171811;
+    --green: #73d9a1;
+    --amber: #ffbd4a;
+    --red: #ff7970;
+    --violet: #c7d64a;
+    --editor-selection: #eaff0045;
+    --shadow: 0 24px 76px #000a;
 }
 
 :root[data-theme="click-light"] {
     color-scheme: light;
-    --page: #f3f5f7;
+    --page: #f4f5f1;
     --page-raised: #ffffff;
     --panel: #ffffff;
-    --panel-raised: #f8fafb;
-    --panel-hover: #edf1f3;
-    --line: #dfe5e8;
-    --line-bright: #cbd4d9;
-    --text: #192126;
-    --text-soft: #46545b;
-    --muted: #6c7a82;
-    --accent: #956e00;
-    --accent-strong: #ffe05a;
-    --accent-action: #e9bd2a;
-    --accent-ink: #251e06;
+    --panel-raised: #fafbf7;
+    --panel-hover: #eff1e9;
+    --line: #e1e4da;
+    --line-bright: #cbd0c2;
+    --text: #171916;
+    --text-soft: #4e5449;
+    --muted: #6b7266;
+    --accent: #5c6800;
+    --accent-strong: #efff00;
+    --accent-action: #eaff00;
+    --accent-ink: #171916;
     --green: #18754a;
-    --amber: #8b6100;
+    --amber: #966300;
     --red: #b63e39;
-    --violet: #704bb0;
-    --editor-selection: #e4bd3e55;
-    --shadow: 0 22px 70px #24313a1c;
+    --violet: #707b13;
+    --editor-selection: #dce94e77;
+    --shadow: 0 22px 70px #17200b1a;
 }
+
+:root[data-theme="click-dark"] .application,
+:root[data-theme="click-light"] .application { background: var(--page); }
+:root[data-theme="click-dark"] .application::before,
+:root[data-theme="click-light"] .application::before { display: none; }
+:root[data-theme="click-dark"] .beginner-ai-surface,
+:root[data-theme="click-light"] .beginner-ai-surface { background: var(--panel); box-shadow: 0 18px 54px #00000012; }
+:root[data-theme="click-dark"] .beginner-ai-surface::before,
+:root[data-theme="click-light"] .beginner-ai-surface::before { display: none; }
 
 @layer base {
     * { box-sizing: border-box; }
@@ -509,7 +518,7 @@
     .beginner-workspace-content:not(.has-run) { display: flex; flex-direction: column; }
     .beginner-workspace-content:not(.has-run) > .beginner-ai-surface { min-height: 0; flex: 1; }
     .beginner-workspace-content.has-run { grid-template-rows: minmax(260px, .85fr) minmax(220px, 1.15fr); }
-    .brand-lockup { gap: 0; }
+    .brand-lockup { gap: 9px; }
     .beginner-ai-toolbar { min-height: 48px; }
     .beginner-ai-main { min-height: 0; flex: 1; align-content: center; gap: 12px; margin: 0 auto; padding: 24px 32px; }
     .beginner-ai-title { display: grid; justify-items: center; gap: 7px; }

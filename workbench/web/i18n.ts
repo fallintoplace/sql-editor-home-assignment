@@ -5,8 +5,8 @@ export type ExperienceLevel = 'beginner' | 'expert';
 export const themeAppearance: Record<Theme, { dark: boolean; chromeColor: string }> = {
     monokai: { dark: true, chromeColor: '#101412' },
     'catppuccin-latte': { dark: false, chromeColor: '#f1f3ee' },
-    'click-dark': { dark: true, chromeColor: '#0d1012' },
-    'click-light': { dark: false, chromeColor: '#f3f5f7' },
+    'click-dark': { dark: true, chromeColor: '#101010' },
+    'click-light': { dark: false, chromeColor: '#f5f6f1' },
 };
 
 export interface Copy {

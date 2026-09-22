@@ -8,6 +8,8 @@ import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { checkpoint, closeDraft, MAX_TABS, newDraft, recover, reopenDraft, type Draft, type WorkspaceState } from './workspace-state';
 import { useWorkspacePersistence } from './useWorkspacePersistence';
 import { getCopy, localeOptions, themeAppearance, themeOptions, type Copy, type ExperienceLevel, type Locale, type Theme } from './i18n';
+import clickhouseLogomarkDark from './assets/clickhouse-logomark-dark.svg';
+import clickhouseLogomarkLight from './assets/clickhouse-logomark-light.svg';
 
 type Connected = Connection & { trusted: boolean };
 type Session = { principal: Principal | null; requiresLogin: boolean; demo: boolean };
@@ -143,12 +145,12 @@ function App() {
         finally { setTrustActionBusy(false); }
     };
 
-    if (!session) return <main className="auth-screen"><section className="auth-card animate-enter"><Brand/><span className="eyebrow mt-8">PRIVATE WORKSPACE</span><h1>{sessionError ? 'Workspace unavailable' : copy.auth.opening}</h1>{sessionError ? <><p>{sessionError}</p><Button variant="primary" onClick={() => { setSessionError(''); void loadSession().catch(error => setSessionError(message(error))); }}>Try again</Button></> : <div className="splash-status"><span className="loading-orbit"/><p>{copy.auth.opening}</p></div>}</section></main>;
-    if (!session.principal) return <main className="auth-screen"><form className="auth-card animate-enter" onSubmit={event => { event.preventDefault(); void login(); }}><Brand/><span className="eyebrow mt-8">Private workspace</span><h1>{copy.auth.title}</h1><p>{copy.auth.description}</p><label className="field-label">{copy.auth.token}<input className="field-input mt-2" type="password" autoComplete="current-password" value={token} onChange={event => setToken(event.target.value)} autoFocus/></label>{sessionError && <div className="callout callout-error">{sessionError}</div>}<Button variant="primary" type="submit" disabled={busy || !token} className="mt-4 w-full">{busy ? copy.auth.opening : copy.auth.open}<span className="button-arrow">↗</span></Button><div className="auth-footnote"><Icon name="lock"/> Credentials are handled by the workspace server.</div></form></main>;
+    if (!session) return <main className="auth-screen"><section className="auth-card animate-enter"><Brand theme={theme}/><span className="eyebrow mt-8">PRIVATE WORKSPACE</span><h1>{sessionError ? 'Workspace unavailable' : copy.auth.opening}</h1>{sessionError ? <><p>{sessionError}</p><Button variant="primary" onClick={() => { setSessionError(''); void loadSession().catch(error => setSessionError(message(error))); }}>Try again</Button></> : <div className="splash-status"><span className="loading-orbit"/><p>{copy.auth.opening}</p></div>}</section></main>;
+    if (!session.principal) return <main className="auth-screen"><form className="auth-card animate-enter" onSubmit={event => { event.preventDefault(); void login(); }}><Brand theme={theme}/><span className="eyebrow mt-8">Private workspace</span><h1>{copy.auth.title}</h1><p>{copy.auth.description}</p><label className="field-label">{copy.auth.token}<input className="field-input mt-2" type="password" autoComplete="current-password" value={token} onChange={event => setToken(event.target.value)} autoFocus/></label>{sessionError && <div className="callout callout-error">{sessionError}</div>}<Button variant="primary" type="submit" disabled={busy || !token} className="mt-4 w-full">{busy ? copy.auth.opening : copy.auth.open}<span className="button-arrow">↗</span></Button><div className="auth-footnote"><Icon name="lock"/> Credentials are handled by the workspace server.</div></form></main>;
 
     return <div className="application" data-experience={experience}>
         <header className="topbar">
-            <Brand/>
+            <Brand theme={theme}/>
             <div className="topbar-divider"/>
             <div className="connection-wrap">
                 <button className="connection-trigger" type="button" aria-haspopup="dialog" aria-expanded={connectionPicker} aria-controls="connection-menu" onClick={() => setConnectionPicker(value => !value)}>
@@ -193,8 +195,9 @@ function App() {
     </div>;
 }
 
-function Brand() {
-    return <div className="brand-lockup"><span className="brand-name">Click<span>Studio</span><small>CLICKHOUSE WORKSPACE</small></span></div>;
+function Brand({ theme }: { theme: Theme }) {
+    const logo = themeAppearance[theme].dark ? clickhouseLogomarkDark : clickhouseLogomarkLight;
+    return <div className="brand-lockup"><img className="brand-symbol" src={logo} alt="ClickHouse"/><span className="brand-name">Click<span>Studio</span><small>CLICKHOUSE WORKSPACE</small></span></div>;
 }
 
 function Workspace({ connection, connectionLabel, connections, onSelectConnection, onRefreshConnections, trustActionRef, demoMode, experience, dark, copy, locale }: {

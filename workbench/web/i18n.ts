@@ -85,7 +85,15 @@ export const messages = {
             statementCount: 'SQL statements',
             editor: 'Editor',
             results: 'Results',
-            history: 'History'
+            history: 'History',
+            board: 'Board',
+            write: 'Write',
+            analyze: 'Analyze',
+            investigate: 'Investigate',
+            review: 'Review',
+            monitor: 'Monitor',
+            addWidget: 'Add widget',
+            resetLayout: 'Reset layout'
         },
         editor: {
             runStatement: 'Run statement',
@@ -242,7 +250,15 @@ export const messages = {
             statementCount: 'SQL-Anweisungen',
             editor: 'Editor',
             results: 'Ergebnisse',
-            history: 'Verlauf'
+            history: 'Verlauf',
+            board: 'Board',
+            write: 'Schreiben',
+            analyze: 'Analysieren',
+            investigate: 'Untersuchen',
+            review: 'Prüfen',
+            monitor: 'Überwachen',
+            addWidget: 'Widget hinzufügen',
+            resetLayout: 'Layout zurücksetzen'
         },
         editor: {
             runStatement: 'Anweisung ausführen',
@@ -399,7 +415,15 @@ export const messages = {
             statementCount: 'instrucciones SQL',
             editor: 'Editor',
             results: 'Resultados',
-            history: 'Historial'
+            history: 'Historial',
+            board: 'Tablero',
+            write: 'Escribir',
+            analyze: 'Analizar',
+            investigate: 'Investigar',
+            review: 'Revisar',
+            monitor: 'Monitorizar',
+            addWidget: 'Añadir widget',
+            resetLayout: 'Restablecer diseño'
         },
         editor: {
             runStatement: 'Ejecutar instrucción',
@@ -556,7 +580,15 @@ export const messages = {
             statementCount: 'SQL-instructies',
             editor: 'Editor',
             results: 'Resultaten',
-            history: 'Geschiedenis'
+            history: 'Geschiedenis',
+            board: 'Bord',
+            write: 'Schrijven',
+            analyze: 'Analyseren',
+            investigate: 'Onderzoeken',
+            review: 'Beoordelen',
+            monitor: 'Monitoren',
+            addWidget: 'Widget toevoegen',
+            resetLayout: 'Indeling herstellen'
         },
         editor: {
             runStatement: 'Instructie uitvoeren',
@@ -713,7 +745,15 @@ export const messages = {
             statementCount: '条 SQL 语句',
             editor: '编辑器',
             results: '结果',
-            history: '历史记录'
+            history: '历史记录',
+            board: '工作板',
+            write: '编写',
+            analyze: '分析',
+            investigate: '调查',
+            review: '审阅',
+            monitor: '监控',
+            addWidget: '添加组件',
+            resetLayout: '重置布局'
         },
         editor: {
             runStatement: '运行语句',
@@ -870,7 +910,15 @@ export const messages = {
             statementCount: 'SQL-инструкции',
             editor: 'Редактор',
             results: 'Результаты',
-            history: 'История'
+            history: 'История',
+            board: 'Рабочая доска',
+            write: 'Написать',
+            analyze: 'Анализ',
+            investigate: 'Исследование',
+            review: 'Проверка',
+            monitor: 'Мониторинг',
+            addWidget: 'Добавить виджет',
+            resetLayout: 'Сбросить макет'
         },
         editor: {
             runStatement: 'Выполнить оператор',

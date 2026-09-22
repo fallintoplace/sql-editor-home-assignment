@@ -483,3 +483,12 @@ body:has(button[id^=header-][data-state=open]) [data-radix-popper-content-wrappe
     .theme-picker{width:min(232px,calc(100vw - 24px))!important;min-width:0!important}
     .level-picker{width:min(174px,calc(100vw - 24px))!important;min-width:0!important}
 }
+
+.pipeline-canvas{height:clamp(280px,42vw,520px);min-height:0}
+.pipeline-canvas svg{height:100%;min-height:0}
+.beginner-demo-preview{display:flex;flex-direction:column}
+.beginner-demo-copy{max-width:860px}
+.beginner-demo-copy button{margin-top:0}
+.beginner-demo-actions{display:flex;flex-wrap:wrap;gap:8px}
+.beginner-demo-graph{min-width:0;padding-top:4px;border-top:1px solid color-mix(in srgb,var(--kraken-cyan) 28%,var(--line))}
+.beginner-demo-graph .pipeline-canvas{height:320px}

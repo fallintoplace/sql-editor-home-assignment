@@ -44,6 +44,7 @@ export interface PreparedContext {
         image?: string;
     };
     summary: string[];
+    evaluationSchema?: Pick<Schema, 'tables' | 'truncated'>;
     state: 'ready' | 'running' | 'complete' | 'failed';
     proposalId?: string;
 }
@@ -160,7 +161,7 @@ export class AssistantService {
         const built = buildContext(input);
         const context: PreparedContext = { id: randomUUID(), owner: p.id, connectionId: input.connectionId,
             action: input.action, createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 300000).toISOString(),
-            baseSql: input.sql, ...built, state: 'ready' };
+            baseSql: input.sql, ...built, evaluationSchema: { tables: input.schema.tables.map(table => ({ ...table })), truncated: input.schema.truncated }, state: 'ready' };
         this.store.put('ai-contexts', context.id, context);
         return context;
     }
@@ -193,7 +194,7 @@ export class AssistantService {
             const proposal: Proposal = { ...content, id: randomUUID(), owner: p.id, connectionId: context.connectionId,
                 action: context.action, createdAt: new Date().toISOString(), baseSql: context.baseSql, responseId: response.responseId,
                 model: this.driver.model, promptVersion: PROMPT_VERSION, contextSummary: context.summary, decision: 'pending',
-                quality: evaluateProposal(content, context.action, { schema: JSON.parse(context.payload.context) as Schema }) };
+                quality: evaluateProposal(content, context.action, { schema: context.evaluationSchema }) };
             this.store.put('proposals', proposal.id, proposal);
             context.proposalId = proposal.id;
             context.state = 'complete';
@@ -206,6 +207,7 @@ export class AssistantService {
         }
         finally {
             delete context.payload.image;
+            delete context.evaluationSchema;
             context.payload.context = '[Deleted after request; retained summary is attached to the proposal.]';
             this.store.put('ai-contexts', contextId, context);
         }

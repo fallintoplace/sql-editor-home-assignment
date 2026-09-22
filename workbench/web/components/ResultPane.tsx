@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Dialog } from '@clickhouse/click-ui';
 import type { ChartConfig, Json, Result, ResultPage, Run } from '../../shared/types';
 import type { Copy } from '../i18n';
-import { columnStats, displayValue, exportCsv, filterRows, MAX_CHART_SERIES, numericType, recommendChart } from '../../shared/results';
+import { columnStats, displayValue, filterRows, MAX_CHART_SERIES, numericType, recommendChart } from '../../shared/results';
 import { api, download, message } from '../api';
 import { Action, Callout, Select, TextField } from '../ui';
 import { Chart } from './Chart';
@@ -55,11 +55,11 @@ export function ResultPane({ run, draftSql, draftParameters, config, copy, onCha
     const renderedColumns = displayedColumns.slice(currentColumnPage * RESULT_COLUMN_PAGE_SIZE, currentColumnPage * RESULT_COLUMN_PAGE_SIZE + RESULT_COLUMN_PAGE_SIZE);
     const recommendation = fullResult ? recommendChart(fullResult.columns, fullResult.rows) : undefined;
     const changeFilter = (value: string) => { setFilter(value); if (value.trim()) setFullRequested(true); setPage(0); };
-    const exportFull = async (name: string, value: (full: Result) => unknown, type?: string) => {
-        setFullRequested(true);
-        const full = fullQuery.data ?? (await fullQuery.refetch()).data;
-        if (full)
-            download(name, value(full), type);
+    const exportFull = (format: 'csv' | 'json') => {
+        const link = document.createElement('a');
+        link.href = `/api/runs/${encodeURIComponent(run.id)}/export?format=${format}`;
+        link.download = `${run.queryId}.${format}`;
+        link.click();
     };
     const inspectCell = (origin: HTMLElement, column: number, value: Json) => {
         cellOrigin.current = origin;
@@ -101,7 +101,7 @@ export function ResultPane({ run, draftSql, draftParameters, config, copy, onCha
         {activeQuery.error && <Callout danger>{message(activeQuery.error)}<Action disabled={activeQuery.isFetching} onClick={() => void activeQuery.refetch()}>Retry loading result</Action><p>Reloads retained data only. Does not execute SQL.</p></Callout>}
         {result && <>
             <p className="muted">{result.completeness === 'truncated' ? 'Truncated retained prefix' : 'Complete returned result'} · executed {new Date(result.createdAt).toLocaleString()} · retained until {new Date(result.expiresAt).toLocaleString()}</p>
-            <div className="toolbar wrap"><Action onClick={() => void exportFull(`${run.queryId}.csv`, full => exportCsv(full), 'text/csv')}>CSV</Action><Action onClick={() => void exportFull(`${run.queryId}.json`, full => ({ run, result: full }))}>Evidence JSON</Action><span className="muted">Full CSV and Evidence JSON: exports include all {retainedRows.toLocaleString()} retained rows, not just the local page. All columns are included.</span></div>
+            <div className="toolbar wrap"><Action onClick={() => exportFull('csv')}>CSV</Action><Action onClick={() => exportFull('json')}>Evidence JSON</Action><span className="muted">Full CSV and Evidence JSON: exports include all {retainedRows.toLocaleString()} retained rows, not just the local page. All columns are included.</span></div>
             {view === 'profile' ? fullResult ? <ResultProfile result={fullResult} rows={filtered}/> : <p role="status">Loading all retained rows for the profile…</p> : view === 'chart' ? fullResult ? <>
                 <div className="chart-controls"><Select label="Chart type" value={config.kind} options={['table', 'number', 'line', 'bar', 'stacked', 'area', 'pie', 'scatter'].map(value => ({ value, label: value }))} onSelect={kind => { onChart({ ...config, kind: kind as ChartConfig['kind'] }); if (kind === 'table') setView('table'); }}/><Select label="X axis" value={String(config.x)} options={fullResult.columns.map((c, i) => ({ value: String(i), label: c.name }))} onSelect={x => onChart({ ...config, x: Number(x) })}/><div className="measure-picker"><span className="field-label">Measures · max {MAX_CHART_SERIES}</span><div className="toolbar wrap">{fullResult.columns.map((column, index) => { const selected = config.ys.includes(index), limitReached = config.ys.length >= MAX_CHART_SERIES && !selected; return numericType(column.type) && <Action key={index} disabled={limitReached} title={limitReached ? `Choose up to ${MAX_CHART_SERIES} measures.` : undefined} type={selected ? 'primary' : 'secondary'} aria-pressed={selected} onClick={() => { const ys = selected ? config.ys.filter(value => value !== index) : [...config.ys, index]; if (ys.length) onChart({ ...config, ys }); }}>{column.name}</Action>; })}</div></div><TextField label="Title" value={config.title} onChange={title => onChart({ ...config, title })}/></div>
                 <p className="muted">{recommendation?.reason} The chart uses all retained rows, not the local table filter.</p>

@@ -152,7 +152,7 @@ export function buildQueryProfile(run: Run, evidence: unknown, options: {
         summary: current,
         insights: insights(run, current, options.queryLogAvailable, Boolean(evidenceRow(evidence, run.queryId))),
         pipeline,
-        capabilities: { queryLog: options.queryLogAvailable, pipelineGraph: pipeline.source === 'explain_pipeline', indexAnalysis: false, runtimePlan: false },
+        capabilities: { queryLog: options.queryLogAvailable, pipelineGraph: options.pipelineAvailable, indexAnalysis: false, runtimePlan: false },
         evidence,
         traceUrl: options.traceUrl,
         notice: options.notice,

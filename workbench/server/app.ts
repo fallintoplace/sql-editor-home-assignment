@@ -126,20 +126,29 @@ export function createApp(config: Config, overrides: {
         requireThat(authorized(principal(res), run.connectionId), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before inspecting live query-log evidence');
         const evidence = await driver.profileEvidence(run);
         const connection = driver.connection(principal(res), run.connectionId);
-        let pipelineEvidence: string[] | undefined;
-        if (connection.manifest?.pipeline.available) {
-            try {
-                pipelineEvidence = await driver.profilePipeline(run);
-            }
-            catch { }
-        }
         let traceUrl: string | undefined;
         if (config.traceUrl && run.traceId) {
             const url = new URL(config.traceUrl.replace('{traceId}', encodeURIComponent(run.traceId)));
             if (['http:', 'https:'].includes(url.protocol))
                 traceUrl = url.toString();
         }
-        res.json(buildQueryProfile(run, evidence, { queryLogAvailable: true, pipelineAvailable: Boolean(connection.manifest?.pipeline.available), pipelineEvidence, traceUrl, notice: 'Query-log rows may arrive after a server flush interval. This is server evidence, not an operator-level performance model.' }));
+        res.json(buildQueryProfile(run, evidence, { queryLogAvailable: true, pipelineAvailable: Boolean(connection.manifest?.pipeline.available), traceUrl, notice: 'Query-log rows may arrive after a server flush interval. This is server evidence, not an operator-level performance model.' }));
+    });
+    app.get('/api/runs/:id/profile/pipeline', async (req, res) => {
+        const p = principal(res), run = runs.get(p, id(req));
+        requireThat(authorized(p, run.connectionId), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before inspecting live pipeline evidence');
+        const connection = driver.connection(p, run.connectionId);
+        requireThat(Boolean(connection.manifest?.pipeline.available), 409, 'CAPABILITY_UNAVAILABLE', 'EXPLAIN PIPELINE is unavailable on this connection');
+        const evidence = await driver.profileEvidence(run);
+        const pipelineEvidence = await driver.profilePipeline(run);
+        let traceUrl: string | undefined;
+        if (config.traceUrl && run.traceId) {
+            const url = new URL(config.traceUrl.replace('{traceId}', encodeURIComponent(run.traceId)));
+            if (['http:', 'https:'].includes(url.protocol))
+                traceUrl = url.toString();
+        }
+        const profile = buildQueryProfile(run, evidence, { queryLogAvailable: true, pipelineAvailable: true, pipelineEvidence, traceUrl, notice: 'Query-log rows may arrive after a server flush interval. This is server evidence, not an operator-level performance model.' });
+        res.json(profile.pipeline);
     });
     app.post('/api/scripts', (req, res) => { const v = body(req); res.status(202).json(runs.submitScript(principal(res), v, v.stopOnError === undefined ? true : boolean(v.stopOnError, 'stopOnError'))); });
     app.get('/api/scripts/:id', (req, res) => res.json(runs.getScript(principal(res), id(req))));

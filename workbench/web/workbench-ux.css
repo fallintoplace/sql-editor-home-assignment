@@ -118,6 +118,7 @@
 .performance-metric>small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .performance-better{color:#4f8f61}
 .performance-worse{color:var(--danger)}
+.performance-neutral{color:var(--muted)}
 .profile-tabs{display:flex;gap:6px;flex-wrap:wrap;padding:4px;border:1px solid var(--line);border-radius:10px;background:var(--page)}
 .profile-insights{display:flex;flex-direction:column;gap:8px}
 .profile-insights>h3{margin:0}

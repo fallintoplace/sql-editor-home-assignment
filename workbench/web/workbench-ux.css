@@ -692,6 +692,14 @@ body:has(button[id^=header-][data-state=open]) [data-radix-popper-content-wrappe
 .sql-editor{height:clamp(420px,58vh,760px)!important;border:1px solid var(--line)!important;border-radius:6px!important;background:var(--panel)!important;background-image:none!important;box-shadow:none!important}
 .sql-editor:hover,.sql-editor:focus-within{border-color:var(--accent-strong)!important;box-shadow:0 0 0 2px color-mix(in srgb,var(--accent-strong) 16%,transparent)!important}
 .result-deck:not(.result-deck-closed),.inspector-drawer{box-shadow:none!important}
+.sidebar-compact{white-space:nowrap!important}
+.sidebar-compact>button,.sidebar-compact .nav-section>summary{white-space:nowrap!important;overflow:visible!important}
+.sidebar-compact [class*="button__label"]{display:none!important}
+.inspector-drawer{position:fixed!important;top:132px!important;right:12px!important;bottom:auto!important;width:min(360px,calc(100vw - 24px))!important;max-height:calc(100vh - 156px)!important;margin:0!important;padding:10px!important;z-index:40!important;border:1px solid var(--line)!important;border-left:3px solid var(--accent-strong)!important;border-radius:7px!important;background:var(--panel)!important;box-shadow:-10px 12px 28px color-mix(in srgb,var(--text) 18%,transparent)!important}
+.inspector-drawer>.toolbar{position:sticky!important;top:-11px!important;margin:-11px -11px 10px!important;padding:9px 10px!important;background:var(--panel)!important;border-bottom:1px solid var(--line)!important;backdrop-filter:none!important}
+.result-deck:not(.result-deck-closed){max-height:min(38vh,420px)!important;overflow:auto!important}
+.result-deck-closed{max-height:44px!important}
+.history{max-height:320px;overflow:auto}
 @media(max-width:760px){
     .app-header{height:auto!important;min-height:52px!important;padding:7px 10px!important}
     .connection-picker{padding:5px 10px!important}

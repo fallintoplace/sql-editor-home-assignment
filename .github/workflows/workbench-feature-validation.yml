@@ -1,0 +1,92 @@
+name: Validate portable draft features
+on:
+  push:
+    branches: ["review/workbench-features-20260922"]
+    paths: [".github/workflows/workbench-feature-validation.yml"]
+permissions:
+  contents: write
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct and verify the locally tested patch
+        run: |
+          python3 - <<'PY'
+          import base64, gzip, hashlib
+          from pathlib import Path
+          actual = ['8d1da58d1f156f69b1a560c382f1705f0384925d', 'c22ebe445d1c848ef36b28bfba76178f1c893f47', '04fdea65bcb89559c6e36c5a2f599f6829675348']
+          expected = ['27fea2539c7fb9cfb6dc1a5b4fbcc6e8a57c6193', 'c22ebe445d1c848ef36b28bfba76178f1c893f47', 'ac4d072c269420f09aba30b2bafea0c93f5605a3']
+          repairs = {1: [(2590, 2591, '')], 3: [(8598, 8600, ''), (8607, 8609, 'NFb')]}
+          def blob(data):
+              return hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
+          parts = []
+          for number in range(1, 4):
+              data = Path(f'.review/feature-{number}.b64').read_bytes()
+              assert blob(data) == actual[number - 1], 'Unexpected transport fragment'
+              text = data.decode('ascii')
+              for start, end, replacement in reversed(repairs.get(number, [])):
+                  text = text[:start] + replacement + text[end:]
+              assert blob(text.encode()) == expected[number - 1], 'Transport verification failed'
+              parts.append(text)
+          patch = gzip.decompress(base64.b64decode(''.join(parts), validate=True))
+          assert hashlib.sha256(patch).hexdigest() == '26ea5675b2e5d19c18a2e5dfebe8b4eace32721f5f127844cbc11810dedcc184'
+          Path('/tmp/workbench-feature.patch').write_bytes(patch)
+          PY
+      - name: Create a clean application commit and stage it
+        run: |
+          git fetch --depth=1 origin 67438c5ae2e3dbc82ad767469dd171b0f59b5e41
+          git checkout --detach 67438c5ae2e3dbc82ad767469dd171b0f59b5e41
+          git apply --index /tmp/workbench-feature.patch
+          git diff --cached --check
+          test "$(git write-tree)" = "0444f968122ce8807a4862dd62ce8ede2fad6981"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'feat: open local SQL files and restore portable drafts'
+          git rev-parse HEAD | tee /tmp/workbench-feature-sha.txt
+          git push origin HEAD:refs/heads/stage/workbench-portable-drafts-20260922
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: workbench/package-lock.json
+      - name: Install locked dependencies
+        working-directory: workbench
+        run: npm ci
+      - name: Core and workspace tests and production build
+        id: build
+        working-directory: workbench
+        run: npm test && npm run build
+      - name: Start restricted local ClickHouse fixture
+        id: database
+        working-directory: workbench
+        run: npm run init:env && docker compose up -d --wait clickhouse && npm run db:setup
+      - name: Live ClickHouse and HTTP integrations
+        working-directory: workbench
+        run: CLICKHOUSE_INTEGRATION=1 npm run test:integration
+      - name: Deterministic SQL evaluations
+        working-directory: workbench
+        run: npm run eval
+      - name: Install browser
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        working-directory: workbench
+        run: npx playwright install --with-deps chromium
+      - name: Browser regressions and new local file flows
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        working-directory: workbench
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: workbench-feature-validation
+          path: |
+            /tmp/workbench-feature-sha.txt
+            workbench/test-results
+            workbench/playwright-report
+          retention-days: 3
+          if-no-files-found: ignore
+      - name: Stop local database
+        if: ${{ always() && steps.database.outcome != 'skipped' }}
+        working-directory: workbench
+        run: docker compose down -v

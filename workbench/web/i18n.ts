@@ -442,6 +442,228 @@ export const messages = {
             workflow: 'Uitvoeringsinspector',
             close: 'Sluiten'
         }
+    },
+    zh: {
+        app: {
+            name: 'Query Studio',
+            tagline: 'ClickHouse SQL、结果与性能',
+            lightMode: '浅色模式',
+            darkMode: '深色模式',
+            demoMode: '演示模式 — 不会执行 ClickHouse 查询或导入操作。SQL 文本不会被求值；此模式仅用于体验界面和生命周期行为。',
+            language: '语言'
+        },
+        common: {
+            cancel: '取消',
+            confirm: '确认',
+            dismiss: '关闭',
+            retry: '重试',
+            copy: '复制',
+            previous: '上一页',
+            next: '下一页',
+            page: '第',
+            of: '页，共'
+        },
+        auth: {
+            opening: '正在打开 Query Studio…',
+            title: '打开 Query Studio',
+            description: '使用服务器管理员配置的访问令牌。数据库和 OpenAI 凭据不应填写在此表单中。',
+            tokenLabel: '工作区访问令牌',
+            signIn: '登录',
+            signOut: '退出登录'
+        },
+        shared: {
+            title: 'Query Studio · 共享结果',
+            description: '只读结果。此链接不能执行 SQL，也不能授予对源数据库的访问权限。',
+            fixture: '演示快照 — 未执行 SQL，这些行不是实时数据库数据。',
+            complete: '完整结果',
+            truncated: '已截断结果',
+            executed: '执行于',
+            expires: '过期于',
+            connection: '连接引用',
+            parameters: '参数',
+            executedAs: '执行身份',
+            page: '第',
+            evidenceJson: '结果 JSON',
+            csv: 'CSV'
+        },
+        errors: {
+            renderTitle: 'Query Studio 无法加载。',
+            persistedDrafts: '之前保存的草稿仍保留在此浏览器中。请勿清除浏览器存储。',
+            reload: '重新加载 Query Studio'
+        },
+        connection: {
+            profile: '连接配置',
+            privateWorkspace: '私有工作区 · 本地草稿 · 服务器管理凭据',
+            test: '测试连接',
+            trust: '信任连接',
+            revokeTrust: '撤销信任',
+            commands: '命令 Ctrl/⌘K',
+            readOnly: '只读模式',
+            testCompleted: '连接检查已完成。',
+            activeQueriesCancelled: '活动查询将被取消。',
+            trustDescription: '只有在你主动请求时，应用才会检查架构并执行有上限的只读查询。',
+            reviewBeforeTrust: '请检查主机、数据库和身份，然后信任连接以检查架构或运行查询。'
+        },
+        workspace: {
+            view: '工作台视图',
+            hideFiles: '隐藏文件',
+            showFiles: '显示文件',
+            focusMode: '专注模式',
+            exitFocusMode: '退出专注模式',
+            sidePanelsHidden: '侧边面板已隐藏，但未重置。',
+            title: '资源浏览器',
+            newTab: '新建 SQL 标签页',
+            importBackup: '导入 SQL / 备份',
+            searchPlaceholder: '搜索文件、表和列',
+            savedFiles: '已保存文件',
+            schema: '架构',
+            refreshSchema: '刷新架构',
+            statementOutline: '语句大纲',
+            exportDrafts: '导出本地草稿',
+            openLocalFiles: '打开本地文件',
+            closeTab: '关闭标签页',
+            reopenTab: '重新打开已关闭的标签页',
+            advancedControls: '高级执行',
+            parameters: '查询参数'
+        },
+        editor: {
+            runStatement: '运行语句',
+            runScript: '运行脚本',
+            cancelRun: '取消运行',
+            cancelScript: '取消脚本',
+            saveRevision: '保存修订',
+            publish: '发布 / 分享',
+            branch: '创建实验分支',
+            explain: 'EXPLAIN',
+            pipeline: '管道',
+            indent: '缩进选中内容',
+            exportSql: '导出 SQL',
+            statementBoundary: '语句边界',
+            yourSql: 'SQL 由你掌控。',
+            emptyHint: '运行示例以查看类型化结果、图表、查询 ID 和保留行。不会自动运行任何内容。'
+        },
+        panels: {
+            assistant: '助手',
+            library: '查询库',
+            import: '导入',
+            evidence: '运行详情',
+            monitors: '监控',
+            tools: '工作台工具',
+            inspector: '检查器',
+            workflow: '运行检查器',
+            close: '关闭'
+        }
+    },
+    ru: {
+        app: {
+            name: 'Query Studio',
+            tagline: 'SQL, результаты и производительность ClickHouse',
+            lightMode: 'Светлая тема',
+            darkMode: 'Темная тема',
+            demoMode: 'ДЕМО-РЕЖИМ — запросы ClickHouse и импорты не выполняются. Текст SQL не обрабатывается; режим нужен только для просмотра интерфейса и сценариев жизненного цикла.',
+            language: 'Язык'
+        },
+        common: {
+            cancel: 'Отмена',
+            confirm: 'Подтвердить',
+            dismiss: 'Закрыть',
+            retry: 'Повторить',
+            copy: 'Копировать',
+            previous: 'Назад',
+            next: 'Далее',
+            page: 'Страница',
+            of: 'из'
+        },
+        auth: {
+            opening: 'Открытие Query Studio…',
+            title: 'Открыть Query Studio',
+            description: 'Используйте токен доступа, настроенный администратором сервера. Учетные данные базы данных и OpenAI не должны вводиться в эту форму.',
+            tokenLabel: 'Токен доступа к рабочей области',
+            signIn: 'Войти',
+            signOut: 'Выйти'
+        },
+        shared: {
+            title: 'Query Studio · общий результат',
+            description: 'Результат только для чтения. Эта ссылка не может выполнять SQL или предоставлять доступ к исходной базе данных.',
+            fixture: 'ДЕМО-СНИМОК — SQL не выполнялся, эти строки не являются данными из рабочей базы.',
+            complete: 'Полный результат',
+            truncated: 'Обрезанный результат',
+            executed: 'выполнен',
+            expires: 'истекает',
+            connection: 'Ссылка на подключение',
+            parameters: 'Параметры',
+            executedAs: 'Выполнен от имени',
+            page: 'Страница',
+            evidenceJson: 'JSON результата',
+            csv: 'CSV'
+        },
+        errors: {
+            renderTitle: 'Query Studio не удалось загрузить.',
+            persistedDrafts: 'Ранее сохраненные черновики остаются в этом браузере. Не очищайте хранилище браузера.',
+            reload: 'Перезагрузить Query Studio'
+        },
+        connection: {
+            profile: 'Профиль подключения',
+            privateWorkspace: 'Приватная рабочая область · локальные черновики · учетные данные управляются сервером',
+            test: 'Проверить подключение',
+            trust: 'Доверить подключению',
+            revokeTrust: 'Отозвать доверие',
+            commands: 'Команды Ctrl/⌘K',
+            readOnly: 'режим только для чтения',
+            testCompleted: 'Проверка подключения завершена.',
+            activeQueriesCancelled: 'Активные запросы будут отменены.',
+            trustDescription: 'Приложение проверяет схему и выполняет ограниченные запросы только для чтения только по вашему запросу.',
+            reviewBeforeTrust: 'Проверьте хост, базу данных и пользователя, затем доверьте подключение для просмотра схемы или запуска запроса.'
+        },
+        workspace: {
+            view: 'Вид студии',
+            hideFiles: 'Скрыть файлы',
+            showFiles: 'Показать файлы',
+            focusMode: 'Режим фокуса',
+            exitFocusMode: 'Выйти из режима фокуса',
+            sidePanelsHidden: 'Боковые панели скрыты, но не сброшены.',
+            title: 'Проводник',
+            newTab: 'Новая вкладка SQL',
+            importBackup: 'Импорт SQL / резервной копии',
+            searchPlaceholder: 'Поиск файлов, таблиц и столбцов',
+            savedFiles: 'Сохраненные файлы',
+            schema: 'Схема',
+            refreshSchema: 'Обновить схему',
+            statementOutline: 'Структура операторов',
+            exportDrafts: 'Экспорт локальных черновиков',
+            openLocalFiles: 'Открыть локальные файлы',
+            closeTab: 'Закрыть вкладку',
+            reopenTab: 'Снова открыть закрытую вкладку',
+            advancedControls: 'Расширенное выполнение',
+            parameters: 'Параметры запроса'
+        },
+        editor: {
+            runStatement: 'Выполнить оператор',
+            runScript: 'Выполнить скрипт',
+            cancelRun: 'Отменить выполнение',
+            cancelScript: 'Отменить скрипт',
+            saveRevision: 'Сохранить ревизию',
+            publish: 'Опубликовать / поделиться',
+            branch: 'Создать экспериментальную ветку',
+            explain: 'EXPLAIN',
+            pipeline: 'Конвейер',
+            indent: 'Добавить отступ выделению',
+            exportSql: 'Экспорт SQL',
+            statementBoundary: 'Граница оператора',
+            yourSql: 'Ваш SQL под вашим контролем.',
+            emptyHint: 'Запустите пример, чтобы увидеть типизированный результат, график, ID запроса и сохраненные строки. Ничего не запускается автоматически.'
+        },
+        panels: {
+            assistant: 'Ассистент',
+            library: 'Библиотека',
+            import: 'Импорт',
+            evidence: 'Детали выполнения',
+            monitors: 'Мониторы',
+            tools: 'Инструменты студии',
+            inspector: 'Инспектор',
+            workflow: 'Инспектор выполнения',
+            close: 'Закрыть'
+        }
     }
 } as const;
 
@@ -456,7 +678,9 @@ export const localeOptions: Array<{ value: Locale; label: string }> = [
     { value: 'en', label: 'English' },
     { value: 'de', label: 'Deutsch' },
     { value: 'es', label: 'Español' },
-    { value: 'nl', label: 'Nederlands' }
+    { value: 'nl', label: 'Nederlands' },
+    { value: 'zh', label: '中文' },
+    { value: 'ru', label: 'Русский' }
 ];
 
 export function getCopy(locale: Locale = 'en'): Copy {

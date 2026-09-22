@@ -1,5 +1,5 @@
 // Declare cascade layer order before Click UI injects its component styles.
-import './styles.css';
+import './tailwind.css';
 import React, { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';

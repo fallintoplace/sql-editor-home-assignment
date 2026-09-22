@@ -7,7 +7,7 @@ import { api, download, message, post } from './api';
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { checkpoint, closeDraft, MAX_TABS, newDraft, recover, reopenDraft, type Draft, type WorkspaceState } from './workspace-state';
 import { useWorkspacePersistence } from './useWorkspacePersistence';
-import { getCopy, localeOptions, themeOptions, type Copy, type ExperienceLevel, type Locale, type Theme } from './i18n';
+import { getCopy, localeOptions, themeAppearance, themeOptions, type Copy, type ExperienceLevel, type Locale, type Theme } from './i18n';
 import clickhouseLogomarkDark from './assets/clickhouse-logomark-dark.svg';
 import clickhouseLogomarkLight from './assets/clickhouse-logomark-light.svg';
 
@@ -72,7 +72,7 @@ function SelectControl({ label, value, options, onChange }: { label: string; val
 
 function App() {
     const [locale, setLocale] = useState<Locale>(() => pref('cathedral:locale', ['en', 'de', 'es', 'nl', 'zh', 'ru'] as const, 'en'));
-    const [theme, setTheme] = useState<Theme>(() => pref('cathedral:theme', ['monokai', 'catppuccin-latte'] as const, 'monokai'));
+    const [theme, setTheme] = useState<Theme>(() => pref('cathedral:theme', ['monokai', 'catppuccin-latte', 'click-dark', 'click-light'] as const, 'monokai'));
     const [experience, setExperience] = useState<ExperienceLevel>(() => pref('cathedral:experience', ['beginner', 'expert'] as const, 'beginner'));
     const [session, setSession] = useState<Session>();
     const [connections, setConnections] = useState<Connected[]>([]);
@@ -83,12 +83,13 @@ function App() {
     const [connectionPicker, setConnectionPicker] = useState(false);
     const copy = getCopy(locale);
     const connection = connections.find(item => item.id === connectionId) ?? connections[0];
-    const dark = theme === 'monokai';
+    const dark = themeAppearance[theme].dark;
 
     useEffect(() => {
-        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        document.documentElement.dataset.theme = theme;
         document.documentElement.lang = locale;
         document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeAppearance[theme].chromeColor);
         try {
             localStorage.setItem('cathedral:theme', theme);
             localStorage.setItem('cathedral:locale', locale);

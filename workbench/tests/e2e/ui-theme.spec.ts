@@ -1,19 +1,36 @@
 import { test, expect } from '@playwright/test';
 
-for (const theme of ['light', 'dark']) test(`Click UI controls retain their design-system styles in ${theme} mode`, async ({ page }) => {
+const themes = [
+    { value: 'monokai', dark: true, surface: '#101412', chrome: '#101412' },
+    { value: 'catppuccin-latte', dark: false, surface: '#f1f3ee', chrome: '#f1f3ee' },
+    { value: 'click-dark', dark: true, surface: '#0d1012', chrome: '#0d1012' },
+    { value: 'click-light', dark: false, surface: '#f3f5f7', chrome: '#f3f5f7' },
+] as const;
+
+for (const theme of themes) test(`${theme.value} applies its palette and survives reload`, async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText(/not live data/i).first()).toBeVisible();
-    if (theme === 'dark') await page.getByRole('button', { name: 'Dark mode', exact: true }).click();
-    const action = page.getByRole('button', { name: 'Test connection', exact: true });
-    await expect(action).toBeVisible();
-    // A later Tailwind reset previously won over the Click UI cascade layer.
-    // Check rendered affordances, not a class name or a particular theme color.
-    const styles = await action.evaluate(element => {
-        const css = getComputedStyle(element);
-        return { padding: parseFloat(css.paddingLeft), radius: parseFloat(css.borderRadius), height: element.getBoundingClientRect().height };
-    });
-    expect(styles.padding).toBeGreaterThan(0);
-    expect(styles.radius).toBeGreaterThan(0);
-    expect(styles.height).toBeGreaterThanOrEqual(32);
-    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    const picker = page.getByLabel('Theme');
+    await expect(picker).toBeVisible();
+    await picker.selectOption(theme.value);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme.value);
+
+    const palette = await page.locator('html').evaluate(element => ({
+        colorScheme: getComputedStyle(element).colorScheme,
+        surface: getComputedStyle(element).getPropertyValue('--page').trim(),
+    }));
+    expect(palette.colorScheme).toBe(theme.dark ? 'dark' : 'light');
+    expect(palette.surface).toBe(theme.surface);
+    await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', theme.chrome);
+    await expect(page.locator('.brand-symbol')).toHaveAttribute('src', new RegExp(`clickhouse-logomark-${theme.dark ? 'dark' : 'light'}`));
+
+    await page.reload();
+    await expect(page.getByLabel('Theme')).toHaveValue(theme.value);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme.value);
+});
+
+test('an unknown saved theme falls back to Monokai', async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('cathedral:theme', 'future-theme'));
+    await page.goto('/');
+    await expect(page.getByLabel('Theme')).toHaveValue('monokai');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'monokai');
 });

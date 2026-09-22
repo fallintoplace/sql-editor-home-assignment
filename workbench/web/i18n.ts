@@ -1,6 +1,13 @@
 export type Locale = 'en' | 'de' | 'es' | 'nl' | 'zh' | 'ru';
-export type Theme = 'monokai' | 'catppuccin-latte';
+export type Theme = 'monokai' | 'catppuccin-latte' | 'click-dark' | 'click-light';
 export type ExperienceLevel = 'beginner' | 'expert';
+
+export const themeAppearance: Record<Theme, { dark: boolean; chromeColor: string }> = {
+    monokai: { dark: true, chromeColor: '#101412' },
+    'catppuccin-latte': { dark: false, chromeColor: '#f1f3ee' },
+    'click-dark': { dark: true, chromeColor: '#0d1012' },
+    'click-light': { dark: false, chromeColor: '#f3f5f7' },
+};
 
 export interface Copy {
     app: {
@@ -80,6 +87,8 @@ export const localeOptions: Array<{ value: Locale; label: string }> = [
 export const themeOptions: Array<{ value: Theme; label: string }> = [
     { value: 'monokai', label: 'Monokai' },
     { value: 'catppuccin-latte', label: 'Catppuccin Latte' },
+    { value: 'click-dark', label: 'ClickDark' },
+    { value: 'click-light', label: 'ClickLight' },
 ];
 
 export const experienceOptions = (copy: Copy): Array<{ value: ExperienceLevel; label: string }> => [

@@ -26,16 +26,20 @@ jobs:
             npm install
           fi
       - name: Core tests and dependency-aware build
+        id: build
         run: npm test && npm run build
       - name: Local-only credentials and ClickHouse 24.6
+        id: database
         run: npm run init:env && docker compose up -d --wait clickhouse && npm run db:setup
       - name: HTTP integration and LIVE ClickHouse fixture checks
         run: CLICKHOUSE_INTEGRATION=1 npm run test:integration
       - name: Deterministic SQL evaluations
         run: npm run eval
       - name: Install browser
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: npx playwright install --with-deps chromium
       - name: Browser flow tests (explicit fixture driver)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: npm run test:e2e
       - name: Preserve browser diagnostics
         if: failure()
@@ -54,5 +58,5 @@ jobs:
           path: workbench/package-lock.json
           if-no-files-found: ignore
       - name: Stop local services
-        if: always()
+        if: ${{ always() && steps.database.outcome != 'skipped' }}
         run: docker compose down -v

@@ -36,11 +36,16 @@ export class SessionService {
             if (a.until <= now)
                 this.attempts.delete(key);
         requireThat(this.attempts.size < 1000 || this.attempts.has(address), 429, 'LOGIN_CAPACITY', 'Please retry later');
-        const attempts = this.attempts.get(address) ?? { count: 0, until: now + 600000 };
-        attempts.count++;
-        this.attempts.set(address, attempts);
-        requireThat(attempts.count <= 10, 429, 'LOGIN_RATE_LIMIT', 'Too many login attempts. Retry after ten minutes.');
-        requireThat(typeof value === 'string' && value.length <= 4096 && this.token && timingSafeEqual(this.digest(value), this.digest(this.token)), 401, 'INVALID_TOKEN', 'The workspace access token is invalid');
+        const attempts = this.attempts.get(address);
+        requireThat(!attempts || attempts.count < 10, 429, 'LOGIN_RATE_LIMIT', 'Too many login attempts. Retry after ten minutes.');
+        const valid = typeof value === 'string' && value.length <= 4096 && Boolean(this.token) && timingSafeEqual(this.digest(value), this.digest(this.token!));
+        if (!valid) {
+            const next = attempts ?? { count: 0, until: now + 600000 };
+            next.count++;
+            this.attempts.set(address, next);
+            requireThat(false, 401, 'INVALID_TOKEN', 'The workspace access token is invalid');
+        }
+        this.attempts.delete(address);
         for (const [key, s] of this.sessions)
             if (s.expiresAt <= now)
                 this.sessions.delete(key);

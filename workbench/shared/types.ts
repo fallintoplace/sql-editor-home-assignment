@@ -82,6 +82,8 @@ export interface RunRequest {
     limits?: Partial<Limits>;
     tags?: Record<string, string>;
     parentRunId?: string;
+    sourceFrom?: number;
+    sourceTo?: number;
 }
 export type RunStatus = 'queued' | 'running' | 'succeeded' | 'truncated' | 'failed' | 'cancelled' | 'timed_out' | 'interrupted';
 export interface Progress {
@@ -98,6 +100,8 @@ export interface Run {
     connectionId: string;
     documentId?: string;
     sql: string;
+    sourceFrom?: number;
+    sourceTo?: number;
     kind: 'query' | 'explain' | 'pipeline';
     parameters: Record<string, string>;
     limits: Limits;

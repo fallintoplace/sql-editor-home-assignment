@@ -45,11 +45,15 @@ export function runRequest(value: unknown): RunRequest {
         requireThat(/^[A-Za-z0-9_. :/-]{0,80}$/.test(t), 400, 'INVALID_TAG', 'Tags must be short, non-secret labels');
     const requestedLimits = v.limits === undefined ? undefined : record(v.limits, 'limits');
     const checkedLimits = limits(requestedLimits);
+    const sourceFrom = v.sourceFrom === undefined ? undefined : integer(v.sourceFrom, 'sourceFrom', 0, 200000);
+    const sourceTo = v.sourceTo === undefined ? undefined : integer(v.sourceTo, 'sourceTo', 0, 200000);
+    requireThat(sourceFrom === undefined ? sourceTo === undefined : sourceTo !== undefined && sourceTo >= sourceFrom, 400, 'INVALID_SOURCE_RANGE', 'sourceTo must be greater than or equal to sourceFrom');
     return {
         clientRequestId: identifier(v.clientRequestId, 'clientRequestId'),
         connectionId: identifier(v.connectionId, 'connectionId'), sql: text(v.sql, 'SQL', 200000),
         kind: kind as RunRequest['kind'], parameters: stringMap(v.parameters, 'parameters'),
         limits: requestedLimits === undefined ? undefined : Object.fromEntries(Object.keys(requestedLimits).map(k => [k, checkedLimits[k as keyof Limits]])), tags,
+        ...(sourceFrom === undefined ? {} : { sourceFrom, sourceTo }),
         ...(v.documentId !== undefined ? { documentId: identifier(v.documentId, 'documentId') } : {}),
         ...(v.parentRunId !== undefined ? { parentRunId: identifier(v.parentRunId, 'parentRunId') } : {}),
     };

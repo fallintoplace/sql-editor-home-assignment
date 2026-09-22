@@ -146,4 +146,8 @@ export function reopenDraft(state: WorkspaceState): WorkspaceState {
     return { ...state, tabs: [...state.tabs, reopened], activeId: reopened.id, closedTabs };
 }
 
-export function checkpoint(draft: Draft, reason: string): Draft { return { ...draft, checkpoints: [{ id: crypto.randomUUID(), at: new Date().toISOString(), reason, sql: draft.sql, from: draft.from, to: draft.to, parentRevision: draft.baseRevision }, ...draft.checkpoints].slice(0, 30) }; }
+export function checkpoint(draft: Draft, reason: string): Draft {
+    const point = { id: crypto.randomUUID(), at: new Date().toISOString(), reason, sql: draft.sql, from: draft.from, to: draft.to, parentRevision: draft.baseRevision };
+    // Repeating a command without changing SQL does not create a useful second full snapshot.
+    return { ...draft, checkpoints: [point, ...draft.checkpoints.filter(existing => existing.sql !== draft.sql)].slice(0, 30) };
+}

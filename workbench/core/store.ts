@@ -23,6 +23,15 @@ export class MemoryStore implements Store {
 /** Atomic single-process persistence. Do not share this directory between replicas. */
 export class FileStore implements Store {
     constructor(private readonly directory: string) { mkdirSync(directory, { recursive: true, mode: 0o700 }); }
+    private syncDirectory(directory: string) {
+        const dirfd = openSync(directory, 'r');
+        try {
+            fsyncSync(dirfd);
+        }
+        finally {
+            closeSync(dirfd);
+        }
+    }
     private path(bucket: string, id?: string) {
         for (const part of [bucket, ...(id === undefined ? [] : [id])]) {
             requireThat(/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(part), 400, 'INVALID_STORAGE_KEY', 'Invalid storage key');
@@ -45,13 +54,13 @@ export class FileStore implements Store {
         const temp = join(directory, `.${randomUUID()}.tmp`);
         const fd = openSync(temp, 'wx', 0o600);
         try {
-            writeFileSync(fd, JSON.stringify(value));
-            fsyncSync(fd);
-        }
-        finally {
-            closeSync(fd);
-        }
-        try {
+            try {
+                writeFileSync(fd, JSON.stringify(value));
+                fsyncSync(fd);
+            }
+            finally {
+                closeSync(fd);
+            }
             renameSync(temp, target);
         }
         catch (error) {
@@ -60,22 +69,21 @@ export class FileStore implements Store {
             throw error;
         }
         // Persist the directory entry, not only the temporary file contents.
-        const dirfd = openSync(directory, 'r');
-        try {
-            fsyncSync(dirfd);
-        }
-        finally {
-            closeSync(dirfd);
-        }
+        this.syncDirectory(directory);
     }
     delete(bucket: string, id: string) {
+        const directory = this.path(bucket);
+        let removed = false;
         try {
             unlinkSync(this.path(bucket, id));
+            removed = true;
         }
         catch (error) {
             if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
                 throw error;
         }
+        if (removed)
+            this.syncDirectory(directory);
     }
     list<T>(bucket: string): T[] {
         let names: string[];

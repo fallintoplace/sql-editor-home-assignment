@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, hoverTooltip, keymap, lineNumbers, highlightActiveLine, drawSelection, rectangularSelection } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab, indentSelection } from '@codemirror/commands';
@@ -30,30 +30,54 @@ function aliasesFor(sql: string) {
     }
     return aliases;
 }
-function tableFor(schema: Schema | undefined, name: string) {
-    const normalized = unquote(name).toLowerCase();
-    return schema?.tables.find(t => `${t.database}.${t.name}`.toLowerCase() === normalized || t.name.toLowerCase() === normalized);
+type SchemaIndex = {
+    columns: Schema['columns'];
+    columnsByTable: Map<string, Schema['columns']>;
+    tables: Schema['tables'];
+    tablesByName: Map<string, Schema['tables'][number]>;
+    codeMirror: Record<string, string[]>;
+};
+const tableKey = (database: string, table: string) => `${database}\u0000${table}`;
+function indexSchema(schema: Schema | undefined): SchemaIndex {
+    const columns = schema?.columns ?? [], columnsByTable = new Map<string, Schema['columns']>(), tablesByName = new Map<string, Schema['tables'][number]>(), codeMirror: Record<string, string[]> = {};
+    for (const column of columns) {
+        const key = tableKey(column.database, column.table), grouped = columnsByTable.get(key) ?? [];
+        grouped.push(column);
+        columnsByTable.set(key, grouped);
+    }
+    for (const table of schema?.tables ?? []) {
+        const qualified = `${table.database}.${table.name}`.toLowerCase(), short = table.name.toLowerCase();
+        tablesByName.set(qualified, table);
+        if (!tablesByName.has(short))
+            tablesByName.set(short, table);
+        codeMirror[`${table.database}.${table.name}`] = (columnsByTable.get(tableKey(table.database, table.name)) ?? []).map(column => column.name);
+    }
+    return { columns, columnsByTable, tables: schema?.tables ?? [], tablesByName, codeMirror };
 }
-function completionSource(context: CompletionContext, schema: Schema | undefined, sqlText: string): CompletionResult | null {
+function indexedTable(index: SchemaIndex, name: string) {
+    return index.tablesByName.get(unquote(name).toLowerCase());
+}
+function completionSource(context: CompletionContext, index: SchemaIndex, sqlText: string): CompletionResult | null {
     const word = context.matchBefore(/[A-Za-z_][A-Za-z0-9_$]*(?:\.[A-Za-z_][A-Za-z0-9_$]*)?$/);
     if (!word && !context.explicit)
         return null;
     const token = word?.text ?? '', dot = token.lastIndexOf('.'), qualifier = dot >= 0 ? token.slice(0, dot) : '';
-    const aliases = aliasesFor(sqlText), tableName = qualifier ? aliases.get(unquote(qualifier).toLowerCase()) ?? qualifier : undefined, table = tableName ? tableFor(schema, tableName) : undefined;
-    const columns = (table ? schema?.columns.filter(c => c.database === table.database && c.table === table.name) ?? [] : schema?.columns ?? []).slice(0, 300).map(column => ({ label: qualifier ? `${qualifier}.${column.name}` : column.name, type: 'variable', detail: `${column.type} · ${column.database}.${column.table}` }));
-    const tables = qualifier ? [] : (schema?.tables ?? []).slice(0, 300).map(t => ({ label: `${t.database}.${t.name}`, type: 'class', detail: t.engine }));
+    const aliases = aliasesFor(sqlText), tableName = qualifier ? aliases.get(unquote(qualifier).toLowerCase()) ?? qualifier : undefined, table = tableName ? indexedTable(index, tableName) : undefined;
+    const columns = (table ? index.columnsByTable.get(tableKey(table.database, table.name)) ?? [] : index.columns).slice(0, 300).map(column => ({ label: qualifier ? `${qualifier}.${column.name}` : column.name, type: 'variable', detail: `${column.type} · ${column.database}.${column.table}` }));
+    const tables = qualifier ? [] : index.tables.slice(0, 300).map(t => ({ label: `${t.database}.${t.name}`, type: 'class', detail: t.engine }));
     const functions = qualifier ? [] : clickhouseFunctions.map(([label, detail]) => ({ label, type: 'function', detail }));
     return { from: word?.from ?? context.pos, options: [...functions, ...tables, ...columns], validFor: /^[A-Za-z_][A-Za-z0-9_$]*(?:\.[A-Za-z_][A-Za-z0-9_$]*)?$/ };
 }
-function hoverInfo(schema: Schema | undefined, sqlText: string, label: string) {
+function hoverInfo(index: SchemaIndex, sqlText: string, label: string) {
     const functionInfo = clickhouseFunctions.find(([name]) => name.toLowerCase() === label.toLowerCase());
     if (functionInfo)
         return `${functionInfo[0]}() · ${functionInfo[1]}`;
     const aliases = aliasesFor(sqlText), raw = unquote(label), qualified = raw.split('.'), columnName = qualified.at(-1)!.toLowerCase(), tableName = qualified.length > 1 ? aliases.get(qualified.slice(0, -1).join('.').toLowerCase()) ?? qualified.slice(0, -1).join('.') : undefined;
-    const column = schema?.columns.find(c => c.name.toLowerCase() === columnName && (!tableName || `${c.database}.${c.table}`.toLowerCase() === tableName.toLowerCase() || c.table.toLowerCase() === tableName.toLowerCase()));
+    const matchedTable = tableName ? indexedTable(index, tableName) : undefined, columns = matchedTable ? index.columnsByTable.get(tableKey(matchedTable.database, matchedTable.name)) ?? [] : index.columns;
+    const column = columns.find(c => c.name.toLowerCase() === columnName);
     if (column)
         return `${column.database}.${column.table}.${column.name} · ${column.type}${column.comment ? ` · ${column.comment}` : ''}`;
-    const table = tableFor(schema, raw);
+    const table = indexedTable(index, raw);
     return table ? `${table.database}.${table.name} · ${table.engine}` : undefined;
 }
 export interface EditorHandle {
@@ -79,11 +103,13 @@ interface Props {
 export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(props, ref) {
     const element = useRef<HTMLDivElement>(null), view = useRef<EditorView | undefined>(undefined), current = useRef(props), language = useRef(new Compartment()), theme = useRef(new Compartment());
     current.current = props;
-    const languageExtension = () => sql({ dialect: clickhouse, schema: Object.fromEntries((current.current.schema?.tables ?? []).map(t => [`${t.database}.${t.name}`, current.current.schema?.columns.filter(c => c.database === t.database && c.table === t.name).map(c => c.name) ?? []])) });
+    const schemaIndex = useMemo(() => indexSchema(props.schema), [props.schema]), schemaIndexRef = useRef(schemaIndex);
+    schemaIndexRef.current = schemaIndex;
+    const languageExtension = () => sql({ dialect: clickhouse, schema: schemaIndex.codeMirror });
     const themeExtension = () => EditorView.theme({ '&': { height: '100%', backgroundColor: 'var(--panel)', color: 'var(--text)' }, '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace', fontSize: '13px' }, '.cm-gutters': { backgroundColor: 'var(--panel)', color: 'var(--muted)', border: 'none' }, '.cm-content': { minHeight: '220px' }, '.cm-cursor': { borderLeftColor: 'var(--text)' }, '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: 'var(--editor-selection)' } }, { dark: current.current.dark });
     useEffect(() => { if (!element.current)
-        return; const p = current.current; const editor = new EditorView({ parent: element.current, state: EditorState.create({ doc: p.value, selection: { anchor: Math.min(p.from, p.value.length), head: Math.min(p.to, p.value.length) }, extensions: [lineNumbers(), history(), drawSelection(), highlightActiveLine(), rectangularSelection(), bracketMatching(), foldGutter(), highlightSelectionMatches(), syntaxHighlighting(defaultHighlightStyle), autocompletion({ override: [context => completionSource(context, current.current.schema, current.current.value)] }), hoverTooltip((view, pos) => { const word = view.state.wordAt(pos); if (!word)
-                return null; const label = view.state.sliceDoc(word.from, word.to), info = hoverInfo(current.current.schema, current.current.value, label); if (!info)
+        return; const p = current.current; const editor = new EditorView({ parent: element.current, state: EditorState.create({ doc: p.value, selection: { anchor: Math.min(p.from, p.value.length), head: Math.min(p.to, p.value.length) }, extensions: [lineNumbers(), history(), drawSelection(), highlightActiveLine(), rectangularSelection(), bracketMatching(), foldGutter(), highlightSelectionMatches(), syntaxHighlighting(defaultHighlightStyle), autocompletion({ override: [context => completionSource(context, schemaIndexRef.current, current.current.value)] }), hoverTooltip((view, pos) => { const word = view.state.wordAt(pos); if (!word)
+                return null; const label = view.state.sliceDoc(word.from, word.to), info = hoverInfo(schemaIndexRef.current, current.current.value, label); if (!info)
                 return null; return { pos: word.from, end: word.to, above: true, create: () => { const dom = document.createElement('div'); dom.className = 'sql-hover'; dom.textContent = info; return { dom }; } }; }), language.current.of(languageExtension()), theme.current.of(themeExtension()), EditorState.allowMultipleSelections.of(true), EditorView.contentAttributes.of({ 'aria-label': 'SQL editor', 'spellcheck': 'false' }), keymap.of([{ key: 'Mod-Enter', run: () => { current.current.onRun(false); return true; } }, { key: 'Mod-Shift-Enter', run: () => { current.current.onRun(true); return true; } }, ...defaultKeymap, ...historyKeymap, ...searchKeymap, ...foldKeymap, indentWithTab]), EditorView.updateListener.of(update => { if (update.docChanged)
                     current.current.onChange(update.state.doc.toString()); if (update.selectionSet) {
                     const s = update.state.selection.main;
@@ -94,7 +120,7 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
     useEffect(() => { const v = view.current; if (!v)
         return; const from = Math.min(props.from, v.state.doc.length), to = Math.min(props.to, v.state.doc.length); if (v.state.selection.main.from !== from || v.state.selection.main.to !== to)
         v.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true }); }, [props.from, props.to]);
-    useEffect(() => { view.current?.dispatch({ effects: language.current.reconfigure(languageExtension()) }); }, [props.schema]);
+    useEffect(() => { view.current?.dispatch({ effects: language.current.reconfigure(languageExtension()) }); }, [schemaIndex]);
     useEffect(() => { view.current?.dispatch({ effects: theme.current.reconfigure(themeExtension()) }); }, [props.dark]);
     useEffect(() => { const v = view.current; if (!v)
         return; const position = props.error?.position; v.dispatch(setDiagnostics(v.state, position === undefined ? [] : [{ from: Math.min(position, v.state.doc.length), to: Math.min(position + 1, v.state.doc.length), severity: 'error', message: props.error!.message }])); }, [props.error]);

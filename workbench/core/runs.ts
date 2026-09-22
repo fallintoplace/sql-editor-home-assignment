@@ -127,6 +127,7 @@ export class RunService {
         const run: Run = {
             id, queryId: `cathedral-${randomUUID()}`, owner: principal.id, dataSource: conn.dataSource ?? 'clickhouse',
             connectionId: conn.id, documentId: request.documentId, sql: request.sql,
+            ...(request.sourceFrom === undefined ? {} : { sourceFrom: request.sourceFrom, sourceTo: request.sourceTo }),
             kind: request.kind ?? 'query', parameters: request.parameters ?? {}, limits: limits(request.limits, conn.limits),
             tags: { ...request.tags, owner: principal.id }, parentRunId: request.parentRunId,
             status: 'queued', createdAt: new Date().toISOString(), elapsedMs: 0,
@@ -417,7 +418,7 @@ export class RunService {
                 continue;
             }
             try {
-                const run = this.submit(principal, { ...request, sql: statement.sql, clientRequestId: `${script.id}-${index}` });
+                const run = this.submit(principal, { ...request, sql: statement.sql, clientRequestId: `${script.id}-${index}`, sourceFrom: statement.from, sourceTo: statement.to });
                 statement.runId = run.id;
                 statement.status = 'running';
                 this.store.put('scripts', script.id, script);

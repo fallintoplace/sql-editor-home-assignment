@@ -129,7 +129,13 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
         catch (error) {
             if (signal.aborted)
                 throw signal.reason;
-            throw this.safeError(error);
+            const failure = this.safeError(error);
+            if (failure.position !== undefined && run.sourceFrom !== undefined && run.sourceTo !== undefined) {
+                const prefix = run.kind === 'explain' ? 'EXPLAIN indexes = 1\n'.length : run.kind === 'pipeline' ? 'EXPLAIN PIPELINE\n'.length : 0;
+                const position = Math.max(run.sourceFrom, Math.min(run.sourceTo, run.sourceFrom + failure.position - prefix));
+                throw new AppError(failure.status, failure.code, failure.message, failure.remediation, position);
+            }
+            throw failure;
         }
         finally {
             if (timer)
@@ -147,7 +153,7 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
     }
     async profileEvidence(run: Run) {
         requireThat(this.manifests.get(run.connectionId)?.queryLog.available, 409, 'CAPABILITY_UNAVAILABLE', 'Test the connection; query-log visibility is required');
-        return this.rows(run.connectionId, 'SELECT query_id, type, query_duration_ms, read_rows, read_bytes, result_rows, result_bytes, memory_usage, exception_code FROM system.query_log WHERE query_id = {id:String} ORDER BY event_time DESC LIMIT 10', { id: run.queryId });
+        return this.rows(run.connectionId, "SELECT query_id, type, query_duration_ms, read_rows, read_bytes, result_rows, result_bytes, memory_usage, exception_code FROM system.query_log WHERE query_id = {id:String} AND type IN ('QueryFinish', 'ExceptionWhileProcessing', 'ExceptionBeforeStart') ORDER BY event_time DESC LIMIT 10", { id: run.queryId });
     }
     targets(id: string) { return this.profile(id).writer?.tables ?? []; }
     allowed(id: string, table: string) { return this.targets(id).includes(table); }

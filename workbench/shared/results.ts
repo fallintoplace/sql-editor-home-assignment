@@ -1,5 +1,6 @@
 import type { ChartConfig, Column, Json, Result, Row } from './types.js';
 export const MAX_CHART_SERIES = 20;
+export const MAX_CHART_POINTS = 5000;
 export function displayValue(value: Json | undefined): string {
     if (value === null || value === undefined)
         return 'NULL';
@@ -54,7 +55,7 @@ export function exportCsv(result: Pick<Result, 'columns' | 'rows'>): string {
 export function columnStats(rows: Row[], index: number) {
     let nulls = 0;
     const values = new Set<string>();
-    const numbers: number[] = [];
+    let min: number | null = null, max: number | null = null;
     for (const row of rows) {
         const value = row[index];
         if (value === null || value === undefined) {
@@ -63,10 +64,11 @@ export function columnStats(rows: Row[], index: number) {
         }
         values.add(displayValue(value));
         const n = chartNumber(value);
-        if (n !== null)
-            numbers.push(n);
+        if (n !== null) {
+            min = min === null ? n : Math.min(min, n);
+            max = max === null ? n : Math.max(max, n);
+        }
     }
     return { scope: 'retained rows only' as const, rows: rows.length, nulls, distinct: values.size,
-        min: numbers.length ? numbers.reduce((a, b) => Math.min(a, b)) : null,
-        max: numbers.length ? numbers.reduce((a, b) => Math.max(a, b)) : null };
+        min, max };
 }

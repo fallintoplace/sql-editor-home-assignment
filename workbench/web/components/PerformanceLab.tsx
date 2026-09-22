@@ -48,7 +48,10 @@ const formatBytes = (input: unknown) => {
     return `${number.toLocaleString()} B`;
 };
 const formatDuration = (milliseconds: number | undefined) => milliseconds === undefined ? '—' : milliseconds < 1000 ? `${Math.round(milliseconds)} ms` : `${(milliseconds / 1000).toFixed(2)} s`;
-const evidenceFor = (profile: ProfileResponse | undefined, queryId: string) => objectRows(profile?.evidence).find(row => String(value(row, 'query_id') ?? '') === queryId) ?? objectRows(profile?.evidence)[0];
+const evidenceFor = (profile: ProfileResponse | undefined, queryId: string) => {
+    const rows = objectRows(profile?.evidence), matching = rows.filter(row => String(value(row, 'query_id') ?? '') === queryId);
+    return matching.find(row => ['QueryFinish', 'ExceptionWhileProcessing', 'ExceptionBeforeStart'].includes(String(value(row, 'type')))) ?? matching[0] ?? rows[0];
+};
 function snapshot(run: Run, row: EvidenceRow | undefined): Snapshot {
     return {
         durationMs: numberValue(value(row, 'query_duration_ms')) ?? run.elapsedMs,

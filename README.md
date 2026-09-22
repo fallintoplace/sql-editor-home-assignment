@@ -54,6 +54,8 @@ npm run test:e2e
 
 The integration/evaluation commands require the local database setup above.
 Browser tests use the explicit fixture driver, not a substitute for live ClickHouse.
+The GitHub Actions browser step is temporarily paused while the dense workbench
+layout selectors are repaired; the backend, build, ClickHouse, and SQL checks remain active.
 See the [hardening and verification note](docs/WORKBENCH-HARDENING.md) for the reviewed
 base commit, what was actually run, and the checks still required for this patch.
 The older implementation status documents describe the initial delivery baseline.

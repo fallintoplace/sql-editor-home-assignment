@@ -135,6 +135,10 @@ npx playwright install chromium
 npm run test:e2e                  # Explicitly labeled fixture-driver browser tests
 ```
 
+The GitHub Actions browser step is temporarily paused while selectors for the dense
+workbench layout are repaired. Run it locally when changing the UI; backend, build,
+ClickHouse, and SQL evaluation checks remain active in CI.
+
 The added GitHub Actions workflow runs the intended full path, including the 24.6 container. It has not run for this patch. Because registry access was unavailable during authoring, the new package has no fabricated lockfile. `npm run setup` creates `workbench/package-lock.json`; review and commit it after dependency installation and verification. CI can bootstrap with npm install until then and uploads the generated lock for review, but a reproducible release requires the committed lock and pinned deployment images.
 
 See `IMPLEMENTATION-STATUS.md` and the delivered verification report for what was actually executed.

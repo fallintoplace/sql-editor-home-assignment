@@ -25,8 +25,8 @@ export function fixture(options = {}) {
             await sleep(options.delay ?? 2, undefined, { signal });
             return { columns, rows: [['1'], ['2']], truncated: false };
         }, async cancel(run) { kills.push(run.id); } };
-    const authorize = (_p, id) => { if (!['local', 'second'].includes(id))
-        throw new Error('No access'); return { ...connection, id }; };
+    const authorize = options.authorize ?? ((_p, id) => { if (!['local', 'second'].includes(id))
+        throw new Error('No access'); return { ...connection, id }; });
     const runs = new RunService(store, driver, authorize, options);
     runs.trust(owner, 'local', true);
     return { store, driver, calls, kills, runs, authorize, request: (extra = {}) => ({ clientRequestId: randomUUID(), connectionId: 'local', sql: 'SELECT number AS n FROM numbers(2)', ...extra }) };

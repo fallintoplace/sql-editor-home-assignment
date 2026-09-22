@@ -17,7 +17,8 @@ async function open(page: Page) {
     return page.getByRole('dialog', { name: 'Open local files', exact: true });
 }
 const localInput = (page: Page) => page.locator('input[aria-label="Local SQL files or draft backups"]');
-const tabs = (page: Page) => page.getByRole('tablist', { name: 'SQL documents' }).getByRole('tab');
+const tabs = (page: Page) => page.locator('[role="tablist"][aria-label="SQL documents"] [role="tab"]');
+const editorText = (page: Page) => page.locator('.cm-content').evaluate(element => element.textContent ?? '');
 const savedState = (page: Page) => page.evaluate(() => {
     window.dispatchEvent(new Event('pagehide'));
     return JSON.parse(localStorage.getItem('cathedral:local-owner:demo:v1')!);
@@ -26,13 +27,13 @@ const savedState = (page: Page) => page.evaluate(() => {
 test('SQL files are previewed before opening, with no replacement or automatic execution', async ({ page }) => {
     const effects = sideEffects(page);
     await page.goto('/');
-    const original = await page.locator('.cm-content').innerText();
+    const original = await editorText(page);
     const dialog = await open(page);
     await localInput(page).setInputFiles([sqlFile('first.sql', 'SELECT 11'), sqlFile('second.SQL', 'SELECT 22')]);
     await expect(dialog.getByRole('checkbox', { name: 'first.sql', exact: true })).toBeChecked();
     await expect(tabs(page)).toHaveCount(1);
     await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await expect(page.locator('.cm-content')).toHaveText(original);
+    await expect.poll(() => editorText(page)).toBe(original);
     await open(page);
     await localInput(page).setInputFiles([sqlFile('first.sql', 'SELECT 11'), sqlFile('second.SQL', 'SELECT 22')]);
     await dialog.getByRole('button', { name: 'Open selected drafts', exact: true }).click();

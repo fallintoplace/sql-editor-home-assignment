@@ -79,15 +79,19 @@
 .sidebar,.drawer,.editor-column{border-radius:12px;box-shadow:0 8px 24px color-mix(in srgb,var(--text) 4%,transparent)}
 .sidebar{padding:16px 14px;top:16px;max-height:calc(100vh - 250px)}
 .sidebar h2{letter-spacing:-.02em}
-.editor-column{padding:18px;gap:14px}
+.editor-column{padding:18px 18px 32px;gap:14px}
 .tabs{padding-bottom:10px}
 .editor-header{padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--page)}
 .editor-header>div:first-child{flex:1;max-width:none}
-.sql-editor{height:clamp(280px,38vh,520px);background:var(--panel);box-shadow:inset 0 1px 3px color-mix(in srgb,var(--text) 5%,transparent)}
+.sql-editor{height:clamp(240px,32vh,440px);background:var(--panel);box-shadow:inset 0 1px 3px color-mix(in srgb,var(--text) 5%,transparent)}
 .drawer{padding:18px;top:16px;max-height:calc(100vh - 250px)}
 .drawer>.toolbar{margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid var(--line)}
 .results{padding-top:18px}
 .empty-state{padding:30px 24px}
+
+@media(min-width:1181px){
+ .workspace-grid>.sidebar,.workspace-grid>.drawer{position:relative;top:auto;max-height:none;overflow:visible}
+}
 
 @media(max-width:1180px){
  .connection-picker{padding-inline:16px}

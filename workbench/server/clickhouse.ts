@@ -38,10 +38,10 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
         const cap = /TOO_MANY_ROWS_OR_BYTES|LIMIT_EXCEEDED|MEMORY_LIMIT_EXCEEDED/i.test(message);
         return new AppError(denied ? 403 : cap ? 413 : 502, denied ? 'CLICKHOUSE_PERMISSION' : cap ? 'SERVER_RESOURCE_LIMIT' : 'CLICKHOUSE_ERROR', message, undefined, position ? Math.max(0, Number(position) - 1) : undefined);
     }
-    private async rows<T>(id: string, sql: string, parameters: Record<string, string> = {}, readonly = 1): Promise<T[]> {
+    private async rows<T>(id: string, sql: string, parameters: Record<string, string> = {}): Promise<T[]> {
         try {
             const set = await this.client(id).query({ query: sql, format: 'JSONEachRow', query_params: parameters, query_id: `cathedral-inspect-${randomUUID()}`,
-                abort_signal: AbortSignal.timeout(10000), clickhouse_settings: { readonly, max_execution_time: 8, max_result_rows: 6000, max_result_bytes: 3000000, result_overflow_mode: 'throw', max_threads: 2 } });
+                abort_signal: AbortSignal.timeout(10000), clickhouse_settings: { readonly: '1', max_execution_time: 8, max_result_rows: '6000', max_result_bytes: '3000000', result_overflow_mode: 'throw', max_threads: 2 } });
             return await set.json<T>();
         }
         catch (error) {
@@ -118,8 +118,8 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
             }, 750);
         try {
             const response = await this.client(run.connectionId).exec({ query: `${sql}\nFORMAT JSONCompactEachRowWithNamesAndTypes`, query_id: run.queryId, query_params: run.parameters, abort_signal: signal,
-                clickhouse_settings: { readonly: 1, max_execution_time: run.limits.seconds, max_memory_usage: run.limits.memory, max_threads: run.limits.threads,
-                    max_result_rows: 100000, max_result_bytes: 50000000, result_overflow_mode: 'throw', max_rows_to_read: 100000000, max_bytes_to_read: 5000000000,
+                clickhouse_settings: { readonly: '1', max_execution_time: run.limits.seconds, max_memory_usage: String(run.limits.memory), max_threads: run.limits.threads,
+                    max_result_rows: '100000', max_result_bytes: '50000000', result_overflow_mode: 'throw', max_rows_to_read: '100000000', max_bytes_to_read: '5000000000',
                     output_format_json_quote_64bit_integers: 1, output_format_json_quote_decimals: 1, log_comment: JSON.stringify(run.tags) } });
             const result = await collectCompactStream(response.stream, run.limits);
             if (result.truncated)
@@ -154,7 +154,7 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
     async insert(id: string, table: string, rows: Record<string, Json>[], queryId: string) {
         requireThat(this.allowed(id, table), 403, 'IMPORT_NOT_ALLOWED', 'Import target is not allowlisted');
         try {
-            await this.client(id, true).insert({ table: quotedTable(table), values: rows, format: 'JSONEachRow', query_id: queryId, abort_signal: AbortSignal.timeout(60000), clickhouse_settings: { max_execution_time: 55, max_memory_usage: 536870912 } });
+            await this.client(id, true).insert({ table: quotedTable(table), values: rows, format: 'JSONEachRow', query_id: queryId, abort_signal: AbortSignal.timeout(60000), clickhouse_settings: { max_execution_time: 55, max_memory_usage: '536870912' } });
         }
         catch (error) {
             throw this.safeError(error);

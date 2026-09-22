@@ -65,10 +65,10 @@ function Root() {
         const stored = localStorage.getItem('cathedral:theme');
         if (themeValues.includes(stored as Theme))
             return stored as Theme;
-        return stored === 'light' ? 'solarized-light' : 'kraken-night';
+        return 'monokai';
     }
     catch {
-        return 'kraken-night';
+        return 'monokai';
     } });
     const [experience, setExperience] = useState<ExperienceLevel>(() => { try {
         const stored = localStorage.getItem('cathedral:experience');
@@ -91,7 +91,7 @@ function Root() {
         }
     });
     const copy = getCopy(locale);
-    const dark = !['solarized-light', 'clickhouse-light', 'github-light', 'catppuccin-latte', 'rose-pine-dawn', 'ayu-light'].includes(theme);
+    const dark = theme === 'monokai';
     useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; document.documentElement.dataset.palette = theme; document.documentElement.style.colorScheme = dark ? 'dark' : 'light'; try {
         localStorage.setItem('cathedral:theme', theme);
     }

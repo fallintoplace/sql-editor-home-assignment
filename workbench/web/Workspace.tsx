@@ -6,7 +6,7 @@ import { api, download, message, post } from './api';
 import { Action, Callout, HelpTip, Select, TextField, useConfirmation } from './ui';
 import { checkpoint, closeDraft, MAX_TABS, newDraft, recover, reopenDraft, type Draft, type WorkspaceState } from './workspace-state';
 import { useWorkspacePersistence } from './useWorkspacePersistence';
-import { publicationIssue } from '../shared/evidence';
+import { publicationIssue, sameParameters } from '../shared/evidence';
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { ResultPane } from './components/ResultPane';
 import { AssistantPanel } from './components/AssistantPanel';
@@ -32,6 +32,12 @@ type Panel = 'assistant' | 'library' | 'import' | 'evidence' | 'monitors';
 type ResultDeckView = 'closed' | 'results' | 'history';
 type BoardPreset = 'write' | 'analyze' | 'investigate' | 'review' | 'monitor';
 const boardPresets: BoardPreset[] = ['write', 'analyze', 'investigate', 'review', 'monitor'];
+function samePublicationDraft(left: Draft | undefined, right: Draft): boolean {
+    return Boolean(left && left.name === right.name && left.sql === right.sql && sameParameters(left.parameters, right.parameters) &&
+        left.activeRunId === right.activeRunId && left.parentDocumentId === right.parentDocumentId && left.kind === right.kind &&
+        JSON.stringify(left.chart) === JSON.stringify(right.chart) && JSON.stringify(left.metric) === JSON.stringify(right.metric) &&
+        JSON.stringify(left.dependencies) === JSON.stringify(right.dependencies));
+}
 const learnerExamples: Array<{ name: string; level: ExperienceLevel; description: string; sql: string; chart: Draft['chart']; parameters?: Record<string, string> }> = [
     { name: '01 · Daily events.sql', level: 'beginner', description: 'Create a small time series with numbers() and a date column.', sql: "SELECT\n    toDate('2026-01-01') + number AS day,\n    (number + 1) * 10 AS events\nFROM numbers(7)\nORDER BY day", chart: { kind: 'line', x: 0, ys: [1], title: 'Daily events' } },
     { name: '02 · Group and count.sql', level: 'beginner', description: 'Group rows into cohorts and count the values in each bucket.', sql: 'SELECT\n    number % 3 AS cohort,\n    count() AS users\nFROM numbers(90)\nGROUP BY cohort\nORDER BY cohort', chart: { kind: 'bar', x: 0, ys: [1], title: 'Users by cohort' } },
@@ -254,12 +260,19 @@ export function Workspace({ connection, dark, experience, refresh, copy }: {
         const confirmed = await confirmation.ask('Publish an evidence snapshot', 'Freeze the saved SQL, parameters, chart and result. Publication keeps at most 1,000 rows / 1 MB for seven days. Truncation is explicitly acknowledged; later draft edits do not change the snapshot.');
         if (!confirmed)
             return;
-        update(active.id, d => checkpoint(d, 'Before publication'));
-        const saved = await saveDraft(active);
+        const candidate = stateRef.current.tabs.find(d => d.id === active.id);
+        if (!candidate)
+            throw new Error('The draft was closed while publication was being confirmed.');
+        const latestIssue = publicationIssue(run.data, { ...candidate, connectionId: connection.id });
+        if (latestIssue)
+            throw new Error(latestIssue);
+        update(candidate.id, d => checkpoint(d, 'Before publication'));
+        const saved = await saveDraft(candidate);
         const pub = await post<Published>(`/documents/${saved.id}/publish`, { revision: saved.revision, acknowledgeTruncated: true });
         await client.invalidateQueries({ queryKey: ['published'] });
-        setNotice(`Published revision ${pub.revision}. Snapshot expires ${new Date(pub.expiresAt).toLocaleString()}.`);
-        if (await confirmation.ask('Create a read-only share link', 'Anyone holding this link can see the SQL and bounded result until expiry or revocation. It does not grant database access or execution rights.')) {
+        const newerLocalEdits = !samePublicationDraft(stateRef.current.tabs.find(d => d.id === candidate.id), candidate);
+        setNotice(`Published revision ${pub.revision}. Snapshot expires ${new Date(pub.expiresAt).toLocaleString()}.${newerLocalEdits ? ' Newer local edits remain in the editor and are not part of this snapshot.' : ''}`);
+        if (await confirmation.ask('Create a read-only share link', 'Anyone holding this link can see the SQL, bound parameter values, chart configuration, query ID / execution identity, and bounded result until expiry or revocation. It does not grant database access or execution rights.')) {
             const shared = await post<{
                 path: string;
             }>(`/published/${pub.id}/share`, { acknowledgeShare: true });

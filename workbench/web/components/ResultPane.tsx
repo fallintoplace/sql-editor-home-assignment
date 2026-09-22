@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Dialog } from '@clickhouse/click-ui';
 import type { ChartConfig, Json, Result, Run } from '../../shared/types';
+import type { Copy } from '../i18n';
 import { columnStats, displayValue, exportCsv, filterRows, numericType, recommendChart } from '../../shared/results';
 import { api, download, message } from '../api';
 import { Action, Callout, Select, TextField } from '../ui';
@@ -10,17 +11,25 @@ import { matchesDraft } from '../../shared/evidence';
 import { visibleColumns, exportFilteredCsv } from '../../shared/result-columns';
 import { ResultColumnControls } from './ResultColumnControls';
 
-export function ResultPane({ run, draftSql, draftParameters, config, onChart, onChild }: {
+function ResultProfile({ result, rows }: { result: Result; rows: Result['rows'] }) {
+    return <div className="result-profile" aria-label="Result profile"><div className="toolbar spread"><strong>Retained result profile</strong><span className="muted">{rows.length.toLocaleString()} rows · local filter scope</span></div><div className="result-profile-grid">{result.columns.map((column, index) => {
+        const stats = columnStats(rows, index), nullRate = rows.length ? Math.round((stats.nulls / rows.length) * 100) : 0;
+        return <article className="profile-card" key={`${column.name}-${index}`}><div className="toolbar spread"><strong title={column.name}>{column.name}</strong><code>{column.type}</code></div><dl><div><dt>Distinct</dt><dd>{stats.distinct.toLocaleString()}</dd></div><div><dt>Nulls</dt><dd>{stats.nulls.toLocaleString()} <small>({nullRate}%)</small></dd></div><div><dt>Minimum</dt><dd>{stats.min === null ? '—' : String(stats.min)}</dd></div><div><dt>Maximum</dt><dd>{stats.max === null ? '—' : String(stats.max)}</dd></div></dl></article>;
+    })}</div><p className="muted">Profiles describe retained rows after the local filter. They never run another query and never change the authoritative result.</p></div>;
+}
+
+export function ResultPane({ run, draftSql, draftParameters, config, copy, onChart, onChild }: {
     run: Run;
     draftSql: string;
     draftParameters: Record<string, string>;
     config: ChartConfig;
+    copy: Copy;
     onChart: (c: ChartConfig) => void;
     onChild: (column: string, value: string | null) => void;
 }) {
     const [filter, setFilter] = useState(''), [page, setPage] = useState(0), [inspect, setInspect] = useState<number>();
     const [hiddenColumns, setHiddenColumns] = useState<number[]>([]);
-    const [showSql, setShowSql] = useState(false), [view, setView] = useState<'table' | 'chart'>('table');
+    const [showSql, setShowSql] = useState(false), [view, setView] = useState<'table' | 'chart' | 'profile'>('table');
     const [cell, setCell] = useState<{ column: number; value: Json }>();
     const [copyNotice, setCopyNotice] = useState(''), [copyError, setCopyError] = useState(''), [copying, setCopying] = useState(false);
     const cellOrigin = useRef<HTMLElement | null>(null);
@@ -57,7 +66,7 @@ export function ResultPane({ run, draftSql, draftParameters, config, onChart, on
                     <Action aria-pressed={view === 'chart'} type={view === 'chart' ? 'primary' : 'secondary'} onClick={() => {
                         if (config.kind === 'table' && recommendation) onChart(recommendation.config);
                         setView('chart');
-                    }}>Chart</Action></>}
+                    }}>Chart</Action><Action aria-pressed={view === 'profile'} type={view === 'profile' ? 'primary' : 'secondary'} onClick={() => setView('profile')}>{copy.editor.profile}</Action></>}
             </div>
         </div>
         <div className="run-facts"><code>{run.queryId}</code><span>{Math.round(run.elapsedMs)} ms</span><span>{run.rowCount.toLocaleString()} returned rows</span><span>{run.progress ? `${run.progress.readRows} rows read · ${run.progress.readBytes} bytes read` : 'Read progress unavailable'}</span><span>Executed as {run.executedAs}</span></div>
@@ -71,8 +80,8 @@ export function ResultPane({ run, draftSql, draftParameters, config, onChart, on
         {result && <>
             <p className="muted">{result.completeness === 'truncated' ? 'Truncated retained prefix' : 'Complete returned result'} · executed {new Date(result.createdAt).toLocaleString()} · retained until {new Date(result.expiresAt).toLocaleString()}</p>
             <div className="toolbar wrap"><Action onClick={() => download(`${run.queryId}.csv`, exportCsv(result), 'text/csv')}>CSV</Action><Action onClick={() => download(`${run.queryId}.json`, { run, result })}>Evidence JSON</Action><span className="muted">Full CSV and Evidence JSON: Exports include all {result.rows.length.toLocaleString()} retained rows, not just the local filter or page. All columns are included.</span></div>
-            {view === 'chart' ? <>
-                <div className="chart-controls"><Select label="Chart type" value={config.kind} options={['table', 'number', 'line', 'bar', 'stacked', 'area', 'pie', 'scatter'].map(value => ({ value, label: value }))} onSelect={kind => { onChart({ ...config, kind: kind as ChartConfig['kind'] }); if (kind === 'table') setView('table'); }}/><Select label="X axis" value={String(config.x)} options={result.columns.map((c, i) => ({ value: String(i), label: c.name }))} onSelect={x => onChart({ ...config, x: Number(x) })}/><Select label="Measure" value={String(config.ys[0] ?? '')} options={result.columns.flatMap((c, i) => numericType(c.type) ? [{ value: String(i), label: c.name }] : [])} onSelect={y => onChart({ ...config, ys: [Number(y)] })}/><TextField label="Title" value={config.title} onChange={title => onChart({ ...config, title })}/></div>
+            {view === 'profile' ? <ResultProfile result={result} rows={filtered}/> : view === 'chart' ? <>
+                <div className="chart-controls"><Select label="Chart type" value={config.kind} options={['table', 'number', 'line', 'bar', 'stacked', 'area', 'pie', 'scatter'].map(value => ({ value, label: value }))} onSelect={kind => { onChart({ ...config, kind: kind as ChartConfig['kind'] }); if (kind === 'table') setView('table'); }}/><Select label="X axis" value={String(config.x)} options={result.columns.map((c, i) => ({ value: String(i), label: c.name }))} onSelect={x => onChart({ ...config, x: Number(x) })}/><div className="measure-picker"><span className="field-label">Measures</span><div className="toolbar wrap">{result.columns.map((column, index) => numericType(column.type) && <Action key={index} type={config.ys.includes(index) ? 'primary' : 'secondary'} aria-pressed={config.ys.includes(index)} onClick={() => { const ys = config.ys.includes(index) ? config.ys.filter(value => value !== index) : [...config.ys, index]; if (ys.length) onChart({ ...config, ys }); }}>{column.name}</Action>)}</div></div><TextField label="Title" value={config.title} onChange={title => onChart({ ...config, title })}/></div>
                 <p className="muted">{recommendation?.reason} The chart uses all retained rows, not the local table filter.</p>
                 {config.kind === 'table' ? <Callout>Choose a chart type and numeric measure, or select Table to inspect the retained values.</Callout> : <Chart result={result} config={config} onFilter={onChild}/>}
             </> : <>

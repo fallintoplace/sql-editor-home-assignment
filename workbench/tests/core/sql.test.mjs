@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { splitSql, selectedStatement, parameterNames, quoteIdentifier, insertChildFilter } from '../../.core-build/shared/sql.js';
+import { splitSql, selectedStatement, parameterNames, quoteIdentifier, insertChildFilter, formatSql } from '../../.core-build/shared/sql.js';
 import { guardSql } from '../../.core-build/core/guards.js';
 import { limits, runRequest, validateJson } from '../../.core-build/core/validation.js';
 const cases = [
@@ -30,6 +30,13 @@ for (const sql of ['DELETE FROM t', 'SELECT 1; DROP TABLE t', 'SELECT 1 SETTINGS
     test(`Read-only guard rejects ${sql}`, () => assert.throws(() => guardSql(sql)));
 test('Missing named parameter is explicit', () => assert.throws(() => guardSql('SELECT {n:UInt64}'), { code: 'MISSING_PARAMETER' }));
 test('Child filter is bound, not interpolated', () => { const f = insertChildFilter('SELECT x FROM t', 'x', "x' OR 1=1"); assert.ok(!f.sql.includes("OR 1=1")); assert.equal(f.parameters.wb_filter, "x' OR 1=1"); });
+test('SQL formatter preserves literals and comments while laying out clauses', () => {
+    const formatted = formatSql("select 'a  from  b' as value -- keep  spaces\nfrom events where value = 'x;y' and id = 1;");
+    assert.ok(formatted.includes("'a  from  b'"));
+    assert.ok(formatted.includes('-- keep  spaces'));
+    assert.ok(formatted.includes("'x;y'"));
+    assert.match(formatted, /\nFROM events\nWHERE/);
+});
 test('Hard limits cannot be raised', () => assert.throws(() => limits({ rows: 1e8 })));
 test('Unknown limit cannot exploit prototype', () => assert.throws(() => limits(JSON.parse('{"__proto__":1}'))));
 test('Unsafe JSON integers reject rather than lose precision', () => assert.throws(() => validateJson(JSON.parse('{"id":18446744073709551615}'))));

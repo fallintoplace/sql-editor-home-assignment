@@ -126,6 +126,68 @@ export function selectedStatement(sql: string, from: number, to = from): Stateme
     return all.find(s => from >= s.from && from <= s.to) ??
         all.find(s => s.from > from) ?? all.at(-1);
 }
+
+/**
+ * A conservative layout helper for the editor. It only changes whitespace and
+ * clause boundaries; quoted values and comments are protected byte-for-byte.
+ * This is intentionally a formatter, not a SQL parser or a semantic rewrite.
+ */
+export function formatSql(sql: string): string {
+    const protectedParts: string[] = [];
+    const protectedText = (value: string) => {
+        const marker = `__WB_FMT_${protectedParts.length}__`;
+        protectedParts.push(value);
+        return marker;
+    };
+    let masked = '';
+    for (let i = 0; i < sql.length;) {
+        const ch = sql[i]!;
+        if (sql.startsWith('--', i) || ch === '#') {
+            const end = sql.indexOf('\n', i);
+            const to = end < 0 ? sql.length : end;
+            masked += protectedText(sql.slice(i, to));
+            i = to;
+            continue;
+        }
+        if (sql.startsWith('/*', i)) {
+            const end = sql.indexOf('*/', i + 2);
+            const to = end < 0 ? sql.length : end + 2;
+            masked += protectedText(sql.slice(i, to));
+            i = to;
+            continue;
+        }
+        if (ch === "'" || ch === '"' || ch === '`') {
+            let to = i + 1;
+            while (to < sql.length) {
+                if (sql[to] === '\\') {
+                    to += 2;
+                    continue;
+                }
+                if (sql[to] === ch) {
+                    if (sql[to + 1] === ch) {
+                        to += 2;
+                        continue;
+                    }
+                    to++;
+                    break;
+                }
+                to++;
+            }
+            masked += protectedText(sql.slice(i, to));
+            i = to;
+            continue;
+        }
+        masked += ch;
+        i++;
+    }
+    masked = masked.replace(/[ \t\r\n]+/g, ' ').trim();
+    masked = masked.replace(/\s*;\s*/g, ';\n');
+    masked = masked.replace(/\s+(FROM|PREWHERE|WHERE|GROUP BY|HAVING|ORDER BY|LIMIT|OFFSET|UNION ALL|UNION DISTINCT|SETTINGS|FORMAT)\b/gi, (_match, keyword: string) => `\n${keyword.toUpperCase()}`);
+    masked = masked.replace(/\s+(LEFT|RIGHT|FULL|INNER|CROSS)?\s*JOIN\b/gi, (_match, side: string | undefined) => `\n${side ? `${side.toUpperCase()} ` : ''}JOIN`);
+    masked = masked.replace(/\s+(AND|OR)\s+/gi, (_match, keyword: string) => `\n  ${keyword.toUpperCase()} `);
+    masked = masked.split('\n').map(line => line.trim()).filter(Boolean).join('\n');
+    return masked.replace(/__WB_FMT_(\d+)__/g, (_match, index: string) => protectedParts[Number(index)] ?? '');
+}
 export function quoteIdentifier(name: string): string {
     return '`' + name.replace(/\\/g, '\\\\').replace(/`/g, '\\`') + '`';
 }

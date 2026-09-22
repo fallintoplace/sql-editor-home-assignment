@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Connection, QueryDocument, Run, RunEvent, Schema, Script, Published } from '../shared/types';
-import { parameterNames, quoteIdentifier, selectedStatement, splitSql, insertChildFilter } from '../shared/sql';
+import { formatSql, parameterNames, quoteIdentifier, selectedStatement, splitSql, insertChildFilter } from '../shared/sql';
 import { api, download, message, post } from './api';
 import { Action, Callout, Select, TextField, useConfirmation } from './ui';
 import { checkpoint, closeDraft, MAX_TABS, newDraft, recover, reopenDraft, type Draft, type WorkspaceState } from './workspace-state';
@@ -19,6 +19,7 @@ import { DraftSaveStatus } from './components/DraftSaveStatus';
 import { ExecutionLimits } from './components/ExecutionLimits';
 import { QueryHistory } from './components/QueryHistory';
 import { LocalFilesDialog } from './components/LocalFilesDialog';
+import { PerformanceLab, type ProfileResponse } from './components/PerformanceLab';
 import { appendLocalDrafts, localDraftBackup } from './local-files';
 import type { Copy } from './i18n';
 import './workbench-ux.css';
@@ -205,6 +206,7 @@ export function Workspace({ connection, dark, refresh, copy }: {
         { id: 'save', name: 'Save named revision · Ctrl/⌘ S', disabledReason: busy ? 'Another action is in progress.' : undefined, run: () => void perform(async () => { await saveDraft(active); }) },
         { id: 'explain', name: 'Explain selected statement', disabledReason: unavailable ?? (!connection.manifest?.explain.available ? 'EXPLAIN is unavailable on this connection.' : undefined), run: () => void execute(false, 'explain') },
         { id: 'pipeline', name: 'Inspect pipeline', disabledReason: unavailable ?? (!connection.manifest?.pipeline.available ? 'Pipeline inspection is unavailable on this connection.' : undefined), run: () => void execute(false, 'pipeline') },
+        { id: 'format', name: 'Format SQL', run: () => patch({ sql: formatSql(active.sql) }) },
         { id: 'branch', name: 'Create isolated experiment', disabledReason: state.tabs.length >= MAX_TABS ? 'Close a tab before creating another.' : undefined, run: branch },
         { id: 'assistant', name: 'Ask Data / review SQL', run: () => showPanel('assistant') },
         { id: 'library', name: 'Local history and revisions', run: () => showPanel('library') },
@@ -235,12 +237,7 @@ export function Workspace({ connection, dark, refresh, copy }: {
         document.addEventListener('keydown', keydown);
         return () => document.removeEventListener('keydown', keydown);
     }, []);
-    const profile = useQuery({ queryKey: ['profile', connection.id, active.activeRunId], queryFn: () => api<{
-            queryId: string;
-            evidence: unknown;
-            notice: string;
-            traceUrl?: string;
-        }>(`/runs/${active.activeRunId}/profile`), enabled: false, retry: false });
+    const profile = useQuery({ queryKey: ['profile', connection.id, active.activeRunId], queryFn: () => api<ProfileResponse>(`/runs/${active.activeRunId}/profile`), enabled: false, retry: false });
     return <><div className={`workspace-banner ${connection.trusted ? 'is-trusted' : 'needs-trust'}`}><div><strong>{connection.name}</strong><span className="muted">{connection.host} · {connection.database} · {connection.username} · {copy.connection.readOnly}</span></div><div className="toolbar"><Action disabled={busy} onClick={() => void perform(async () => { await post(`/connections/${connection.id}/test`); await refresh(); setNotice(copy.connection.testCompleted); })}>{copy.connection.test}</Action><Action disabled={busy} type={connection.trusted ? 'secondary' : 'primary'} onClick={() => void perform(async () => { if (await confirmation.ask(connection.trusted ? copy.connection.revokeTrust : copy.connection.trust, `${connection.host} · database ${connection.database} · identity ${connection.username}. ${connection.trusted ? copy.connection.activeQueriesCancelled : copy.connection.trustDescription}`, connection.id)) {
         await post(`/connections/${connection.id}/trust`, { trusted: !connection.trusted, confirmation: connection.id });
         await refresh();
@@ -269,13 +266,13 @@ export function Workspace({ connection, dark, refresh, copy }: {
  {parsed.error && <p className="muted">{copy.editor.statementBoundary}: {parsed.error}</p>}
  <details className="editor-advanced" open={Boolean(limitIssue)}><summary>{copy.workspace.advancedControls} <span className="advanced-summary">{rowLimit} rows · {timeLimit}s deadline</span></summary>
  <ExecutionLimits ref={limitsPanel} rows={rowLimit} seconds={timeLimit} defaults={connection.limits} onRows={setRowLimit} onSeconds={setTimeLimit}/>
- <div className="toolbar wrap editor-tools"><Action disabled={busy || !connection.manifest?.explain.available || !connection.trusted || Boolean(limitIssue)} title={limitIssue} onClick={() => void execute(false, 'explain')}>{copy.editor.explain}</Action><Action disabled={busy || !connection.manifest?.pipeline.available || !connection.trusted || Boolean(limitIssue)} title={limitIssue} onClick={() => void execute(false, 'pipeline')}>{copy.editor.pipeline}</Action><Action onClick={() => { update(active.id, d => checkpoint(d, 'Before indentation')); editor.current?.indent(); }}>{copy.editor.indent}</Action><Action onClick={() => download(active.name, active.sql, 'application/sql')}>{copy.editor.exportSql}</Action></div>
+ <div className="toolbar wrap editor-tools"><Action disabled={busy || !connection.manifest?.explain.available || !connection.trusted || Boolean(limitIssue)} title={limitIssue} onClick={() => void execute(false, 'explain')}>{copy.editor.explain}</Action><Action disabled={busy || !connection.manifest?.pipeline.available || !connection.trusted || Boolean(limitIssue)} title={limitIssue} onClick={() => void execute(false, 'pipeline')}>{copy.editor.pipeline}</Action><Action onClick={() => patch({ sql: formatSql(active.sql) })}>{copy.editor.formatSql}</Action><Action onClick={() => { update(active.id, d => checkpoint(d, 'Before indentation')); editor.current?.indent(); }}>{copy.editor.indent}</Action><Action onClick={() => download(active.name, active.sql, 'application/sql')}>{copy.editor.exportSql}</Action></div>
  <p className="muted">{connection.limits.bytes.toLocaleString()} output bytes · {Math.round(connection.limits.memory / 1048576)} MiB memory · {connection.limits.threads} threads · {connection.manifest?.serverVersion ?? 'Version unknown: test the connection for capabilities'}</p>
  {parsed.parameters.length > 0 && <details><summary>{copy.workspace.parameters}</summary><div className="parameter-grid">{parsed.parameters.map(p => <TextField key={p.name} label={`${p.name} : ${p.type}`} value={active.parameters[p.name] ?? ''} onChange={value => patch({ parameters: { ...active.parameters, [p.name]: value } })}/>)}</div></details>}
  </details>
  <div className="toolbar wrap panel-switcher" aria-label={copy.panels.tools}>{(['assistant', 'library', 'import', 'evidence', 'monitors'] as Panel[]).map(p => <Action key={p} type={panel === p ? 'primary' : 'secondary'} aria-pressed={panel === p && !focusMode} onClick={() => { if (focusMode) showPanel(p); else setPanel(panel === p ? null : p); }}>{copy.panels[p]}</Action>)}</div>
  {script.data && <section className="panel-card"><h3>Script: {script.data.status}</h3><p>Stop-on-error is enabled. Every statement has a separate run and query ID.</p><div className="toolbar wrap">{script.data.statements.map((s, i) => <Action key={i} disabled={!s.runId} onClick={() => patch({ activeRunId: s.runId })}>Statement {i + 1}: {s.status}</Action>)}</div></section>}
- {run.data && <ResultPane key={run.data.id} run={run.data} draftSql={active.sql} draftParameters={active.parameters} config={active.chart} onChart={chart => patch({ chart })} onChild={child}/>} {!active.activeRunId && <div className="empty-state"><h2>{copy.editor.yourSql}</h2><p>{copy.editor.emptyHint}</p></div>}
+ {run.data && <ResultPane key={run.data.id} run={run.data} draftSql={active.sql} draftParameters={active.parameters} config={active.chart} copy={copy} onChart={chart => patch({ chart })} onChild={child}/>} {!active.activeRunId && <div className="empty-state"><h2>{copy.editor.yourSql}</h2><p>{copy.editor.emptyHint}</p></div>}
  {run.error && <Callout danger>{message(run.error)}</Callout>}{script.error && <Callout danger>{message(script.error)}</Callout>}
  <QueryHistory key={active.id} runs={visibleHistory} selectedRunId={active.activeRunId} allFiles={allHistory} fetching={history.isFetching} error={history.error ? message(history.error) : undefined} busy={busy}
      onToggleScope={() => setAllHistory(value => !value)} onRetry={() => void history.refetch()}
@@ -288,7 +285,7 @@ export function Workspace({ connection, dark, refresh, copy }: {
  {panel === 'library' && <LibraryPanel key={active.id} draft={active} documents={visibleDocuments} onChange={patch} onRestore={restore} onOpen={openDocument}/>}
  {panel === 'import' && <ImportPanel connectionId={connection.id} schema={schema.data} trusted={connection.trusted}/>}
  {panel === 'monitors' && <AutomationPanel connectionId={connection.id} onRun={id => patch({ activeRunId: id })}/>}
- {panel === 'evidence' && <div className="stack"><h2>Execution evidence</h2>{run.data ? <><pre className="code-block">{JSON.stringify(run.data, null, 2)}</pre><Action disabled={!connection.trusted || !connection.manifest?.queryLog.available} onClick={() => void profile.refetch()}>Fetch query-log evidence</Action>{profile.data && <><p>{profile.data.notice}</p><pre className="code-block">{JSON.stringify(profile.data.evidence, null, 2)}</pre>{profile.data.traceUrl && <a href={profile.data.traceUrl} target="_blank" rel="noreferrer">Open trace in configured observability service</a>}</>}{profile.error && <Callout danger>{message(profile.error)}</Callout>}</> : <p>Select a run first.</p>}<a href="https://clickhouse.com/docs" target="_blank" rel="noreferrer">ClickHouse documentation (external fallback)</a><p className="muted">Server-matched documentation search and operator-level profiles are not yet implemented.</p></div>}
+ {panel === 'evidence' && <PerformanceLab connectionId={connection.id} run={run.data} runs={visibleHistory} available={Boolean(connection.trusted && connection.manifest?.queryLog.available)} current={profile.data} loading={profile.isFetching} error={profile.error ? message(profile.error) : undefined} onLoad={() => void profile.refetch()}/>}
  </aside>}
  </div>
  <CommandPalette open={palette} commands={commands} onOpenChange={setPalette} restoreFocus={() => { if (paletteOrigin.current?.isConnected) paletteOrigin.current.focus(); else editor.current?.focus(); }}/>

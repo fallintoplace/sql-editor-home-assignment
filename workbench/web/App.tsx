@@ -8,14 +8,25 @@ import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { checkpoint, closeDraft, MAX_TABS, newDraft, recover, reopenDraft, type Draft, type WorkspaceState } from './workspace-state';
 import { useWorkspacePersistence } from './useWorkspacePersistence';
 import { getCopy, localeOptions, themeAppearance, themeOptions, type Copy, type ExperienceLevel, type Locale, type Theme } from './i18n';
-import clickhouseLogomarkDark from './assets/clickhouse-logomark-dark.svg';
-import clickhouseLogomarkLight from './assets/clickhouse-logomark-light.svg';
 
 type Connected = Connection & { trusted: boolean };
 type Session = { principal: Principal | null; requiresLogin: boolean; demo: boolean };
 type Inspector = 'schema' | 'history' | 'documents' | 'details' | 'profile' | 'pipeline' | 'assistant';
 type ResultsView = 'results' | 'chart' | 'insights';
 type BusyAction = 'run' | 'script' | 'save' | 'ai' | '';
+type AssistantContext = { id: string; summary: string[] };
+type SpeechRecognitionLike = {
+    continuous: boolean;
+    interimResults: boolean;
+    lang: string;
+    onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void) | null;
+    onerror: ((event: { error: string }) => void) | null;
+    onend: (() => void) | null;
+    start: () => void;
+    stop: () => void;
+    abort: () => void;
+};
+type SpeechWindow = Window & { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike };
 
 const terminal = (run?: Run) => Boolean(run && ['succeeded', 'truncated', 'failed', 'cancelled', 'timed_out', 'interrupted'].includes(run.status));
 const stateKey = (connectionId: string) => `clickstudio:workspace:${connectionId}:v1`;
@@ -46,6 +57,8 @@ function Icon({ name, className = '' }: { name: string; className?: string }) {
         lock: <><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/></>,
         bolt: <path d="m13 2-9 12h7l-1 8 10-13h-7l1-7Z"/>,
         copy: <><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></>,
+        mic: <><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11.5a7 7 0 0 0 14 0M12 18.5v3m-4 0h8"/></>,
+        send: <><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></>,
     };
     return <svg aria-hidden="true" className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">{paths[name] ?? paths.details}</svg>;
 }
@@ -125,12 +138,12 @@ function App() {
         catch (error) { setSessionError(message(error)); }
     };
 
-    if (!session) return <main className="auth-screen"><section className="auth-card animate-enter"><Brand dark={dark}/><span className="eyebrow mt-8">PRIVATE WORKSPACE</span><h1>{sessionError ? 'Workspace unavailable' : copy.auth.opening}</h1>{sessionError ? <><p>{sessionError}</p><Button variant="primary" onClick={() => { setSessionError(''); void loadSession().catch(error => setSessionError(message(error))); }}>Try again</Button></> : <div className="splash-status"><span className="loading-orbit"/><p>{copy.auth.opening}</p></div>}</section></main>;
-    if (!session.principal) return <main className="auth-screen"><form className="auth-card animate-enter" onSubmit={event => { event.preventDefault(); void login(); }}><Brand dark={dark}/><span className="eyebrow mt-8">Private workspace</span><h1>{copy.auth.title}</h1><p>{copy.auth.description}</p><label className="field-label">{copy.auth.token}<input className="field-input mt-2" type="password" autoComplete="current-password" value={token} onChange={event => setToken(event.target.value)} autoFocus/></label>{sessionError && <div className="callout callout-error">{sessionError}</div>}<Button variant="primary" type="submit" disabled={busy || !token} className="mt-4 w-full">{busy ? copy.auth.opening : copy.auth.open}<span className="button-arrow">↗</span></Button><div className="auth-footnote"><Icon name="lock"/> Credentials are handled by the workspace server.</div></form></main>;
+    if (!session) return <main className="auth-screen"><section className="auth-card animate-enter"><Brand/><span className="eyebrow mt-8">PRIVATE WORKSPACE</span><h1>{sessionError ? 'Workspace unavailable' : copy.auth.opening}</h1>{sessionError ? <><p>{sessionError}</p><Button variant="primary" onClick={() => { setSessionError(''); void loadSession().catch(error => setSessionError(message(error))); }}>Try again</Button></> : <div className="splash-status"><span className="loading-orbit"/><p>{copy.auth.opening}</p></div>}</section></main>;
+    if (!session.principal) return <main className="auth-screen"><form className="auth-card animate-enter" onSubmit={event => { event.preventDefault(); void login(); }}><Brand/><span className="eyebrow mt-8">Private workspace</span><h1>{copy.auth.title}</h1><p>{copy.auth.description}</p><label className="field-label">{copy.auth.token}<input className="field-input mt-2" type="password" autoComplete="current-password" value={token} onChange={event => setToken(event.target.value)} autoFocus/></label>{sessionError && <div className="callout callout-error">{sessionError}</div>}<Button variant="primary" type="submit" disabled={busy || !token} className="mt-4 w-full">{busy ? copy.auth.opening : copy.auth.open}<span className="button-arrow">↗</span></Button><div className="auth-footnote"><Icon name="lock"/> Credentials are handled by the workspace server.</div></form></main>;
 
     return <div className="application" data-experience={experience}>
         <header className="topbar">
-            <Brand dark={dark}/>
+            <Brand/>
             <div className="topbar-divider"/>
             <div className="connection-wrap">
                 <button className="connection-trigger" type="button" aria-expanded={connectionPicker} onClick={() => setConnectionPicker(value => !value)}>
@@ -153,15 +166,15 @@ function App() {
             <Button variant="ghost" className="account-button" title="Sign out" onClick={() => void logout()}>HV</Button>
         </header>
         {session.demo && <div className="demo-ribbon"><span className="status-light is-warning"/> DEMO DATA · queries are not sent to a live database</div>}
-        {connection ? <Workspace key={connection.id} connection={connection} connections={connections} onSelectConnection={setConnectionId} onRefreshConnections={async () => { const latest = await api<Connected[]>('/connections'); setConnections(latest); }} experience={experience} dark={dark} copy={copy}/> : <div className="empty-connection"><Icon name="schema"/><h1>{copy.app.name}</h1><p>No connection profiles are configured for this workspace.</p></div>}
+        {connection ? <Workspace key={connection.id} connection={connection} connections={connections} onSelectConnection={setConnectionId} onRefreshConnections={async () => { const latest = await api<Connected[]>('/connections'); setConnections(latest); }} experience={experience} dark={dark} copy={copy} locale={locale}/> : <div className="empty-connection"><Icon name="schema"/><h1>{copy.app.name}</h1><p>No connection profiles are configured for this workspace.</p></div>}
     </div>;
 }
 
-function Brand({ dark }: { dark: boolean }) {
-    return <div className="brand-lockup"><img className="brand-symbol" src={dark ? clickhouseLogomarkDark : clickhouseLogomarkLight} alt="ClickHouse logo"/><span className="brand-name">Click<span>Studio</span><small>CLICKHOUSE WORKSPACE</small></span></div>;
+function Brand() {
+    return <div className="brand-lockup"><span className="brand-name">Click<span>Studio</span><small>CLICKHOUSE WORKSPACE</small></span></div>;
 }
 
-function Workspace({ connection, connections, onSelectConnection, onRefreshConnections, experience, dark, copy }: {
+function Workspace({ connection, connections, onSelectConnection, onRefreshConnections, experience, dark, copy, locale }: {
     connection: Connected;
     connections: Connected[];
     onSelectConnection: (id: string) => void;
@@ -169,6 +182,7 @@ function Workspace({ connection, connections, onSelectConnection, onRefreshConne
     experience: ExperienceLevel;
     dark: boolean;
     copy: Copy;
+    locale: Locale;
 }) {
     const key = stateKey(connection.id);
     const [workspace, setWorkspace] = useState<WorkspaceState>(() => recover(key));
@@ -198,6 +212,17 @@ function Workspace({ connection, connections, onSelectConnection, onRefreshConne
     const [eventState, setEventState] = useState<'idle' | 'live' | 'reconnecting'>('idle');
     const [search, setSearch] = useState('');
     const [trusting, setTrusting] = useState(false);
+    const [assistantAction, setAssistantAction] = useState<AssistantAction>('generate');
+    const [assistantQuestion, setAssistantQuestion] = useState('');
+    const [assistantContext, setAssistantContext] = useState<AssistantContext>();
+    const [assistantProposal, setAssistantProposal] = useState<Proposal>();
+    const [assistantBusy, setAssistantBusy] = useState(false);
+    const [assistantError, setAssistantError] = useState('');
+    const [includeResult, setIncludeResult] = useState(false);
+    const [voiceListening, setVoiceListening] = useState(false);
+    const [voiceError, setVoiceError] = useState('');
+    const recognitionRef = useRef<SpeechRecognitionLike | undefined>(undefined);
+    const promptBeforeVoiceRef = useRef('');
     const storageError = useWorkspacePersistence(key, workspace);
     const parameters = useMemo(() => {
         try { return parameterNames(active.sql); } catch { return []; }
@@ -206,6 +231,71 @@ function Workspace({ connection, connections, onSelectConnection, onRefreshConne
     const running = Boolean(run && !terminal(run));
     const currentConnection = connections.find(item => item.id === connection.id) ?? connection;
     const trusted = currentConnection.trusted;
+
+    useEffect(() => () => recognitionRef.current?.abort(), []);
+    useEffect(() => { setDrawerOpen(false); }, [experience]);
+
+    const startVoiceInput = () => {
+        if (voiceListening) { recognitionRef.current?.stop(); return; }
+        const SpeechRecognition = (window as SpeechWindow).SpeechRecognition ?? (window as SpeechWindow).webkitSpeechRecognition;
+        if (!SpeechRecognition) { setVoiceError('Voice input is not available in this browser. You can type your question instead.'); return; }
+        setVoiceError('');
+        promptBeforeVoiceRef.current = assistantQuestion.trimEnd();
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = ({ en: 'en-US', de: 'de-DE', es: 'es-ES', nl: 'nl-NL', zh: 'zh-CN', ru: 'ru-RU' } as const)[locale];
+        recognition.onresult = event => {
+            const transcript = Array.from(event.results).map(result => result[0]?.transcript ?? '').join(' ').replace(/\s+/g, ' ').trim();
+            const base = promptBeforeVoiceRef.current;
+            setAssistantQuestion(`${base}${base && transcript ? ' ' : ''}${transcript}`);
+            setAssistantContext(undefined);
+            setAssistantProposal(undefined);
+        };
+        recognition.onerror = event => {
+            setVoiceError(event.error === 'not-allowed' ? 'Microphone access was denied. Allow access or type your question instead.' : `Voice input stopped (${event.error}). You can continue by typing.`);
+            setVoiceListening(false);
+        };
+        recognition.onend = () => setVoiceListening(false);
+        recognitionRef.current = recognition;
+        try { recognition.start(); setVoiceListening(true); }
+        catch { setVoiceError('Voice input could not start. Check microphone access or type your question instead.'); setVoiceListening(false); }
+    };
+
+    const prepareAssistantContext = async (action = assistantAction, question = assistantQuestion) => {
+        if (!trusted) return;
+        if (!question.trim() && action === 'generate') { setAssistantError('Describe what you want to learn from your data first.'); return; }
+        setAssistantBusy(true); setAssistantError(''); setAssistantAction(action);
+        try {
+            const result = await post<AssistantContext>('/assistant/context', { connectionId: connection.id, action, question, sql: active.sql, runId: activeRunId, includeResult });
+            setAssistantContext(result); setAssistantProposal(undefined);
+        } catch (caught) { setAssistantError(message(caught)); }
+        finally { setAssistantBusy(false); }
+    };
+
+    const requestAssistantProposal = async () => {
+        if (!assistantContext || assistantBusy) return;
+        if (!window.confirm(`Send the reviewed SQL and selected context to the configured AI provider? ${assistantContext.summary.join(' ')}`)) return;
+        setAssistantBusy(true); setAssistantError('');
+        try { setAssistantProposal(await post<Proposal>('/assistant/proposals', { contextId: assistantContext.id, consent: true })); }
+        catch (caught) { setAssistantError(message(caught)); }
+        finally { setAssistantBusy(false); }
+    };
+
+    const decideAssistantProposal = async (decision: 'accepted' | 'rejected') => {
+        if (!assistantProposal) return;
+        setAssistantBusy(true); setAssistantError('');
+        try {
+            const reviewed = await post<Proposal>(`/assistant/proposals/${encodeURIComponent(assistantProposal.id)}/decision`, { decision, connectionId: connection.id, currentSql: active.sql });
+            setAssistantProposal(reviewed);
+            if (decision === 'accepted' && reviewed.sql !== null) patch({ ...checkpoint(active, 'Before accepted AI proposal'), sql: reviewed.sql, from: 0, to: 0 });
+        } catch (caught) { setAssistantError(message(caught)); }
+        finally { setAssistantBusy(false); }
+    };
+
+    const changeAssistantQuestion = (question: string) => {
+        setAssistantQuestion(question); setAssistantContext(undefined); setAssistantProposal(undefined); setAssistantError('');
+    };
 
     const update = useCallback((id: string, change: (draft: Draft) => Draft) => {
         setWorkspace(current => ({ ...current, tabs: current.tabs.map(draft => draft.id === id ? change(draft) : draft) }));
@@ -440,7 +530,7 @@ function Workspace({ connection, connections, onSelectConnection, onRefreshConne
                 <RailButton icon="history" label={copy.common.history} active={inspector === 'history' && drawerOpen} onClick={() => showInspector('history')}/>
                 <RailButton icon="documents" label="Documents" active={inspector === 'documents' && drawerOpen} onClick={() => showInspector('documents')}/>
                 <span className="rail-spacer"/>
-                <RailButton icon="assistant" label={copy.common.assistant} accent active={inspector === 'assistant' && drawerOpen} onClick={() => showInspector('assistant')}/>
+                <RailButton icon="assistant" label={copy.common.assistant} accent active={experience === 'expert' && inspector === 'assistant'} onClick={() => experience === 'beginner' ? document.getElementById('beginner-query-prompt')?.focus() : showInspector('assistant')}/>
                 {experience === 'expert' && <><RailButton icon="details" label="Run details" active={inspector === 'details'} onClick={() => showInspector('details')}/><RailButton icon="pipeline" label="Pipeline" active={inspector === 'pipeline'} onClick={() => showInspector('pipeline')}/></>}
                 <span className="rail-separator"/>
                 <button className="rail-icon-button rail-icon-muted" type="button" title="Export local drafts" onClick={() => download('clickstudio-local-drafts.json', workspace)}><Icon name="settings"/></button>
@@ -457,8 +547,8 @@ function Workspace({ connection, connections, onSelectConnection, onRefreshConne
                     <span className="draft-status"><span className="status-light is-trusted"/>Local draft</span>
                 </div>
 
-                <div className="workspace-content">
-                    <section className="editor-surface">
+                <div className={cx('workspace-content', experience === 'beginner' && 'beginner-workspace-content', experience === 'beginner' && run && 'has-run')}>
+                    {experience === 'beginner' ? <AssistantWorkflow mode="beginner" sql={active.sql} action={assistantAction} onActionChange={value => { setAssistantAction(value); setAssistantContext(undefined); setAssistantProposal(undefined); }} question={assistantQuestion} onQuestionChange={changeAssistantQuestion} context={assistantContext} proposal={assistantProposal} busy={assistantBusy} error={assistantError} trusted={trusted} runId={run?.id} includeResult={includeResult} onIncludeResult={setIncludeResult} onVoiceInput={startVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={() => void prepareAssistantContext('generate', assistantQuestion)} onRequestProposal={() => void requestAssistantProposal()} onDecideProposal={decision => void decideAssistantProposal(decision)} onRunQuery={() => void execute()} runDisabled={!trusted || Boolean(busy)} onSave={() => void saveDraft()} saveDisabled={Boolean(busy)}/> : <section className="editor-surface">
                         <div className="editor-heading">
                             <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">QUERY</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label><span className="edit-indicator" title={active.serverId ? `Saved revision ${active.baseRevision}` : 'Only in this browser'}>{active.serverId ? `REV ${active.baseRevision}` : 'LOCAL'}</span></div>
                             <div className="editor-heading-actions"><Button variant="ghost" className="icon-only" title="Format SQL" onClick={() => patch({ sql: formatSql(active.sql) })}>⌘</Button><Button variant="secondary" onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/> {copy.common.save}</Button></div>
@@ -473,9 +563,9 @@ function Workspace({ connection, connections, onSelectConnection, onRefreshConne
                         <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={schema} dark={dark} error={run?.error && (run.sql === active.sql || run.sql === selectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)}/></div>
                         {parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => patch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
                         <div className="editor-footer"><span><span className="key-hint">⌘↵</span> Run current statement <span className="footer-dot">·</span> <span className="key-hint">⌘⇧↵</span> Run script</span><span>{active.sql.length.toLocaleString()} characters <span className="footer-dot">·</span> {active.sql.split('\n').length} lines</span></div>
-                    </section>
+                    </section>}
 
-                    <section className={cx('results-surface', experience === 'expert' && 'results-expert')}>
+                    {(experience === 'expert' || run) && <section className={cx('results-surface', experience === 'expert' && 'results-expert')}>
                         <div className="results-header">
                             <div className="results-title"><span className="results-mark"><Icon name="chart"/></span><div><span className="eyebrow">WORKSPACE OUTPUT</span><h2>{copy.common.results}</h2></div>{run && <Status run={run}/>}</div>
                             <div className="results-actions">
@@ -483,16 +573,17 @@ function Workspace({ connection, connections, onSelectConnection, onRefreshConne
                                 {run?.resultState === 'reopenable' && <Button variant="ghost" className="toolbar-small" onClick={() => { const link = document.createElement('a'); link.href = `/api/runs/${encodeURIComponent(run.id)}/export?format=csv`; link.download = `${run.queryId}.csv`; link.click(); }}>Export <Icon name="chevron"/></Button>}
                             </div>
                         </div>
-                        {!run && <EmptyWorkspace onRun={() => editor.current?.focus()} beginner={experience === 'beginner'}/>}
+                        {!run && experience === 'expert' && <EmptyWorkspace onRun={() => editor.current?.focus()} beginner={false}/>}
+                        {!run && experience === 'beginner' && <div className="beginner-results-empty"><span className="beginner-results-orb"><Icon name="chart"/></span><span className="eyebrow">YOUR RESULTS</span><strong>They’ll appear here.</strong><p>Create a query with AI, review it, then run it when you’re ready.</p></div>}
                         {run && view === 'results' && <ResultGrid run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/>}
                         {run && view === 'chart' && <ChartView result={snapshot} loading={!snapshot && run.resultState === 'reopenable'} chart={active.chart} onChart={chart => patch({ chart })}/>}
                         {run && view === 'insights' && <InsightsView run={run} profile={profile} onLoad={() => void perform(loadProfile, 'save')} loading={busy === 'save'}/>}
-                    </section>
+                    </section>}
                 </div>
             </main>
 
-            {experience === 'expert' && <InspectorPane inspector={inspector} setInspector={showInspector} connection={connection} schema={schema} schemaLoading={schemaLoading} schemaError={schemaError} search={search} setSearch={setSearch} tables={filteredTables} history={sortedHistory} documents={documents} run={run} profile={profile} pipeline={pipeline} onRefreshSchema={() => void loadSchema()} onInsert={value => editor.current?.insert(value)} onOpenRun={openRun} onOpenDocument={document => { const draft = newDraft(document.name, document.sql); Object.assign(draft, { serverId: document.id, baseRevision: document.revision, parameters: document.parameters, chart: document.chart, activeRunId: document.runId }); addDraft(draft); }} onLoadProfile={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} connectionId={connection.id} sql={active.sql} trusted={trusted} runId={run?.id} onApplySql={sql => patch({ ...checkpoint(active, 'Before accepted AI proposal'), sql, from: 0, to: 0 })} onRefreshDocuments={() => void loadDocuments()}/>}
-            {experience === 'beginner' && drawerOpen && <><button className="drawer-backdrop" type="button" aria-label="Close panel" onClick={() => setDrawerOpen(false)}/><InspectorPane drawer inspector={inspector} setInspector={showInspector} onClose={() => setDrawerOpen(false)} connection={connection} schema={schema} schemaLoading={schemaLoading} schemaError={schemaError} search={search} setSearch={setSearch} tables={filteredTables} history={sortedHistory} documents={documents} run={run} profile={profile} pipeline={pipeline} onRefreshSchema={() => void loadSchema()} onInsert={value => { editor.current?.insert(value); setDrawerOpen(false); }} onOpenRun={openRun} onOpenDocument={document => { const draft = newDraft(document.name, document.sql); Object.assign(draft, { serverId: document.id, baseRevision: document.revision, parameters: document.parameters, chart: document.chart, activeRunId: document.runId }); addDraft(draft); setDrawerOpen(false); }} onLoadProfile={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} connectionId={connection.id} sql={active.sql} trusted={trusted} runId={run?.id} onApplySql={sql => patch({ ...checkpoint(active, 'Before accepted AI proposal'), sql, from: 0, to: 0 })} onRefreshDocuments={() => void loadDocuments()}/></>}
+            {experience === 'expert' && <InspectorPane inspector={inspector} setInspector={showInspector} connection={connection} schema={schema} schemaLoading={schemaLoading} schemaError={schemaError} search={search} setSearch={setSearch} tables={filteredTables} history={sortedHistory} documents={documents} run={run} profile={profile} pipeline={pipeline} onRefreshSchema={() => void loadSchema()} onInsert={value => editor.current?.insert(value)} onOpenRun={openRun} onOpenDocument={document => { const draft = newDraft(document.name, document.sql); Object.assign(draft, { serverId: document.id, baseRevision: document.revision, parameters: document.parameters, chart: document.chart, activeRunId: document.runId }); addDraft(draft); }} onLoadProfile={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} connectionId={connection.id} sql={active.sql} trusted={trusted} runId={run?.id} onRefreshDocuments={() => void loadDocuments()} assistantAction={assistantAction} onAssistantAction={value => { setAssistantAction(value); setAssistantContext(undefined); setAssistantProposal(undefined); }} assistantQuestion={assistantQuestion} onAssistantQuestion={changeAssistantQuestion} assistantContext={assistantContext} assistantProposal={assistantProposal} assistantBusy={assistantBusy} assistantError={assistantError} includeResult={includeResult} onIncludeResult={setIncludeResult} onVoiceInput={startVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={() => void prepareAssistantContext()} onRequestProposal={() => void requestAssistantProposal()} onDecideProposal={decision => void decideAssistantProposal(decision)} onRunQuery={() => void execute()} runDisabled={!trusted || Boolean(busy)}/>}
+            {experience === 'beginner' && drawerOpen && <><button className="drawer-backdrop" type="button" aria-label="Close panel" onClick={() => setDrawerOpen(false)}/><InspectorPane drawer inspector={inspector} setInspector={showInspector} onClose={() => setDrawerOpen(false)} connection={connection} schema={schema} schemaLoading={schemaLoading} schemaError={schemaError} search={search} setSearch={setSearch} tables={filteredTables} history={sortedHistory} documents={documents} run={run} profile={profile} pipeline={pipeline} onRefreshSchema={() => void loadSchema()} onInsert={value => { editor.current?.insert(value); setDrawerOpen(false); }} onOpenRun={openRun} onOpenDocument={document => { const draft = newDraft(document.name, document.sql); Object.assign(draft, { serverId: document.id, baseRevision: document.revision, parameters: document.parameters, chart: document.chart, activeRunId: document.runId }); addDraft(draft); setDrawerOpen(false); }} onLoadProfile={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} connectionId={connection.id} sql={active.sql} trusted={trusted} runId={run?.id} onRefreshDocuments={() => void loadDocuments()} assistantAction={assistantAction} onAssistantAction={value => { setAssistantAction(value); setAssistantContext(undefined); setAssistantProposal(undefined); }} assistantQuestion={assistantQuestion} onAssistantQuestion={changeAssistantQuestion} assistantContext={assistantContext} assistantProposal={assistantProposal} assistantBusy={assistantBusy} assistantError={assistantError} includeResult={includeResult} onIncludeResult={setIncludeResult} onVoiceInput={startVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={() => void prepareAssistantContext()} onRequestProposal={() => void requestAssistantProposal()} onDecideProposal={decision => void decideAssistantProposal(decision)} onRunQuery={() => void execute()} runDisabled={!trusted || Boolean(busy)}/> </>}
         </div>
         {run && <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} busy={Boolean(busy)}/>}
     </div>;
@@ -504,6 +595,59 @@ function RailButton({ icon, label, active, accent, onClick }: { icon: string; la
 
 function EmptyWorkspace({ onRun, beginner }: { onRun: () => void; beginner: boolean }) {
     return <div className="empty-workspace"><div className="empty-graphic"><span className="empty-orbit orbit-one"/><span className="empty-orbit orbit-two"/><span className="empty-core"><Icon name="bolt"/></span><span className="empty-spark spark-one"/><span className="empty-spark spark-two"/></div><span className="eyebrow">YOUR NEXT INSIGHT STARTS HERE</span><h3>Make the data<br/><em>say something.</em></h3><p>{beginner ? 'Run a query to see your data. Results stay in this workspace when you switch modes.' : 'Run the current statement. Your query, run, and evidence stay linked.'}</p><Button variant="primary" onClick={onRun}><Icon name="play"/>Focus SQL editor</Button><span className="empty-shortcut">or press <kbd>⌘ ↵</kbd> to run</span></div>;
+}
+
+type AssistantWorkflowProps = {
+    mode: 'beginner' | 'expert';
+    sql: string;
+    action: AssistantAction;
+    onActionChange: (action: AssistantAction) => void;
+    question: string;
+    onQuestionChange: (question: string) => void;
+    context?: AssistantContext;
+    proposal?: Proposal;
+    busy: boolean;
+    error: string;
+    trusted: boolean;
+    runId?: string;
+    includeResult: boolean;
+    onIncludeResult: (include: boolean) => void;
+    onVoiceInput: () => void;
+    voiceListening: boolean;
+    voiceError: string;
+    onPreview: () => void;
+    onRequestProposal: () => void;
+    onDecideProposal: (decision: 'accepted' | 'rejected') => void;
+    onRunQuery: () => void;
+    runDisabled: boolean;
+    onSave?: () => void;
+    saveDisabled?: boolean;
+};
+
+function AssistantOutput({ mode, sql, context, proposal, busy, error, onRequestProposal, onDecideProposal, onRunQuery, runDisabled }: Pick<AssistantWorkflowProps, 'mode' | 'sql' | 'context' | 'proposal' | 'busy' | 'error' | 'onRequestProposal' | 'onDecideProposal' | 'onRunQuery' | 'runDisabled'>) {
+    const beginner = mode === 'beginner';
+    return <>
+        {error && <div className="callout callout-error" role="alert">{error}</div>}
+        {context && <div className="context-preview animate-enter"><span className="eyebrow">CONTEXT PREVIEW</span>{context.summary.map(item => <p key={item}><span>✓</span>{item}</p>)}<Button variant="primary" className="w-full" disabled={busy} onClick={onRequestProposal}>{busy ? 'Waiting for proposal…' : 'Send to AI & propose'}</Button></div>}
+        {proposal && <div className={cx('proposal-card animate-enter', beginner && 'beginner-proposal-card')}><div className="proposal-heading"><span className={cx('proposal-quality', proposal.quality?.status)}>{proposal.quality?.score ?? '—'}<small>QUALITY</small></span><div><span className="eyebrow">PROPOSAL · {proposal.decision.toUpperCase()}</span><strong>{proposal.summary}</strong></div></div>{proposal.clarification && <div className="callout">{proposal.clarification}</div>}{proposal.assumptions.map(item => <p className="proposal-point" key={item}><span>ASSUMPTION</span>{item}</p>)}{proposal.caveats.map(item => <p className="proposal-point" key={item}><span>CAVEAT</span>{item}</p>)}{proposal.findings.map(item => <p className="proposal-finding" key={`${item.severity}-${item.message}`}><strong>{item.severity}</strong>{item.message}<small>{item.evidence}</small></p>)}{proposal.sql !== null && <><span className="eyebrow mt-4">PROPOSED SQL</span><pre className="proposal-sql">{proposal.sql}</pre>{proposal.decision === 'pending' && <>{proposal.baseSql !== sql && <div className="callout callout-error">This proposal is for an earlier SQL draft. Refresh the context before applying it.</div>}<div className="proposal-buttons"><Button variant="secondary" onClick={() => onDecideProposal('rejected')} disabled={busy}>Reject</Button><Button variant="primary" onClick={() => onDecideProposal('accepted')} disabled={busy || proposal.baseSql !== sql}>{beginner ? 'Use this query' : 'Apply to editor'}</Button></div></>}{beginner && proposal.decision === 'accepted' && <div className="beginner-run-ready"><span><span className="status-light is-trusted"/> Added to your SQL draft</span><Button variant="primary" onClick={onRunQuery} disabled={runDisabled || busy}><Icon name="play"/>{busy ? 'Starting…' : 'Run this query'}</Button></div>}</>}</div>}
+    </>;
+}
+
+function AssistantWorkflow({ mode, sql, action, onActionChange, question, onQuestionChange, context, proposal, busy, error, trusted, runId, includeResult, onIncludeResult, onVoiceInput, voiceListening, voiceError, onPreview, onRequestProposal, onDecideProposal, onRunQuery, runDisabled, onSave, saveDisabled = false }: AssistantWorkflowProps) {
+    const beginner = mode === 'beginner';
+    const speechAvailable = Boolean((window as SpeechWindow).SpeechRecognition ?? (window as SpeechWindow).webkitSpeechRecognition);
+    const output = <AssistantOutput mode={mode} sql={sql} context={context} proposal={proposal} busy={busy} error={error} onRequestProposal={onRequestProposal} onDecideProposal={onDecideProposal} onRunQuery={onRunQuery} runDisabled={runDisabled}/>;
+    if (beginner) return <section className="beginner-ai-surface animate-enter" aria-label="Ask AI to write a query">
+        <header className="beginner-ai-toolbar"><div className="beginner-ai-product"><span className="beginner-ai-mark"><Icon name="assistant"/></span><div><span className="eyebrow">NATURAL LANGUAGE SQL</span><strong>Ask in plain language</strong></div></div><div className="beginner-ai-toolbar-actions">{onSave && <Button variant="secondary" onClick={onSave} disabled={saveDisabled}>Save draft</Button>}</div></header>
+        <div className="beginner-ai-main">
+            <div className="beginner-ai-title"><span className="eyebrow beginner-ai-kicker">YOUR DATA, IN YOUR WORDS</span><h1>Ask your<br/><em>data a question.</em></h1><p className="beginner-ai-intro">Type or speak naturally. ClickStudio turns your question into SQL you can review before it runs.</p><div className="beginner-ai-steps"><div><span>01</span><p><strong>Describe</strong><small>Use everyday language</small></p></div><div><span>02</span><p><strong>Review</strong><small>Check the proposed SQL</small></p></div><div><span>03</span><p><strong>Run</strong><small>Only when you choose</small></p></div></div></div>
+            <div className="beginner-ai-input-column"><div className="beginner-prompt-composer"><div className="beginner-composer-label"><span>Your question</span><kbd>⌘ ↵ to continue</kbd></div><label className="sr-only" htmlFor="beginner-query-prompt">Describe your data question</label><textarea id="beginner-query-prompt" aria-label="Describe your data question" value={question} onChange={event => onQuestionChange(event.target.value)} onKeyDown={event => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); onPreview(); } }} readOnly={voiceListening} placeholder="For example: Show weekly revenue by product for the last 90 days…" rows={4}/><div className="beginner-composer-footer"><div className="beginner-input-tools"><Button variant="ghost" className={cx('voice-button', voiceListening && 'is-listening')} title={speechAvailable ? (voiceListening ? 'Stop dictation' : 'Dictate your question') : 'Voice input is not available in this browser'} aria-label={voiceListening ? 'Stop dictation' : 'Dictate question'} disabled={!speechAvailable} onClick={onVoiceInput}><Icon name="mic"/>{voiceListening ? 'Listening…' : 'Use voice'}</Button><span className="beginner-voice-note">{voiceListening ? 'Speak naturally. Select stop when you’re done.' : 'Voice input may be processed by your browser’s speech service.'}</span></div><Button variant="primary" className="beginner-prepare-button" disabled={!trusted || busy || !question.trim()} onClick={onPreview}>{busy ? 'Preparing…' : context ? 'Refresh context' : 'Create query'}<Icon name="send"/></Button></div></div>
+                {voiceError && <div className="callout callout-error beginner-feedback" role="alert">{voiceError}</div>}{!context && !proposal && <div className="beginner-prompt-examples"><span>TRY ASKING</span>{['Compare revenue by month', 'Find the busiest days', 'Show me the top 10 items'].map(example => <button type="button" key={example} onClick={() => onQuestionChange(example)}>{example}<span>↗</span></button>)}</div>}<p className="beginner-safety-note"><Icon name="lock"/> AI suggests. You decide what to run.</p>
+            </div>
+            {(context || proposal || error) && <div className="beginner-ai-output">{output}</div>}
+        </div>
+    </section>;
+    return <section className="assistant-panel"><div className="assistant-safety"><span className="assistant-glyph"><Icon name="assistant"/></span><div><strong>AI, with you in control.</strong><p>Review context, request a proposal, then decide whether to apply it. Nothing executes automatically.</p></div></div><label className="field-label">ACTION<select className="field-input" value={action} onChange={event => onActionChange(event.target.value as AssistantAction)}><option value="generate">Write a query</option><option value="explain">Explain this SQL</option><option value="repair">Fix a query error</option><option value="review">Review SQL</option><option value="performance">Analyze performance</option><option value="result">Explain the result</option></select></label><label className="field-label">WHAT WOULD YOU LIKE TO KNOW?<textarea className="field-textarea" value={question} onChange={event => onQuestionChange(event.target.value)} placeholder="Describe the question, error, or improvement you want…" rows={4}/></label><label className="include-result"><input type="checkbox" checked={includeResult} onChange={event => onIncludeResult(event.target.checked)} disabled={!runId}/><span><strong>Include selected retained result</strong><small>Rows may contain sensitive data. Inspect before sharing.</small></span></label>{voiceError && <div className="callout callout-error" role="alert">{voiceError}</div>}<div className="assistant-actions"><Button variant="secondary" className="w-full" disabled={!trusted || busy} onClick={onPreview}>{busy && !context ? 'Preparing context…' : context ? 'Refresh context preview' : 'Preview what will be shared'}</Button>{output}</div></section>;
 }
 
 function ResultGrid({ run, page, pageIndex, loading, onPage }: { run: Run; page?: ResultPage; pageIndex: number; loading: boolean; onPage: (page: number) => void }) {
@@ -539,7 +683,7 @@ function InsightsView({ run, profile, onLoad, loading }: { run: Run; profile?: Q
     return <div className="insights-view animate-enter"><div className="insights-heading"><div><span className="eyebrow">EXECUTION INSIGHTS</span><h3>What happened when this ran?</h3><p>Measurements come from this run's execution and ClickHouse query log.</p></div>{!profile && <Button variant="secondary" onClick={onLoad} disabled={loading}>{loading ? 'Loading…' : 'Load execution details'}</Button>}</div><div className="insight-metrics">{metrics.map(metric => <article className="insight-metric" key={metric.label}><span className="insight-icon"><Icon name={metric.icon}/></span><span className="eyebrow">{metric.label}</span><strong>{metric.value}</strong></article>)}</div>{profile?.insights.length ? <div className="insight-list">{profile.insights.map(insight => <article key={insight.id} className={`insight-card severity-${insight.severity}`}><span className="insight-severity">{insight.severity}</span><div><strong>{insight.title}</strong><p>{insight.description}</p></div></article>)}</div> : profile ? <div className="profile-empty">No deterministic issue was identified in the available evidence.</div> : <p className="profile-note">Query log details can take a short time to appear after execution. Values marked unavailable are not inferred.</p>}{profile?.notice && <p className="profile-note">{profile.notice}</p>}</div>;
 }
 
-function InspectorPane({ inspector, setInspector, connection, schema, schemaLoading, schemaError, search, setSearch, tables, history, documents, run, profile, pipeline, onRefreshSchema, onInsert, onOpenRun, onOpenDocument, onLoadProfile, onLoadPipeline, connectionId, sql, trusted, runId, onApplySql, onRefreshDocuments, drawer = false, onClose }: {
+function InspectorPane({ inspector, setInspector, connection, schema, schemaLoading, schemaError, search, setSearch, tables, history, documents, run, profile, pipeline, onRefreshSchema, onInsert, onOpenRun, onOpenDocument, onLoadProfile, onLoadPipeline, connectionId, sql, trusted, runId, onRefreshDocuments, assistantAction, onAssistantAction, assistantQuestion, onAssistantQuestion, assistantContext, assistantProposal, assistantBusy, assistantError, includeResult, onIncludeResult, onVoiceInput, voiceListening, voiceError, onPreview, onRequestProposal, onDecideProposal, onRunQuery, runDisabled, drawer = false, onClose }: {
     inspector: Inspector;
     setInspector: (inspector: Inspector) => void;
     connection: Connected;
@@ -564,47 +708,30 @@ function InspectorPane({ inspector, setInspector, connection, schema, schemaLoad
     sql: string;
     trusted: boolean;
     runId?: string;
-    onApplySql: (sql: string) => void;
     onRefreshDocuments: () => void;
+    assistantAction: AssistantAction;
+    onAssistantAction: (action: AssistantAction) => void;
+    assistantQuestion: string;
+    onAssistantQuestion: (question: string) => void;
+    assistantContext?: AssistantContext;
+    assistantProposal?: Proposal;
+    assistantBusy: boolean;
+    assistantError: string;
+    includeResult: boolean;
+    onIncludeResult: (include: boolean) => void;
+    onVoiceInput: () => void;
+    voiceListening: boolean;
+    voiceError: string;
+    onPreview: () => void;
+    onRequestProposal: () => void;
+    onDecideProposal: (decision: 'accepted' | 'rejected') => void;
+    onRunQuery: () => void;
+    runDisabled: boolean;
     drawer?: boolean;
     onClose?: () => void;
 }) {
     const visibleDocuments = documents.filter(document => document.connectionId === connectionId && !document.deletedAt);
-    const [assistantAction, setAssistantAction] = useState<AssistantAction>('generate');
-    const [question, setQuestion] = useState('');
-    const [context, setContext] = useState<{ id: string; summary: string[] }>();
-    const [proposal, setProposal] = useState<Proposal>();
-    const [assistantBusy, setAssistantBusy] = useState(false);
-    const [assistantError, setAssistantError] = useState('');
-    const [includeResult, setIncludeResult] = useState(false);
     const closeButton = drawer && <Button variant="ghost" className="icon-only" aria-label="Close inspector" onClick={onClose}><Icon name="close"/></Button>;
-
-    const prepareContext = async () => {
-        setAssistantBusy(true); setAssistantError('');
-        try {
-            const result = await post<{ id: string; summary: string[] }>('/assistant/context', { connectionId, action: assistantAction, question, sql, runId, includeResult });
-            setContext(result); setProposal(undefined);
-        } catch (error) { setAssistantError(message(error)); }
-        finally { setAssistantBusy(false); }
-    };
-    const requestProposal = async () => {
-        if (!context || assistantBusy) return;
-        if (!window.confirm(`Send the reviewed SQL and selected context to the configured AI provider? ${context.summary.join(' ')}`)) return;
-        setAssistantBusy(true); setAssistantError('');
-        try { setProposal(await post<Proposal>('/assistant/proposals', { contextId: context.id, consent: true })); }
-        catch (error) { setAssistantError(message(error)); }
-        finally { setAssistantBusy(false); }
-    };
-    const decideProposal = async (decision: 'accepted' | 'rejected') => {
-        if (!proposal) return;
-        setAssistantBusy(true); setAssistantError('');
-        try {
-            const reviewed = await post<Proposal>(`/assistant/proposals/${encodeURIComponent(proposal.id)}/decision`, { decision, connectionId, currentSql: sql });
-            setProposal(reviewed);
-            if (decision === 'accepted' && reviewed.sql !== null) onApplySql(reviewed.sql);
-        } catch (error) { setAssistantError(message(error)); }
-        finally { setAssistantBusy(false); }
-    };
 
     return <aside className={cx('inspector-pane', drawer && 'is-drawer animate-drawer')}>
         <header className="inspector-header"><div><span className="eyebrow">WORKSPACE INSPECTOR</span><h2>{inspectorLabel(inspector)}</h2></div>{closeButton}</header>
@@ -615,7 +742,7 @@ function InspectorPane({ inspector, setInspector, connection, schema, schemaLoad
             {inspector === 'documents' && <section className="inspector-section"><div className="schema-heading"><span>SAVED DOCUMENTS</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshDocuments}>↻ Refresh</Button></div>{visibleDocuments.length ? visibleDocuments.map(document => <button type="button" className="document-card" key={document.id} onClick={() => onOpenDocument(document)}><span className="file-type-icon small">SQL</span><span><strong>{document.name}</strong><small>revision {document.revision} · {new Date(document.updatedAt).toLocaleDateString()}</small></span><span className="history-open">↗</span></button>) : <div className="inspector-empty"><Icon name="documents"/><strong>Nothing saved yet</strong><p>Save the current query to keep a named revision on this connection.</p></div>}</section>}
             {inspector === 'details' && <RunDetails run={run} profile={profile} onLoad={onLoadProfile}/>}
             {inspector === 'pipeline' && <PipelineView run={run} profile={profile} pipeline={pipeline} onLoad={onLoadPipeline}/>}
-            {inspector === 'assistant' && <section className="assistant-panel"><div className="assistant-safety"><span className="assistant-glyph"><Icon name="assistant"/></span><div><strong>AI, with you in control.</strong><p>Review context, request a proposal, then decide whether to apply it. Nothing executes automatically.</p></div></div><label className="field-label">ACTION<select className="field-input" value={assistantAction} onChange={event => { setAssistantAction(event.target.value as AssistantAction); setContext(undefined); setProposal(undefined); }}><option value="generate">Write a query</option><option value="explain">Explain this SQL</option><option value="repair">Fix a query error</option><option value="review">Review SQL</option><option value="performance">Analyze performance</option><option value="result">Explain the result</option></select></label><label className="field-label">WHAT WOULD YOU LIKE TO KNOW?<textarea className="field-textarea" value={question} onChange={event => setQuestion(event.target.value)} placeholder="Describe the question, error, or improvement you want…" rows={4}/></label><label className="include-result"><input type="checkbox" checked={includeResult} onChange={event => setIncludeResult(event.target.checked)} disabled={!runId}/><span><strong>Include selected retained result</strong><small>Rows may contain sensitive data. Inspect before sharing.</small></span></label>{assistantError && <div className="callout callout-error">{assistantError}</div>}<div className="assistant-actions"><Button variant="secondary" className="w-full" disabled={!trusted || assistantBusy} onClick={() => void prepareContext()}>{assistantBusy && !context ? 'Preparing context…' : context ? 'Refresh context preview' : 'Preview what will be shared'}</Button>{context && <div className="context-preview animate-enter"><span className="eyebrow">CONTEXT PREVIEW</span>{context.summary.map(item => <p key={item}><span>✓</span>{item}</p>)}<Button variant="primary" className="w-full" disabled={assistantBusy} onClick={() => void requestProposal()}>{assistantBusy ? 'Waiting for proposal…' : 'Send to AI & propose'}</Button></div>}{proposal && <div className="proposal-card animate-enter"><div className="proposal-heading"><span className={cx('proposal-quality', proposal.quality?.status)}>{proposal.quality?.score ?? '—'}<small>QUALITY</small></span><div><span className="eyebrow">PROPOSAL · {proposal.decision.toUpperCase()}</span><strong>{proposal.summary}</strong></div></div>{proposal.clarification && <div className="callout">{proposal.clarification}</div>}{proposal.assumptions.map(item => <p className="proposal-point" key={item}><span>ASSUMPTION</span>{item}</p>)}{proposal.caveats.map(item => <p className="proposal-point" key={item}><span>CAVEAT</span>{item}</p>)}{proposal.findings.map(item => <p className="proposal-finding" key={`${item.severity}-${item.message}`}><strong>{item.severity}</strong>{item.message}<small>{item.evidence}</small></p>)}{proposal.sql !== null && <><span className="eyebrow mt-4">PROPOSED SQL</span><pre className="proposal-sql">{proposal.sql}</pre>{proposal.decision === 'pending' && <div className="proposal-buttons"><Button variant="secondary" onClick={() => void decideProposal('rejected')} disabled={assistantBusy}>Reject</Button><Button variant="primary" onClick={() => void decideProposal('accepted')} disabled={assistantBusy}>Apply to editor</Button></div>}</>}</div>}</div></section>}
+            {inspector === 'assistant' && <AssistantWorkflow mode={drawer ? 'beginner' : 'expert'} sql={sql} action={assistantAction} onActionChange={onAssistantAction} question={assistantQuestion} onQuestionChange={onAssistantQuestion} context={assistantContext} proposal={assistantProposal} busy={assistantBusy} error={assistantError} trusted={trusted} runId={runId} includeResult={includeResult} onIncludeResult={onIncludeResult} onVoiceInput={onVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={onPreview} onRequestProposal={onRequestProposal} onDecideProposal={onDecideProposal} onRunQuery={onRunQuery} runDisabled={runDisabled}/>}
         </div>
         <footer className="inspector-footer"><span className="connection-readonly"><Icon name="lock"/> Read only</span><span>{connection.name} <i>·</i> {connection.database}</span></footer>
     </aside>;

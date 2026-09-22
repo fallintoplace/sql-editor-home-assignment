@@ -10,7 +10,7 @@ import { api, download, message, post } from './api';
 import { Action, Callout, Select } from './ui';
 import { Workspace } from './Workspace';
 import { Chart } from './components/Chart';
-import { getCopy, localeOptions, type Copy, type Locale } from './i18n';
+import { getCopy, localeOptions, themeOptions, themeValues, type Copy, type Locale, type Theme } from './i18n';
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } } });
 class Boundary extends React.Component<{
     copy: Copy;
@@ -60,11 +60,14 @@ function Authenticated({ dark, copy }: {
  {connection && <Workspace key={connection.id} connection={connection} dark={dark} copy={copy} refresh={() => connections.refetch()}/>} {connections.error && <Callout danger>{message(connections.error)}</Callout>}</>;
 }
 function Root() {
-    const [dark, setDark] = useState(() => { try {
-        return localStorage.getItem('cathedral:theme') === 'dark';
+    const [theme, setTheme] = useState<Theme>(() => { try {
+        const stored = localStorage.getItem('cathedral:theme');
+        if (themeValues.includes(stored as Theme))
+            return stored as Theme;
+        return stored === 'light' ? 'solarized-light' : 'kraken-night';
     }
     catch {
-        return false;
+        return 'kraken-night';
     } });
     const [locale, setLocale] = useState<Locale>(() => {
         try {
@@ -76,15 +79,16 @@ function Root() {
         }
     });
     const copy = getCopy(locale);
-    useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; document.documentElement.style.colorScheme = dark ? 'dark' : 'light'; try {
-        localStorage.setItem('cathedral:theme', dark ? 'dark' : 'light');
+    const dark = theme !== 'solarized-light';
+    useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; document.documentElement.dataset.palette = theme; document.documentElement.style.colorScheme = dark ? 'dark' : 'light'; try {
+        localStorage.setItem('cathedral:theme', theme);
     }
-    catch { } }, [dark]);
+    catch { } }, [dark, theme]);
     useEffect(() => { document.documentElement.lang = locale; try {
         localStorage.setItem('cathedral:locale', locale);
     }
     catch { } }, [locale]);
     const token = /^\/share\/([^/]+)$/.exec(location.pathname)?.[1];
-    return <ClickUIProvider theme={dark ? 'dark' : 'light'}><div className="application"><header className="app-header"><div><span className="wordmark">{copy.app.name}</span><span className="tagline">{copy.app.tagline}</span></div><div className="app-header-actions"><Select label={copy.app.language} value={locale} options={localeOptions} onSelect={value => setLocale(value as Locale)}/><Action onClick={() => setDark(v => !v)}>{dark ? copy.app.lightMode : copy.app.darkMode}</Action></div></header><Boundary copy={copy}>{token ? <Shared token={token} copy={copy} locale={locale}/> : <Authenticated dark={dark} copy={copy}/>}</Boundary></div></ClickUIProvider>;
+    return <ClickUIProvider theme={dark ? 'dark' : 'light'}><div className="application"><header className="app-header"><div><span className="wordmark">{copy.app.name}</span><span className="tagline">{copy.app.tagline}</span></div><div className="app-header-actions"><Select label={copy.app.language} value={locale} options={localeOptions} onSelect={value => setLocale(value as Locale)}/><Select label={copy.app.theme} value={theme} options={themeOptions} onSelect={value => setTheme(value as Theme)}/></div></header><Boundary copy={copy}>{token ? <Shared token={token} copy={copy} locale={locale}/> : <Authenticated dark={dark} copy={copy}/>}</Boundary></div></ClickUIProvider>;
 }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><QueryClientProvider client={queryClient}><Root /></QueryClientProvider></React.StrictMode>);

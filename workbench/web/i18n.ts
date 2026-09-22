@@ -6,7 +6,8 @@ export const messages = {
             lightMode: 'Light mode',
             darkMode: 'Dark mode',
             demoMode: 'DEMO MODE — no ClickHouse queries or imports are executed. SQL text is not evaluated; this mode exercises UI and lifecycle behavior only.',
-            language: 'Language'
+            language: 'Language',
+            theme: 'Theme'
         },
         common: {
             cancel: 'Cancel',
@@ -188,7 +189,8 @@ export const messages = {
             lightMode: 'Heller Modus',
             darkMode: 'Dunkler Modus',
             demoMode: 'DEMO-MODUS — es werden keine ClickHouse-Abfragen oder Importe ausgeführt. SQL wird nicht ausgewertet; dieser Modus testet nur Oberfläche und Ablauf.',
-            language: 'Sprache'
+            language: 'Sprache',
+            theme: 'Thema'
         },
         common: {
             cancel: 'Abbrechen',
@@ -370,7 +372,8 @@ export const messages = {
             lightMode: 'Modo claro',
             darkMode: 'Modo oscuro',
             demoMode: 'MODO DEMO — no se ejecutan consultas de ClickHouse ni importaciones. El texto SQL no se evalúa; este modo solo prueba la interfaz y el ciclo de vida.',
-            language: 'Idioma'
+            language: 'Idioma',
+            theme: 'Tema'
         },
         common: {
             cancel: 'Cancelar',
@@ -552,7 +555,8 @@ export const messages = {
             lightMode: 'Lichte modus',
             darkMode: 'Donkere modus',
             demoMode: 'DEMOMODUS — er worden geen ClickHouse-query’s of imports uitgevoerd. SQL wordt niet geëvalueerd; deze modus test alleen de interface en levenscyclus.',
-            language: 'Taal'
+            language: 'Taal',
+            theme: 'Thema'
         },
         common: {
             cancel: 'Annuleren',
@@ -734,7 +738,8 @@ export const messages = {
             lightMode: '浅色模式',
             darkMode: '深色模式',
             demoMode: '演示模式 — 不会执行 ClickHouse 查询或导入操作。SQL 文本不会被求值；此模式仅用于体验界面和生命周期行为。',
-            language: '语言'
+            language: '语言',
+            theme: '主题'
         },
         common: {
             cancel: '取消',
@@ -916,7 +921,8 @@ export const messages = {
             lightMode: 'Светлая тема',
             darkMode: 'Темная тема',
             demoMode: 'ДЕМО-РЕЖИМ — запросы ClickHouse и импорты не выполняются. Текст SQL не обрабатывается; режим нужен только для просмотра интерфейса и сценариев жизненного цикла.',
-            language: 'Язык'
+            language: 'Язык',
+            theme: 'Тема'
         },
         common: {
             cancel: 'Отмена',
@@ -1094,6 +1100,7 @@ export const messages = {
 } as const;
 
 export type Locale = keyof typeof messages;
+export type Theme = 'kraken-night' | 'monokai' | 'mariana' | 'dracula' | 'nord' | 'solarized-light';
 export type Copy = {
     [Section in keyof typeof messages.en]: {
         [Key in keyof typeof messages.en[Section]]: string;
@@ -1107,6 +1114,16 @@ export const localeOptions: Array<{ value: Locale; label: string }> = [
     { value: 'nl', label: 'Nederlands' },
     { value: 'zh', label: '中文' },
     { value: 'ru', label: 'Русский' }
+];
+
+export const themeValues: Theme[] = ['kraken-night', 'monokai', 'mariana', 'dracula', 'nord', 'solarized-light'];
+export const themeOptions: Array<{ value: Theme; label: string }> = [
+    { value: 'kraken-night', label: 'Kraken Night' },
+    { value: 'monokai', label: 'Monokai' },
+    { value: 'mariana', label: 'Mariana' },
+    { value: 'dracula', label: 'Dracula' },
+    { value: 'nord', label: 'Nord' },
+    { value: 'solarized-light', label: 'Solarized Light' }
 ];
 
 export function getCopy(locale: Locale = 'en'): Copy {

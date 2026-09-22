@@ -30,6 +30,7 @@ type SpeechWindow = Window & { SpeechRecognition?: new () => SpeechRecognitionLi
 
 const terminal = (run?: Run) => Boolean(run && ['succeeded', 'truncated', 'failed', 'cancelled', 'timed_out', 'interrupted'].includes(run.status));
 const stateKey = (connectionId: string) => `clickstudio:workspace:${connectionId}:v1`;
+const connectionLabel = (connection: Connected, demo: boolean) => demo && connection.dataSource === 'fixture' ? connection.id === 'demo' ? 'Sample data' : 'Another sample' : connection.name;
 const pref = <T extends string>(key: string, values: readonly T[], fallback: T): T => {
     try {
         const value = localStorage.getItem(key);
@@ -73,8 +74,7 @@ function Button({ variant = 'secondary', className = '', type = 'button', ...pro
     return <button {...props} type={type} className={cx('button-base', variants[variant], className)} />;
 }
 
-function Status({ run, trusted }: { run?: Run; trusted?: boolean }) {
-    if (trusted !== undefined) return <span className={cx('inline-flex items-center gap-2 text-xs', trusted ? 'text-emerald-300' : 'text-amber-300')}><span className={cx('status-light', trusted ? 'is-trusted' : 'is-warning')}/>{trusted ? 'Trusted · read only' : 'Needs review'}</span>;
+function Status({ run }: { run?: Run }) {
     const kind = terminal(run) ? run?.status === 'succeeded' ? 'is-trusted' : run?.status === 'truncated' ? 'is-warning' : 'is-error' : 'is-running';
     return <span className="inline-flex items-center gap-2 text-[11px] capitalize text-muted"><span className={cx('status-light', kind)}/>{run?.status ?? 'Ready'}</span>;
 }
@@ -94,8 +94,11 @@ function App() {
     const [token, setToken] = useState('');
     const [busy, setBusy] = useState(false);
     const [connectionPicker, setConnectionPicker] = useState(false);
+    const [trustActionBusy, setTrustActionBusy] = useState(false);
+    const trustActionRef = useRef<() => Promise<void>>(async () => undefined);
     const copy = getCopy(locale);
     const connection = connections.find(item => item.id === connectionId) ?? connections[0];
+    const otherConnections = connection ? connections.filter(item => item.id !== connection.id && (!session?.demo || experience === 'expert')) : [];
     const dark = themeAppearance[theme].dark;
 
     useEffect(() => {
@@ -133,6 +136,13 @@ function App() {
         finally { setBusy(false); }
     };
 
+    const runTrustAction = async () => {
+        if (trustActionBusy) return;
+        setTrustActionBusy(true);
+        try { await trustActionRef.current(); }
+        finally { setTrustActionBusy(false); }
+    };
+
     if (!session) return <main className="auth-screen"><section className="auth-card animate-enter"><Brand/><span className="eyebrow mt-8">PRIVATE WORKSPACE</span><h1>{sessionError ? 'Workspace unavailable' : copy.auth.opening}</h1>{sessionError ? <><p>{sessionError}</p><Button variant="primary" onClick={() => { setSessionError(''); void loadSession().catch(error => setSessionError(message(error))); }}>Try again</Button></> : <div className="splash-status"><span className="loading-orbit"/><p>{copy.auth.opening}</p></div>}</section></main>;
     if (!session.principal) return <main className="auth-screen"><form className="auth-card animate-enter" onSubmit={event => { event.preventDefault(); void login(); }}><Brand/><span className="eyebrow mt-8">Private workspace</span><h1>{copy.auth.title}</h1><p>{copy.auth.description}</p><label className="field-label">{copy.auth.token}<input className="field-input mt-2" type="password" autoComplete="current-password" value={token} onChange={event => setToken(event.target.value)} autoFocus/></label>{sessionError && <div className="callout callout-error">{sessionError}</div>}<Button variant="primary" type="submit" disabled={busy || !token} className="mt-4 w-full">{busy ? copy.auth.opening : copy.auth.open}<span className="button-arrow">↗</span></Button><div className="auth-footnote"><Icon name="lock"/> Credentials are handled by the workspace server.</div></form></main>;
 
@@ -141,12 +151,32 @@ function App() {
             <Brand/>
             <div className="topbar-divider"/>
             <div className="connection-wrap">
-                <button className="connection-trigger" type="button" aria-expanded={connectionPicker} onClick={() => setConnectionPicker(value => !value)}>
-                    <span className="connection-env"><span className="status-light is-trusted"/> LIVE CONNECTION</span>
-                    <strong>{connection?.name ?? 'Choose connection'}</strong>
+                <button className="connection-trigger" type="button" aria-haspopup="dialog" aria-expanded={connectionPicker} aria-controls="connection-menu" onClick={() => setConnectionPicker(value => !value)}>
+                    <span className={cx('connection-env', session.demo && 'is-demo')} title={session.demo ? 'Queries are not sent to a live database.' : undefined}><span className={cx('status-light', session.demo ? 'is-warning' : connection?.trusted ? 'is-trusted' : 'is-warning')}/>{session.demo ? 'DEMO DATA' : 'LIVE CONNECTION'}</span>
+                    {!session.demo && <span className={cx('connection-quick-status', connection?.trusted ? 'is-ready' : 'is-review')}>{connection?.trusted ? 'Read-only' : 'Review needed'}</span>}
+                    <strong>{connection ? connectionLabel(connection, session.demo) : 'Choose connection'}</strong>
                     <span className="connection-database">{connection?.database ?? '—'} <Icon name="chevron"/></span>
                 </button>
-                {connectionPicker && <div className="connection-menu animate-enter" role="listbox">{connections.map(item => <button key={item.id} type="button" onClick={() => { setConnectionId(item.id); setConnectionPicker(false); }}><span><strong>{item.name}</strong><small>{item.database} · {item.host}</small></span><Status trusted={item.trusted}/></button>)}</div>}
+                {connectionPicker && connection && <div className="connection-menu animate-enter" id="connection-menu" role="dialog" aria-label="Connection details">
+                    <div className="connection-menu-current">
+                        <span className="connection-menu-heading">Current connection</span>
+                        <strong>{connectionLabel(connection, session.demo)}</strong>
+                        <small>{session.demo ? 'Local sample data' : `Database: ${connection.database} · Server: ${connection.host}`}</small>
+                    </div>
+                    <p className={cx('connection-menu-note', session.demo ? 'is-sample' : connection.trusted ? 'is-ready' : 'is-review')} role="status">
+                        {session.demo ? 'This demo uses sample data. Your SQL is not sent to a real database.' : connection.trusted ? 'Read-only access is on. Queries can read data but cannot change it.' : 'Review this connection before you run a query.'}
+                    </p>
+                    {(!session.demo || !connection.trusted) && <Button variant={connection.trusted ? 'ghost' : 'primary'} className="connection-menu-action" disabled={trustActionBusy} onClick={() => void runTrustAction()}>
+                        {trustActionBusy ? 'Saving…' : session.demo ? 'Start exploring' : connection.trusted ? 'Turn off read-only access' : 'Review connection'}
+                    </Button>}
+                    {otherConnections.length > 0 && <div className="connection-switch-list">
+                        <span className="connection-menu-heading">Switch connection</span>
+                        {otherConnections.map(item => <button key={item.id} type="button" onClick={() => { setConnectionId(item.id); setConnectionPicker(false); }}>
+                            <span><strong>{connectionLabel(item, session.demo)}</strong><small>{session.demo ? 'Local sample data' : `${item.database} · ${item.host}`}</small></span>
+                            <span className="connection-choice-arrow" aria-hidden="true">›</span>
+                        </button>)}
+                    </div>}
+                </div>}
             </div>
             <div className="topbar-spacer"/>
             <div className="experience-switch" role="group" aria-label="Workspace mode">
@@ -159,8 +189,7 @@ function App() {
                 <SelectControl label={copy.app.theme} value={theme} options={themeOptions} onChange={value => setTheme(value as Theme)}/>
             </div>
         </header>
-        {session.demo && <div className="demo-ribbon"><span className="status-light is-warning"/> DEMO DATA · queries are not sent to a live database</div>}
-        {connection ? <Workspace key={connection.id} connection={connection} connections={connections} onSelectConnection={setConnectionId} onRefreshConnections={async () => { const latest = await api<Connected[]>('/connections'); setConnections(latest); }} experience={experience} dark={dark} copy={copy} locale={locale}/> : <div className="empty-connection"><Icon name="schema"/><h1>{copy.app.name}</h1><p>No connection profiles are configured for this workspace.</p></div>}
+        {connection ? <Workspace key={connection.id} connection={connection} connectionLabel={connectionLabel(connection, session.demo)} connections={connections} onSelectConnection={setConnectionId} onRefreshConnections={async () => { const latest = await api<Connected[]>('/connections'); setConnections(latest); }} trustActionRef={trustActionRef} demoMode={session.demo} experience={experience} dark={dark} copy={copy} locale={locale}/> : <div className="empty-connection"><Icon name="schema"/><h1>{copy.app.name}</h1><p>No connection profiles are configured for this workspace.</p></div>}
     </div>;
 }
 
@@ -168,11 +197,14 @@ function Brand() {
     return <div className="brand-lockup"><span className="brand-name">Click<span>Studio</span><small>CLICKHOUSE WORKSPACE</small></span></div>;
 }
 
-function Workspace({ connection, connections, onSelectConnection, onRefreshConnections, experience, dark, copy, locale }: {
+function Workspace({ connection, connectionLabel, connections, onSelectConnection, onRefreshConnections, trustActionRef, demoMode, experience, dark, copy, locale }: {
     connection: Connected;
+    connectionLabel: string;
     connections: Connected[];
     onSelectConnection: (id: string) => void;
     onRefreshConnections: () => Promise<void>;
+    trustActionRef: { current: () => Promise<void> };
+    demoMode: boolean;
     experience: ExperienceLevel;
     dark: boolean;
     copy: Copy;
@@ -205,7 +237,6 @@ function Workspace({ connection, connections, onSelectConnection, onRefreshConne
     const [notice, setNotice] = useState('');
     const [eventState, setEventState] = useState<'idle' | 'live' | 'reconnecting'>('idle');
     const [search, setSearch] = useState('');
-    const [trusting, setTrusting] = useState(false);
     const [assistantAction, setAssistantAction] = useState<AssistantAction>('generate');
     const [assistantQuestion, setAssistantQuestion] = useState('');
     const [assistantContext, setAssistantContext] = useState<AssistantContext>();
@@ -484,14 +515,12 @@ function Workspace({ connection, connections, onSelectConnection, onRefreshConne
     };
 
     const trustConnection = () => perform(async () => {
-        if (!trusted && !window.confirm(`Review connection ${connection.name} at ${connection.host}, database ${connection.database}, identity ${connection.username}. Trust its read only access?`)) return;
-        setTrusting(true);
-        try {
-            await post(`/connections/${encodeURIComponent(connection.id)}/trust`, { trusted: !trusted, confirmation: connection.id });
-            await onRefreshConnections();
-            setNotice(trusted ? 'Connection trust revoked.' : 'Connection trusted. Schema access is ready.');
-        } finally { setTrusting(false); }
+        if (!trusted && !demoMode && !window.confirm(`Check these connection details before continuing:\n\nConnection: ${connectionLabel}\nServer: ${connection.host}\nDatabase: ${connection.database}\nUser: ${connection.username}\nAccess: read-only\n\nAllow read-only access so you can run queries?`)) return;
+        await post(`/connections/${encodeURIComponent(connection.id)}/trust`, { trusted: !trusted, confirmation: connection.id });
+        await onRefreshConnections();
+        setNotice(demoMode ? 'Sample data is ready. You can explore the workspace.' : trusted ? 'Read-only access was turned off.' : 'Connection is ready for read-only queries.');
     }, 'save');
+    trustActionRef.current = trustConnection;
 
     const sortedHistory = useMemo(() => [...history].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [history]);
     const filteredTables = useMemo(() => {
@@ -508,11 +537,6 @@ function Workspace({ connection, connections, onSelectConnection, onRefreshConne
     };
 
     return <div className={cx('workspace-root', experience === 'expert' && 'is-expert')}>
-        <section className="connection-strip">
-            <div className="connection-summary"><span className="connection-icon"><Icon name="bolt"/></span><div><span className="eyebrow">ACTIVE TARGET</span><strong>{connection.name}<span className="slash">/</span>{connection.database}</strong><small>{connection.host} · ClickHouse {connection.manifest?.serverVersion ?? 'version unknown'}</small></div></div>
-            <div className="connection-status"><Status trusted={trusted}/><span className="connection-readonly"><Icon name="lock"/> READ ONLY</span><Button variant={trusted ? 'ghost' : 'primary'} disabled={Boolean(busy) || trusting} onClick={() => void trustConnection()}>{trusting ? 'Updating…' : trusted ? 'Revoke trust' : 'Review & trust'}</Button></div>
-        </section>
-        {!trusted && <div className="trust-callout animate-enter"><span className="trust-callout-icon"><Icon name="lock"/></span><span><strong>This connection needs your review.</strong><small>Check the host, database, and identity above before allowing schema access or query execution.</small></span><Button variant="primary" onClick={() => void trustConnection()}>Review connection <span>↗</span></Button></div>}
         {error && <div className="toast toast-error animate-enter" role="alert"><span>!</span>{error}<button onClick={() => setError('')} aria-label="Dismiss error"><Icon name="close"/></button></div>}
         {notice && <div className="toast toast-success animate-enter" role="status"><span>✓</span>{notice}<button onClick={() => setNotice('')} aria-label="Dismiss message"><Icon name="close"/></button></div>}
         {storageError && <div className="toast toast-error" role="alert">Local draft storage could not save changes: {storageError}</div>}

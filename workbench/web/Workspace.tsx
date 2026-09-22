@@ -75,7 +75,7 @@ export function Workspace({ connection, dark, experience, refresh, copy }: {
     stateRef.current = state;
     const active = state.tabs.find(t => t.id === state.activeId) ?? state.tabs[0]!, editor = useRef<EditorHandle>(null), client = useQueryClient(), confirmation = useConfirmation();
     const [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false), latch = useRef(false), [search, setSearch] = useState(''), [panel, setPanel] = useState<Panel | null>(null), [palette, setPalette] = useState(false), [rowLimit, setRowLimit] = useState(String(connection.limits.rows)), [timeLimit, setTimeLimit] = useState(String(connection.limits.seconds)), [allHistory, setAllHistory] = useState(false), [link, setLink] = useState('');
-    const [filesVisible, setFilesVisible] = useState(true), [filesCompact, setFilesCompact] = useState(true), [focusMode, setFocusMode] = useState(false), [resultDeck, setResultDeck] = useState<ResultDeckView>(active.activeRunId ? 'results' : 'closed'), [boardPreset, setBoardPreset] = useState<BoardPreset>('write'), [widgetMenu, setWidgetMenu] = useState(false), [examplesOpen, setExamplesOpen] = useState(experience === 'beginner'), [beginnerGraphOpen, setBeginnerGraphOpen] = useState(false);
+    const [filesVisible, setFilesVisible] = useState(true), [filesCompact, setFilesCompact] = useState(true), [focusMode, setFocusMode] = useState(false), [resultDeck, setResultDeck] = useState<ResultDeckView>(active.activeRunId ? 'results' : 'closed'), [boardPreset, setBoardPreset] = useState<BoardPreset>('write'), [widgetMenu, setWidgetMenu] = useState(false), [examplesOpen, setExamplesOpen] = useState(false), [beginnerGraphOpen, setBeginnerGraphOpen] = useState(false);
     const visibleExamples = experience === 'beginner' ? learnerExamples.filter(example => example.level === 'beginner') : learnerExamples;
     const [eventStreamState, setEventStreamState] = useState<'idle' | 'connecting' | 'healthy' | 'failed'>('idle');
     const [localFilesOpen, setLocalFilesOpen] = useState(false), localFilesOrigin = useRef<HTMLElement | null>(null);
@@ -101,7 +101,7 @@ export function Workspace({ connection, dark, experience, refresh, copy }: {
     const visibleBoardPresets = experience === 'beginner' ? boardPresets.filter(preset => preset === 'write' || preset === 'analyze') : boardPresets;
     useEffect(() => { if (experience === 'beginner' && !visibleBoardPresets.includes(boardPreset))
         selectBoard('write'); }, [experience, boardPreset]);
-    useEffect(() => { setExamplesOpen(experience === 'beginner'); }, [experience]);
+    useEffect(() => { setExamplesOpen(false); }, [experience]);
     const update = useCallback((id: string, change: (d: Draft) => Draft) => setState(s => ({ ...s, tabs: s.tabs.map(d => d.id === id ? change(d) : d) })), []);
     const patch = (values: Partial<Draft>) => update(active.id, d => ({ ...d, ...values }));
     const storageError = useWorkspacePersistence(key, state);

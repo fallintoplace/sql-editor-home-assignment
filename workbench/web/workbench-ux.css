@@ -1,0 +1,30 @@
+/* Layout additions use the existing light/dark tokens and Click UI controls. */
+.workspace-view-controls{margin:12px 16px 0;flex-wrap:wrap}
+.workspace-grid.sidebar-closed{grid-template-columns:minmax(340px,1fr) minmax(310px,390px)}
+.workspace-grid.sidebar-closed.drawer-closed{grid-template-columns:minmax(0,1fr)}
+.workspace-grid>.sidebar[hidden],.workspace-grid>.drawer[hidden]{display:none!important}
+.workspace-banner>div{min-width:0}
+.workspace-banner .muted{overflow-wrap:anywhere}
+.tabs button{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.palette-option{width:100%;white-space:normal!important;overflow-wrap:anywhere;min-height:44px}
+.palette-option[aria-selected=true]{background:var(--accent)!important;outline:2px solid var(--muted);outline-offset:-2px}
+.palette-option[aria-disabled=true]{opacity:.65;cursor:not-allowed}
+.palette-option small{margin-top:4px}
+.command-hint{margin-top:10px}
+.result-empty{padding:22px 18px;display:flex;flex-direction:column;gap:10px;background:var(--page);border:1px dashed var(--line);border-radius:8px}
+.result-pagination{flex-wrap:wrap}
+.result-cell-help{font-size:12px;color:var(--muted)}
+.cell-inspector{display:flex;flex-direction:column;gap:14px;min-width:0}
+.cell-inspector .code-block{white-space:pre-wrap;user-select:text;max-height:50vh}
+@media(max-width:1180px){.workspace-grid.sidebar-closed{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:760px){
+ .workspace-view-controls{margin:10px 8px 0}
+ .workspace-grid,.workspace-grid.sidebar-closed{grid-template-columns:minmax(0,1fr)}
+ .app-header{height:auto;min-height:68px;flex-wrap:wrap;gap:10px;padding:12px}
+ .editor-header>div:first-child{max-width:none}
+ .drawer .toolbar,.results .toolbar{flex-wrap:wrap}
+ .run-facts code{max-width:100%;word-break:break-all}
+ .parameter-grid{grid-template-columns:minmax(0,1fr)}
+ .result-pagination>.toolbar{width:100%;justify-content:space-between}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}

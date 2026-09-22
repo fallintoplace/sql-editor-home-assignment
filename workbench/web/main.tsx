@@ -1,3 +1,5 @@
+// Declare cascade layer order before Click UI injects its component styles.
+import './styles.css';
 import React, { useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
@@ -8,7 +10,6 @@ import { api, download, message, post } from './api';
 import { Action, Callout, Select } from './ui';
 import { Workspace } from './Workspace';
 import { Chart } from './components/Chart';
-import './styles.css';
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } } });
 class Boundary extends React.Component<{
     children: ReactNode;

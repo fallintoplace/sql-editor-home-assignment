@@ -1,8 +1,8 @@
-# ClickStudio · ClickHouse SQL Workbench
+# SQL / Pro · ClickHouse SQL Workbench
 
-A single-owner, local-first SQL workspace extending the original home assignment.
-The implementation is in `workbench/`. The ten-stage cathedral roadmap is not a claim
-of completed multi-tenant, collaborative or production-ready functionality.
+A local-first ClickHouse SQL workspace with a dense, keyboard-friendly interface.
+The frontend was rebuilt from scratch with Tailwind CSS utilities and CodeMirror.
+The implementation is in `workbench/`.
 
 ## Start with a real local ClickHouse database
 
@@ -27,24 +27,23 @@ The Compose database is the project's ClickHouse 24.6 compatibility fixture, not
 a recommendation for a new production deployment. Fixture/demo mode is separately
 labelled and does not evaluate SQL or provide live database evidence.
 
-## Workflows
+## Current workspace
 
-Run a selected statement or a script, inspect typed results and charts, cancel a
-run, and reopen retained execution evidence. Drafts are scoped to their connection;
-closing a tab retains it in a bounded ten-tab recovery list and does not delete a
-saved revision or cancel a server query. Edited parameters mark old results as stale.
+- Dark SQL editor with ClickHouse syntax, autocomplete, folding, and keyboard run.
+- Connection test and explicit trust flow before a query can execute.
+- Schema explorer, query history, cancelable runs, and row/time limits.
+- Table and JSON result views with local filtering and CSV export.
 
-Saved revisions, explicit publication/share consent, bounded CSV/JSON import and
-review-first model proposals are described in the [workbench guide](docs/WORKBENCH.md).
-The Assistant panel also shows proposal quality checks and accepted/rejected outcomes;
-run `cd workbench && npm run eval:assistant` for the deterministic benchmark suite.
-Provider-backed features require operator configuration; they never auto-execute a proposal.
+The server still retains execution evidence and exposes the broader backend APIs
+described in the [workbench guide](docs/WORKBENCH.md). The rebuilt UI intentionally
+keeps the first screen focused on query work.
 
 ## Validation and delivery status
 
 ```sh
 cd workbench
 npm test
+npm run typecheck
 npm run build
 CLICKHOUSE_INTEGRATION=1 npm run test:integration
 npm run eval
@@ -52,6 +51,7 @@ npx playwright install --with-deps chromium
 npm run test:e2e
 ```
 
+The typecheck, build, and unit test commands are the fast frontend/backend checks.
 The integration/evaluation commands require the local database setup above.
 Browser tests use the explicit fixture driver, not a substitute for live ClickHouse.
 The GitHub Actions browser step is temporarily paused while the dense workbench

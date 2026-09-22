@@ -1,5 +1,8 @@
 [hidden]{display:none!important}
 
+[data-radix-dialog-overlay]{z-index:1000}
+[data-testid="click-dialog-contentarea"]{z-index:1001}
+
 .application{min-height:100vh;background:linear-gradient(180deg,color-mix(in srgb,var(--panel) 58%,var(--page)) 0,var(--page) 360px)}
 .app-header{position:sticky;top:0;z-index:20;height:52px;padding:0 max(16px,calc((100vw - 1760px) / 2 + 16px));background:color-mix(in srgb,var(--panel) 90%,transparent);border-bottom:1px solid var(--line);box-shadow:0 8px 24px color-mix(in srgb,var(--text) 5%,transparent);backdrop-filter:blur(16px)}
 .app-header>div:first-child{display:flex;align-items:baseline;gap:18px;min-width:0}

@@ -175,7 +175,7 @@ export function createApp(config: Config, overrides: {
     app.post('/api/workspace/import', (req, res) => res.status(201).json(artifacts.import(principal(res), req.body)));
     app.get('/api/published', (_req, res) => res.json(artifacts.publications(principal(res))));
     app.get('/api/published/:id', (req, res) => res.json(artifacts.published(principal(res), id(req))));
-    app.post('/api/published/:id/share', (req, res) => { requireThat(body(req).acknowledgeShare === true, 400, 'SHARE_CONSENT', 'A share link exposes the SQL and bounded result to anyone holding it'); const pub = artifacts.published(principal(res), id(req)); safeExport(pub); const share = artifacts.share(principal(res), pub.id); res.json({ ...share, path: `/share/${share.token}` }); });
+    app.post('/api/published/:id/share', (req, res) => { requireThat(body(req).acknowledgeShare === true, 400, 'SHARE_CONSENT', 'A share link exposes SQL, bound parameters, execution metadata, chart configuration and the bounded result to anyone holding it'); const pub = artifacts.published(principal(res), id(req)); safeExport(pub); const share = artifacts.share(principal(res), pub.id); res.json({ ...share, path: `/share/${share.token}` }); });
     app.delete('/api/published/:id/share', (req, res) => { artifacts.revokeShares(principal(res), id(req)); res.json({ ok: true }); });
     app.delete('/api/published/:id', (req, res) => { artifacts.deletePublication(principal(res), id(req)); res.json({ ok: true }); });
     app.get('/api/assistant/status', (_req, res) => res.json(ai.status(principal(res))));

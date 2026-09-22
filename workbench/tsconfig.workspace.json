@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "types": [],
+    "rootDir": ".",
+    "outDir": ".workspace-build",
+    "noEmitOnError": true
+  },
+  "include": [
+    "web/workspace-state.ts",
+    "web/workspace-persistence.ts",
+    "shared/evidence.ts"
+  ]
+}

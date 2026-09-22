@@ -5,9 +5,11 @@ import { columnStats, displayValue, exportCsv, filterRows, numericType, recommen
 import { api, download, message } from '../api';
 import { Action, Callout, Select, TextField } from '../ui';
 import { Chart } from './Chart';
-export function ResultPane({ run, draftSql, config, onChart, onChild }: {
+import { matchesDraft } from '../../shared/evidence';
+export function ResultPane({ run, draftSql, draftParameters, config, onChart, onChild }: {
     run: Run;
     draftSql: string;
+    draftParameters: Record<string, string>;
     config: ChartConfig;
     onChart: (c: ChartConfig) => void;
     onChild: (column: string, value: string | null) => void;
@@ -20,8 +22,8 @@ export function ResultPane({ run, draftSql, config, onChart, onChild }: {
     return <section className="results" aria-label="Query results"><div className="toolbar spread"><h2>Results <span className={`status ${run.status}`}>{run.status}</span></h2><div className="toolbar"><Action onClick={() => setShowSql(v => !v)}>Executed SQL</Action>{result && <><Action onClick={() => setView('table')}>Table</Action><Action onClick={() => { if (config.kind === 'table' && recommendation)
         onChart(recommendation.config); setView('chart'); }}>Chart</Action></>}</div></div>
  <div className="run-facts"><code>{run.queryId}</code><span>{Math.round(run.elapsedMs)} ms</span><span>{run.rowCount.toLocaleString()} returned rows</span><span>{run.progress ? `${run.progress.readRows} rows read · ${run.progress.readBytes} bytes read` : 'Read progress unavailable'}</span><span>Executed as {run.executedAs}</span></div>
- {showSql && <pre className="code-block">{run.sql}</pre>}
- {draftSql.trim() !== run.sql.trim() && <Callout>This result belongs to an earlier or selected statement. Editing the draft does not change executed evidence.</Callout>}
+ {showSql && <><pre className="code-block" aria-label="Executed SQL text">{run.sql}</pre><pre className="code-block" aria-label="Executed parameters">{JSON.stringify(run.parameters, null, 2)}</pre></>}
+ {!matchesDraft(run, draftSql, draftParameters) && <Callout>This result belongs to an earlier or selected statement, or different bound parameters. Editing the draft does not change executed evidence.</Callout>}
  {run.warnings.map((w, i) => <Callout key={i}>{w}</Callout>)}
  {run.error && <Callout danger>{run.error.code}: {run.error.message}</Callout>}
  {run.resultState === 'expired' && <Callout>Result data expired or was evicted. The SQL and query ID remain. Rerun explicitly for fresh data.</Callout>}

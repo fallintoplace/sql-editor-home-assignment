@@ -5,7 +5,9 @@ import type { Connection, QueryDocument, Run, RunEvent, Schema, Script, Publishe
 import { parameterNames, quoteIdentifier, selectedStatement, splitSql, insertChildFilter } from '../shared/sql';
 import { api, download, message, post } from './api';
 import { Action, Callout, Select, TextField, useConfirmation } from './ui';
-import { checkpoint, newDraft, recover, type Draft, type WorkspaceState } from './workspace-state';
+import { checkpoint, closeDraft, MAX_TABS, newDraft, recover, reopenDraft, type Draft, type WorkspaceState } from './workspace-state';
+import { useWorkspacePersistence } from './useWorkspacePersistence';
+import { publicationIssue } from '../shared/evidence';
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { ResultPane } from './components/ResultPane';
 import { AssistantPanel } from './components/AssistantPanel';
@@ -25,16 +27,10 @@ export function Workspace({ connection, dark, refresh }: {
     const key = `cathedral:local-owner:${connection.id}:v1`, [state, setState] = useState<WorkspaceState>(() => recover(key)), stateRef = useRef(state);
     stateRef.current = state;
     const active = state.tabs.find(t => t.id === state.activeId) ?? state.tabs[0]!, editor = useRef<EditorHandle>(null), client = useQueryClient(), confirmation = useConfirmation();
-    const [error, setError] = useState(''), [notice, setNotice] = useState(''), [storageError, setStorageError] = useState(''), [busy, setBusy] = useState(false), latch = useRef(false), [search, setSearch] = useState(''), [panel, setPanel] = useState<Panel | null>('assistant'), [palette, setPalette] = useState(false), [paletteSearch, setPaletteSearch] = useState(''), [rowLimit, setRowLimit] = useState(String(connection.limits.rows)), [timeLimit, setTimeLimit] = useState(String(connection.limits.seconds)), [allHistory, setAllHistory] = useState(false), [link, setLink] = useState('');
+    const [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false), latch = useRef(false), [search, setSearch] = useState(''), [panel, setPanel] = useState<Panel | null>('assistant'), [palette, setPalette] = useState(false), [paletteSearch, setPaletteSearch] = useState(''), [rowLimit, setRowLimit] = useState(String(connection.limits.rows)), [timeLimit, setTimeLimit] = useState(String(connection.limits.seconds)), [allHistory, setAllHistory] = useState(false), [link, setLink] = useState('');
     const update = useCallback((id: string, change: (d: Draft) => Draft) => setState(s => ({ ...s, tabs: s.tabs.map(d => d.id === id ? change(d) : d) })), []);
     const patch = (values: Partial<Draft>) => update(active.id, d => ({ ...d, ...values }));
-    useEffect(() => { const timer = setTimeout(() => { try {
-        localStorage.setItem(key, JSON.stringify(state));
-        setStorageError('');
-    }
-    catch {
-        setStorageError('Browser draft storage is unavailable or full. Export your local drafts before closing this page.');
-    } }, 150); return () => clearTimeout(timer); }, [state, key]);
+    const storageError = useWorkspacePersistence(key, state);
     const schema = useQuery({ queryKey: ['schema', connection.id], queryFn: ({ signal }) => api<Schema>(`/connections/${connection.id}/schema`, { signal }), enabled: connection.trusted, retry: false });
     const documents = useQuery({ queryKey: ['documents', connection.id], queryFn: () => api<QueryDocument[]>('/documents?trash=true'), retry: false });
     const history = useQuery({ queryKey: ['runs', connection.id], queryFn: () => api<Run[]>(`/runs?connectionId=${encodeURIComponent(connection.id)}`), refetchInterval: 4000, retry: false });
@@ -42,7 +38,8 @@ export function Workspace({ connection, dark, refresh }: {
             throw new Error('This saved run belongs to another connection.'); return value; }, enabled: Boolean(active.activeRunId), refetchInterval: q => terminal(q.state.data) ? false : 1500, retry: false,
         structuralSharing: (old: unknown, incoming: unknown) => { const previous = old as Run | undefined, next = incoming as Run; return previous && next && previous.sequence > next.sequence ? previous : next; } });
     const script = useQuery({ queryKey: ['script', connection.id, active.scriptId], queryFn: () => api<Script>(`/scripts/${active.scriptId}`), enabled: Boolean(active.scriptId), refetchInterval: q => q.state.data?.status === 'running' ? 800 : false, retry: false });
-    useEffect(() => { const id = active.activeRunId; if (!id)
+    const activeRunTerminal = terminal(run.data);
+    useEffect(() => { const id = active.activeRunId; if (!id || activeRunTerminal)
         return; const source = new EventSource(`/api/runs/${id}/events`); source.onmessage = event => { try {
         const data = JSON.parse(event.data) as RunEvent;
         if (data.run.id !== id || data.run.connectionId !== connection.id)
@@ -55,7 +52,7 @@ export function Workspace({ connection, dark, refresh }: {
     }
     catch {
         source.close();
-    } }; return () => source.close(); }, [active.activeRunId, connection.id, client]);
+    } }; return () => source.close(); }, [active.activeRunId, activeRunTerminal, connection.id, client]);
     useEffect(() => { if (active.scriptId && script.data && !active.activeRunId) {
         const first = script.data.statements.find(s => s.runId)?.runId;
         if (first)
@@ -79,8 +76,8 @@ export function Workspace({ connection, dark, refresh }: {
         latch.current = false;
         setBusy(false);
     } };
-    const addDraft = (draft: Draft) => { if (stateRef.current.tabs.length >= 30) {
-        setError('At most 30 local tabs are supported. Save or export work before creating more.');
+    const addDraft = (draft: Draft) => { if (stateRef.current.tabs.length >= MAX_TABS) {
+        setError('At most 30 local tabs are supported. Close a tab, or save and export work before creating more.');
         return;
     } setState(s => ({ ...s, tabs: [...s.tabs, draft], activeId: draft.id })); };
     const openDocument = (document: QueryDocument) => { if (document.connectionId !== connection.id) {
@@ -134,8 +131,8 @@ export function Workspace({ connection, dark, refresh }: {
         setError(message(e));
     } }, [run.data, active.serverId]);
     const publish = () => perform(async () => {
-        if (!active.activeRunId)
-            throw new Error('Run this exact SQL before publishing.');
+        const issue = publicationIssue(run.data, { ...active, connectionId: connection.id });
+        if (issue) throw new Error(issue);
         const confirmed = await confirmation.ask('Publish an evidence snapshot', 'Freeze the saved SQL, parameters, chart and result. Publication keeps at most 1,000 rows / 1 MB for seven days. Truncation is explicitly acknowledged; later draft edits do not change the snapshot.');
         if (!confirmed)
             return;
@@ -167,7 +164,7 @@ export function Workspace({ connection, dark, refresh }: {
         await refresh();
     } })}>{connection.trusted ? 'Revoke trust' : 'Trust connection'}</Action><Action onClick={() => setPalette(true)}>Commands ⌘K</Action></div></div>
  {!connection.trusted && <Callout>Review the configured host, database and identity, then trust the connection to inspect schema or run a query.</Callout>}
- {storageError && <Callout danger>{storageError}<Action onClick={() => download('cathedral-local-drafts.json', state)}>Export local drafts</Action></Callout>}{error && <Callout danger>{error}<Action type="empty" onClick={() => setError('')}>Dismiss</Action></Callout>}{notice && <p className="notice" role="status">{notice}</p>}
+ {state.recoveryWarning && <Callout danger>{state.recoveryWarning}</Callout>}{storageError && <Callout danger>{storageError}<Action onClick={() => download('cathedral-local-drafts.json', state)}>Export local drafts</Action></Callout>}{error && <Callout danger>{error}<Action type="empty" onClick={() => setError('')}>Dismiss</Action></Callout>}{notice && <p className="notice" role="status">{notice}</p>}
  {link && <div className="toolbar"><TextField label="Read-only share link" value={link} readOnly onChange={() => { }}/><Action onClick={() => void navigator.clipboard.writeText(link).catch(e => setError(message(e)))}>Copy link</Action></div>}
  <div className={panel ? 'workspace-grid' : 'workspace-grid drawer-closed'}><aside className="sidebar stack"><h2>Workspace</h2><Action onClick={() => addDraft(newDraft())}>New SQL tab</Action><TextField aria-label="Search files and schema" placeholder="Find files, tables, columns" value={search} onChange={setSearch}/><h3>Saved files</h3>{visibleDocuments.filter(d => !d.deletedAt && d.name.toLowerCase().includes(search.toLowerCase())).map(d => <Action type="empty" align="left" key={d.id} onClick={() => openDocument(d)}>{d.name} <small>r{d.revision}{d.verifiedRevision ? ' · self-reviewed' : ''}</small></Action>)}
  <h3>Schema</h3>{schema.isFetching && <p role="status">Loading schema…</p>}{schema.error && <Callout danger>{message(schema.error)}</Callout>}<Action disabled={!connection.trusted} onClick={() => void schema.refetch()}>Refresh schema</Action>
@@ -176,6 +173,10 @@ export function Workspace({ connection, dark, refresh }: {
  <Action onClick={() => download('cathedral-local-drafts.json', state)}>Export local drafts</Action></aside>
  <main className="editor-column"><div className="tabs" role="tablist" aria-label="SQL documents" onKeyDown={e => { if (!['ArrowLeft', 'ArrowRight'].includes(e.key))
         return; e.preventDefault(); const index = state.tabs.findIndex(d => d.id === active.id), next = (index + (e.key === 'ArrowRight' ? 1 : -1) + state.tabs.length) % state.tabs.length; setState(s => ({ ...s, activeId: s.tabs[next]!.id })); (e.currentTarget.querySelectorAll('[role=tab]')[next] as HTMLElement | undefined)?.focus(); }}>{state.tabs.map(d => <Action key={d.id} type={d.id === active.id ? 'primary' : 'empty'} role="tab" aria-selected={d.id === active.id} tabIndex={d.id === active.id ? 0 : -1} onClick={() => setState(s => ({ ...s, activeId: d.id }))}>{d.name}</Action>)}</div>
+ <div className="toolbar wrap" aria-label="Tab actions"><Action disabled={busy} onClick={() => {
+        setState(s => closeDraft(s, active.id));
+        setNotice('Tab closed locally. Reopen closed tab restores it. The last 10 closed tabs are retained; server revisions and query history are unchanged.');
+    }}>Close tab</Action><Action disabled={busy || !(state.closedTabs?.length) || state.tabs.length >= MAX_TABS} onClick={() => setState(reopenDraft)}>Reopen closed tab</Action></div>
  <div className="editor-header"><TextField aria-label="SQL document name" value={active.name} onChange={name => patch({ name })}/><span className="muted">{active.serverId ? `Local draft · based on saved r${active.baseRevision}` : 'Private local draft'}</span></div>
  <div className="toolbar wrap"><Action type="primary" disabled={busy || !connection.trusted} onClick={() => void execute()}>Run statement</Action><Action disabled={busy || !connection.trusted} onClick={() => void execute(true)}>Run script</Action><Action disabled={busy || !run.data || terminal(run.data)} onClick={() => void perform(async () => { await post(`/runs/${active.activeRunId}/cancel`); await run.refetch(); })}>Cancel run</Action>{script.data?.status === 'running' && <Action onClick={() => void perform(async () => { await post(`/scripts/${active.scriptId}/cancel`); await script.refetch(); })}>Cancel script</Action>}<Action disabled={busy} onClick={() => void perform(async () => { await saveDraft(active); })}>Save revision</Action><Action disabled={busy || !active.activeRunId} onClick={() => void publish()}>Publish / share</Action><Action onClick={branch}>Branch experiment</Action></div>
  <SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={schema.data} dark={dark} error={run.data?.sql === active.sql ? run.data.error : undefined} onChange={sql => update(active.id, d => ({ ...d, sql }))} onSelection={(from, to) => update(active.id, d => ({ ...d, from, to }))} onRun={script => void execute(script)}/>
@@ -185,7 +186,7 @@ export function Workspace({ connection, dark, refresh }: {
  {parsed.parameters.length > 0 && <details open><summary>Bound query parameters</summary><div className="parameter-grid">{parsed.parameters.map(p => <TextField key={p.name} label={`${p.name} : ${p.type}`} value={active.parameters[p.name] ?? ''} onChange={value => patch({ parameters: { ...active.parameters, [p.name]: value } })}/>)}</div></details>}
  <div className="toolbar wrap">{(['assistant', 'library', 'import', 'evidence', 'monitors'] as Panel[]).map(p => <Action key={p} type={panel === p ? 'primary' : 'secondary'} onClick={() => setPanel(panel === p ? null : p)}>{p}</Action>)}</div>
  {script.data && <section className="panel-card"><h3>Script: {script.data.status}</h3><p>Stop-on-error is enabled. Every statement has a separate run and query ID.</p><div className="toolbar wrap">{script.data.statements.map((s, i) => <Action key={i} disabled={!s.runId} onClick={() => patch({ activeRunId: s.runId })}>Statement {i + 1}: {s.status}</Action>)}</div></section>}
- {run.data && <ResultPane key={run.data.id} run={run.data} draftSql={active.sql} config={active.chart} onChart={chart => patch({ chart })} onChild={child}/>} {!active.activeRunId && <div className="empty-state"><h2>Your SQL stays in charge.</h2><p>Run the example to see a typed table, chart, query ID, and retained evidence. Nothing runs automatically.</p></div>}
+ {run.data && <ResultPane key={run.data.id} run={run.data} draftSql={active.sql} draftParameters={active.parameters} config={active.chart} onChart={chart => patch({ chart })} onChild={child}/>} {!active.activeRunId && <div className="empty-state"><h2>Your SQL stays in charge.</h2><p>Run the example to see a typed table, chart, query ID, and retained evidence. Nothing runs automatically.</p></div>}
  {run.error && <Callout danger>{message(run.error)}</Callout>}{script.error && <Callout danger>{message(script.error)}</Callout>}
  <section className="history"><div className="toolbar spread"><h3>Query history</h3><Action onClick={() => setAllHistory(v => !v)}>{allHistory ? 'Show current file' : 'Show all workspace files'}</Action></div>{visibleHistory.slice(0, 50).map(r => <div className="history-row" key={r.id}><Action type="empty" onClick={() => patch({ activeRunId: r.id })}>{r.status} · {Math.round(r.elapsedMs)} ms · {r.sql.slice(0, 65)}</Action><Action onClick={() => addDraft({ ...newDraft('History copy.sql', r.sql), parameters: r.parameters, parentRunId: r.id })}>SQL as child draft</Action>{!terminal(r) && <Action onClick={() => void perform(async () => { await post(`/runs/${r.id}/cancel`); await history.refetch(); })}>Cancel</Action>}</div>)}</section>
  </main>

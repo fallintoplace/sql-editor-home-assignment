@@ -1,4 +1,4 @@
-import type { ChartConfig, MetricContract } from '../shared/types';
+import type { ChartConfig, MetricContract } from '../shared/types.js';
 export const SAMPLE_SQL = "SELECT\n    toDate('2026-01-01') + number AS day,\n    (number + 1) * 10 AS events\nFROM numbers(7)\nORDER BY day";
 export interface Checkpoint {
     id: string;
@@ -33,16 +33,117 @@ export interface WorkspaceState {
     version: 1;
     tabs: Draft[];
     activeId: string;
+    closedTabs?: Draft[];
+    recoveryWarning?: string;
 }
 export const newDraft = (name = 'Untitled.sql', sql = SAMPLE_SQL): Draft => ({ id: crypto.randomUUID(), name, sql, parameters: {}, chart: { kind: 'table', x: 0, ys: [], title: 'Query result' }, runIds: [], checkpoints: [], from: 0, to: 0, kind: 'query', dependencies: [] });
-export function recover(key: string): WorkspaceState {
+export const MAX_TABS = 30;
+export const MAX_CLOSED_TABS = 10;
+const record = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+const text = (value: unknown, fallback = '') => typeof value === 'string' ? value : fallback;
+const id = (value: unknown) => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,200}$/.test(value) ? value : undefined;
+const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+const position = (value: unknown, length: number) => typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(length, Math.trunc(value))) : 0;
+const index = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+const revision = (value: unknown) => index(value) && value > 0 ? value : undefined;
+const chartKinds: ChartConfig['kind'][] = ['table', 'number', 'line', 'bar', 'area', 'stacked', 'pie', 'scatter'];
+
+/** Browser storage is untrusted input; preserve SQL while repairing optional metadata. */
+function recoverDraft(value: unknown): Draft | undefined {
+    if (!record(value) || typeof value.sql !== 'string' || value.sql.length > 200000)
+        return undefined;
+    const draft = newDraft(text(value.name, 'Recovered.sql'), value.sql);
+    const chart = record(value.chart) ? value.chart : {};
+    const metric = record(value.metric) ? value.metric : undefined;
+    const from = position(value.from, draft.sql.length), to = position(value.to, draft.sql.length);
+    return {
+        ...draft, id: id(value.id) ?? draft.id,
+        serverId: id(value.serverId), baseRevision: revision(value.baseRevision),
+        parameters: record(value.parameters) ? Object.fromEntries(Object.entries(value.parameters).filter((entry): entry is [string, string] => typeof entry[1] === 'string')) : {},
+        chart: {
+            kind: chartKinds.includes(chart.kind as ChartConfig['kind']) ? chart.kind as ChartConfig['kind'] : 'table',
+            x: index(chart.x) ? chart.x : 0,
+            ys: Array.isArray(chart.ys) ? chart.ys.filter(index) : [], title: text(chart.title, 'Query result'),
+        },
+        runIds: [...new Set(strings(value.runIds).filter(v => id(v)))],
+        activeRunId: id(value.activeRunId), scriptId: id(value.scriptId),
+        parentRunId: id(value.parentRunId), parentDocumentId: id(value.parentDocumentId),
+        from: Math.min(from, to), to: Math.max(from, to),
+        kind: value.kind === 'metric' || value.kind === 'snippet' ? value.kind : 'query',
+        metric: metric ? {
+            definition: text(metric.definition), grain: text(metric.grain), dimensions: strings(metric.dimensions),
+            timezone: text(metric.timezone), filters: text(metric.filters), nullTreatment: text(metric.nullTreatment),
+            sourceColumns: strings(metric.sourceColumns),
+        } : undefined,
+        dependencies: strings(value.dependencies).filter(v => id(v)),
+        checkpoints: (Array.isArray(value.checkpoints) ? value.checkpoints : []).flatMap((point): Checkpoint[] => {
+            if (!record(point) || typeof point.sql !== 'string' || point.sql.length > 200000)
+                return [];
+            const a = position(point.from, point.sql.length), b = position(point.to, point.sql.length);
+            return [{ id: id(point.id) ?? crypto.randomUUID(), at: text(point.at), reason: text(point.reason, 'Recovered checkpoint'),
+                sql: point.sql, from: Math.min(a, b), to: Math.max(a, b), parentRevision: revision(point.parentRevision) }];
+        }).slice(0, 30),
+    };
+}
+
+export function recover(key: string, storage?: Pick<Storage, 'getItem'>): WorkspaceState {
     try {
-        const v = JSON.parse(localStorage.getItem(key) ?? 'null') as WorkspaceState | null;
-        if (v?.version === 1 && Array.isArray(v.tabs) && v.tabs.length > 0 && v.tabs.length <= 30 && v.tabs.every(t => typeof t.id === 'string' && typeof t.name === 'string' && typeof t.sql === 'string' && t.sql.length <= 200000 && Array.isArray(t.checkpoints) && Array.isArray(t.runIds) && t.parameters && t.chart))
-            return { ...v, activeId: v.tabs.some(t => t.id === v.activeId) ? v.activeId : v.tabs[0]!.id };
+        const value: unknown = JSON.parse((storage ?? localStorage).getItem(key) ?? 'null');
+        if (record(value) && value.version === 1 && (Array.isArray(value.tabs) || Array.isArray(value.closedTabs))) {
+            const seen = new Set<string>();
+            const recoverTabs = (input: unknown[], limit: number) => {
+                const recovered: Draft[] = [];
+                for (const value of input) {
+                    const draft = recoverDraft(value);
+                    if (!draft) continue;
+                    // Duplicated local IDs must not make edits affect two tabs.
+                    if (seen.has(draft.id)) draft.id = crypto.randomUUID();
+                    seen.add(draft.id);
+                    recovered.push(draft);
+                    if (recovered.length === limit) break;
+                }
+                return recovered;
+            };
+            const storedTabs = Array.isArray(value.tabs) ? value.tabs : [];
+            const storedClosed = Array.isArray(value.closedTabs) ? value.closedTabs : [];
+            const tabs = recoverTabs(storedTabs, MAX_TABS);
+            const closedTabs = recoverTabs(storedClosed, MAX_CLOSED_TABS);
+            const incomplete = !Array.isArray(value.tabs) || tabs.length !== storedTabs.length ||
+                closedTabs.length !== storedClosed.length || (value.closedTabs !== undefined && !Array.isArray(value.closedTabs));
+            // A damaged open-tab list must not erase an otherwise usable closed history.
+            if (!tabs.length) tabs.push(newDraft('Getting started.sql'));
+            return {
+                version: 1, tabs, closedTabs,
+                activeId: tabs.find(t => t.id === value.activeId)?.id ?? tabs[0]!.id,
+                recoveryWarning: incomplete ? 'Some stored tabs could not be recovered. Valid SQL drafts were kept.' : undefined,
+            };
+        }
     }
     catch { /* Corrupt or unavailable browser storage never prevents opening the editor. */ }
     const draft = newDraft('Getting started.sql');
-    return { version: 1, tabs: [draft], activeId: draft.id };
+    return { version: 1, tabs: [draft], activeId: draft.id, closedTabs: [] };
 }
+
+/** Closing affects local navigation only: no server deletion or query cancellation. */
+export function closeDraft(state: WorkspaceState, draftId: string): WorkspaceState {
+    const i = state.tabs.findIndex(d => d.id === draftId);
+    if (i === -1) return state;
+    const closed = state.tabs[i]!;
+    const tabs = state.tabs.filter(d => d.id !== draftId);
+    if (!tabs.length) tabs.push(newDraft());
+    return { ...state, tabs,
+        activeId: state.activeId === draftId ? tabs[Math.min(i, tabs.length - 1)]!.id : state.activeId,
+        closedTabs: [closed, ...(state.closedTabs ?? []).filter(d => d.id !== draftId)].slice(0, MAX_CLOSED_TABS),
+    };
+}
+
+export function reopenDraft(state: WorkspaceState): WorkspaceState {
+    const [draft, ...closedTabs] = state.closedTabs ?? [];
+    if (!draft || state.tabs.length >= MAX_TABS) return state;
+    // Keep the saved revision, selection, checkpoints and run references unchanged.
+    const reopened = state.tabs.some(d => d.id === draft.id) ? { ...draft, id: crypto.randomUUID() } : draft;
+    return { ...state, tabs: [...state.tabs, reopened], activeId: reopened.id, closedTabs };
+}
+
 export function checkpoint(draft: Draft, reason: string): Draft { return { ...draft, checkpoints: [{ id: crypto.randomUUID(), at: new Date().toISOString(), reason, sql: draft.sql, from: draft.from, to: draft.to, parentRevision: draft.baseRevision }, ...draft.checkpoints].slice(0, 30) }; }

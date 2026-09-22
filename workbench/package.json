@@ -12,15 +12,16 @@
     "build": "npm run typecheck && vite build && tsc -p tsconfig.server.json",
     "start:production": "node --env-file-if-exists=.env dist/server/index.js",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.server.json",
-    "test": "npm run test:core",
+    "test": "npm run test:core && npm run test:workspace",
     "test:core": "tsc -p tsconfig.core.json && node --test tests/core/*.test.mjs",
     "test:integration": "tsx --env-file-if-exists=.env --test tests/integration/*.test.ts",
     "test:e2e": "playwright test",
-    "check": "npm run typecheck && npm run test:core && npm run build",
+    "check": "npm run typecheck && npm test && npm run build",
     "eval": "tsx --env-file-if-exists=.env scripts/eval.ts",
     "init:env": "node scripts/init-env.mjs",
     "db:setup": "tsx --env-file-if-exists=.env scripts/seed.ts",
-    "check:syntax": "node scripts/check-syntax.mjs"
+    "check:syntax": "node scripts/check-syntax.mjs",
+    "test:workspace": "tsc -p tsconfig.workspace.json && node --test tests/workspace/*.test.mjs"
   },
   "dependencies": {
     "@clickhouse/client": "^1.12.0",

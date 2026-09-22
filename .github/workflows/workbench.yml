@@ -19,13 +19,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: workbench/package-lock.json
       - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then npm ci; else
-            echo '::warning::Bootstrap install: review and commit workbench/package-lock.json for reproducible releases.'
-            npm install
-          fi
-      - name: Core tests and dependency-aware build
+        run: npm ci
+      - name: Core and workspace regressions plus dependency-aware build
         id: build
         run: npm test && npm run build
       - name: Local-only credentials and ClickHouse 24.6

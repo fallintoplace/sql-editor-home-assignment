@@ -1,0 +1,23 @@
+name: Verify workbench source transfer
+on:
+  push:
+    branches: ["review/workbench-features-20260922"]
+    paths: [".github/workflows/workbench-patch-transfer.yml"]
+permissions:
+  contents: read
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copy patch fragments for byte verification
+        run: |
+          mkdir -p /tmp/workbench-patch-transfer
+          cp .review/feature-*.b64 /tmp/workbench-patch-transfer/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workbench-patch-transfer
+          path: /tmp/workbench-patch-transfer/
+          retention-days: 1
+          if-no-files-found: error

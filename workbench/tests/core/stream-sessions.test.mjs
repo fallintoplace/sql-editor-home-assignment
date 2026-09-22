@@ -4,7 +4,7 @@ import { Readable } from 'node:stream';
 import { collectCompactStream } from '../../.core-build/core/compact-stream.js';
 import { SessionService } from '../../.core-build/core/sessions.js';
 import { DEFAULT_LIMITS } from '../../.core-build/shared/types.js';
-import { FileStore } from '../../.core-build/core/store.js';
+import { FileStore, MemoryStore, audit } from '../../.core-build/core/store.js';
 import { mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -43,6 +43,8 @@ test('File storage is atomic, private, and independent of returned object mutati
 finally {
     rmSync(path, { recursive: true, force: true });
 } });
+test('Store key counts distinguish creates from updates', () => { const store = new MemoryStore(); store.put('docs', 'one', { v: 1 }); store.put('docs', 'one', { v: 2 }); store.put('docs', 'two', { v: 3 }); assert.equal(store.count('docs'), 2); assert.deepEqual(store.keys('docs').sort(), ['one', 'two']); store.delete('docs', 'one'); assert.equal(store.count('docs'), 1); });
+test('Audit retention prunes by keys without scanning stored event values', () => { const store = new MemoryStore(); store.list = () => { throw new Error('audit pruning must not parse all stored events'); }; const principal = { id: 'local-owner', role: 'owner' }; for (let i = 0; i < 5001; i++) audit(store, principal, 'test', String(i)); assert.equal(store.count('audit'), 4500); });
 test('Storage keys reject filesystem traversal', () => { const path = mkdtempSync(join(tmpdir(), 'cathedral-')); try {
     const store = new FileStore(path);
     assert.throws(() => store.put('../outside', 'x', {}), { code: 'INVALID_STORAGE_KEY' });

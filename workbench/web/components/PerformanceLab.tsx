@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ProfileSummary, QueryProfile, Run } from '../../shared/types';
 import { api, message } from '../api';
@@ -56,7 +56,8 @@ export function PerformanceLab({ connectionId, run, runs, available, current, lo
     onLoad: () => void;
 }) {
     const [compareId, setCompareId] = useState(''), [tab, setTab] = useState<'overview' | 'pipeline' | 'insights' | 'evidence'>('overview');
-    const comparison = useMemo(() => runs.find(candidate => candidate.id === compareId), [runs, compareId]);
+    useEffect(() => { setCompareId(''); }, [run?.id]);
+    const comparison = useMemo(() => runs.find(candidate => candidate.id === compareId && candidate.id !== run?.id), [runs, compareId, run?.id]);
     const comparisonProfile = useQuery({
         queryKey: ['profile', connectionId, comparison?.id],
         queryFn: () => api<ProfileResponse>(`/runs/${comparison!.id}/profile`),

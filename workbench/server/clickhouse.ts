@@ -159,7 +159,7 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
         requireThat(this.manifests.get(run.connectionId)?.pipeline.available, 409, 'CAPABILITY_UNAVAILABLE', 'Test the connection; pipeline inspection is required');
         const statement = splitSql(run.sql)[0]?.sql;
         requireThat(statement, 400, 'EMPTY_SQL', 'The run has no SQL statement to inspect');
-        const rows = await this.rows<Record<string, unknown>>(run.connectionId, `EXPLAIN PIPELINE\n${statement}`);
+        const rows = await this.rows<Record<string, unknown>>(run.connectionId, `EXPLAIN PIPELINE\n${statement}`, run.parameters);
         return rows.map(row => String(Object.values(row)[0] ?? '')).filter(Boolean);
     }
     targets(id: string) { return this.profile(id).writer?.tables ?? []; }

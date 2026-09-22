@@ -38,8 +38,10 @@ export function ResultPane({ run, draftSql, draftParameters, config, copy, onCha
     const [copyNotice, setCopyNotice] = useState(''), [copyError, setCopyError] = useState(''), [copying, setCopying] = useState(false);
     const cellOrigin = useRef<HTMLElement | null>(null);
     const deferredFilter = useDeferredValue(filter);
-    const pageQuery = useQuery({ queryKey: ['result-page', run.connectionId, run.id, run.resultState, page], queryFn: ({ signal }) => api<ResultPage>(`/runs/${run.id}/result?offset=${page * RESULT_PAGE_SIZE}&count=${RESULT_PAGE_SIZE}`, { signal }), enabled: run.resultState === 'reopenable' && !fullRequested && view === 'table' && !filter, retry: false });
-    const fullQuery = useQuery({ queryKey: ['snapshot', run.connectionId, run.id, run.resultState], queryFn: ({ signal }) => api<Result>(`/runs/${run.id}/snapshot`, { signal }), enabled: run.resultState === 'reopenable' && (fullRequested || view !== 'table' || Boolean(filter)), retry: false });
+    const requiresFullResult = fullRequested || view !== 'table' || Boolean(filter);
+    const pageQuery = useQuery({ queryKey: ['result-page', run.connectionId, run.id, run.resultState, page], queryFn: ({ signal }) => api<ResultPage>(`/runs/${run.id}/result?offset=${page * RESULT_PAGE_SIZE}&count=${RESULT_PAGE_SIZE}`, { signal }), enabled: run.resultState === 'reopenable' && !requiresFullResult, retry: false });
+    const fullQuery = useQuery({ queryKey: ['snapshot', run.connectionId, run.id, run.resultState], queryFn: ({ signal }) => api<Result>(`/runs/${run.id}/snapshot`, { signal }), enabled: run.resultState === 'reopenable' && requiresFullResult, retry: false });
+    const activeQuery = requiresFullResult ? fullQuery : pageQuery;
     const fullResult = fullQuery.data;
     const result = fullResult ?? pageQuery.data;
     const searchableRows = useMemo(() => fullResult?.rows.map(row => row.map(value => displayValue(value).toLocaleLowerCase()).join('\u0001')), [fullResult]);
@@ -95,8 +97,8 @@ export function ResultPane({ run, draftSql, draftParameters, config, copy, onCha
         {run.warnings.map((w, i) => <Callout key={i}>{w}</Callout>)}
         {run.error && <Callout danger>{run.error.code}: {run.error.message}</Callout>}
         {run.resultState === 'expired' && <Callout>Result data expired or was evicted. The SQL and query ID remain. Rerun explicitly for fresh data.</Callout>}
-        {(pageQuery.isFetching || fullQuery.isFetching) && <p role="status">Loading retained result…</p>}
-        {(pageQuery.error || fullQuery.error) && <Callout danger>{message(fullQuery.error ?? pageQuery.error)}<Action disabled={pageQuery.isFetching || fullQuery.isFetching} onClick={() => void (fullRequested ? fullQuery.refetch() : pageQuery.refetch())}>Retry loading result</Action><p>Reloads retained data only. Does not execute SQL.</p></Callout>}
+        {activeQuery.isFetching && <p role="status">Loading retained result…</p>}
+        {activeQuery.error && <Callout danger>{message(activeQuery.error)}<Action disabled={activeQuery.isFetching} onClick={() => void activeQuery.refetch()}>Retry loading result</Action><p>Reloads retained data only. Does not execute SQL.</p></Callout>}
         {result && <>
             <p className="muted">{result.completeness === 'truncated' ? 'Truncated retained prefix' : 'Complete returned result'} · executed {new Date(result.createdAt).toLocaleString()} · retained until {new Date(result.expiresAt).toLocaleString()}</p>
             <div className="toolbar wrap"><Action onClick={() => void exportFull(`${run.queryId}.csv`, full => exportCsv(full), 'text/csv')}>CSV</Action><Action onClick={() => void exportFull(`${run.queryId}.json`, full => ({ run, result: full }))}>Evidence JSON</Action><span className="muted">Full CSV and Evidence JSON: exports include all {retainedRows.toLocaleString()} retained rows, not just the local page. All columns are included.</span></div>

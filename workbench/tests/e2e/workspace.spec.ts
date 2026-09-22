@@ -161,8 +161,8 @@ test('Published shares stay frozen after draft edits', async ({ page, context })
     await expect(link).toHaveValue(/\/share\//);
     const shared = await context.newPage();
     await shared.goto(await link.inputValue());
-    await expect(shared.getByRole('heading', { name: 'Cathedral · shared evidence' })).toBeVisible();
-    await expect(shared.getByText(/DEMO FIXTURE SNAPSHOT/)).toBeVisible();
+    await expect(shared.getByRole('heading', { name: 'Query Studio · shared result' })).toBeVisible();
+    await expect(shared.getByText(/DEMO SNAPSHOT/)).toBeVisible();
     await expect(shared.getByRole('cell', { name: '2026-01-01', exact: true })).toBeVisible();
     await expect(shared.getByRole('button', { name: 'Run statement', exact: true })).toHaveCount(0);
     await replaceSql(page, 'SELECT 999');

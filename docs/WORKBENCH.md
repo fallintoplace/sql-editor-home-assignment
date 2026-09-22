@@ -1,4 +1,4 @@
-# Cathedral workbench: implementation and operations
+# Query Studio workbench: implementation and operations
 
 ## Delivery status
 

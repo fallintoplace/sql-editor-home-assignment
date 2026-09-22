@@ -1,4 +1,4 @@
-# Cathedral · ClickHouse SQL Workbench
+# Query Studio · ClickHouse SQL Workbench
 
 A single-owner, local-first SQL workspace extending the original home assignment.
 The implementation is in `workbench/`. The ten-stage cathedral roadmap is not a claim

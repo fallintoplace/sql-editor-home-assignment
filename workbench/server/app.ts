@@ -145,7 +145,7 @@ export function createApp(config: Config, overrides: {
     app.post('/api/documents/:id/publish', (req, res) => { const v = body(req), pub = artifacts.publish(principal(res), id(req), integer(v.revision, 'revision', 1, 1e6), v.acknowledgeTruncated === true); res.json(pub); });
     app.get('/api/documents/:id/comments', (req, res) => res.json(artifacts.comments(principal(res), id(req))));
     app.post('/api/documents/:id/comments', (req, res) => res.status(201).json(artifacts.comment(principal(res), id(req), req.body)));
-    app.get('/api/workspace/export', (_req, res) => { const bundle = artifacts.export(principal(res)); safeExport(bundle); res.attachment('cathedral-workspace.json').json(bundle); });
+    app.get('/api/workspace/export', (_req, res) => { const bundle = artifacts.export(principal(res)); safeExport(bundle); res.attachment('query-studio-workspace.json').json(bundle); });
     app.post('/api/workspace/import', (req, res) => res.status(201).json(artifacts.import(principal(res), req.body)));
     app.get('/api/published', (_req, res) => res.json(artifacts.publications(principal(res))));
     app.get('/api/published/:id', (req, res) => res.json(artifacts.published(principal(res), id(req))));

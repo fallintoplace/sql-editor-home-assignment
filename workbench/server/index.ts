@@ -14,7 +14,7 @@ try {
     const services = createApp(config);
     server.removeAllListeners('request');
     server.on('request', services.app);
-    console.log(`Cathedral ${config.demo ? 'FIXTURE MODE' : 'workbench'} listening on ${config.host}:${config.port}`);
+    console.log(`Query Studio ${config.demo ? 'FIXTURE MODE' : 'workbench'} listening on ${config.host}:${config.port}`);
     const sweep = setInterval(() => { try {
         services.runs.sweep();
         services.artifacts.sweep();

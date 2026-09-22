@@ -37,7 +37,7 @@ export function LibraryPanel({ draft, documents, onChange, onRestore, onOpen }: 
             await api(`/documents/${draft.serverId}`, { method: 'DELETE', body: { confirmImpact: true } });
         } })}>Move saved document to trash</Action></>}
  {documents.some(d => d.deletedAt) && <><h3>Recoverable trash</h3>{documents.filter(d => d.deletedAt).map(d => <Action key={d.id} onClick={() => void perform(async () => { const restored = await post<QueryDocument>(`/documents/${d.id}/restore`); onOpen(restored); })}>Restore {d.name}</Action>)}</>}
- <h3>Portable workspace</h3><Action onClick={() => void perform(async () => download('cathedral-workspace.json', await api('/workspace/export')))}>Export saved workspace</Action><Action onClick={() => file.current?.click()}>Import workspace as new drafts</Action><input ref={file} type="file" accept=".json" hidden onChange={event => { const f = event.target.files?.[0]; event.target.value = ''; if (!f)
+ <h3>Portable workspace</h3><Action onClick={() => void perform(async () => download('query-studio-workspace.json', await api('/workspace/export')))}>Export saved workspace</Action><Action onClick={() => file.current?.click()}>Import workspace as new drafts</Action><input ref={file} type="file" accept=".json" hidden onChange={event => { const f = event.target.files?.[0]; event.target.value = ''; if (!f)
         return; void perform(async () => { if (f.size > 2000000)
         throw new Error('Workspace import must be at most 2 MB'); const docs = await post<QueryDocument[]>('/workspace/import', JSON.parse(await f.text())); if (docs[0])
         onOpen(docs[0]); }); }}/>

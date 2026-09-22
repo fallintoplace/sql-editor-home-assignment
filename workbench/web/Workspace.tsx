@@ -40,7 +40,7 @@ export function Workspace({ connection, dark, refresh, copy }: {
     const [filesVisible, setFilesVisible] = useState(true), [focusMode, setFocusMode] = useState(false);
     const [localFilesOpen, setLocalFilesOpen] = useState(false), localFilesOrigin = useRef<HTMLElement | null>(null);
     const openLocalFiles = () => { localFilesOrigin.current = document.activeElement as HTMLElement | null; setLocalFilesOpen(true); };
-    const exportLocalDrafts = () => download('cathedral-local-drafts.json', localDraftBackup(stateRef.current, connection));
+    const exportLocalDrafts = () => download('query-studio-local-drafts.json', localDraftBackup(stateRef.current, connection));
     const importLocalDrafts = (drafts: Draft[]) => {
         if (latch.current) throw new Error('Wait for the current action before opening drafts.');
         const next = appendLocalDrafts(stateRef.current, drafts);

@@ -10,7 +10,7 @@ import { api, download, message, post } from './api';
 import { Action, Callout, Select } from './ui';
 import { Workspace } from './Workspace';
 import { Chart } from './components/Chart';
-import { getCopy, type Copy, type Locale } from './i18n';
+import { getCopy, localeOptions, type Copy, type Locale } from './i18n';
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } } });
 class Boundary extends React.Component<{
     children: ReactNode;
@@ -81,6 +81,6 @@ function Root() {
     }
     catch { } }, [locale]);
     const token = /^\/share\/([^/]+)$/.exec(location.pathname)?.[1];
-    return <ClickUIProvider theme={dark ? 'dark' : 'light'}><div className="application"><header className="app-header"><div><span className="wordmark">{copy.app.name}</span><span className="tagline">{copy.app.tagline}</span></div><div className="app-header-actions"><Action aria-label={copy.app.nextLanguage} onClick={() => setLocale(value => value === 'en' ? 'de' : 'en')}>{copy.app.nextLanguage}</Action><Action onClick={() => setDark(v => !v)}>{dark ? copy.app.lightMode : copy.app.darkMode}</Action></div></header><Boundary>{token ? <Shared token={token}/> : <Authenticated dark={dark} copy={copy}/>}</Boundary></div></ClickUIProvider>;
+    return <ClickUIProvider theme={dark ? 'dark' : 'light'}><div className="application"><header className="app-header"><div><span className="wordmark">{copy.app.name}</span><span className="tagline">{copy.app.tagline}</span></div><div className="app-header-actions"><Select label={copy.app.language} value={locale} options={localeOptions} onSelect={value => setLocale(value as Locale)}/><Action onClick={() => setDark(v => !v)}>{dark ? copy.app.lightMode : copy.app.darkMode}</Action></div></header><Boundary>{token ? <Shared token={token}/> : <Authenticated dark={dark} copy={copy}/>}</Boundary></div></ClickUIProvider>;
 }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><QueryClientProvider client={queryClient}><Root /></QueryClientProvider></React.StrictMode>);

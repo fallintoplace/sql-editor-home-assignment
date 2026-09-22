@@ -1,7 +1,7 @@
 export const messages = {
     en: {
         app: {
-            name: 'Query Studio',
+            name: 'ClickStudio',
             tagline: 'ClickHouse SQL, results, and performance',
             lightMode: 'Light mode',
             darkMode: 'Dark mode',
@@ -25,15 +25,15 @@ export const messages = {
             of: 'of'
         },
         auth: {
-            opening: 'Opening Query Studio…',
-            title: 'Open Query Studio',
+            opening: 'Opening ClickStudio…',
+            title: 'Open ClickStudio',
             description: 'Use the access token configured by your server operator. Database and OpenAI credentials never belong in this form.',
             tokenLabel: 'Workspace access token',
             signIn: 'Sign in',
             signOut: 'Sign out'
         },
         shared: {
-            title: 'Query Studio · shared result',
+            title: 'ClickStudio · shared result',
             description: 'Read-only result. This link cannot execute SQL or grant access to the source database.',
             fixture: 'DEMO SNAPSHOT — no SQL was evaluated and these rows are not live database data.',
             complete: 'Complete result',
@@ -48,9 +48,9 @@ export const messages = {
             csv: 'CSV'
         },
         errors: {
-            renderTitle: 'Query Studio could not render.',
+            renderTitle: 'ClickStudio could not render.',
             persistedDrafts: 'Previously saved drafts remain in this browser. Do not clear browser storage.',
-            reload: 'Reload Query Studio'
+            reload: 'Reload ClickStudio'
         },
         connection: {
             profile: 'Connection profile',
@@ -188,7 +188,7 @@ export const messages = {
     },
     de: {
         app: {
-            name: 'Query Studio',
+            name: 'ClickStudio',
             tagline: 'ClickHouse-SQL, Ergebnisse und Performance',
             lightMode: 'Heller Modus',
             darkMode: 'Dunkler Modus',
@@ -212,15 +212,15 @@ export const messages = {
             of: 'von'
         },
         auth: {
-            opening: 'Query Studio wird geöffnet…',
-            title: 'Query Studio öffnen',
+            opening: 'ClickStudio wird geöffnet…',
+            title: 'ClickStudio öffnen',
             description: 'Verwende den vom Serverbetreiber konfigurierten Zugriffstoken. Datenbank- und OpenAI-Zugangsdaten gehören nicht in dieses Formular.',
             tokenLabel: 'Zugriffstoken für den Workspace',
             signIn: 'Anmelden',
             signOut: 'Abmelden'
         },
         shared: {
-            title: 'Query Studio · geteiltes Ergebnis',
+            title: 'ClickStudio · geteiltes Ergebnis',
             description: 'Schreibgeschütztes Ergebnis. Dieser Link kann kein SQL ausführen und keinen Zugriff auf die Quelldatenbank gewähren.',
             fixture: 'DEMO-SNAPSHOT — SQL wurde nicht ausgewertet. Diese Zeilen stammen nicht aus einer Live-Datenbank.',
             complete: 'Vollständiges Ergebnis',
@@ -235,9 +235,9 @@ export const messages = {
             csv: 'CSV'
         },
         errors: {
-            renderTitle: 'Query Studio konnte nicht geladen werden.',
+            renderTitle: 'ClickStudio konnte nicht geladen werden.',
             persistedDrafts: 'Bereits gespeicherte Entwürfe sind weiterhin in diesem Browser vorhanden. Lösche den Browserspeicher nicht.',
-            reload: 'Query Studio neu laden'
+            reload: 'ClickStudio neu laden'
         },
         connection: {
             profile: 'Verbindungsprofil',
@@ -375,7 +375,7 @@ export const messages = {
     },
     es: {
         app: {
-            name: 'Query Studio',
+            name: 'ClickStudio',
             tagline: 'SQL, resultados y rendimiento de ClickHouse',
             lightMode: 'Modo claro',
             darkMode: 'Modo oscuro',
@@ -399,15 +399,15 @@ export const messages = {
             of: 'de'
         },
         auth: {
-            opening: 'Abriendo Query Studio…',
-            title: 'Abrir Query Studio',
+            opening: 'Abriendo ClickStudio…',
+            title: 'Abrir ClickStudio',
             description: 'Usa el token de acceso configurado por el operador del servidor. Las credenciales de la base de datos y de OpenAI no deben introducirse aquí.',
             tokenLabel: 'Token de acceso al workspace',
             signIn: 'Iniciar sesión',
             signOut: 'Cerrar sesión'
         },
         shared: {
-            title: 'Query Studio · resultado compartido',
+            title: 'ClickStudio · resultado compartido',
             description: 'Resultado de solo lectura. Este enlace no puede ejecutar SQL ni conceder acceso a la base de datos de origen.',
             fixture: 'INSTANTÁNEA DE DEMO — no se evaluó SQL y estas filas no son datos de una base de datos activa.',
             complete: 'Resultado completo',
@@ -422,9 +422,9 @@ export const messages = {
             csv: 'CSV'
         },
         errors: {
-            renderTitle: 'Query Studio no pudo cargarse.',
+            renderTitle: 'ClickStudio no pudo cargarse.',
             persistedDrafts: 'Los borradores guardados siguen en este navegador. No borres el almacenamiento del navegador.',
-            reload: 'Recargar Query Studio'
+            reload: 'Recargar ClickStudio'
         },
         connection: {
             profile: 'Perfil de conexión',
@@ -562,7 +562,7 @@ export const messages = {
     },
     nl: {
         app: {
-            name: 'Query Studio',
+            name: 'ClickStudio',
             tagline: 'ClickHouse-SQL, resultaten en prestaties',
             lightMode: 'Lichte modus',
             darkMode: 'Donkere modus',
@@ -586,15 +586,15 @@ export const messages = {
             of: 'van'
         },
         auth: {
-            opening: 'Query Studio wordt geopend…',
-            title: 'Query Studio openen',
+            opening: 'ClickStudio wordt geopend…',
+            title: 'ClickStudio openen',
             description: 'Gebruik het toegangstoken dat door de serverbeheerder is ingesteld. Database- en OpenAI-referenties horen niet in dit formulier.',
             tokenLabel: 'Toegangstoken voor de workspace',
             signIn: 'Aanmelden',
             signOut: 'Afmelden'
         },
         shared: {
-            title: 'Query Studio · gedeeld resultaat',
+            title: 'ClickStudio · gedeeld resultaat',
             description: 'Alleen-lezenresultaat. Met deze link kun je geen SQL uitvoeren en krijg je geen toegang tot de brondatabase.',
             fixture: 'DEMOSNAPSHOT — er is geen SQL uitgevoerd en deze rijen zijn geen live databasegegevens.',
             complete: 'Volledig resultaat',
@@ -609,9 +609,9 @@ export const messages = {
             csv: 'CSV'
         },
         errors: {
-            renderTitle: 'Query Studio kon niet worden geladen.',
+            renderTitle: 'ClickStudio kon niet worden geladen.',
             persistedDrafts: 'Eerder opgeslagen concepten staan nog in deze browser. Wis de browseropslag niet.',
-            reload: 'Query Studio opnieuw laden'
+            reload: 'ClickStudio opnieuw laden'
         },
         connection: {
             profile: 'Verbindingsprofiel',
@@ -749,7 +749,7 @@ export const messages = {
     },
     zh: {
         app: {
-            name: 'Query Studio',
+            name: 'ClickStudio',
             tagline: 'ClickHouse SQL、结果与性能',
             lightMode: '浅色模式',
             darkMode: '深色模式',
@@ -773,15 +773,15 @@ export const messages = {
             of: '页，共'
         },
         auth: {
-            opening: '正在打开 Query Studio…',
-            title: '打开 Query Studio',
+            opening: '正在打开 ClickStudio…',
+            title: '打开 ClickStudio',
             description: '使用服务器管理员配置的访问令牌。数据库和 OpenAI 凭据不应填写在此表单中。',
             tokenLabel: '工作区访问令牌',
             signIn: '登录',
             signOut: '退出登录'
         },
         shared: {
-            title: 'Query Studio · 共享结果',
+            title: 'ClickStudio · 共享结果',
             description: '只读结果。此链接不能执行 SQL，也不能授予对源数据库的访问权限。',
             fixture: '演示快照 — 未执行 SQL，这些行不是实时数据库数据。',
             complete: '完整结果',
@@ -796,9 +796,9 @@ export const messages = {
             csv: 'CSV'
         },
         errors: {
-            renderTitle: 'Query Studio 无法加载。',
+            renderTitle: 'ClickStudio 无法加载。',
             persistedDrafts: '之前保存的草稿仍保留在此浏览器中。请勿清除浏览器存储。',
-            reload: '重新加载 Query Studio'
+            reload: '重新加载 ClickStudio'
         },
         connection: {
             profile: '连接配置',
@@ -936,7 +936,7 @@ export const messages = {
     },
     ru: {
         app: {
-            name: 'Query Studio',
+            name: 'ClickStudio',
             tagline: 'SQL, результаты и производительность ClickHouse',
             lightMode: 'Светлая тема',
             darkMode: 'Темная тема',
@@ -960,15 +960,15 @@ export const messages = {
             of: 'из'
         },
         auth: {
-            opening: 'Открытие Query Studio…',
-            title: 'Открыть Query Studio',
+            opening: 'Открытие ClickStudio…',
+            title: 'Открыть ClickStudio',
             description: 'Используйте токен доступа, настроенный администратором сервера. Учетные данные базы данных и OpenAI не должны вводиться в эту форму.',
             tokenLabel: 'Токен доступа к рабочей области',
             signIn: 'Войти',
             signOut: 'Выйти'
         },
         shared: {
-            title: 'Query Studio · общий результат',
+            title: 'ClickStudio · общий результат',
             description: 'Результат только для чтения. Эта ссылка не может выполнять SQL или предоставлять доступ к исходной базе данных.',
             fixture: 'ДЕМО-СНИМОК — SQL не выполнялся, эти строки не являются данными из рабочей базы.',
             complete: 'Полный результат',
@@ -983,9 +983,9 @@ export const messages = {
             csv: 'CSV'
         },
         errors: {
-            renderTitle: 'Query Studio не удалось загрузить.',
+            renderTitle: 'ClickStudio не удалось загрузить.',
             persistedDrafts: 'Ранее сохраненные черновики остаются в этом браузере. Не очищайте хранилище браузера.',
-            reload: 'Перезагрузить Query Studio'
+            reload: 'Перезагрузить ClickStudio'
         },
         connection: {
             profile: 'Профиль подключения',

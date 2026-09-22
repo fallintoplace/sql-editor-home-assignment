@@ -1,0 +1,31 @@
+name: Prepare workbench review environment
+on:
+  push:
+    branches: ["review/workbench-features-20260922"]
+    paths: [".github/workflows/workbench-review-environment.yml"]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Archive tracked source only
+        run: git archive --format=tar HEAD | gzip > /tmp/workbench-source.tar.gz
+      - name: Install the existing locked dependencies
+        working-directory: workbench
+        run: npm ci
+      - name: Archive dependencies for offline local validation
+        run: tar -czf /tmp/workbench-dependencies.tar.gz -C workbench node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workbench-review-environment
+          path: |
+            /tmp/workbench-source.tar.gz
+            /tmp/workbench-dependencies.tar.gz
+          retention-days: 1
+          if-no-files-found: error

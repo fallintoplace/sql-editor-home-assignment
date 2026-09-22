@@ -120,6 +120,19 @@
 :root[data-theme="click-dark"] .beginner-ai-surface::before,
 :root[data-theme="click-light"] .beginner-ai-surface::before { display: none; }
 
+.topbar .experience-switch > div { width: auto; flex-direction: row; align-items: center; gap: 0; }
+.topbar .experience-switch > div > div { width: auto; flex-direction: row; align-items: center; gap: 4px; }
+.topbar .navbar-mode-control { display: flex; align-items: center; gap: 4px; }
+.topbar .navbar-mode-option { position: relative; display: flex; width: auto; align-items: center; padding: 0; }
+.topbar .navbar-mode-option > button { position: absolute; width: 1px; height: 1px; overflow: hidden; margin: -1px; padding: 0; border: 0; opacity: 0; clip-path: inset(50%); white-space: nowrap; }
+.topbar .navbar-mode-option > label { display: inline-flex; min-height: 32px; align-items: center; gap: 7px; padding: 8px 11px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font: inherit; font-size: 11px; font-weight: 620; cursor: pointer; transition: .22s cubic-bezier(.2,.8,.2,1); }
+.topbar .navbar-mode-option > label:hover { background: var(--panel-hover); color: var(--text); }
+.topbar .navbar-mode-option.is-active > label { border-color: color-mix(in srgb, var(--accent) 28%, transparent); background: linear-gradient(140deg, color-mix(in srgb, var(--accent) 17%, var(--panel)), color-mix(in srgb, var(--accent) 6%, var(--panel))); color: var(--text); box-shadow: 0 4px 15px #0002, inset 0 1px #ffffff0c; }
+.topbar .navbar-mode-option > button:focus-visible + label { outline: 2px solid color-mix(in srgb, var(--accent) 78%, white); outline-offset: 2px; }
+.topbar .navbar-mode-option > label::before { width: 7px; height: 7px; flex: none; content: ""; }
+.topbar .navbar-mode-option.is-beginner > label::before { border-radius: 50%; background: var(--green); box-shadow: 0 0 10px color-mix(in srgb, var(--green) 65%, transparent); }
+.topbar .navbar-mode-option.is-expert > label::before { border-radius: 1px; background: var(--accent); transform: rotate(45deg); }
+
 @layer base {
     * { box-sizing: border-box; }
     html, body, #root { width: 100%; min-width: 320px; min-height: 100%; margin: 0; }
@@ -172,9 +185,6 @@
     .connection-choice-arrow { flex: none; color: var(--muted); font-size: 18px; line-height: 1; }
     .experience-switch { display: flex; align-items: center; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: #00000012; }
     .mode-caption { padding: 0 8px; color: var(--muted); font-size: 8px; font-weight: 750; letter-spacing: .12em; }
-    .experience-switch button { display: inline-flex; align-items: center; gap: 7px; padding: 8px 11px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 620; cursor: pointer; transition: .22s cubic-bezier(.2,.8,.2,1); }
-    .experience-switch button:hover { color: var(--text); }
-    .experience-switch button.is-active { border-color: color-mix(in srgb, var(--accent) 28%, transparent); background: linear-gradient(140deg, color-mix(in srgb, var(--accent) 17%, var(--panel)), color-mix(in srgb, var(--accent) 6%, var(--panel))); color: var(--text); box-shadow: 0 4px 15px #0002, inset 0 1px #ffffff0c; }
     .beginner-dot, .expert-diamond { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px color-mix(in srgb, var(--green) 65%, transparent); }
     .expert-diamond { border-radius: 1px; background: var(--accent); transform: rotate(45deg); }
     .topbar-preferences { display: flex; gap: 8px; }
@@ -704,7 +714,7 @@
     .connection-trigger > strong { font-size: 10px; }
     .connection-database { font-size: 8px; }
     .experience-switch { gap: 1px; padding: 3px; }
-    .experience-switch button { gap: 5px; padding: 7px 8px; font-size: 9px; }
+    .topbar .navbar-mode-option > label { gap: 5px; padding: 7px 8px; font-size: 9px; }
     .topbar-preferences { gap: 4px; }
     .select-control select { max-width: 82px; padding: 6px 21px 6px 6px; font-size: 9px; }
     .connection-env { font-size: 7px; letter-spacing: .08em; }

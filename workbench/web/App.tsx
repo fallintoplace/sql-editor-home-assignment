@@ -8,6 +8,7 @@ import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { checkpoint, closeDraft, MAX_TABS, newDraft, recover, reopenDraft, type Draft, type WorkspaceState } from './workspace-state';
 import { useWorkspacePersistence } from './useWorkspacePersistence';
 import { getCopy, localeOptions, themeAppearance, themeOptions, type Copy, type ExperienceLevel, type Locale, type Theme } from './i18n';
+import { RadioGroup } from '@clickhouse/click-ui/RadioGroup';
 import clickhouseLogomarkDark from './assets/clickhouse-logomark-dark.svg';
 import clickhouseLogomarkLight from './assets/clickhouse-logomark-light.svg';
 
@@ -181,9 +182,12 @@ function App() {
                 </div>}
             </div>
             <div className="topbar-spacer"/>
-            <div className="experience-switch" role="group" aria-label="Workspace mode">
+            <div className="experience-switch">
                 <span className="mode-caption">WORKSPACE</span>
-                {(['beginner', 'expert'] as const).map(level => <button type="button" key={level} aria-pressed={experience === level} onClick={() => setExperience(level)} className={experience === level ? 'is-active' : ''}><span className={level === 'expert' ? 'expert-diamond' : 'beginner-dot'}/>{level === 'beginner' ? copy.app.beginner : copy.app.expert}</button>)}
+                <RadioGroup className="navbar-mode-control" value={experience} onValueChange={value => setExperience(value as ExperienceLevel)} aria-label="Workspace mode" inline orientation="horizontal" dir="end">
+                    <RadioGroup.Item value="beginner" className={`navbar-mode-option is-beginner ${experience === 'beginner' ? 'is-active' : ''}`} label={copy.app.beginner}/>
+                    <RadioGroup.Item value="expert" className={`navbar-mode-option is-expert ${experience === 'expert' ? 'is-active' : ''}`} label={copy.app.expert}/>
+                </RadioGroup>
             </div>
             <div className="topbar-divider topbar-divider-short"/>
             <div className="topbar-preferences">

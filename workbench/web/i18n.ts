@@ -1118,7 +1118,7 @@ export const localeOptions: Array<{ value: Locale; label: string }> = [
 
 export const themeValues: Theme[] = ['kraken-night', 'monokai', 'mariana', 'dracula', 'nord', 'solarized-light'];
 export const themeOptions: Array<{ value: Theme; label: string }> = [
-    { value: 'kraken-night', label: 'Kraken Night' },
+    { value: 'kraken-night', label: 'ClickHouse Night' },
     { value: 'monokai', label: 'Monokai' },
     { value: 'mariana', label: 'Mariana' },
     { value: 'dracula', label: 'Dracula' },

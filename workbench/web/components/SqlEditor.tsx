@@ -48,7 +48,7 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
     useEffect(() => { view.current?.dispatch({ effects: language.current.reconfigure(languageExtension()) }); }, [props.schema]);
     useEffect(() => { view.current?.dispatch({ effects: theme.current.reconfigure(themeExtension()) }); }, [props.dark]);
     useEffect(() => { const v = view.current; if (!v)
-        return; const position = props.error?.position; v.dispatch(setDiagnostics(v, position === undefined ? [] : [{ from: Math.min(position, v.state.doc.length), to: Math.min(position + 1, v.state.doc.length), severity: 'error', message: props.error!.message }])); }, [props.error]);
+        return; const position = props.error?.position; v.dispatch(setDiagnostics(v.state, position === undefined ? [] : [{ from: Math.min(position, v.state.doc.length), to: Math.min(position + 1, v.state.doc.length), severity: 'error', message: props.error!.message }])); }, [props.error]);
     useImperativeHandle(ref, () => ({ insert: text => { const v = view.current; if (v) {
             v.dispatch(v.state.replaceSelection(text));
             v.focus();

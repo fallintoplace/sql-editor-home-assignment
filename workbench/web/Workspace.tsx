@@ -281,7 +281,7 @@ export function Workspace({ connection, dark, refresh, copy }: {
      onCancel={selected => void perform(async () => { await post(`/runs/${selected.id}/cancel`); await history.refetch(); })}/>
  </main>
  {panel && <aside className="drawer inspector-drawer" aria-label={copy.panels.inspector} hidden={focusMode}><div className="toolbar spread"><span className="eyebrow">{copy.panels.workflow}</span><Action type="empty" aria-label={copy.panels.close} onClick={() => setPanel(null)}>{copy.panels.close}</Action></div>
- {panel === 'assistant' && <AssistantPanel key={active.id} connectionId={connection.id} sql={active.sql} run={run.data} trusted={connection.trusted} onApply={sql => restore(sql, 'Before accepted AI proposal')}/>}
+ {panel === 'assistant' && <AssistantPanel key={active.id} connectionId={connection.id} sql={active.sql} run={run.data} trusted={connection.trusted} copy={copy} onApply={sql => restore(sql, 'Before accepted AI proposal')}/>}
  {panel === 'library' && <LibraryPanel key={active.id} draft={active} documents={visibleDocuments} onChange={patch} onRestore={restore} onOpen={openDocument}/>}
  {panel === 'import' && <ImportPanel connectionId={connection.id} schema={schema.data} trusted={connection.trusted}/>}
  {panel === 'monitors' && <AutomationPanel connectionId={connection.id} onRun={id => patch({ activeRunId: id })}/>}

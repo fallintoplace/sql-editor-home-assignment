@@ -2,7 +2,9 @@ import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { AssistantAction, Proposal, Run } from '../../shared/types';
 import { api, message, post } from '../api';
+import type { Copy } from '../i18n';
 import { Action, Callout, Select, TextAreaField } from '../ui';
+import { VoiceSession } from './VoiceSession';
 interface ContextView {
     id: string;
     connectionId: string;
@@ -16,11 +18,12 @@ interface ContextView {
         image?: string;
     };
 }
-export function AssistantPanel({ connectionId, sql, run, trusted, onApply }: {
+export function AssistantPanel({ connectionId, sql, run, trusted, copy, onApply }: {
     connectionId: string;
     sql: string;
     run?: Run;
     trusted: boolean;
+    copy: Copy;
     onApply: (sql: string) => void;
 }) {
     const [action, setAction] = useState<AssistantAction>('generate'), [question, setQuestion] = useState(''), [image, setImage] = useState<string>(), [includeResult, setIncludeResult] = useState(false), [rules, setRules] = useState('Read-only ClickHouse SQL. State assumptions and preserve evidence.'), [context, setContext] = useState<ContextView>(), [proposal, setProposal] = useState<Proposal>(), [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -58,7 +61,7 @@ export function AssistantPanel({ connectionId, sql, run, trusted, onApply }: {
         setError('Images must be at most 2 MB');
         return;
     } const reader = new FileReader(); reader.onerror = () => setError('The image could not be read'); reader.onload = () => { setImage(String(reader.result)); setContext(undefined); }; reader.readAsDataURL(f); }}/>
- <div className="toolbar"><Action onClick={() => file.current?.click()}>Attach screenshot</Action><Action disabled title="Realtime voice is not implemented in this release. Text and image input are available.">Voice unavailable</Action></div>
+ <div className="toolbar"><Action onClick={() => file.current?.click()}>Attach screenshot</Action></div><VoiceSession connectionId={connectionId} sql={sql} run={run} trusted={trusted} copy={copy}/>
  {image && <><img className="image-preview" alt="Image that will be sent only after context approval" src={image}/><Action onClick={() => { setImage(undefined); setContext(undefined); }}>Remove image</Action><p className="muted">Check that this image contains no credentials or unintended personal information.</p></>}
  <Action disabled={!trusted || busy} onClick={() => void prepare()}>Preview exact context</Action>
  {context && <><h3>Review before sending</h3>{context.summary.map((line, i) => <p className="muted" key={i}>{line}</p>)}<details open><summary>Exact question and analytical context</summary><pre className="code-block">{JSON.stringify({ question: context.payload.question, context: JSON.parse(context.payload.context) }, null, 2)}</pre></details><details><summary>System / playbook instructions</summary><pre className="code-block">{context.payload.instructions}</pre></details><Action type="primary" disabled={busy || !status.data?.available || Boolean(proposal)} onClick={() => void send()}>Approve this context and request proposal</Action><p className="muted">Preview expires {new Date(context.expiresAt).toLocaleTimeString()}. Model: {status.data?.model}. Calls remaining today: {status.data?.callsRemaining}.</p></>}

@@ -115,6 +115,29 @@ export const messages = {
             inspector: 'Inspector',
             workflow: 'Run inspector',
             close: 'Close'
+        },
+        voice: {
+            title: 'Voice workflow',
+            description: 'Talk through the current SQL and result. Voice can explain and suggest; Run and Apply stay explicit.',
+            start: 'Start voice',
+            stop: 'End voice',
+            connecting: 'Connecting…',
+            connected: 'Listening',
+            finishing: 'Finishing…',
+            error: 'Voice error',
+            ready: 'Ready',
+            explain: 'Explain SQL',
+            next: 'Suggest next step',
+            explainPrompt: 'Explain the current SQL and result in two short points.',
+            nextPrompt: 'Suggest one useful next step for this analysis.',
+            microphoneDenied: 'Microphone permission is required for voice.',
+            closeTimeout: 'The voice session did not confirm a clean close.',
+            trustFirst: 'Trust the connection before sharing its SQL with voice.',
+            unavailable: 'Voice is not configured on this server.',
+            empty: 'Transcript and short answers will appear here.',
+            you: 'You',
+            assistant: 'Assistant',
+            audio: 'Voice output'
         }
     },
     de: {
@@ -233,6 +256,29 @@ export const messages = {
             inspector: 'Inspektor',
             workflow: 'Ausführungsinspektor',
             close: 'Schließen'
+        },
+        voice: {
+            title: 'Sprachworkflow',
+            description: 'Besprich das aktuelle SQL und Ergebnis. Sprache erklärt und schlägt vor; Ausführen und Anwenden bleiben ausdrücklich.',
+            start: 'Sprache starten',
+            stop: 'Sprache beenden',
+            connecting: 'Verbindung wird hergestellt…',
+            connected: 'Hört zu',
+            finishing: 'Wird beendet…',
+            error: 'Sprachfehler',
+            ready: 'Bereit',
+            explain: 'SQL erklären',
+            next: 'Nächsten Schritt vorschlagen',
+            explainPrompt: 'Erkläre das aktuelle SQL und Ergebnis in zwei kurzen Punkten.',
+            nextPrompt: 'Schlage einen nützlichen nächsten Schritt für diese Analyse vor.',
+            microphoneDenied: 'Für Sprache ist eine Mikrofonberechtigung erforderlich.',
+            closeTimeout: 'Die Sprachsitzung hat kein sauberes Ende bestätigt.',
+            trustFirst: 'Vertraue der Verbindung, bevor du SQL mit der Sprache teilst.',
+            unavailable: 'Sprache ist auf diesem Server nicht konfiguriert.',
+            empty: 'Hier erscheinen Transkript und kurze Antworten.',
+            you: 'Du',
+            assistant: 'Assistent',
+            audio: 'Sprachausgabe'
         }
     },
     es: {
@@ -351,6 +397,29 @@ export const messages = {
             inspector: 'Inspector',
             workflow: 'Inspector de ejecución',
             close: 'Cerrar'
+        },
+        voice: {
+            title: 'Flujo de voz',
+            description: 'Habla sobre el SQL y el resultado actuales. La voz explica y sugiere; ejecutar y aplicar siguen siendo acciones explícitas.',
+            start: 'Iniciar voz',
+            stop: 'Finalizar voz',
+            connecting: 'Conectando…',
+            connected: 'Escuchando',
+            finishing: 'Finalizando…',
+            error: 'Error de voz',
+            ready: 'Listo',
+            explain: 'Explicar SQL',
+            next: 'Sugerir siguiente paso',
+            explainPrompt: 'Explica el SQL y el resultado actuales en dos puntos breves.',
+            nextPrompt: 'Sugiere un siguiente paso útil para este análisis.',
+            microphoneDenied: 'Se necesita permiso para usar el micrófono.',
+            closeTimeout: 'La sesión de voz no confirmó un cierre limpio.',
+            trustFirst: 'Confía en la conexión antes de compartir su SQL con la voz.',
+            unavailable: 'La voz no está configurada en este servidor.',
+            empty: 'Aquí aparecerán la transcripción y respuestas breves.',
+            you: 'Tú',
+            assistant: 'Asistente',
+            audio: 'Salida de voz'
         }
     },
     nl: {
@@ -469,6 +538,29 @@ export const messages = {
             inspector: 'Inspector',
             workflow: 'Uitvoeringsinspector',
             close: 'Sluiten'
+        },
+        voice: {
+            title: 'Spraakworkflow',
+            description: 'Bespreek de huidige SQL en het resultaat. Spraak legt uit en doet suggesties; uitvoeren en toepassen blijven expliciete acties.',
+            start: 'Spraak starten',
+            stop: 'Spraak beëindigen',
+            connecting: 'Verbinden…',
+            connected: 'Luistert',
+            finishing: 'Afronden…',
+            error: 'Spraakfout',
+            ready: 'Gereed',
+            explain: 'SQL uitleggen',
+            next: 'Volgende stap voorstellen',
+            explainPrompt: 'Leg de huidige SQL en het resultaat uit in twee korte punten.',
+            nextPrompt: 'Stel één nuttige volgende stap voor deze analyse voor.',
+            microphoneDenied: 'Microfoontoestemming is nodig voor spraak.',
+            closeTimeout: 'De spraaksessie bevestigde geen nette afsluiting.',
+            trustFirst: 'Vertrouw de verbinding voordat je SQL met spraak deelt.',
+            unavailable: 'Spraak is niet geconfigureerd op deze server.',
+            empty: 'Transcript en korte antwoorden verschijnen hier.',
+            you: 'Jij',
+            assistant: 'Assistent',
+            audio: 'Spraakuitvoer'
         }
     },
     zh: {
@@ -587,6 +679,29 @@ export const messages = {
             inspector: '检查器',
             workflow: '运行检查器',
             close: '关闭'
+        },
+        voice: {
+            title: '语音工作流',
+            description: '用语音讨论当前 SQL 和结果。语音可以解释和建议；运行与应用始终需要明确操作。',
+            start: '开始语音',
+            stop: '结束语音',
+            connecting: '正在连接…',
+            connected: '正在聆听',
+            finishing: '正在结束…',
+            error: '语音错误',
+            ready: '就绪',
+            explain: '解释 SQL',
+            next: '建议下一步',
+            explainPrompt: '用两个简短要点解释当前 SQL 和结果。',
+            nextPrompt: '为这次分析建议一个有用的下一步。',
+            microphoneDenied: '语音需要麦克风权限。',
+            closeTimeout: '语音会话没有确认正常结束。',
+            trustFirst: '请先信任连接，再通过语音分享 SQL。',
+            unavailable: '此服务器尚未配置语音。',
+            empty: '转录内容和简短回答会显示在这里。',
+            you: '你',
+            assistant: '助手',
+            audio: '语音输出'
         }
     },
     ru: {
@@ -705,6 +820,29 @@ export const messages = {
             inspector: 'Инспектор',
             workflow: 'Инспектор выполнения',
             close: 'Закрыть'
+        },
+        voice: {
+            title: 'Голосовой сценарий',
+            description: 'Обсуждайте текущий SQL и результат голосом. Голос объясняет и предлагает; запуск и применение остаются явными действиями.',
+            start: 'Запустить голос',
+            stop: 'Завершить голос',
+            connecting: 'Подключение…',
+            connected: 'Слушает',
+            finishing: 'Завершение…',
+            error: 'Ошибка голоса',
+            ready: 'Готово',
+            explain: 'Объяснить SQL',
+            next: 'Предложить следующий шаг',
+            explainPrompt: 'Объясни текущий SQL и результат в двух коротких пунктах.',
+            nextPrompt: 'Предложи один полезный следующий шаг для этого анализа.',
+            microphoneDenied: 'Для голоса требуется разрешение на микрофон.',
+            closeTimeout: 'Голосовая сессия не подтвердила корректное завершение.',
+            trustFirst: 'Доверьте соединение перед передачей SQL голосу.',
+            unavailable: 'Голос не настроен на этом сервере.',
+            empty: 'Здесь появятся расшифровка и короткие ответы.',
+            you: 'Вы',
+            assistant: 'Ассистент',
+            audio: 'Голосовой вывод'
         }
     }
 } as const;

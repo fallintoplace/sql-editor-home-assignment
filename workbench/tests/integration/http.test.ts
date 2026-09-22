@@ -6,10 +6,11 @@ import { createApp } from '../../server/app.js';
 import { loadConfig } from '../../server/config.js';
 import { MemoryStore } from '../../core/store.js';
 import { DemoDriver } from '../../server/demo.js';
+import type { VoiceService } from '../../server/voice.js';
 import type { QueryDocument, Run, Published } from '../../shared/types.js';
-async function start(token?: string) {
+async function start(token?: string, voice?: VoiceService) {
     const config = loadConfig({ DEMO_MODE: 'true', WORKBENCH_TOKEN: token });
-    const service = createApp(config, { store: new MemoryStore(), driver: new DemoDriver() });
+    const service = createApp(config, { store: new MemoryStore(), driver: new DemoDriver(), voice });
     const server = service.app.listen(0, '127.0.0.1');
     await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
     config.port = (server.address() as AddressInfo).port;
@@ -18,6 +19,18 @@ async function start(token?: string) {
     return { ...service, call, origin: config.origin, stop: async () => { await service.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); } };
 }
 const owner = { id: 'local-owner', role: 'owner' } as const;
+test('Voice sessions require trust and keep the provider behind the server', async (t) => {
+    const calls: unknown[] = [];
+    const s = await start(undefined, { available: true, model: 'test-voice', createSession: async input => { calls.push(input); return { sdp: 'answer-sdp', model: 'test-voice' }; } });
+    t.after(() => s.stop());
+    assert.equal((await s.call('/voice/status')).status, 200);
+    assert.equal((await s.call('/voice/session', { connectionId: 'demo', sdp: 'offer-sdp', context: 'SELECT 1' })).status, 403);
+    await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' });
+    const response = await s.call('/voice/session', { connectionId: 'demo', sdp: 'offer-sdp', context: 'SELECT 1' });
+    assert.equal(response.status, 201);
+    assert.deepEqual(await response.json(), { sdp: 'answer-sdp', model: 'test-voice' });
+    assert.equal((calls[0] as { safetyIdentifier: string }).safetyIdentifier.length, 64);
+});
 test('HTTP query flow requires explicit trust and is idempotent', async (t) => {
     const s = await start();
     t.after(() => s.stop());

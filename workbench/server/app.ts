@@ -19,6 +19,7 @@ import { configuredSecrets, redactor, type Config } from './config.js';
 import { ClickHouseDriver } from './clickhouse.js';
 import { DemoDriver } from './demo.js';
 import { OpenAIDriver } from './openai.js';
+import { OpenAIVoiceService, safetyIdentifier, type VoiceService } from './voice.js';
 import { telemetry, recordRun } from './telemetry.js';
 type Driver = QueryDriver & ImportDriver & Pick<ClickHouseDriver, 'connection' | 'connections' | 'test' | 'targets' | 'profileEvidence' | 'close'>;
 function mappingFields(value: unknown) { const fields = record(value, 'mapping'); requireThat(Object.keys(fields).length <= 200, 400, 'IMPORT_MAPPING', 'Too many mapping fields'); return Object.fromEntries(Object.entries(fields).map(([key, value]) => [text(key, 'source column', 256), text(value, 'destination column', 256)])); }
@@ -30,11 +31,13 @@ export function createApp(config: Config, overrides: {
     store?: Store;
     driver?: Driver;
     assistant?: AssistantDriver;
+    voice?: VoiceService;
 } = {}) {
     const app = express(), store = overrides.store ?? new FileStore(config.dataDir), driver: Driver = overrides.driver ?? (config.demo ? new DemoDriver() : new ClickHouseDriver(config));
     const runs = new RunService(store, driver, (p, c) => driver.connection(p, c)), artifacts = new ArtifactService(store, runs, (p, c) => driver.connection(p, c));
     const authorized = (p: Principal, c: string) => { driver.connection(p, c); return runs.isTrusted(p, c); };
     const ai = new AssistantService(store, overrides.assistant ?? new OpenAIDriver(config.demo ? undefined : config.openaiKey, config.openaiModel), authorized);
+    const voice = overrides.voice ?? new OpenAIVoiceService(config.demo ? undefined : config.openaiKey, config.openaiRealtimeModel);
     const imports = new ImportService(store, driver, authorized), monitors = new MonitorService(store, runs, artifacts), sessions = new SessionService(config.token), redact = redactor(config);
     const secretFree = (value: unknown) => !configuredSecrets(config).some(secret => JSON.stringify(value).includes(secret));
     const safeExport = (value: unknown) => requireThat(secretFree(value), 400, 'SECRET_IN_EXPORT', 'This data contains a configured secret and cannot be exported or shared');
@@ -47,7 +50,7 @@ export function createApp(config: Config, overrides: {
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.setHeader('Referrer-Policy', 'no-referrer');
         res.setHeader('X-Frame-Options', 'DENY');
-        res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+        res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
         res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws://localhost:5173 ws://127.0.0.1:5173; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
         const allowedHosts = new Set([new URL(config.origin).host, `localhost:${config.port}`, `127.0.0.1:${config.port}`]);
         if (!allowedHosts.has(req.get('host') ?? ''))
@@ -153,6 +156,17 @@ export function createApp(config: Config, overrides: {
     app.delete('/api/published/:id/share', (req, res) => { artifacts.revokeShares(principal(res), id(req)); res.json({ ok: true }); });
     app.delete('/api/published/:id', (req, res) => { artifacts.deletePublication(principal(res), id(req)); res.json({ ok: true }); });
     app.get('/api/assistant/status', (_req, res) => res.json(ai.status(principal(res))));
+    app.get('/api/voice/status', (_req, res) => res.json({ available: voice.available, model: voice.model, reason: voice.available ? undefined : 'Set OPENAI_API_KEY on the server to use voice workflows' }));
+    app.post('/api/voice/session', async (req, res) => {
+        const p = principal(res), v = body(req), connectionId = identifier(v.connectionId, 'connectionId');
+        canWrite(p);
+        requireThat(authorized(p, connectionId), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before starting a voice workflow');
+        requireThat(voice.available, 503, 'AI_VOICE_UNAVAILABLE', 'Set OPENAI_API_KEY on the server to use voice workflows');
+        const sdp = text(v.sdp, 'SDP offer', 300000), context = v.context === undefined ? undefined : text(v.context, 'voice context', 100000, true);
+        if (!secretFree({ context }))
+            throw new AppError(400, 'SECRET_IN_VOICE_CONTEXT', 'This voice context contains a configured secret; remove it before starting voice');
+        res.status(201).json(await voice.createSession({ sdp, context, safetyIdentifier: safetyIdentifier(p.id) }));
+    });
     app.post('/api/assistant/context', async (req, res) => {
         const p = principal(res), v = body(req), connectionId = identifier(v.connectionId, 'connectionId');
         canWrite(p);
@@ -200,5 +214,5 @@ export function createApp(config: Config, overrides: {
         type?: string;
     })?.type === 'entity.too.large'; res.status(tooLarge ? 413 : error instanceof AppError ? error.status : error instanceof SyntaxError ? 400 : 500).json({ error: { ...parsed, message: redact(parsed.message) }, requestId: res.locals.requestId }); };
     app.use(errors);
-    return { app, store, runs, artifacts, ai, imports, monitors, driver, close: async () => { await runs.close(); await driver.close(); } };
+    return { app, store, runs, artifacts, ai, voice, imports, monitors, driver, close: async () => { await runs.close(); await driver.close(); } };
 }

@@ -18,6 +18,9 @@
   "include": [
     "web/workspace-state.ts",
     "web/workspace-persistence.ts",
-    "shared/evidence.ts"
+    "shared/evidence.ts",
+    "shared/workbench-view.ts",
+    "web/local-import.ts",
+    "shared/result-columns.ts"
   ]
 }

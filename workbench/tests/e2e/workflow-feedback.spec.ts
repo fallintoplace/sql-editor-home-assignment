@@ -1,18 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import type { Run } from '../../shared/types';
-
-async function trust(page: Page) {
-    await page.goto('/');
-    await expect(page.getByRole('button', { name: 'Run statement', exact: true })).toBeVisible();
-    const button = page.getByRole('button', { name: 'Trust connection', exact: true });
-    if (await button.isVisible()) {
-        await button.click();
-        const dialog = page.getByRole('dialog');
-        await dialog.getByRole('textbox').fill('demo');
-        await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
-    }
-    await expect(page.getByRole('button', { name: 'Run statement', exact: true })).toBeEnabled();
-}
+import { trust } from './helpers.js';
 async function replaceSql(page: Page, sql: string) {
     await page.locator('.cm-content').click();
     await page.keyboard.press('ControlOrMeta+a');

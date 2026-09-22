@@ -1,17 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-
-async function trust(page: Page) {
-    await page.goto('/');
-    await expect(page.getByText(/not live data/i).first()).toBeVisible();
-    const button = page.getByRole('button', { name: 'Trust connection', exact: true });
-    if (await button.isVisible()) {
-        await button.click();
-        const dialog = page.getByRole('dialog');
-        await dialog.getByRole('textbox').fill('demo');
-        await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
-    }
-    await expect(page.getByRole('button', { name: 'Run statement', exact: true })).toBeEnabled();
-}
+import { trust } from './helpers.js';
 
 test('Empty truncated evidence never claims the query matched no rows', async ({ page }) => {
     await page.route('**/api/runs/*/snapshot', async route => {

@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Download } from '@playwright/test';
 import type { Result } from '../../shared/types';
+import { trust } from './helpers.js';
 
 function countWrites(page: Page) {
     const calls = { runs: 0, documents: 0, imports: 0 };
@@ -10,16 +11,6 @@ function countWrites(page: Page) {
         if (request.method() === 'POST' && path.startsWith('/api/import')) calls.imports++;
     });
     return calls;
-}
-async function trust(page: Page) {
-    await page.goto('/');
-    await expect(page.getByRole('button', { name: 'Run statement', exact: true })).toBeVisible();
-    const button = page.getByRole('button', { name: 'Trust connection', exact: true });
-    if (await button.isVisible()) {
-        await button.click();
-        await page.getByRole('dialog').getByRole('textbox').fill('demo');
-        await page.getByRole('dialog').getByRole('button', { name: 'Confirm', exact: true }).click();
-    }
 }
 async function snapshot(page: Page, transform: (result: Result) => Result) {
     await page.route('**/api/runs/*/snapshot', async route => {

@@ -1,58 +1,51 @@
 import { test, expect, type Page } from '@playwright/test';
-async function trust(page: Page) {
-    await page.goto('/');
-    await expect(page.getByText(/not live data/i).first()).toBeVisible();
-    const button = page.getByRole('button', { name: 'Trust connection', exact: true });
-    if (await button.isVisible()) {
-        await button.click();
-        const dialog = page.getByRole('dialog');
-        await dialog.getByRole('textbox').fill('demo');
-        await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
-    }
-    await expect(page.getByRole('button', { name: 'Run statement', exact: true })).toBeEnabled();
-}
-test('Run, chart, save, reload and inspect retained evidence', async ({ page }) => {
+import { trust, trustCurrentConnection } from './helpers.js';
+test('Run, chart, save, reload and retain the same run evidence', async ({ page }) => {
+    const runs = countRunRequests(page);
     await trust(page);
     await page.getByRole('button', { name: 'Run statement', exact: true }).click();
     await expect(page.getByText('succeeded', { exact: true }).first()).toBeVisible();
     await expect(page.getByRole('cell', { name: '2026-01-01', exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Chart', exact: true }).click();
-    await expect(page.locator('canvas')).toBeVisible();
+    await page.getByRole('tab', { name: 'Chart', exact: true }).click();
+    await expect(page.locator('.chart-canvas svg[role="img"]')).toBeVisible();
     await page.getByRole('button', { name: 'Save revision', exact: true }).click();
-    await expect(page.getByText(/Saved .+ as revision/)).toBeVisible();
+    await expect(page.getByRole('status')).toContainText(/Saved .+ · revision/);
+    const queryId = await page.locator('.execution-bar code').innerText();
     await page.reload();
     await expect(page.getByText('succeeded', { exact: true }).first()).toBeVisible();
-    await page.getByRole('button', { name: 'Executed SQL', exact: true }).click();
-    await expect(page.getByLabel('Executed SQL text', { exact: true })).toContainText('SELECT');
+    await expect(page.getByRole('cell', { name: '2026-01-01', exact: true })).toBeVisible();
+    await expect(page.locator('.execution-bar code')).toHaveText(queryId);
+    expect(runs()).toBe(1);
 });
-test('A script shows partial failure without losing editor text', async ({ page }) => {
+test('A script exposes its failed run without losing editor text', async ({ page }) => {
     await trust(page);
     const editor = page.locator('.cm-content');
     await editor.click();
     await page.keyboard.press('ControlOrMeta+a');
     await page.keyboard.insertText('SELECT 1; SELECT fixture_error; SELECT 3;');
     await page.getByRole('button', { name: 'Run script', exact: true }).click();
-    await expect(page.getByRole('button', { name: /Statement 2: failed/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /Statement 3: skipped/ })).toBeVisible();
-    await expect(editor).toContainText('SELECT fixture_error');
+    await expect(page.getByRole('status')).toContainText('Script started');
+    await expect(page.getByRole('region', { name: 'Query results' })).toContainText('FIXTURE_ERROR: Deliberate fixture error');
+    await expect(page.getByText('failed', { exact: true }).first()).toBeVisible();
+    await expect(editor).toContainText('SELECT 1; SELECT fixture_error; SELECT 3;');
 });
 test('Connection switching does not reuse another connection’s result', async ({ page }) => {
     await trust(page);
     await page.getByRole('button', { name: 'Run statement', exact: true }).click();
     await expect(page.getByText('succeeded', { exact: true }).first()).toBeVisible();
-    await switchConnection(page, 'Second isolated fixture');
-    await expect(page.getByRole('button', { name: 'Trust connection', exact: true })).toBeVisible();
+    await switchConnection(page, 'Another sample');
+    await trustCurrentConnection(page);
     await expect(page.getByRole('cell', { name: '2026-01-01', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('region', { name: 'Query results' })).toHaveCount(0);
-    await switchConnection(page, 'Demo fixtures (not live data)');
+    await expect(page.getByRole('table', { name: 'Retained query rows' })).toHaveCount(0);
+    await switchConnection(page, 'Sample data');
     await expect(page.getByRole('cell', { name: '2026-01-01', exact: true })).toBeVisible();
 });
 
 // Click UI 0.12 uses a labelled button and a popover dialog, not a combobox.
 async function switchConnection(page: Page, name: string) {
-    const picker = page.getByRole('button', { name: 'Connection profile', exact: true });
+    const picker = page.locator('.connection-trigger');
     await picker.click();
-    await page.getByRole('dialog').getByText(name, { exact: true }).click();
+    await page.getByRole('dialog', { name: 'Connection details', exact: true }).getByRole('button').filter({ hasText: name }).click();
     await expect(picker).toContainText(name);
 }
 

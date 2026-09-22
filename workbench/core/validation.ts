@@ -40,7 +40,7 @@ export function runRequest(value: unknown): RunRequest {
     const kind = v.kind ?? 'query';
     requireThat(['query', 'explain', 'pipeline'].includes(String(kind)), 400, 'INVALID_KIND', 'Unknown run kind');
     const tags = stringMap(v.tags, 'tags', 5);
-    requireThat(Object.keys(tags).every(k => ['workspace', 'owner', 'artifact', 'environment', 'cost_center'].includes(k)), 400, 'INVALID_TAG', 'Unsupported query tag');
+    requireThat(Object.keys(tags).every(k => ['workspace', 'owner', 'artifact', 'environment', 'cost_center', 'experience'].includes(k)), 400, 'INVALID_TAG', 'Unsupported query tag');
     for (const t of Object.values(tags))
         requireThat(/^[A-Za-z0-9_. :/-]{0,80}$/.test(t), 400, 'INVALID_TAG', 'Tags must be short, non-secret labels');
     const requestedLimits = v.limits === undefined ? undefined : record(v.limits, 'limits');

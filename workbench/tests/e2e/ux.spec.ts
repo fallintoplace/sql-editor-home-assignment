@@ -1,18 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import type { Result } from '../../shared/types';
-
-async function trust(page: Page) {
-    await page.goto('/');
-    const button = page.getByRole('button', { name: 'Trust connection', exact: true });
-    await expect(page.getByText(/not live data/i).first()).toBeVisible();
-    if (await button.isVisible()) {
-        await button.click();
-        const dialog = page.getByRole('dialog');
-        await dialog.getByRole('textbox').fill('demo');
-        await dialog.getByRole('button', { name: 'Confirm', exact: true }).click();
-    }
-    await expect(page.getByRole('button', { name: 'Run statement', exact: true })).toBeEnabled();
-}
+import { trust } from './helpers.js';
 function requests(page: Page) {
     const count = { runs: 0, saves: 0 };
     page.on('request', request => {

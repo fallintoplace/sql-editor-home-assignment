@@ -97,6 +97,8 @@ The assistant has generate, explain, repair, result, performance and review acti
 
 **Inspect/propose → accept into the draft → execute** are separate transitions. A provider response does not receive a query execution tool. Accepting checks the original SQL and connection before recording the decision. The frontend makes a local checkpoint, applies the accepted SQL, and still requires Run. Review/explain actions cannot become unapproved SQL changes.
 
+Every new proposal receives a quality record with four checks: playbook contract, read-only SQL safety, schema grounding, and a static semantic proxy. Unsafe SQL is rejected again at acceptance, so the quality result is not only decoration. Accepted and rejected decisions are retained as bounded proposal metadata and exposed through the Assistant quality panel. The local `eval:assistant` command runs five deterministic benchmark cases covering table grounding, bounded repair, inspect-only responses, review findings, and clarification instead of guessing. These checks do not claim that a query is semantically correct: execution against a known ClickHouse fixture and inspection of retained results remain the semantic gate.
+
 The provider request uses the OpenAI SDK, Responses API, structured output validation, `store: false`, an output cap, a deadline and no automatic retries. `store: false` is not a claim that provider-side retention obligations disappear; review your provider agreement and data policy. Prepared image/raw context expires after five minutes or is removed after use. Proposal metadata is retained until deletion or the bounded proposal cap. Configured credential values are excluded/redacted; configured sensitive columns are omitted from result context. This is **not a general DLP engine**: users must still inspect SQL literals, free text, column names and images for sensitive content.
 
 Voice/WebRTC, full multi-file/hunk editing, autonomous investigations and production organization-level AI budgets are not implemented. Their absence is not hidden behind a fake success UI.
@@ -128,6 +130,7 @@ npm run build
 npm run test:integration          # HTTP fixtures; live DB test is explicitly skipped by default
 CLICKHOUSE_INTEGRATION=1 npm run test:integration
 npm run eval                     # Deterministic live SQL fixtures, not an AI quality benchmark
+npm run eval:assistant            # Deterministic assistant safety/grounding benchmark
 npx playwright install chromium
 npm run test:e2e                  # Explicitly labeled fixture-driver browser tests
 ```

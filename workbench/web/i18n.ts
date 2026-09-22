@@ -138,6 +138,22 @@ export const messages = {
             you: 'You',
             assistant: 'Assistant',
             audio: 'Voice output'
+        },
+        evaluation: {
+            title: 'Proposal quality',
+            description: 'Safety and grounding checks for generated SQL. Run the query to prove semantics.',
+            refresh: 'Refresh quality',
+            proposals: 'Proposals',
+            acceptance: 'Acceptance',
+            quality: 'Quality pass',
+            safety: 'Safety pass',
+            semantics: 'Semantic proxy',
+            benchmark: 'Static benchmark',
+            staticNotice: 'Static checks guide review. They do not replace execution evidence.',
+            pending: 'pending',
+            accepted: 'accepted',
+            rejected: 'rejected',
+            noData: 'No proposals evaluated yet.'
         }
     },
     de: {
@@ -279,6 +295,22 @@ export const messages = {
             you: 'Du',
             assistant: 'Assistent',
             audio: 'Sprachausgabe'
+        },
+        evaluation: {
+            title: 'Vorschlagsqualität',
+            description: 'Sicherheits- und Schema-Prüfungen für erzeugtes SQL. Führe die Abfrage aus, um die Semantik zu prüfen.',
+            refresh: 'Qualität aktualisieren',
+            proposals: 'Vorschläge',
+            acceptance: 'Angenommen',
+            quality: 'Qualitätsprüfung',
+            safety: 'Sicherheitsprüfung',
+            semantics: 'Semantik-Proxy',
+            benchmark: 'Statischer Benchmark',
+            staticNotice: 'Statische Prüfungen helfen bei der Prüfung. Ausführungsevidenz bleibt nötig.',
+            pending: 'offen',
+            accepted: 'angenommen',
+            rejected: 'abgelehnt',
+            noData: 'Noch keine Vorschläge ausgewertet.'
         }
     },
     es: {
@@ -420,6 +452,22 @@ export const messages = {
             you: 'Tú',
             assistant: 'Asistente',
             audio: 'Salida de voz'
+        },
+        evaluation: {
+            title: 'Calidad de propuestas',
+            description: 'Comprobaciones de seguridad y esquema para SQL generado. Ejecuta la consulta para probar la semántica.',
+            refresh: 'Actualizar calidad',
+            proposals: 'Propuestas',
+            acceptance: 'Aceptación',
+            quality: 'Calidad aprobada',
+            safety: 'Seguridad aprobada',
+            semantics: 'Proxy semántico',
+            benchmark: 'Benchmark estático',
+            staticNotice: 'Las comprobaciones estáticas ayudan a revisar. La ejecución sigue siendo necesaria.',
+            pending: 'pendiente',
+            accepted: 'aceptada',
+            rejected: 'rechazada',
+            noData: 'Aún no hay propuestas evaluadas.'
         }
     },
     nl: {
@@ -561,6 +609,22 @@ export const messages = {
             you: 'Jij',
             assistant: 'Assistent',
             audio: 'Spraakuitvoer'
+        },
+        evaluation: {
+            title: 'Kwaliteit van voorstellen',
+            description: 'Veiligheids- en schemacontroles voor gegenereerde SQL. Voer de query uit om de semantiek te bewijzen.',
+            refresh: 'Kwaliteit vernieuwen',
+            proposals: 'Voorstellen',
+            acceptance: 'Acceptatie',
+            quality: 'Kwaliteitscontrole',
+            safety: 'Veiligheidscontrole',
+            semantics: 'Semantische proxy',
+            benchmark: 'Statische benchmark',
+            staticNotice: 'Statische controles helpen bij beoordeling. Uitvoeringsbewijs blijft nodig.',
+            pending: 'openstaand',
+            accepted: 'geaccepteerd',
+            rejected: 'afgewezen',
+            noData: 'Nog geen voorstellen geëvalueerd.'
         }
     },
     zh: {
@@ -702,6 +766,22 @@ export const messages = {
             you: '你',
             assistant: '助手',
             audio: '语音输出'
+        },
+        evaluation: {
+            title: '提案质量',
+            description: '检查生成 SQL 的安全性和模式依据。运行查询以验证语义。',
+            refresh: '刷新质量',
+            proposals: '提案',
+            acceptance: '接受率',
+            quality: '质量通过率',
+            safety: '安全通过率',
+            semantics: '语义代理指标',
+            benchmark: '静态基准',
+            staticNotice: '静态检查用于辅助审阅，不能替代执行证据。',
+            pending: '待处理',
+            accepted: '已接受',
+            rejected: '已拒绝',
+            noData: '还没有已评估的提案。'
         }
     },
     ru: {
@@ -843,6 +923,22 @@ export const messages = {
             you: 'Вы',
             assistant: 'Ассистент',
             audio: 'Голосовой вывод'
+        },
+        evaluation: {
+            title: 'Качество предложений',
+            description: 'Проверки безопасности и схемы для сгенерированного SQL. Запустите запрос для проверки семантики.',
+            refresh: 'Обновить качество',
+            proposals: 'Предложения',
+            acceptance: 'Принятие',
+            quality: 'Пройдено по качеству',
+            safety: 'Пройдено по безопасности',
+            semantics: 'Семантический прокси',
+            benchmark: 'Статический бенчмарк',
+            staticNotice: 'Статические проверки помогают при ревью. Нужны результаты выполнения.',
+            pending: 'ожидает',
+            accepted: 'принято',
+            rejected: 'отклонено',
+            noData: 'Пока нет оцененных предложений.'
         }
     }
 } as const;

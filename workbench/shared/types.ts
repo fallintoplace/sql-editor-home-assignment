@@ -256,6 +256,19 @@ export interface ProposalContent {
         evidence: string;
     }[];
 }
+export type EvaluationStatus = 'pass' | 'warn' | 'fail';
+export interface ProposalQualityCheck {
+    id: 'contract' | 'safety' | 'grounding' | 'semantic';
+    status: EvaluationStatus;
+    message: string;
+}
+export interface ProposalQuality {
+    evaluatorVersion: string;
+    evaluatedAt: string;
+    status: EvaluationStatus;
+    score: number;
+    checks: ProposalQualityCheck[];
+}
 export interface Proposal extends ProposalContent {
     id: string;
     owner: string;
@@ -268,6 +281,28 @@ export interface Proposal extends ProposalContent {
     promptVersion: string;
     contextSummary: string[];
     decision: 'pending' | 'accepted' | 'rejected';
+    quality?: ProposalQuality;
+    decidedAt?: string;
+}
+export interface AssistantEvaluationReport {
+    evaluatorVersion: string;
+    total: number;
+    pending: number;
+    accepted: number;
+    rejected: number;
+    acceptanceRate: number | null;
+    evaluated: number;
+    qualityPassRate: number | null;
+    safetyPassRate: number | null;
+    semanticPassRate: number | null;
+    averageScore: number | null;
+    latest: Array<Pick<Proposal, 'id' | 'action' | 'decision' | 'createdAt'> & { status: EvaluationStatus | 'unknown'; score: number | null }>;
+    benchmark: {
+        total: number;
+        passed: number;
+        score: number;
+        mode: 'static';
+    };
 }
 export interface Monitor {
     id: string;

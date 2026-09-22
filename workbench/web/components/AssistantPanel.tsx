@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { AssistantAction, Proposal, Run } from '../../shared/types';
+import type { AssistantAction, AssistantEvaluationReport, Proposal, Run } from '../../shared/types';
 import { api, message, post } from '../api';
 import type { Copy } from '../i18n';
 import { Action, Callout, Select, TextAreaField } from '../ui';
@@ -34,6 +34,7 @@ export function AssistantPanel({ connectionId, sql, run, trusted, copy, onApply 
             reason?: string;
             callsRemaining: number;
         }>('/assistant/status'), retry: false });
+    const evaluation = useQuery({ queryKey: ['assistant-evaluation'], queryFn: () => api<AssistantEvaluationReport>('/assistant/evaluation'), retry: false });
     const perform = async (task: () => Promise<void>) => { if (busy)
         return; setBusy(true); setError(''); try {
         await task();
@@ -46,12 +47,14 @@ export function AssistantPanel({ connectionId, sql, run, trusted, copy, onApply 
     } };
     const prepare = () => perform(async () => { setContext(await post<ContextView>('/assistant/context', { connectionId, sql, action, question, runId: run?.id, includeResult, rules, image })); setProposal(undefined); });
     const send = () => perform(async () => { if (!context)
-        return; setProposal(await post<Proposal>('/assistant/proposals', { contextId: context.id, consent: true })); setImage(undefined); await status.refetch(); });
+        return; setProposal(await post<Proposal>('/assistant/proposals', { contextId: context.id, consent: true })); setImage(undefined); await Promise.all([status.refetch(), evaluation.refetch()]); });
     const decide = (decision: 'accepted' | 'rejected') => perform(async () => { if (!proposal)
-        return; const reviewed = await post<Proposal>(`/assistant/proposals/${proposal.id}/decision`, { decision, connectionId, currentSql: sql }); setProposal(reviewed); if (decision === 'accepted' && reviewed.sql !== null)
+        return; const reviewed = await post<Proposal>(`/assistant/proposals/${proposal.id}/decision`, { decision, connectionId, currentSql: sql }); setProposal(reviewed); await evaluation.refetch(); if (decision === 'accepted' && reviewed.sql !== null)
         onApply(reviewed.sql); });
+    const percent = (value: number | null) => value === null ? '—' : `${value}%`;
     return <div className="stack"><h2>Ask Data / SQL copilot</h2><Callout>Inspect → propose → apply to draft. Execution is always a separate Run action.</Callout>
  {status.data && !status.data.available && <Callout>{status.data.reason}</Callout>}{status.error && <Callout danger>{message(status.error)}</Callout>}
+ {evaluation.data && <details className="quality-card" open><summary><span>{copy.evaluation.title}</span><span className={`quality-pill ${evaluation.data.qualityPassRate === 100 ? 'pass' : 'warn'}`}>{percent(evaluation.data.averageScore)} score</span></summary><p className="muted">{copy.evaluation.description}</p><div className="quality-metrics"><div><small>{copy.evaluation.proposals}</small><strong>{evaluation.data.total}</strong><span>{evaluation.data.accepted} {copy.evaluation.acceptance.toLowerCase()} · {evaluation.data.pending} {copy.evaluation.pending}</span></div><div><small>{copy.evaluation.quality}</small><strong>{percent(evaluation.data.qualityPassRate)}</strong><span>{evaluation.data.evaluated} evaluated</span></div><div><small>{copy.evaluation.safety}</small><strong>{percent(evaluation.data.safetyPassRate)}</strong><span>{copy.evaluation.semantics}: {percent(evaluation.data.semanticPassRate)}</span></div><div><small>{copy.evaluation.benchmark}</small><strong>{evaluation.data.benchmark.passed}/{evaluation.data.benchmark.total}</strong><span>{evaluation.data.benchmark.score}/100 · static</span></div></div><p className="muted">{copy.evaluation.staticNotice}</p><Action onClick={() => void evaluation.refetch()}>{copy.evaluation.refresh}</Action></details>}
  <Select label="Action / playbook" value={action} options={['generate', 'explain', 'repair', 'result', 'performance', 'review'].map(value => ({ value, label: value === 'generate' ? 'Ask Data: propose SQL' : value === 'review' ? 'Review only (no SQL edits)' : value }))} onSelect={value => { setAction(value as AssistantAction); setContext(undefined); }}/>
  <TextAreaField label="Question or instruction" rows={4} value={question} onChange={setQuestion} placeholder="Show daily events and explain the time window…"/>
  <Select label="Result context" value={includeResult ? 'include' : 'schema'} options={[{ value: 'schema', label: 'Schema, current SQL and selected error only' }, { value: 'include', label: 'Also share the selected retained result', disabled: run?.resultState !== 'reopenable' }]} onSelect={value => setIncludeResult(value === 'include')}/>
@@ -70,6 +73,7 @@ export function AssistantPanel({ connectionId, sql, run, trusted, copy, onApply 
  {proposal.assumptions.length > 0 && <p><strong>Assumptions:</strong> {proposal.assumptions.join(' · ')}</p>}{proposal.caveats.length > 0 && <Callout>{proposal.caveats.join(' · ')}</Callout>}
  {proposal.tables.length > 0 && <p>Referenced tables: {proposal.tables.join(', ')}</p>}
  {proposal.findings.map((finding, i) => <Callout key={i}><strong>{finding.severity}: </strong>{finding.message}<p>{finding.evidence}</p></Callout>)}
+ {proposal.quality && <section className={`proposal-quality ${proposal.quality.status}`}><div className="toolbar spread"><h4>Quality gate · {proposal.quality.score}/100</h4><span className={`quality-pill ${proposal.quality.status}`}>{proposal.quality.status}</span></div><ul>{proposal.quality.checks.map(check => <li key={check.id} className={check.status}><strong>{check.id}</strong><span>{check.message}</span></li>)}</ul></section>}
  {proposal.sql !== null && <><div className="diff"><section><h4>Before</h4><pre>{proposal.baseSql}</pre></section><section><h4>Proposed replacement</h4><pre>{proposal.sql}</pre></section></div><Action type="primary" disabled={busy || proposal.decision !== 'pending' || proposal.baseSql !== sql} onClick={() => void decide('accepted')}>Accept into draft — do not run</Action></>}
  <Action disabled={busy || proposal.decision !== 'pending'} onClick={() => void decide('rejected')}>Reject / keep draft</Action><p className="muted">{proposal.decision} · {proposal.promptVersion} · response {proposal.responseId}</p></div>}
  </div>;

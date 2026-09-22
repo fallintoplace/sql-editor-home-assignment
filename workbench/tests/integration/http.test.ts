@@ -51,6 +51,16 @@ test('HTTP query flow requires explicit trust and is idempotent', async (t) => {
     assert.match(text, /data: /);
     assert.match(text, /succeeded/);
 });
+test('Assistant evaluation report is available without a provider and keeps SQL out of the summary', async (t) => {
+    const s = await start();
+    t.after(() => s.stop());
+    const response = await s.call('/assistant/evaluation');
+    assert.equal(response.status, 200);
+    const report = await response.json() as { total: number; benchmark: { total: number; passed: number; score: number; mode: string }; latest: unknown[] };
+    assert.equal(report.total, 0);
+    assert.deepEqual(report.benchmark, { total: 5, passed: 5, score: 100, mode: 'static' });
+    assert.deepEqual(report.latest, []);
+});
 test('Cookie login, request intent and Origin checks are enforced', async (t) => {
     const token = 'owner-token-'.repeat(4), s = await start(token);
     t.after(() => s.stop());

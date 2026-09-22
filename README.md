@@ -36,6 +36,8 @@ saved revision or cancel a server query. Edited parameters mark old results as s
 
 Saved revisions, explicit publication/share consent, bounded CSV/JSON import and
 review-first model proposals are described in the [workbench guide](docs/WORKBENCH.md).
+The Assistant panel also shows proposal quality checks and accepted/rejected outcomes;
+run `cd workbench && npm run eval:assistant` for the deterministic benchmark suite.
 Provider-backed features require operator configuration; they never auto-execute a proposal.
 
 ## Validation and delivery status

@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import type { AssistantAction, Principal, Proposal, ProposalContent, Result, Schema } from '../shared/types.js';
+import type { AssistantAction, AssistantEvaluationReport, Principal, Proposal, ProposalContent, Result, Schema } from '../shared/types.js';
 import { AppError, requireThat } from './errors.js';
-import { canWrite, mustOwn } from './guards.js';
+import { canWrite, guardSql, mustOwn } from './guards.js';
 import { audit, hash, type Store } from './store.js';
 import { record, text } from './validation.js';
+import { buildEvaluationReport, evaluateProposal } from './assistant-evaluation.js';
 export const PROMPT_VERSION = 'cathedral-review-v1';
 export const PLAYBOOKS = {
     generate: 'Propose ClickHouse SQL only from known schema. Clarify missing definitions. Never execute.',
@@ -191,7 +192,8 @@ export class AssistantService {
                 content.sql = null;
             const proposal: Proposal = { ...content, id: randomUUID(), owner: p.id, connectionId: context.connectionId,
                 action: context.action, createdAt: new Date().toISOString(), baseSql: context.baseSql, responseId: response.responseId,
-                model: this.driver.model, promptVersion: PROMPT_VERSION, contextSummary: context.summary, decision: 'pending' };
+                model: this.driver.model, promptVersion: PROMPT_VERSION, contextSummary: context.summary, decision: 'pending',
+                quality: evaluateProposal(content, context.action, { schema: JSON.parse(context.payload.context) as Schema }) };
             this.store.put('proposals', proposal.id, proposal);
             context.proposalId = proposal.id;
             context.state = 'complete';
@@ -214,6 +216,9 @@ export class AssistantService {
         mustOwn(p, proposal.owner);
         return proposal;
     }
+    evaluation(p: Principal): AssistantEvaluationReport {
+        return buildEvaluationReport(this.store.list<Proposal>('proposals').filter(proposal => proposal.owner === p.id));
+    }
     decide(p: Principal, id: string, decision: 'accepted' | 'rejected', connectionId: string, currentSql: string): Proposal {
         canWrite(p);
         const proposal = this.get(p, id);
@@ -221,9 +226,17 @@ export class AssistantService {
         if (decision === 'accepted') {
             requireThat(proposal.sql !== null && proposal.action !== 'review' && proposal.action !== 'explain', 409, 'REVIEW_ONLY', 'This proposal is inspect-only');
             requireThat(proposal.baseSql === currentSql, 409, 'DRAFT_CHANGED', 'The draft changed since the proposal. Compare before applying.');
+            try {
+                guardSql(proposal.sql);
+            }
+            catch {
+                audit(this.store, p, 'ai.accepted', id, 'denied', 'AI_PROPOSAL_UNSAFE');
+                throw new AppError(409, 'AI_PROPOSAL_UNSAFE', 'The proposal failed the read-only SQL safety gate. Keep it out of the draft.');
+            }
         }
         requireThat(proposal.decision === 'pending' || proposal.decision === decision, 409, 'DECISION_CONFLICT', 'The proposal already has a different decision');
         proposal.decision = decision;
+        proposal.decidedAt = new Date().toISOString();
         this.store.put('proposals', id, proposal);
         audit(this.store, p, `ai.${decision}`, id);
         return proposal;

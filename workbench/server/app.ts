@@ -156,6 +156,7 @@ export function createApp(config: Config, overrides: {
     app.delete('/api/published/:id/share', (req, res) => { artifacts.revokeShares(principal(res), id(req)); res.json({ ok: true }); });
     app.delete('/api/published/:id', (req, res) => { artifacts.deletePublication(principal(res), id(req)); res.json({ ok: true }); });
     app.get('/api/assistant/status', (_req, res) => res.json(ai.status(principal(res))));
+    app.get('/api/assistant/evaluation', (_req, res) => res.json(ai.evaluation(principal(res))));
     app.get('/api/voice/status', (_req, res) => res.json({ available: voice.available, model: voice.model, reason: voice.available ? undefined : 'Set OPENAI_API_KEY on the server to use voice workflows' }));
     app.post('/api/voice/session', async (req, res) => {
         const p = principal(res), v = body(req), connectionId = identifier(v.connectionId, 'connectionId');

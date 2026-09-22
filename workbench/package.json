@@ -18,6 +18,7 @@
     "test:e2e": "playwright test",
     "check": "npm run typecheck && npm test && npm run build",
     "eval": "tsx --env-file-if-exists=.env scripts/eval.ts",
+    "eval:assistant": "tsx --env-file-if-exists=.env scripts/eval-assistant.ts",
     "init:env": "node scripts/init-env.mjs",
     "db:setup": "tsx --env-file-if-exists=.env scripts/seed.ts",
     "check:syntax": "node scripts/check-syntax.mjs",

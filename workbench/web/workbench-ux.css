@@ -400,3 +400,34 @@
 @keyframes hud-pulse{0%,100%{transform:scale(.82);opacity:.28}50%{transform:scale(1.1);opacity:.72}}
 @keyframes sidebar-drift{0%,100%{background-position:0 0}50%{background-position:0 100%}}
 @media(prefers-reduced-motion:reduce){.application::before,.workbench-topbar::after,.board-canvas::before,.workspace-view-controls::after,.sidebar{animation:none!important}.example-card:nth-child(2n){transform:none}}
+
+/* Keep translated labels and long theme names readable in the compact header. */
+.app-header-actions>div:first-child{width:196px;min-width:196px;flex:0 0 auto}
+.theme-picker{width:232px!important;min-width:232px!important;flex:0 0 auto}
+.level-picker{width:174px!important;min-width:174px!important;flex:0 0 auto}
+.app-header-actions button>div:first-child,
+.app-header-actions button>div:first-child>div,
+.app-header-actions button>div:first-child>div>div{min-width:0;max-width:none;overflow:visible!important;text-overflow:clip!important;white-space:nowrap!important}
+.app-header-actions button>div:first-child{flex:1}
+.app-header-actions [data-testid="ellipsed-icon-wrapper-text"],
+.app-header-actions [data-testid="ellipsed-icon-wrapper-text"]>*{width:max-content!important;max-width:none!important;overflow:visible!important;text-overflow:clip!important;white-space:nowrap!important}
+
+/* Click UI sizes Select popovers to the trigger by default. Let the menu grow
+   to the option text so the full label remains visible when it is opened. */
+[data-radix-popper-content-wrapper]:has([cui-select-item])>div[role=dialog]{width:max-content!important;min-width:100%!important;max-width:min(440px,calc(100vw - 24px))!important}
+[data-radix-popper-content-wrapper]:has([cui-select-item]) [cui-select-item]{width:max-content!important;min-width:100%!important;max-width:none!important;overflow:visible!important;text-overflow:clip!important;white-space:nowrap!important}
+[data-radix-popper-content-wrapper]:has([cui-select-item]) [cui-select-item]>div,
+[data-radix-popper-content-wrapper]:has([cui-select-item]) [data-testid="ellipsed-icon-wrapper-text"],
+[data-radix-popper-content-wrapper]:has([cui-select-item]) [data-testid="ellipsed-icon-wrapper-text"]>*{width:max-content!important;max-width:none!important;overflow:visible!important;text-overflow:clip!important;white-space:nowrap!important}
+
+/* Editable fields should keep their normal horizontal editing behavior inside
+   flex rows instead of inheriting a clipped minimum size from a sibling. */
+.editor-header>div:first-child,.editor-header>div:first-child>div,.editor-header input{min-width:0}
+.editor-header input{overflow:visible;text-overflow:clip}
+
+@media(max-width:760px){
+    .app-header-actions{width:100%;margin-left:0;flex-wrap:wrap;justify-content:flex-end}
+    .app-header-actions>div:first-child{width:min(196px,calc(100vw - 24px));min-width:0}
+    .theme-picker{width:min(232px,calc(100vw - 24px))!important;min-width:0!important}
+    .level-picker{width:min(174px,calc(100vw - 24px))!important;min-width:0!important}
+}

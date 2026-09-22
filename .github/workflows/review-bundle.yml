@@ -1,0 +1,31 @@
+name: Workbench review bundle
+on:
+  push:
+    branches: [cathedral/workbench-review-20260922]
+    paths: [.github/workflows/review-bundle.yml]
+permissions:
+  contents: read
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install the existing implementation's dependencies
+        working-directory: workbench
+        run: npm install --ignore-scripts
+      - name: Archive tracked source and installed dependencies only
+        run: |
+          git archive --format=tar HEAD > "$RUNNER_TEMP/source.tar"
+          tar -czf "$RUNNER_TEMP/workbench-review.tgz" -C "$RUNNER_TEMP" source.tar -C "$GITHUB_WORKSPACE" workbench/node_modules workbench/package-lock.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: workbench-review-bundle
+          path: ${{ runner.temp }}/workbench-review.tgz
+          retention-days: 1
+          compression-level: 0

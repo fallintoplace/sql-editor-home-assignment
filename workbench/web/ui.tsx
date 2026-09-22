@@ -1,4 +1,4 @@
-import { useState, type ComponentProps, type ReactNode } from 'react';
+import { useId, useState, type ComponentProps, type ReactNode } from 'react';
 import { Button, Dialog, TextField } from '@clickhouse/click-ui';
 export { Select, TextAreaField, TextField } from '@clickhouse/click-ui';
 /** Thin defaults only: Click UI owns button styling, focus behavior and disabled states. */
@@ -7,6 +7,13 @@ export function Callout({ children, danger = false }: {
     children: ReactNode;
     danger?: boolean;
 }) { return <div className={danger ? 'callout danger' : 'callout'} role={danger ? 'alert' : 'status'}>{children}</div>; }
+export function HelpTip({ children }: { children: ReactNode }) {
+    const id = useId();
+    return <span className="help-tip" tabIndex={0} aria-describedby={id}>
+        <span className="help-tip-icon" aria-hidden="true">?</span>
+        <span id={id} className="help-tip-popover" role="tooltip">{children}</span>
+    </span>;
+}
 interface Confirmation {
     title: string;
     description: string;

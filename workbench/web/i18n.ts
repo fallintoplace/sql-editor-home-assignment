@@ -128,6 +128,19 @@ export const messages = {
             workflow: 'Run inspector',
             close: 'Close'
         },
+        help: {
+            runStatement: 'Run only the selected or current SQL statement. It does not run the whole file.',
+            runScript: 'Run every statement in this file in order. Stop-on-error is enabled.',
+            trustConnection: 'Trusting allows schema inspection and bounded read-only queries for this connection.',
+            results: 'See the latest bounded result, chart, query ID, and retained rows. Nothing runs from this view.',
+            queryParameters: 'Values are bound separately from SQL text. Changing one makes previous evidence stale.',
+            resultLimit: 'Limits protect the workspace from large results. They do not rewrite your SQL.',
+            boardAnalyze: 'Analyze keeps the editor close to results and charts for fast iteration.',
+            publishEvidence: 'Publish freezes SQL, parameters, chart, and bounded result into a read-only snapshot.',
+            examples: 'Start with a safe read-only query. Open it as a local draft and run it only when ready.',
+            assistant: 'Ask for a proposal or review. Applying SQL changes the draft; running it is always separate.',
+            schema: 'Browse visible tables and columns, then insert an identifier into the editor.'
+        },
         voice: {
             title: 'Voice workflow',
             description: 'Talk through the current SQL and result. Voice can explain and suggest; Run and Apply stay explicit.',
@@ -296,6 +309,19 @@ export const messages = {
             inspector: 'Inspektor',
             workflow: 'Ausführungsinspektor',
             close: 'Schließen'
+        },
+        help: {
+            runStatement: 'Führt nur die ausgewählte oder aktuelle SQL-Anweisung aus, nicht die ganze Datei.',
+            runScript: 'Führt alle Anweisungen der Datei der Reihe nach aus. Bei Fehlern wird gestoppt.',
+            trustConnection: 'Vertrauen erlaubt die Schemaprüfung und begrenzte schreibgeschützte Abfragen.',
+            results: 'Zeigt Ergebnis, Diagramm, Abfrage-ID und gespeicherte Zeilen. Diese Ansicht startet nichts.',
+            queryParameters: 'Werte werden getrennt vom SQL gebunden. Eine Änderung macht frühere Belege ungültig.',
+            resultLimit: 'Limits schützen den Workspace vor großen Ergebnissen. Dein SQL wird nicht verändert.',
+            boardAnalyze: 'Analysieren hält Editor, Ergebnisse und Diagramme für schnelle Iteration zusammen.',
+            publishEvidence: 'Veröffentlichen friert SQL, Parameter, Diagramm und Ergebnis als Snapshot ein.',
+            examples: 'Starte mit einer sicheren schreibgeschützten Abfrage. Öffne sie als lokalen Entwurf.',
+            assistant: 'Bitte um einen Vorschlag oder ein Review. Anwenden ändert den Entwurf; Ausführen bleibt getrennt.',
+            schema: 'Durchsuche sichtbare Tabellen und Spalten und füge Bezeichner in den Editor ein.'
         },
         voice: {
             title: 'Sprachworkflow',
@@ -466,6 +492,19 @@ export const messages = {
             workflow: 'Inspector de ejecución',
             close: 'Cerrar'
         },
+        help: {
+            runStatement: 'Ejecuta solo la sentencia SQL seleccionada o actual, no todo el archivo.',
+            runScript: 'Ejecuta todas las sentencias del archivo en orden y se detiene ante un error.',
+            trustConnection: 'Confiar permite inspeccionar el esquema y ejecutar consultas limitadas de solo lectura.',
+            results: 'Muestra el resultado, el gráfico, el ID y las filas retenidas. Esta vista no ejecuta nada.',
+            queryParameters: 'Los valores se enlazan aparte del SQL. Cambiar uno invalida la evidencia anterior.',
+            resultLimit: 'Los límites protegen el espacio de trabajo frente a resultados grandes. No cambian tu SQL.',
+            boardAnalyze: 'Analizar mantiene editor, resultados y gráficos juntos para iterar rápido.',
+            publishEvidence: 'Publicar congela SQL, parámetros, gráfico y resultado en una instantánea de solo lectura.',
+            examples: 'Empieza con una consulta segura de solo lectura. Ábrela como borrador local.',
+            assistant: 'Pide una propuesta o revisión. Aplicar cambia el borrador; ejecutar siempre es separado.',
+            schema: 'Explora tablas y columnas visibles e inserta identificadores en el editor.'
+        },
         voice: {
             title: 'Flujo de voz',
             description: 'Habla sobre el SQL y el resultado actuales. La voz explica y sugiere; ejecutar y aplicar siguen siendo acciones explícitas.',
@@ -634,6 +673,19 @@ export const messages = {
             inspector: 'Inspector',
             workflow: 'Uitvoeringsinspector',
             close: 'Sluiten'
+        },
+        help: {
+            runStatement: 'Voer alleen de geselecteerde of huidige SQL-instructie uit, niet het hele bestand.',
+            runScript: 'Voer alle instructies in dit bestand op volgorde uit en stop bij een fout.',
+            trustConnection: 'Vertrouwen maakt schema-inspectie en beperkte alleen-lezen-query’s mogelijk.',
+            results: 'Bekijk resultaat, grafiek, query-ID en behouden rijen. Deze weergave voert niets uit.',
+            queryParameters: 'Waarden worden los van SQL gebonden. Een wijziging maakt eerdere evidence ongeldig.',
+            resultLimit: 'Limieten beschermen de werkruimte tegen grote resultaten. Je SQL wordt niet aangepast.',
+            boardAnalyze: 'Analyseren houdt editor, resultaten en grafieken bij elkaar voor snelle iteratie.',
+            publishEvidence: 'Publiceren bevriest SQL, parameters, grafiek en resultaat in een alleen-lezen-snapshot.',
+            examples: 'Begin met een veilige alleen-lezen-query. Open die als lokaal concept.',
+            assistant: 'Vraag om een voorstel of review. Toepassen wijzigt het concept; uitvoeren blijft apart.',
+            schema: 'Bekijk zichtbare tabellen en kolommen en voeg identifiers in de editor in.'
         },
         voice: {
             title: 'Spraakworkflow',
@@ -804,6 +856,19 @@ export const messages = {
             workflow: '运行检查器',
             close: '关闭'
         },
+        help: {
+            runStatement: '只运行选中的或当前 SQL 语句，不运行整个文件。',
+            runScript: '按顺序运行文件中的所有语句，遇到错误即停止。',
+            trustConnection: '信任连接后才能检查架构并运行有界只读查询。',
+            results: '查看结果、图表、查询 ID 和保留行。此视图不会执行任何操作。',
+            queryParameters: '参数与 SQL 文本分开绑定。修改参数会使之前的证据失效。',
+            resultLimit: '限制用于保护工作区免受大结果影响，不会改写 SQL。',
+            boardAnalyze: '分析模式让编辑器、结果和图表保持在一起，便于快速迭代。',
+            publishEvidence: '发布会冻结 SQL、参数、图表和有界结果，生成只读快照。',
+            examples: '从安全的只读查询开始。将它作为本地草稿打开，准备好后再运行。',
+            assistant: '请求 SQL 建议或审查。应用会修改草稿，运行始终是单独操作。',
+            schema: '浏览可见的表和列，然后将标识符插入编辑器。'
+        },
         voice: {
             title: '语音工作流',
             description: '用语音讨论当前 SQL 和结果。语音可以解释和建议；运行与应用始终需要明确操作。',
@@ -972,6 +1037,19 @@ export const messages = {
             inspector: 'Инспектор',
             workflow: 'Инспектор выполнения',
             close: 'Закрыть'
+        },
+        help: {
+            runStatement: 'Запускает только выбранную или текущую SQL-инструкцию, а не весь файл.',
+            runScript: 'Запускает все инструкции файла по порядку и останавливается при ошибке.',
+            trustConnection: 'Доверие разрешает просмотр схемы и ограниченные запросы только для чтения.',
+            results: 'Показывает результат, график, ID запроса и сохранённые строки. Этот экран ничего не запускает.',
+            queryParameters: 'Значения привязываются отдельно от SQL. Изменение делает старые данные недействительными.',
+            resultLimit: 'Лимиты защищают рабочее пространство от больших результатов и не меняют SQL.',
+            boardAnalyze: 'Анализ объединяет редактор, результаты и графики для быстрой итерации.',
+            publishEvidence: 'Публикация фиксирует SQL, параметры, график и ограниченный результат в снимке.',
+            examples: 'Начните с безопасного запроса только для чтения. Откройте его как локальный черновик.',
+            assistant: 'Запросите предложение или проверку. Применение меняет черновик, запуск всегда отдельный.',
+            schema: 'Просматривайте видимые таблицы и столбцы и вставляйте идентификаторы в редактор.'
         },
         voice: {
             title: 'Голосовой сценарий',

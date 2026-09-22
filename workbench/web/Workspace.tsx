@@ -14,6 +14,12 @@ import { LibraryPanel } from './components/LibraryPanel';
 import { ImportPanel } from './components/ImportPanel';
 import { AutomationPanel } from './components/AutomationPanel';
 import { CommandPalette, type Command } from './components/CommandPalette';
+import { executionLimitIssue, executionLimits, rememberRunIds, scopedHistory } from '../shared/workbench-view';
+import { DraftSaveStatus } from './components/DraftSaveStatus';
+import { ExecutionLimits } from './components/ExecutionLimits';
+import { QueryHistory } from './components/QueryHistory';
+import { LocalFilesDialog } from './components/LocalFilesDialog';
+import { appendLocalDrafts, localDraftBackup } from './local-files';
 import './workbench-ux.css';
 const terminal = (run?: Run) => Boolean(run && ['succeeded', 'truncated', 'failed', 'cancelled', 'timed_out', 'interrupted'].includes(run.status));
 type Connected = Connection & {
@@ -30,6 +36,18 @@ export function Workspace({ connection, dark, refresh }: {
     const active = state.tabs.find(t => t.id === state.activeId) ?? state.tabs[0]!, editor = useRef<EditorHandle>(null), client = useQueryClient(), confirmation = useConfirmation();
     const [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false), latch = useRef(false), [search, setSearch] = useState(''), [panel, setPanel] = useState<Panel | null>('assistant'), [palette, setPalette] = useState(false), [rowLimit, setRowLimit] = useState(String(connection.limits.rows)), [timeLimit, setTimeLimit] = useState(String(connection.limits.seconds)), [allHistory, setAllHistory] = useState(false), [link, setLink] = useState('');
     const [filesVisible, setFilesVisible] = useState(true), [focusMode, setFocusMode] = useState(false);
+    const [localFilesOpen, setLocalFilesOpen] = useState(false), localFilesOrigin = useRef<HTMLElement | null>(null);
+    const openLocalFiles = () => { localFilesOrigin.current = document.activeElement as HTMLElement | null; setLocalFilesOpen(true); };
+    const exportLocalDrafts = () => download('cathedral-local-drafts.json', localDraftBackup(stateRef.current, connection));
+    const importLocalDrafts = (drafts: Draft[]) => {
+        if (latch.current) throw new Error('Wait for the current action before opening drafts.');
+        const next = appendLocalDrafts(stateRef.current, drafts);
+        stateRef.current = next; setState(next);
+        setNotice(`Opened ${drafts.length} local draft${drafts.length === 1 ? '' : 's'} on ${connection.name}. Review the SQL and parameters before running. No query was executed.`);
+    };
+    const limitsPanel = useRef<HTMLDivElement>(null);
+    const [savingDraftId, setSavingDraftId] = useState<string>();
+    const limitIssue = executionLimitIssue(rowLimit, 'rows') ?? executionLimitIssue(timeLimit, 'seconds');
     const paletteOrigin = useRef<HTMLElement | null>(null), saveShortcut = useRef<() => void>(() => {});
     const openPalette = () => { paletteOrigin.current = document.activeElement as HTMLElement | null; setPalette(true); };
     const showPanel = (next: Panel) => { setFocusMode(false); setPanel(next); };
@@ -58,12 +76,19 @@ export function Workspace({ connection, dark, refresh }: {
     catch {
         source.close();
     } }; return () => source.close(); }, [active.activeRunId, activeRunTerminal, connection.id, client]);
-    useEffect(() => { if (active.scriptId && script.data && !active.activeRunId) {
-        const first = script.data.statements.find(s => s.runId)?.runId;
-        if (first)
-            update(active.id, d => ({ ...d, activeRunId: first }));
-    } }, [script.data, active.id, active.activeRunId, active.scriptId, update]);
-    const visibleDocuments = (documents.data ?? []).filter(d => d.connectionId === connection.id), visibleHistory = (history.data ?? []).filter(r => allHistory || (active.serverId ? r.documentId === active.serverId : active.runIds.includes(r.id)));
+    useEffect(() => {
+        if (!active.scriptId || script.data?.id !== active.scriptId || script.data.connectionId !== connection.id) return;
+        const ids = script.data.statements.flatMap(statement => statement.runId ? [statement.runId] : []);
+        const remembered = rememberRunIds(active.runIds, ids);
+        if (remembered !== active.runIds || (!active.activeRunId && ids.length)) {
+            update(active.id, draft => ({ ...draft, runIds: rememberRunIds(draft.runIds, ids), activeRunId: draft.activeRunId ?? ids[0] }));
+        }
+    }, [script.data, connection.id, active.id, active.activeRunId, active.scriptId, active.runIds, update]);
+    const visibleDocuments = (documents.data ?? []).filter(d => d.connectionId === connection.id);
+    const visibleHistory = useMemo(() => scopedHistory(history.data ?? [], {
+        connectionId: connection.id, documentId: active.serverId, allFiles: allHistory,
+        runIds: [...active.runIds, ...(script.data?.statements.flatMap(statement => statement.runId ? [statement.runId] : []) ?? [])],
+    }), [history.data, connection.id, active.serverId, active.runIds, script.data, allHistory]);
     const searchText = search.trim().toLowerCase();
     const matchingDocuments = visibleDocuments.filter(d => !d.deletedAt && d.name.toLowerCase().includes(searchText));
     const matchingTables = (schema.data?.tables ?? []).filter(t => `${t.database}.${t.name}`.toLowerCase().includes(searchText) ||
@@ -102,10 +127,16 @@ export function Workspace({ connection, dark, refresh }: {
         void api<QueryDocument>(`/documents/${encodeURIComponent(id)}${revision ? `?revision=${encodeURIComponent(revision)}` : ''}`).then(d => { if (d.connectionId === connection.id)
             openDocument(d); }).catch(e => setError(message(e))); }, [connection.id]);
     const execute = (wholeScript = false, kind: 'query' | 'explain' | 'pipeline' = 'query') => perform(async () => {
+        // Keyboard and palette actions must use the same validation as the visible controls.
+        if (limitIssue) {
+            limitsPanel.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+            throw new Error(limitIssue);
+        }
+        const checkedLimits = executionLimits(rowLimit, timeLimit);
         const selection = editor.current?.selection() ?? { from: active.from, to: active.to }, statement = wholeScript ? undefined : selectedStatement(active.sql, selection.from, selection.to);
         if (!wholeScript && !statement)
             throw new Error('Select or write a SQL statement first.');
-        const target = active.id, payload = { clientRequestId: crypto.randomUUID(), connectionId: connection.id, documentId: active.serverId, sql: wholeScript ? active.sql : statement!.sql, parameters: active.parameters, parentRunId: active.parentRunId, kind, limits: { rows: Number(rowLimit), seconds: Number(timeLimit) }, tags: { workspace: 'local', ...(active.serverId ? { artifact: active.serverId } : {}) } };
+        const target = active.id, payload = { clientRequestId: crypto.randomUUID(), connectionId: connection.id, documentId: active.serverId, sql: wholeScript ? active.sql : statement!.sql, parameters: active.parameters, parentRunId: active.parentRunId, kind, limits: checkedLimits, tags: { workspace: 'local', ...(active.serverId ? { artifact: active.serverId } : {}) } };
         if (wholeScript) {
             const result = await post<Script>('/scripts', { ...payload, stopOnError: true });
             update(target, d => ({ ...d, scriptId: result.id, activeRunId: undefined }));
@@ -121,12 +152,19 @@ export function Workspace({ connection, dark, refresh }: {
             editor.current?.focus();
     });
     const saveDraft = async (draft: Draft): Promise<QueryDocument> => {
-        const payload = { name: draft.name, sql: draft.sql, connectionId: connection.id, baseRevision: draft.baseRevision, parameters: draft.parameters, chart: draft.chart, runId: draft.activeRunId, parentDocumentId: draft.parentDocumentId, kind: draft.kind, metric: draft.metric, dependencies: draft.dependencies };
-        const saved = await api<QueryDocument>(draft.serverId ? `/documents/${draft.serverId}` : '/documents', { method: draft.serverId ? 'PUT' : 'POST', body: payload });
-        update(draft.id, d => ({ ...d, serverId: saved.id, baseRevision: saved.revision }));
-        await documents.refetch();
-        setNotice(`Saved ${saved.name} as revision ${saved.revision}.`);
-        return saved;
+        setSavingDraftId(draft.id);
+        try {
+            const payload = { name: draft.name, sql: draft.sql, connectionId: connection.id, baseRevision: draft.baseRevision, parameters: draft.parameters, chart: draft.chart, runId: draft.activeRunId, parentDocumentId: draft.parentDocumentId, kind: draft.kind, metric: draft.metric, dependencies: draft.dependencies };
+            const saved = await api<QueryDocument>(draft.serverId ? `/documents/${draft.serverId}` : '/documents', { method: draft.serverId ? 'PUT' : 'POST', body: payload });
+            // Record the response as the baseline, not the draft that may have changed in flight.
+            client.setQueryData<QueryDocument[]>(['documents', connection.id], previous => [saved, ...(previous ?? []).filter(document => document.id !== saved.id)]);
+            update(draft.id, d => ({ ...d, serverId: saved.id, baseRevision: saved.revision }));
+            await documents.refetch();
+            setNotice(`Saved ${saved.name} as revision ${saved.revision}.`);
+            return saved;
+        } finally {
+            setSavingDraftId(undefined);
+        }
     };
     const restore = (sql: string, reason: string) => update(active.id, d => ({ ...checkpoint(d, reason), sql, from: 0, to: 0 }));
     const branch = () => addDraft({ ...newDraft(`${active.name.replace(/\.sql$/, '')} experiment.sql`, active.sql), parameters: { ...active.parameters }, parentDocumentId: active.serverId, parentRunId: active.activeRunId, chart: { ...active.chart }, kind: active.kind, metric: active.metric, dependencies: [...active.dependencies] });
@@ -157,7 +195,7 @@ export function Workspace({ connection, dark, refresh }: {
             setLink(new URL(shared.path, location.origin).toString());
         }
     });
-    const unavailable = busy ? 'Another action is in progress.' : !connection.trusted ? 'Trust this connection before running SQL.' : !parsed.statements.length ? 'Write a SQL statement first.' : undefined;
+    const unavailable = busy ? 'Another action is in progress.' : !connection.trusted ? 'Trust this connection before running SQL.' : limitIssue ?? (!parsed.statements.length ? 'Write a SQL statement first.' : undefined);
     const commands: Command[] = [
         { id: 'run', name: 'Run selected or current statement · Ctrl/⌘ Enter', disabledReason: unavailable, run: () => void execute() },
         { id: 'script', name: 'Run script · Ctrl/⌘ Shift Enter', disabledReason: unavailable, run: () => void execute(true) },
@@ -171,6 +209,8 @@ export function Workspace({ connection, dark, refresh }: {
         { id: 'publish', name: 'Publish evidence snapshot', disabledReason: busy ? 'Another action is in progress.' : publicationIssue(run.data, { ...active, connectionId: connection.id }), run: () => void publish() },
         { id: 'new', name: 'New SQL tab', disabledReason: state.tabs.length >= MAX_TABS ? 'Close a tab before creating another.' : undefined, run: () => addDraft(newDraft()) },
         { id: 'reopen', name: 'Reopen closed SQL tab', disabledReason: !state.closedTabs?.length ? 'No recently closed tabs.' : state.tabs.length >= MAX_TABS ? 'Close a tab before reopening another.' : undefined, run: () => setState(reopenDraft) },
+        { id: 'open-local', name: 'Open SQL files or restore local draft backup', disabledReason: busy ? 'Another action is in progress.' : undefined, run: openLocalFiles },
+        { id: 'export-local', name: 'Export local drafts backup', run: exportLocalDrafts },
         { id: 'focus', name: focusMode ? 'Exit focus mode' : 'Focus mode: hide side panels', run: () => setFocusMode(value => !value) },
         ...visibleDocuments.filter(d => !d.deletedAt).map(d => ({ id: `document-${d.id}`, name: `Open ${d.name}`, run: () => openDocument(d) })),
     ];
@@ -203,7 +243,7 @@ export function Workspace({ connection, dark, refresh }: {
         await refresh();
     } })}>{connection.trusted ? 'Revoke trust' : 'Trust connection'}</Action><Action onClick={openPalette} aria-keyshortcuts="Control+k Meta+k">Commands Ctrl/⌘K</Action></div></div>
  {!connection.trusted && <Callout>Review the configured host, database and identity, then trust the connection to inspect schema or run a query.</Callout>}
- {state.recoveryWarning && <Callout danger>{state.recoveryWarning}</Callout>}{storageError && <Callout danger>{storageError}<Action onClick={() => download('cathedral-local-drafts.json', state)}>Export local drafts</Action></Callout>}{error && <Callout danger>{error}<Action type="empty" onClick={() => setError('')}>Dismiss</Action></Callout>}{notice && <p className="notice" role="status">{notice}</p>}
+ {state.recoveryWarning && <Callout danger>{state.recoveryWarning}</Callout>}{storageError && <Callout danger>{storageError}<Action onClick={exportLocalDrafts} title="Backup contains SQL and parameter values. Store it privately.">Export local drafts</Action></Callout>}{error && <Callout danger>{error}<Action type="empty" onClick={() => setError('')}>Dismiss</Action></Callout>}{notice && <p className="notice" role="status">{notice}</p>}
  {link && <div className="toolbar"><TextField label="Read-only share link" value={link} readOnly onChange={() => { }}/><Action onClick={() => void navigator.clipboard.writeText(link).catch(e => setError(message(e)))}>Copy link</Action></div>}
  <div className="toolbar workspace-view-controls" role="group" aria-label="Workspace layout"><Action aria-expanded={filesVisible && !focusMode} aria-controls="workspace-files" onClick={() => { if (focusMode) { setFocusMode(false); setFilesVisible(true); } else setFilesVisible(value => !value); }}>{filesVisible && !focusMode ? 'Hide files' : 'Show files'}</Action><Action aria-pressed={focusMode} onClick={() => setFocusMode(value => !value)}>{focusMode ? 'Exit focus mode' : 'Focus mode'}</Action>{focusMode && <span className="muted">Side panels are hidden, not reset.</span>}</div>
  <div className={['workspace-grid', (!panel || focusMode) && 'drawer-closed', (!filesVisible || focusMode) && 'sidebar-closed'].filter(Boolean).join(' ')}><aside id="workspace-files" className="sidebar stack" aria-label="Files and schema" hidden={!filesVisible || focusMode}><h2>Workspace</h2><Action onClick={() => addDraft(newDraft())}>New SQL tab</Action><TextField aria-label="Search files and schema" placeholder="Find files, tables, columns" value={search} onChange={setSearch}/><h3>Saved files</h3>{matchingDocuments.map(d => <Action type="empty" align="left" key={d.id} onClick={() => openDocument(d)}>{d.name} <small>r{d.revision}{d.verifiedRevision ? ' · self-reviewed' : ''}</small></Action>)}
@@ -212,25 +252,30 @@ export function Workspace({ connection, dark, refresh }: {
  {matchingTables.map(t => <details key={`${t.database}.${t.name}`}><summary>{t.database}.{t.name}</summary><Action type="empty" onClick={() => editor.current?.insert(`${quoteIdentifier(t.database)}.${quoteIdentifier(t.name)}`)}>Insert table</Action>{schema.data?.columns.filter(c => c.table === t.name && c.database === t.database).map(c => <Action type="empty" align="left" key={c.name} title={`${c.type} · ${c.comment}`} onClick={() => editor.current?.insert(quoteIdentifier(c.name))}>{c.name}<small>{c.type}</small></Action>)}</details>)}
  {schema.data && !schema.isFetching && !matchingTables.length && <p className="muted">{searchText ? 'No tables or columns match this search.' : 'No tables are visible to this connection.'}</p>}
  {schema.data?.warnings.map((warning, i) => <p className="muted" key={i}>{warning}</p>)}<h3>Statement outline</h3>{parsed.statements.map((s, i) => <Action key={s.from} type="empty" onClick={() => { patch({ from: s.from, to: s.to }); editor.current?.focus(); }}>Statement {i + 1} · {s.sql.slice(0, 32)}</Action>)}
- <Action onClick={() => download('cathedral-local-drafts.json', state)}>Export local drafts</Action></aside>
+ <Action onClick={exportLocalDrafts} title="Backup contains SQL and parameter values. Store it privately.">Export local drafts</Action></aside>
  <main className="editor-column"><div className="tabs" role="tablist" aria-label="SQL documents" onKeyDown={e => { if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key))
         return; e.preventDefault(); const index = state.tabs.findIndex(d => d.id === active.id), next = e.key === 'Home' ? 0 : e.key === 'End' ? state.tabs.length - 1 : (index + (e.key === 'ArrowRight' ? 1 : -1) + state.tabs.length) % state.tabs.length; setState(s => ({ ...s, activeId: s.tabs[next]!.id })); const tab = e.currentTarget.querySelectorAll<HTMLElement>('[role=tab]')[next]; tab?.focus(); tab?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }}>{state.tabs.map(d => <Action key={d.id} type={d.id === active.id ? 'primary' : 'empty'} role="tab" id={`sql-tab-${d.id}`} aria-controls={`sql-panel-${d.id}`} title={d.name} aria-selected={d.id === active.id} tabIndex={d.id === active.id ? 0 : -1} onClick={() => setState(s => ({ ...s, activeId: d.id }))}>{d.name}</Action>)}</div>
- <div className="toolbar wrap" aria-label="Tab actions"><Action disabled={busy} onClick={() => {
+ <div className="toolbar wrap" aria-label="Tab actions"><Action disabled={busy} onClick={openLocalFiles}>Open local files</Action><Action disabled={busy} onClick={() => {
         setState(s => closeDraft(s, active.id));
         setNotice('Tab closed locally. Reopen closed tab restores it. The last 10 closed tabs are retained; server revisions and query history are unchanged.');
     }}>Close tab</Action><Action disabled={busy || !(state.closedTabs?.length) || state.tabs.length >= MAX_TABS} onClick={() => setState(reopenDraft)}>Reopen closed tab</Action></div>
- <div className="editor-header"><TextField aria-label="SQL document name" value={active.name} onChange={name => patch({ name })}/><span className="muted">{active.serverId ? `Local draft · based on saved r${active.baseRevision}` : 'Private local draft'}</span></div>
- <div className="toolbar wrap"><Action type="primary" disabled={busy || !connection.trusted} onClick={() => void execute()}>Run statement</Action><Action disabled={busy || !connection.trusted} onClick={() => void execute(true)}>Run script</Action><Action disabled={busy || !run.data || terminal(run.data)} onClick={() => void perform(async () => { await post(`/runs/${active.activeRunId}/cancel`); await run.refetch(); })}>Cancel run</Action>{script.data?.status === 'running' && <Action onClick={() => void perform(async () => { await post(`/scripts/${active.scriptId}/cancel`); await script.refetch(); })}>Cancel script</Action>}<Action disabled={busy} title="Save named revision (Ctrl/⌘ S)" aria-keyshortcuts="Control+s Meta+s" onClick={() => void perform(async () => { await saveDraft(active); })}>Save revision</Action><Action disabled={busy || !active.activeRunId} onClick={() => void publish()}>Publish / share</Action><Action onClick={branch}>Branch experiment</Action></div>
+ <div className="editor-header"><TextField aria-label="SQL document name" value={active.name} onChange={name => patch({ name })}/><DraftSaveStatus draft={active} connectionId={connection.id} saved={visibleDocuments.find(document => document.id === active.serverId)} saving={savingDraftId === active.id} pending={documents.isFetching} readError={Boolean(documents.error)} onRetry={() => void documents.refetch()} onCompare={() => showPanel('library')}/></div>
+ <div className="toolbar wrap"><Action type="primary" disabled={busy || !connection.trusted || Boolean(limitIssue)} title={limitIssue} onClick={() => void execute()}>Run statement</Action><Action disabled={busy || !connection.trusted || Boolean(limitIssue)} title={limitIssue} onClick={() => void execute(true)}>Run script</Action><Action disabled={busy || !run.data || terminal(run.data)} onClick={() => void perform(async () => { await post(`/runs/${active.activeRunId}/cancel`); await run.refetch(); })}>Cancel run</Action>{script.data?.status === 'running' && <Action onClick={() => void perform(async () => { await post(`/scripts/${active.scriptId}/cancel`); await script.refetch(); })}>Cancel script</Action>}<Action disabled={busy} title="Save named revision (Ctrl/⌘ S)" aria-keyshortcuts="Control+s Meta+s" onClick={() => void perform(async () => { await saveDraft(active); })}>Save revision</Action><Action disabled={busy || !active.activeRunId} onClick={() => void publish()}>Publish / share</Action><Action onClick={branch}>Branch experiment</Action></div>
  {state.tabs.map(d => <section key={d.id} role="tabpanel" id={`sql-panel-${d.id}`} aria-labelledby={`sql-tab-${d.id}`} hidden={d.id !== active.id}>{d.id === active.id && <SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={schema.data} dark={dark} error={run.data?.sql === active.sql ? run.data.error : undefined} onChange={sql => update(active.id, d => ({ ...d, sql }))} onSelection={(from, to) => update(active.id, d => ({ ...d, from, to }))} onRun={script => void execute(script)}/>}</section>)}
  {parsed.error && <p className="muted">Statement boundary: {parsed.error}</p>}
- <div className="toolbar wrap"><TextField label="Maximum returned rows" value={rowLimit} onChange={setRowLimit}/><TextField label="Deadline (seconds)" value={timeLimit} onChange={setTimeLimit}/><Action disabled={busy || !connection.manifest?.explain.available || !connection.trusted} onClick={() => void execute(false, 'explain')}>EXPLAIN</Action><Action disabled={busy || !connection.manifest?.pipeline.available || !connection.trusted} onClick={() => void execute(false, 'pipeline')}>Pipeline</Action><Action onClick={() => { update(active.id, d => checkpoint(d, 'Before indentation')); editor.current?.indent(); }}>Indent selection</Action><Action onClick={() => download(active.name, active.sql, 'application/sql')}>Export SQL</Action></div>
+ <ExecutionLimits ref={limitsPanel} rows={rowLimit} seconds={timeLimit} defaults={connection.limits} onRows={setRowLimit} onSeconds={setTimeLimit}/>
+ <div className="toolbar wrap"><Action disabled={busy || !connection.manifest?.explain.available || !connection.trusted || Boolean(limitIssue)} title={limitIssue} onClick={() => void execute(false, 'explain')}>EXPLAIN</Action><Action disabled={busy || !connection.manifest?.pipeline.available || !connection.trusted || Boolean(limitIssue)} title={limitIssue} onClick={() => void execute(false, 'pipeline')}>Pipeline</Action><Action onClick={() => { update(active.id, d => checkpoint(d, 'Before indentation')); editor.current?.indent(); }}>Indent selection</Action><Action onClick={() => download(active.name, active.sql, 'application/sql')}>Export SQL</Action></div>
  <p className="muted">{connection.limits.bytes.toLocaleString()} output bytes · {Math.round(connection.limits.memory / 1048576)} MiB memory · {connection.limits.threads} threads · {connection.manifest?.serverVersion ?? 'Version unknown: test the connection for capabilities'}</p>
  {parsed.parameters.length > 0 && <details open><summary>Bound query parameters</summary><div className="parameter-grid">{parsed.parameters.map(p => <TextField key={p.name} label={`${p.name} : ${p.type}`} value={active.parameters[p.name] ?? ''} onChange={value => patch({ parameters: { ...active.parameters, [p.name]: value } })}/>)}</div></details>}
  <div className="toolbar wrap">{(['assistant', 'library', 'import', 'evidence', 'monitors'] as Panel[]).map(p => <Action key={p} type={panel === p ? 'primary' : 'secondary'} aria-pressed={panel === p && !focusMode} onClick={() => { if (focusMode) showPanel(p); else setPanel(panel === p ? null : p); }}>{p}</Action>)}</div>
  {script.data && <section className="panel-card"><h3>Script: {script.data.status}</h3><p>Stop-on-error is enabled. Every statement has a separate run and query ID.</p><div className="toolbar wrap">{script.data.statements.map((s, i) => <Action key={i} disabled={!s.runId} onClick={() => patch({ activeRunId: s.runId })}>Statement {i + 1}: {s.status}</Action>)}</div></section>}
  {run.data && <ResultPane key={run.data.id} run={run.data} draftSql={active.sql} draftParameters={active.parameters} config={active.chart} onChart={chart => patch({ chart })} onChild={child}/>} {!active.activeRunId && <div className="empty-state"><h2>Your SQL stays in charge.</h2><p>Run the example to see a typed table, chart, query ID, and retained evidence. Nothing runs automatically.</p></div>}
  {run.error && <Callout danger>{message(run.error)}</Callout>}{script.error && <Callout danger>{message(script.error)}</Callout>}
- <section className="history"><div className="toolbar spread"><h3>Query history</h3><Action onClick={() => setAllHistory(v => !v)}>{allHistory ? 'Show current file' : 'Show all workspace files'}</Action></div>{visibleHistory.slice(0, 50).map(r => <div className="history-row" key={r.id}><Action type="empty" onClick={() => patch({ activeRunId: r.id })}>{r.status} · {Math.round(r.elapsedMs)} ms · {r.sql.slice(0, 65)}</Action><Action onClick={() => addDraft({ ...newDraft('History copy.sql', r.sql), parameters: r.parameters, parentRunId: r.id })}>SQL as child draft</Action>{!terminal(r) && <Action onClick={() => void perform(async () => { await post(`/runs/${r.id}/cancel`); await history.refetch(); })}>Cancel</Action>}</div>)}</section>
+ <QueryHistory key={active.id} runs={visibleHistory} selectedRunId={active.activeRunId} allFiles={allHistory} fetching={history.isFetching} error={history.error ? message(history.error) : undefined} busy={busy}
+     onToggleScope={() => setAllHistory(value => !value)} onRetry={() => void history.refetch()}
+     onOpen={selected => patch({ activeRunId: selected.id })}
+     onChild={selected => addDraft({ ...newDraft('History copy.sql', selected.sql), parameters: selected.parameters, parentRunId: selected.id })}
+     onCancel={selected => void perform(async () => { await post(`/runs/${selected.id}/cancel`); await history.refetch(); })}/>
  </main>
  {panel && <aside className="drawer" aria-label="Inspector" hidden={focusMode}><div className="toolbar spread"><span className="eyebrow">Inspectable workflow</span><Action type="empty" aria-label="Close inspector" onClick={() => setPanel(null)}>Close</Action></div>
  {panel === 'assistant' && <AssistantPanel key={active.id} connectionId={connection.id} sql={active.sql} run={run.data} trusted={connection.trusted} onApply={sql => restore(sql, 'Before accepted AI proposal')}/>}
@@ -241,5 +286,6 @@ export function Workspace({ connection, dark, refresh }: {
  </aside>}
  </div>
  <CommandPalette open={palette} commands={commands} onOpenChange={setPalette} restoreFocus={() => { if (paletteOrigin.current?.isConnected) paletteOrigin.current.focus(); else editor.current?.focus(); }}/>
+ <LocalFilesDialog open={localFilesOpen} connectionName={connection.name} openTabs={state.tabs.length} busy={busy} onOpenChange={setLocalFilesOpen} onImport={importLocalDrafts} restoreFocus={() => { if (localFilesOrigin.current?.isConnected) localFilesOrigin.current.focus(); else editor.current?.focus(); }}/>
  {confirmation.dialog}</>;
 }

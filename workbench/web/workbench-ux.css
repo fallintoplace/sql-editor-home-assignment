@@ -32,3 +32,25 @@
 .workspace-grid .history-row>button{max-width:100%}
 .workspace-grid .history-row>button:first-child{flex:1 1 240px}
 .workspace-grid .history-row>button>span,.workspace-grid .tabs button>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Revision feedback and history stay inside the existing workspace surfaces. */
+.draft-save-status{display:flex;flex-direction:column;align-items:flex-start;gap:4px;max-width:100%;min-width:0;font-size:12px}
+.draft-save-status>[role=status]{padding:4px 7px;border:1px solid var(--line);border-radius:5px;overflow-wrap:anywhere;background:var(--page)}
+.draft-save-status[data-state=saved]>[role=status]{background:var(--accent)}
+.draft-save-status[data-state=changed]>[role=status],.draft-save-status[data-state=conflict]>[role=status]{background:var(--warning)}
+.execution-limits,.history-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:10px;min-width:0}
+.execution-limits>button,.history-controls>button{justify-self:start;max-width:100%}
+.limit-field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field-error{font-size:12px;color:var(--danger);overflow-wrap:anywhere}
+.history-entry{min-width:0;border:1px solid transparent;border-radius:7px;padding:5px 8px}
+.history-entry[data-selected=true]{border-color:var(--line);background:var(--accent)}
+.history-details{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11px;color:var(--muted)}
+.history-details code{max-width:100%;overflow-wrap:anywhere}
+@media(max-width:760px){.execution-limits,.history-controls{grid-template-columns:minmax(0,1fr)}}
+
+/* File previews stay local, bounded and readable without expanding the dialog. */
+.local-files-dialog{display:flex;flex-direction:column;gap:12px;min-width:0}
+.local-file-list{max-height:40vh;overflow:auto;border:1px solid var(--line);border-radius:8px;min-width:0}
+.local-file-entry{padding:12px;border-bottom:1px solid var(--line);overflow-wrap:anywhere;min-width:0}
+.local-file-entry:last-child{border-bottom:0}
+.local-file-entry small{margin-top:5px}
+.local-file-entry .code-block{max-height:200px}

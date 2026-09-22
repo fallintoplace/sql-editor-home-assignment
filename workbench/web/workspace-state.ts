@@ -50,7 +50,7 @@ const revision = (value: unknown) => index(value) && value > 0 ? value : undefin
 const chartKinds: ChartConfig['kind'][] = ['table', 'number', 'line', 'bar', 'area', 'stacked', 'pie', 'scatter'];
 
 /** Browser storage is untrusted input; preserve SQL while repairing optional metadata. */
-function recoverDraft(value: unknown): Draft | undefined {
+export function recoverDraft(value: unknown): Draft | undefined {
     if (!record(value) || typeof value.sql !== 'string' || value.sql.length > 200000)
         return undefined;
     const draft = newDraft(text(value.name, 'Recovered.sql'), value.sql);

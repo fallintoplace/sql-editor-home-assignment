@@ -1100,7 +1100,7 @@ export const messages = {
 } as const;
 
 export type Locale = keyof typeof messages;
-export type Theme = 'kraken-night' | 'monokai' | 'mariana' | 'dracula' | 'nord' | 'solarized-light' | 'clickhouse-light' | 'one-dark' | 'tokyo-night' | 'high-contrast';
+export type Theme = 'kraken-night' | 'monokai' | 'mariana' | 'dracula' | 'nord' | 'solarized-light' | 'clickhouse-light' | 'one-dark' | 'tokyo-night' | 'high-contrast' | 'github-light' | 'catppuccin-latte' | 'rose-pine-dawn' | 'ayu-light';
 export type Copy = {
     [Section in keyof typeof messages.en]: {
         [Key in keyof typeof messages.en[Section]]: string;
@@ -1116,7 +1116,7 @@ export const localeOptions: Array<{ value: Locale; label: string }> = [
     { value: 'ru', label: 'Русский' }
 ];
 
-export const themeValues: Theme[] = ['kraken-night', 'monokai', 'mariana', 'dracula', 'nord', 'solarized-light', 'clickhouse-light', 'one-dark', 'tokyo-night', 'high-contrast'];
+export const themeValues: Theme[] = ['kraken-night', 'monokai', 'mariana', 'dracula', 'nord', 'solarized-light', 'clickhouse-light', 'one-dark', 'tokyo-night', 'high-contrast', 'github-light', 'catppuccin-latte', 'rose-pine-dawn', 'ayu-light'];
 export const themeOptions: Array<{ value: Theme; label: string }> = [
     { value: 'kraken-night', label: 'ClickHouse Night' },
     { value: 'monokai', label: 'Monokai' },
@@ -1127,7 +1127,11 @@ export const themeOptions: Array<{ value: Theme; label: string }> = [
     { value: 'clickhouse-light', label: 'ClickHouse Light' },
     { value: 'one-dark', label: 'One Dark' },
     { value: 'tokyo-night', label: 'Tokyo Night' },
-    { value: 'high-contrast', label: 'High Contrast' }
+    { value: 'high-contrast', label: 'High Contrast' },
+    { value: 'github-light', label: 'GitHub Light' },
+    { value: 'catppuccin-latte', label: 'Catppuccin Latte' },
+    { value: 'rose-pine-dawn', label: 'Rosé Pine Dawn' },
+    { value: 'ayu-light', label: 'Ayu Light' }
 ];
 
 export function getCopy(locale: Locale = 'en'): Copy {

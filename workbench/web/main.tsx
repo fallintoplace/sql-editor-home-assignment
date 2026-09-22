@@ -79,7 +79,7 @@ function Root() {
         }
     });
     const copy = getCopy(locale);
-    const dark = !['solarized-light', 'clickhouse-light'].includes(theme);
+    const dark = !['solarized-light', 'clickhouse-light', 'github-light', 'catppuccin-latte', 'rose-pine-dawn', 'ayu-light'].includes(theme);
     useEffect(() => { document.documentElement.dataset.theme = dark ? 'dark' : 'light'; document.documentElement.dataset.palette = theme; document.documentElement.style.colorScheme = dark ? 'dark' : 'light'; try {
         localStorage.setItem('cathedral:theme', theme);
     }
@@ -89,6 +89,6 @@ function Root() {
     }
     catch { } }, [locale]);
     const token = /^\/share\/([^/]+)$/.exec(location.pathname)?.[1];
-    return <ClickUIProvider theme={dark ? 'dark' : 'light'}><div className="application"><header className="app-header"><div><span className="wordmark">{copy.app.name}</span><span className="tagline">{copy.app.tagline}</span></div><div className="app-header-actions"><Select label={copy.app.language} value={locale} options={localeOptions} onSelect={value => setLocale(value as Locale)}/><Select label={copy.app.theme} value={theme} options={themeOptions} onSelect={value => setTheme(value as Theme)}/></div></header><Boundary copy={copy}>{token ? <Shared token={token} copy={copy} locale={locale}/> : <Authenticated dark={dark} copy={copy}/>}</Boundary></div></ClickUIProvider>;
+    return <ClickUIProvider theme={dark ? 'dark' : 'light'}><div className="application"><header className="app-header"><div><span className="wordmark">{copy.app.name}</span><span className="tagline">{copy.app.tagline}</span></div><div className="app-header-actions"><Select label={copy.app.language} value={locale} options={localeOptions} onSelect={value => setLocale(value as Locale)}/><div className="theme-picker"><span className="theme-charm" aria-hidden="true">✦</span><Select label={copy.app.theme} value={theme} options={themeOptions} onSelect={value => setTheme(value as Theme)}/></div></div></header><Boundary copy={copy}>{token ? <Shared token={token} copy={copy} locale={locale}/> : <Authenticated dark={dark} copy={copy}/>}</Boundary></div></ClickUIProvider>;
 }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><QueryClientProvider client={queryClient}><Root /></QueryClientProvider></React.StrictMode>);

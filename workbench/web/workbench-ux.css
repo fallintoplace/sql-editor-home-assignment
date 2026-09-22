@@ -120,3 +120,47 @@
  .editor-column{padding:12px;gap:12px}
  .drawer>.toolbar{margin-bottom:14px}
 }
+
+.application{background:linear-gradient(180deg,color-mix(in srgb,var(--panel) 38%,var(--page)) 0,var(--page) 260px)}
+.app-header{position:sticky;top:0;background:color-mix(in srgb,var(--panel) 88%,transparent);backdrop-filter:blur(14px);box-shadow:0 1px 0 var(--line),0 8px 24px color-mix(in srgb,var(--text) 4%,transparent)}
+.app-header .wordmark{font-size:18px;letter-spacing:.24em}
+.app-header>button{border-radius:9px}
+.connection-picker{background:color-mix(in srgb,var(--panel) 82%,var(--page));box-shadow:0 1px 0 var(--line);border-radius:0 0 12px 12px}
+.workspace-banner{border-color:color-mix(in srgb,var(--line) 75%,var(--text));background:linear-gradient(135deg,var(--panel),color-mix(in srgb,var(--accent) 18%,var(--panel)))}
+.workspace-banner>div:first-child{gap:7px}
+.workspace-banner>div:first-child strong{font-size:18px}
+.workspace-view-controls{padding-block:9px;border:1px solid var(--line);border-radius:10px;background:color-mix(in srgb,var(--panel) 82%,var(--page));box-shadow:0 5px 18px color-mix(in srgb,var(--text) 3%,transparent)}
+.view-controls-label{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-right:auto}
+.workspace-grid{padding-top:12px}
+.sidebar,.editor-column,.drawer{border-color:color-mix(in srgb,var(--line) 88%,var(--text));box-shadow:0 12px 30px color-mix(in srgb,var(--text) 5%,transparent)}
+.sidebar{gap:10px;background:color-mix(in srgb,var(--panel) 96%,var(--page))}
+.sidebar h2{font-size:20px}
+.sidebar h3{font-size:11px;text-transform:uppercase;letter-spacing:.11em;color:var(--muted);margin-top:18px}
+.sidebar>button{border-radius:8px}
+.workspace-main{gap:12px}
+.tabs{background:var(--page);border:1px solid var(--line);border-radius:9px;padding:4px;margin-bottom:0}
+.tabs button{border-radius:7px}
+.editor-tab-actions{padding-top:2px}
+.editor-header{gap:16px}
+.editor-actions{padding:10px;border:1px solid var(--line);border-radius:10px;background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 24%,var(--panel)),var(--panel));box-shadow:0 4px 14px color-mix(in srgb,var(--text) 3%,transparent)}
+.editor-actions>button:first-child{min-width:132px}
+.editor-tools{padding-top:12px;border-top:1px solid var(--line)}
+.panel-switcher{padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--page)}
+.panel-switcher>button{text-transform:capitalize}
+.inspector-drawer{background:color-mix(in srgb,var(--panel) 98%,var(--page))}
+.inspector-drawer>.toolbar{position:sticky;top:72px;z-index:1;background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(10px)}
+.empty-state{background:linear-gradient(145deg,color-mix(in srgb,var(--accent) 28%,var(--page)),var(--page));border-style:solid;border-color:color-mix(in srgb,var(--line) 72%,var(--accent));box-shadow:inset 0 1px 0 color-mix(in srgb,var(--panel) 80%,transparent)}
+.results{scroll-margin-top:90px}
+
+@media(max-height:850px) and (min-width:1181px){.sql-editor{height:clamp(220px,27vh,360px)}}
+@media(max-width:760px){
+ .application{background:var(--page)}
+ .view-controls-label{width:100%;margin-right:0}
+ .workspace-view-controls{align-items:stretch}
+ .workspace-view-controls>button{flex:1 1 auto}
+ .editor-actions,.panel-switcher{padding:8px}
+ .editor-actions>button{flex:1 1 auto}
+ .editor-actions>button:first-child{min-width:0}
+ .editor-tools>button{flex:1 1 auto}
+ .inspector-drawer>.toolbar{top:64px}
+}

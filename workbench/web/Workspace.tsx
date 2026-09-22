@@ -39,7 +39,7 @@ export function Workspace({ connection, dark, refresh, copy }: {
     stateRef.current = state;
     const active = state.tabs.find(t => t.id === state.activeId) ?? state.tabs[0]!, editor = useRef<EditorHandle>(null), client = useQueryClient(), confirmation = useConfirmation();
     const [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false), latch = useRef(false), [search, setSearch] = useState(''), [panel, setPanel] = useState<Panel | null>(null), [palette, setPalette] = useState(false), [rowLimit, setRowLimit] = useState(String(connection.limits.rows)), [timeLimit, setTimeLimit] = useState(String(connection.limits.seconds)), [allHistory, setAllHistory] = useState(false), [link, setLink] = useState('');
-    const [filesVisible, setFilesVisible] = useState(true), [filesCompact, setFilesCompact] = useState(false), [focusMode, setFocusMode] = useState(false), [resultDeck, setResultDeck] = useState<ResultDeckView>(active.activeRunId ? 'results' : 'closed');
+    const [filesVisible, setFilesVisible] = useState(true), [filesCompact, setFilesCompact] = useState(true), [focusMode, setFocusMode] = useState(false), [resultDeck, setResultDeck] = useState<ResultDeckView>(active.activeRunId ? 'results' : 'closed');
     const [localFilesOpen, setLocalFilesOpen] = useState(false), localFilesOrigin = useRef<HTMLElement | null>(null);
     useEffect(() => { setResultDeck(active.activeRunId ? 'results' : 'closed'); }, [active.id]);
     const openLocalFiles = () => { localFilesOrigin.current = document.activeElement as HTMLElement | null; setLocalFilesOpen(true); };

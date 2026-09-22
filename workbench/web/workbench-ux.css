@@ -54,3 +54,7 @@
 .local-file-entry:last-child{border-bottom:0}
 .local-file-entry small{margin-top:5px}
 .local-file-entry .code-block{max-height:200px}
+.result-column-options{display:flex;flex-direction:column;gap:8px;max-height:42vh;overflow:auto;min-width:0}
+.result-column-options button{max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.result-column-options button>span{min-width:0;white-space:normal;overflow-wrap:anywhere}
+.result-column-controls{border:1px solid var(--line);border-radius:8px;padding:0 12px 10px}

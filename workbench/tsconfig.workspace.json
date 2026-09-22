@@ -20,6 +20,7 @@
     "web/workspace-persistence.ts",
     "shared/evidence.ts",
     "shared/workbench-view.ts",
-    "web/local-files.ts"
+    "web/local-files.ts",
+    "shared/result-columns.ts"
   ]
 }

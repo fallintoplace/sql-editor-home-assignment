@@ -7,6 +7,8 @@ import { api, download, message } from '../api';
 import { Action, Callout, Select, TextField } from '../ui';
 import { Chart } from './Chart';
 import { matchesDraft } from '../../shared/evidence';
+import { visibleColumns, exportFilteredCsv } from '../../shared/result-columns';
+import { ResultColumnControls } from './ResultColumnControls';
 
 export function ResultPane({ run, draftSql, draftParameters, config, onChart, onChild }: {
     run: Run;
@@ -17,12 +19,14 @@ export function ResultPane({ run, draftSql, draftParameters, config, onChart, on
     onChild: (column: string, value: string | null) => void;
 }) {
     const [filter, setFilter] = useState(''), [page, setPage] = useState(0), [inspect, setInspect] = useState<number>();
+    const [hiddenColumns, setHiddenColumns] = useState<number[]>([]);
     const [showSql, setShowSql] = useState(false), [view, setView] = useState<'table' | 'chart'>('table');
     const [cell, setCell] = useState<{ column: number; value: Json }>();
     const [copyNotice, setCopyNotice] = useState(''), [copyError, setCopyError] = useState(''), [copying, setCopying] = useState(false);
     const cellOrigin = useRef<HTMLElement | null>(null);
     const query = useQuery({ queryKey: ['snapshot', run.connectionId, run.id, run.resultState], queryFn: ({ signal }) => api<Result>(`/runs/${run.id}/snapshot`, { signal }), enabled: run.resultState === 'reopenable', retry: false });
     const result = query.data, filtered = useMemo(() => filterRows(result?.rows ?? [], filter), [result, filter]);
+    const displayedColumns = useMemo(() => visibleColumns(result?.columns.length ?? 0, hiddenColumns), [result?.columns.length, hiddenColumns]);
     const count = Math.max(1, Math.ceil(filtered.length / 200)), current = Math.min(page, count - 1), rows = filtered.slice(current * 200, current * 200 + 200);
     const recommendation = result ? recommendChart(result.columns, result.rows) : undefined;
     const changeFilter = (value: string) => { setFilter(value); setPage(0); };
@@ -66,7 +70,7 @@ export function ResultPane({ run, draftSql, draftParameters, config, onChart, on
         {query.error && <Callout danger>{message(query.error)}<Action disabled={query.isFetching} onClick={() => void query.refetch()}>Retry loading result</Action><p>Reloads retained data only. Does not execute SQL.</p></Callout>}
         {result && <>
             <p className="muted">{result.completeness === 'truncated' ? 'Truncated retained prefix' : 'Complete returned result'} · executed {new Date(result.createdAt).toLocaleString()} · retained until {new Date(result.expiresAt).toLocaleString()}</p>
-            <div className="toolbar wrap"><Action onClick={() => download(`${run.queryId}.csv`, exportCsv(result), 'text/csv')}>CSV</Action><Action onClick={() => download(`${run.queryId}.json`, { run, result })}>Evidence JSON</Action><span className="muted">Exports include all {result.rows.length.toLocaleString()} retained rows, not just the local filter or page.</span></div>
+            <div className="toolbar wrap"><Action onClick={() => download(`${run.queryId}.csv`, exportCsv(result), 'text/csv')}>CSV</Action><Action onClick={() => download(`${run.queryId}.json`, { run, result })}>Evidence JSON</Action><span className="muted">Full CSV and Evidence JSON: Exports include all {result.rows.length.toLocaleString()} retained rows, not just the local filter or page. All columns are included.</span></div>
             {view === 'chart' ? <>
                 <div className="chart-controls"><Select label="Chart type" value={config.kind} options={['table', 'number', 'line', 'bar', 'stacked', 'area', 'pie', 'scatter'].map(value => ({ value, label: value }))} onSelect={kind => { onChart({ ...config, kind: kind as ChartConfig['kind'] }); if (kind === 'table') setView('table'); }}/><Select label="X axis" value={String(config.x)} options={result.columns.map((c, i) => ({ value: String(i), label: c.name }))} onSelect={x => onChart({ ...config, x: Number(x) })}/><Select label="Measure" value={String(config.ys[0] ?? '')} options={result.columns.flatMap((c, i) => numericType(c.type) ? [{ value: String(i), label: c.name }] : [])} onSelect={y => onChart({ ...config, ys: [Number(y)] })}/><TextField label="Title" value={config.title} onChange={title => onChart({ ...config, title })}/></div>
                 <p className="muted">{recommendation?.reason} The chart uses all retained rows, not the local table filter.</p>
@@ -76,11 +80,13 @@ export function ResultPane({ run, draftSql, draftParameters, config, onChart, on
                     {filter && <Action onClick={() => changeFilter('')}>Clear filter</Action>}
                 </div>
                 <p className="muted" role="status">Local filter: {filtered.length.toLocaleString()} of {result.rows.length.toLocaleString()} retained rows. No new query or database cost.</p>
+                <ResultColumnControls columns={result.columns} hidden={hiddenColumns} onChange={hidden => { setHiddenColumns(hidden); setInspect(undefined); }}/>
+                <div className="toolbar wrap"><Action disabled={!displayedColumns.length} onClick={() => download(`${run.queryId}-filtered.csv`, exportFilteredCsv({ columns: result.columns, rows: filtered }, displayedColumns), 'text/csv')}>Filtered CSV</Action><span className="muted">Filtered CSV: all {filtered.length.toLocaleString()} matching retained rows and {displayedColumns.length} visible columns, across every page.</span></div>
                 <p className="result-cell-help">Focus a cell and press Enter, or double-click, to inspect its full value, copy it, or create a filtered draft.</p>
-                <div className="table-scroll"><table aria-label="Retained query rows"><thead><tr><th scope="col">Row</th>{result.columns.map((c, i) => <th key={i} scope="col"><Action type="empty" aria-expanded={inspect === i} onClick={() => setInspect(inspect === i ? undefined : i)}>{c.name}</Action><small>{c.type}</small></th>)}</tr></thead>
-                    <tbody>{rows.map((row, r) => <tr key={r}><th scope="row">{current * 200 + r + 1}</th>{row.map((value, c) => <td key={c} title={displayValue(value)} tabIndex={0}
-                        onDoubleClick={event => inspectCell(event.currentTarget, c, value)}
-                        onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); inspectCell(event.currentTarget, c, value); } }}>{displayValue(value)}</td>)}</tr>)}</tbody>
+                <div className="table-scroll"><table aria-label="Retained query rows"><thead><tr><th scope="col">Row</th>{displayedColumns.map(i => <th key={i} scope="col"><Action type="empty" aria-expanded={inspect === i} onClick={() => setInspect(inspect === i ? undefined : i)}>{result.columns[i]!.name}</Action><small>{result.columns[i]!.type}</small></th>)}</tr></thead>
+                    <tbody>{rows.map((row, r) => <tr key={r}><th scope="row">{current * 200 + r + 1}</th>{displayedColumns.map(c => <td key={c} title={displayValue(row[c])} tabIndex={0}
+                        onDoubleClick={event => inspectCell(event.currentTarget, c, row[c]!)}
+                        onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); inspectCell(event.currentTarget, c, row[c]!); } }}>{displayValue(row[c])}</td>)}</tr>)}</tbody>
                 </table></div>
                 {result.rows.length === 0 ? <div className="result-empty" role="status">{result.completeness === 'truncated' ? <><h3>No rows fit in the retained result.</h3><p>This result was truncated. An empty retained prefix does not mean the query matched no rows. Review the output limits before choosing to run again.</p></> : <><h3>This query returned no rows.</h3><p>The execution completed without row data. Review the SQL and bound parameters before choosing to run again. No totals are inferred.</p></>}</div>
                     : filtered.length === 0 && <div className="result-empty" role="status"><h3>No retained rows match this filter.</h3><p>Your {result.rows.length.toLocaleString()} retained rows are still available. Clear the local filter to show them again.</p></div>}

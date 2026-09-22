@@ -125,6 +125,8 @@
 .app-header{position:sticky;top:0;background:color-mix(in srgb,var(--panel) 88%,transparent);backdrop-filter:blur(14px);box-shadow:0 1px 0 var(--line),0 8px 24px color-mix(in srgb,var(--text) 4%,transparent)}
 .app-header .wordmark{font-size:18px;letter-spacing:.24em}
 .app-header>button{border-radius:9px}
+.app-header-actions{display:flex;align-items:center;gap:8px}
+.app-header-actions>button{border-radius:9px}
 .connection-picker{background:color-mix(in srgb,var(--panel) 82%,var(--page));box-shadow:0 1px 0 var(--line);border-radius:0 0 12px 12px}
 .workspace-banner{border-color:color-mix(in srgb,var(--line) 75%,var(--text));background:linear-gradient(135deg,var(--panel),color-mix(in srgb,var(--accent) 18%,var(--panel)))}
 .workspace-banner>div:first-child{gap:7px}
@@ -194,6 +196,7 @@
 }
 @media(max-width:760px){
  .app-header{height:auto;padding:12px}
+ .app-header-actions{margin-left:auto}
  .connection-picker,.workspace-banner,.workspace-view-controls{width:calc(100% - 16px)}
  .workspace-grid,.workspace-grid.drawer-closed,.workspace-grid.sidebar-closed{width:calc(100% - 16px);margin-bottom:28px;gap:8px}
  .workspace-main{padding:10px 10px 28px}

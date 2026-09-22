@@ -20,17 +20,18 @@ import { ExecutionLimits } from './components/ExecutionLimits';
 import { QueryHistory } from './components/QueryHistory';
 import { LocalFilesDialog } from './components/LocalFilesDialog';
 import { appendLocalDrafts, localDraftBackup } from './local-files';
-import { copy } from './i18n';
+import type { Copy } from './i18n';
 import './workbench-ux.css';
 const terminal = (run?: Run) => Boolean(run && ['succeeded', 'truncated', 'failed', 'cancelled', 'timed_out', 'interrupted'].includes(run.status));
 type Connected = Connection & {
     trusted: boolean;
 };
 type Panel = 'assistant' | 'library' | 'import' | 'evidence' | 'monitors';
-export function Workspace({ connection, dark, refresh }: {
+export function Workspace({ connection, dark, refresh, copy }: {
     connection: Connected;
     dark: boolean;
     refresh: () => Promise<unknown>;
+    copy: Copy;
 }) {
     const key = `cathedral:local-owner:${connection.id}:v1`, [state, setState] = useState<WorkspaceState>(() => recover(key)), stateRef = useRef(state);
     stateRef.current = state;
@@ -239,11 +240,11 @@ export function Workspace({ connection, dark, refresh }: {
             notice: string;
             traceUrl?: string;
         }>(`/runs/${active.activeRunId}/profile`), enabled: false, retry: false });
-    return <><div className="workspace-banner"><div><strong>{connection.name}</strong><span className="muted">{connection.host} · {connection.database} · {connection.username} · read-only exploration</span></div><div className="toolbar"><Action disabled={busy} onClick={() => void perform(async () => { await post(`/connections/${connection.id}/test`); await refresh(); setNotice('Connection capability check completed.'); })}>Test connection</Action><Action disabled={busy} type={connection.trusted ? 'secondary' : 'primary'} onClick={() => void perform(async () => { if (await confirmation.ask(connection.trusted ? 'Revoke connection trust' : 'Trust this connection', `${connection.host} · database ${connection.database} · identity ${connection.username}. ${connection.trusted ? 'Active queries will be cancelled.' : 'The application may inspect schema and execute bounded read-only queries only when you request them.'}`, connection.id)) {
+    return <><div className="workspace-banner"><div><strong>{connection.name}</strong><span className="muted">{connection.host} · {connection.database} · {connection.username} · {copy.connection.readOnly}</span></div><div className="toolbar"><Action disabled={busy} onClick={() => void perform(async () => { await post(`/connections/${connection.id}/test`); await refresh(); setNotice(copy.connection.testCompleted); })}>{copy.connection.test}</Action><Action disabled={busy} type={connection.trusted ? 'secondary' : 'primary'} onClick={() => void perform(async () => { if (await confirmation.ask(connection.trusted ? copy.connection.revokeTrust : copy.connection.trust, `${connection.host} · database ${connection.database} · identity ${connection.username}. ${connection.trusted ? copy.connection.activeQueriesCancelled : copy.connection.trustDescription}`, connection.id)) {
         await post(`/connections/${connection.id}/trust`, { trusted: !connection.trusted, confirmation: connection.id });
         await refresh();
-    } })}>{connection.trusted ? 'Revoke trust' : 'Trust connection'}</Action><Action onClick={openPalette} aria-keyshortcuts="Control+k Meta+k">Commands Ctrl/⌘K</Action></div></div>
- {!connection.trusted && <Callout>Review the configured host, database and identity, then trust the connection to inspect schema or run a query.</Callout>}
+    } })}>{connection.trusted ? copy.connection.revokeTrust : copy.connection.trust}</Action><Action onClick={openPalette} aria-keyshortcuts="Control+k Meta+k">{copy.connection.commands}</Action></div></div>
+ {!connection.trusted && <Callout>{copy.connection.reviewBeforeTrust}</Callout>}
  {state.recoveryWarning && <Callout danger>{state.recoveryWarning}</Callout>}{storageError && <Callout danger>{storageError}<Action onClick={exportLocalDrafts} title="Backup contains SQL and parameter values. Store it privately.">Export local drafts</Action></Callout>}{error && <Callout danger>{error}<Action type="empty" onClick={() => setError('')}>Dismiss</Action></Callout>}{notice && <p className="notice" role="status">{notice}</p>}
  {link && <div className="toolbar"><TextField label="Read-only share link" value={link} readOnly onChange={() => { }}/><Action onClick={() => void navigator.clipboard.writeText(link).catch(e => setError(message(e)))}>Copy link</Action></div>}
  <div className="toolbar workspace-view-controls" role="group" aria-label={copy.workspace.view}><span className="view-controls-label">{copy.workspace.view}</span><Action aria-expanded={filesVisible && !focusMode} aria-controls="workspace-files" onClick={() => { if (focusMode) { setFocusMode(false); setFilesVisible(true); } else setFilesVisible(value => !value); }}>{filesVisible && !focusMode ? copy.workspace.hideFiles : copy.workspace.showFiles}</Action><Action aria-pressed={focusMode} onClick={() => setFocusMode(value => !value)}>{focusMode ? copy.workspace.exitFocusMode : copy.workspace.focusMode}</Action>{focusMode && <span className="muted">{copy.workspace.sidePanelsHidden}</span>}</div>

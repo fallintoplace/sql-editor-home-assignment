@@ -4,7 +4,8 @@ export const messages = {
             name: 'CATHEDRAL',
             tagline: 'ClickHouse evidence workspace',
             lightMode: 'Light mode',
-            darkMode: 'Dark mode'
+            darkMode: 'Dark mode',
+            nextLanguage: 'Deutsch'
         },
         connection: {
             profile: 'Connection profile',
@@ -14,6 +15,9 @@ export const messages = {
             revokeTrust: 'Revoke trust',
             commands: 'Commands Ctrl/⌘K',
             readOnly: 'read-only exploration',
+            testCompleted: 'Connection capability check completed.',
+            activeQueriesCancelled: 'Active queries will be cancelled.',
+            trustDescription: 'The application may inspect schema and execute bounded read-only queries only when you request them.',
             reviewBeforeTrust: 'Review the configured host, database and identity, then trust the connection to inspect schema or run a query.'
         },
         workspace: {
@@ -65,11 +69,86 @@ export const messages = {
             workflow: 'Inspectable workflow',
             close: 'Close'
         }
+    },
+    de: {
+        app: {
+            name: 'CATHEDRAL',
+            tagline: 'ClickHouse-Evidenz-Workspace',
+            lightMode: 'Heller Modus',
+            darkMode: 'Dunkler Modus',
+            nextLanguage: 'English'
+        },
+        connection: {
+            profile: 'Verbindungsprofil',
+            privateWorkspace: 'Workspace mit einem Eigentümer · private Entwürfe · serverseitig verwaltete Zugangsdaten',
+            test: 'Verbindung testen',
+            trust: 'Verbindung vertrauen',
+            revokeTrust: 'Vertrauen widerrufen',
+            commands: 'Befehle Strg/⌘K',
+            readOnly: 'schreibgeschützte Exploration',
+            testCompleted: 'Die Prüfung der Verbindungskapazitäten ist abgeschlossen.',
+            activeQueriesCancelled: 'Aktive Abfragen werden abgebrochen.',
+            trustDescription: 'Die Anwendung darf das Schema prüfen und nur auf deine ausdrückliche Anforderung begrenzte schreibgeschützte Abfragen ausführen.',
+            reviewBeforeTrust: 'Prüfe Host, Datenbank und Identität. Vertraue dann der Verbindung, um das Schema zu prüfen oder eine Abfrage auszuführen.'
+        },
+        workspace: {
+            view: 'Workspace-Ansicht',
+            hideFiles: 'Dateien ausblenden',
+            showFiles: 'Dateien anzeigen',
+            focusMode: 'Fokusmodus',
+            exitFocusMode: 'Fokusmodus verlassen',
+            sidePanelsHidden: 'Seitenleisten sind ausgeblendet, nicht zurückgesetzt.',
+            title: 'Workspace',
+            newTab: 'Neuer SQL-Tab',
+            importBackup: 'SQL / Backup importieren',
+            searchPlaceholder: 'Dateien, Tabellen, Spalten suchen',
+            savedFiles: 'Gespeicherte Dateien',
+            schema: 'Schema',
+            refreshSchema: 'Schema aktualisieren',
+            statementOutline: 'Anweisungsübersicht',
+            exportDrafts: 'Lokale Entwürfe exportieren',
+            openLocalFiles: 'Lokale Dateien öffnen',
+            closeTab: 'Tab schließen',
+            reopenTab: 'Geschlossenen Tab erneut öffnen',
+            advancedControls: 'Erweiterte Ausführungseinstellungen',
+            parameters: 'Gebundene Abfrageparameter'
+        },
+        editor: {
+            runStatement: 'Anweisung ausführen',
+            runScript: 'Skript ausführen',
+            cancelRun: 'Ausführung abbrechen',
+            cancelScript: 'Skript abbrechen',
+            saveRevision: 'Revision speichern',
+            publish: 'Veröffentlichen / teilen',
+            branch: 'Experiment-Branch',
+            explain: 'EXPLAIN',
+            pipeline: 'Pipeline',
+            indent: 'Auswahl einrücken',
+            exportSql: 'SQL exportieren',
+            statementBoundary: 'Anweisungsgrenze',
+            yourSql: 'Dein SQL bleibt maßgeblich.',
+            emptyHint: 'Führe das Beispiel aus, um eine typisierte Tabelle, ein Diagramm, eine Query-ID und gespeicherte Evidenz zu sehen. Nichts wird automatisch ausgeführt.'
+        },
+        panels: {
+            assistant: 'Assistent',
+            library: 'Bibliothek',
+            import: 'Import',
+            evidence: 'Evidenz',
+            monitors: 'Monitore',
+            tools: 'Workspace-Werkzeuge',
+            inspector: 'Inspektor',
+            workflow: 'Prüfbarer Workflow',
+            close: 'Schließen'
+        }
     }
 } as const;
 
 export type Locale = keyof typeof messages;
-export type Copy = typeof messages.en;
+export type Copy = {
+    [Section in keyof typeof messages.en]: {
+        [Key in keyof typeof messages.en[Section]]: string;
+    };
+};
 
 export function getCopy(locale: Locale = 'en'): Copy {
     return messages[locale];

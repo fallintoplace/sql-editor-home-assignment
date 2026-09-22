@@ -72,10 +72,14 @@ function Root() {
     } });
     const [experience, setExperience] = useState<ExperienceLevel>(() => { try {
         const stored = localStorage.getItem('cathedral:experience');
-        return stored === 'beginner' || stored === 'advanced' ? stored : 'intermediate';
+        if (stored === 'beginner')
+            return 'beginner';
+        if (stored === 'advanced' || stored === 'expert')
+            return 'expert';
+        return 'beginner';
     }
     catch {
-        return 'intermediate';
+        return 'beginner';
     } });
     const [locale, setLocale] = useState<Locale>(() => {
         try {

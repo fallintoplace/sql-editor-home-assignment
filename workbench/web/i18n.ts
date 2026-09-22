@@ -10,8 +10,7 @@ export const messages = {
             theme: 'Theme',
             experience: 'Workspace level',
             beginner: 'Beginner',
-            intermediate: 'Intermediate',
-            advanced: 'Advanced'
+            expert: 'Expert'
         },
         common: {
             cancel: 'Cancel',
@@ -197,8 +196,7 @@ export const messages = {
             theme: 'Thema',
             experience: 'Arbeitsbereichsstufe',
             beginner: 'Anfänger',
-            intermediate: 'Mittelstufe',
-            advanced: 'Fortgeschritten'
+            expert: 'Experte'
         },
         common: {
             cancel: 'Abbrechen',
@@ -384,8 +382,7 @@ export const messages = {
             theme: 'Tema',
             experience: 'Nivel del espacio',
             beginner: 'Principiante',
-            intermediate: 'Intermedio',
-            advanced: 'Avanzado'
+            expert: 'Experto'
         },
         common: {
             cancel: 'Cancelar',
@@ -571,8 +568,7 @@ export const messages = {
             theme: 'Thema',
             experience: 'Werkruimteniveau',
             beginner: 'Beginner',
-            intermediate: 'Gemiddeld',
-            advanced: 'Geavanceerd'
+            expert: 'Expert'
         },
         common: {
             cancel: 'Annuleren',
@@ -758,8 +754,7 @@ export const messages = {
             theme: '主题',
             experience: '工作区级别',
             beginner: '入门',
-            intermediate: '中级',
-            advanced: '高级'
+            expert: '专家'
         },
         common: {
             cancel: '取消',
@@ -945,8 +940,7 @@ export const messages = {
             theme: 'Тема',
             experience: 'Уровень рабочего пространства',
             beginner: 'Начальный',
-            intermediate: 'Средний',
-            advanced: 'Продвинутый'
+            expert: 'Эксперт'
         },
         common: {
             cancel: 'Отмена',
@@ -1124,7 +1118,7 @@ export const messages = {
 } as const;
 
 export type Locale = keyof typeof messages;
-export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
+export type ExperienceLevel = 'beginner' | 'expert';
 export type Theme = 'kraken-night' | 'monokai' | 'mariana' | 'dracula' | 'nord' | 'solarized-light' | 'clickhouse-light' | 'one-dark' | 'tokyo-night' | 'high-contrast' | 'github-light' | 'catppuccin-latte' | 'rose-pine-dawn' | 'ayu-light';
 export type Copy = {
     [Section in keyof typeof messages.en]: {
@@ -1160,8 +1154,7 @@ export const themeOptions: Array<{ value: Theme; label: string }> = [
 ];
 export const experienceOptions = (copy: Copy): Array<{ value: ExperienceLevel; label: string }> => [
     { value: 'beginner', label: copy.app.beginner },
-    { value: 'intermediate', label: copy.app.intermediate },
-    { value: 'advanced', label: copy.app.advanced }
+    { value: 'expert', label: copy.app.expert }
 ];
 
 export function getCopy(locale: Locale = 'en'): Copy {

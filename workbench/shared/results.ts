@@ -1,4 +1,5 @@
 import type { ChartConfig, Column, Json, Result, Row } from './types.js';
+export const MAX_CHART_SERIES = 20;
 export function displayValue(value: Json | undefined): string {
     if (value === null || value === undefined)
         return 'NULL';
@@ -36,9 +37,9 @@ export function recommendChart(columns: Column[], rows: Row[]): {
     return { config: { kind: time >= 0 ? 'line' : 'bar', x, ys, title: 'Query result' },
         reason: time >= 0 ? 'A date/time dimension with numeric measures.' : 'A dimension with numeric measures; no hidden aggregation is performed.' };
 }
-export function filterRows(rows: Row[], term: string): Row[] {
+export function filterRows(rows: Row[], term: string, searchableRows?: string[]): Row[] {
     const needle = term.toLocaleLowerCase();
-    return needle ? rows.filter(r => r.some(v => displayValue(v).toLocaleLowerCase().includes(needle))) : rows;
+    return needle ? rows.filter((r, index) => (searchableRows?.[index] ?? r.map(v => displayValue(v).toLocaleLowerCase()).join('\u0001')).includes(needle)) : rows;
 }
 export function csvCell(value: Json | undefined): string {
     let cell = value === null || value === undefined ? '' : displayValue(value);

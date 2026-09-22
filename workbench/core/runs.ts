@@ -9,6 +9,11 @@ export interface DriverResult {
     columns: Column[];
     rows: Row[];
     truncated: boolean;
+    bytes?: number;
+    bounded?: {
+        rows: number;
+        bytes: number;
+    };
     warnings?: string[];
     serverVersion?: string;
 }
@@ -236,9 +241,10 @@ export class RunService {
             this.emit(run);
         }
     }
-    private emit(run: Run, type: RunEvent['type'] = 'state') {
+    private emit(run: Run, type: RunEvent['type'] = 'state', options: { persist?: boolean } = {}) {
         run.sequence++;
-        this.store.put('runs', run.id, run);
+        if (options.persist !== false)
+            this.store.put('runs', run.id, run);
         const event: RunEvent = { sequence: run.sequence, type, run: structuredClone(run) };
         for (const fn of this.listeners.get(run.id) ?? []) {
             try {
@@ -289,7 +295,7 @@ export class RunService {
                         return;
                     run.progress = progress;
                     run.elapsedMs = performance.now() - start;
-                    this.emit(run, 'progress');
+                    this.emit(run, 'progress', { persist: false });
                 }), aborted]);
             if (controller.signal.aborted)
                 throw controller.signal.reason;
@@ -443,6 +449,10 @@ export class RunService {
     }
 }
 export function boundResult(output: DriverResult, limit: Limits) {
+    if (output.bounded?.rows === limit.rows && output.bounded.bytes === limit.bytes) {
+        requireThat(output.bytes !== undefined && output.bytes <= limit.bytes, 502, 'INVALID_RESULT', 'The server returned an invalid bounded result');
+        return { columns: output.columns, rows: output.rows, bytes: output.bytes, truncated: output.truncated };
+    }
     requireThat(output.columns.length <= 500, 413, 'TOO_MANY_COLUMNS', 'The result exceeds the 500-column display limit');
     const rows: Row[] = [];
     let bytes = Buffer.byteLength(JSON.stringify(output.columns)), truncated = output.truncated;

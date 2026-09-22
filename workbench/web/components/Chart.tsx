@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChartConfig, Result } from '../../shared/types';
-import { chartNumber, displayValue } from '../../shared/results';
+import { chartNumber, displayValue, MAX_CHART_SERIES } from '../../shared/results';
 import { Callout } from '../ui';
 export function Chart({ result, config, onFilter }: {
     result: Result;
@@ -15,6 +15,10 @@ export function Chart({ result, config, onFilter }: {
         setError('');
         if (config.kind === 'table' || config.kind === 'number')
             return;
+        if (config.ys.length > MAX_CHART_SERIES) {
+            setError(`Charts support at most ${MAX_CHART_SERIES} measures.`);
+            return;
+        }
         void import('echarts').then(echarts => {
             if (disposed || !element.current)
                 return;

@@ -135,7 +135,12 @@ export function createApp(config: Config, overrides: {
     app.post('/api/scripts', (req, res) => { const v = body(req); res.status(202).json(runs.submitScript(principal(res), v, v.stopOnError === undefined ? true : boolean(v.stopOnError, 'stopOnError'))); });
     app.get('/api/scripts/:id', (req, res) => res.json(runs.getScript(principal(res), id(req))));
     app.post('/api/scripts/:id/cancel', async (req, res) => res.json(await runs.cancelScript(principal(res), id(req))));
-    app.get('/api/documents', (req, res) => res.json(artifacts.list(principal(res), req.query.trash === 'true')));
+    app.get('/api/documents', (req, res) => {
+        const connectionId = typeof req.query.connectionId === 'string' ? text(req.query.connectionId, 'connectionId', 128) : undefined;
+        if (connectionId)
+            driver.connection(principal(res), connectionId);
+        res.json(artifacts.list(principal(res), req.query.trash === 'true', connectionId));
+    });
     app.post('/api/documents', (req, res) => res.status(201).json(artifacts.save(principal(res), req.body)));
     app.get('/api/documents/:id', (req, res) => res.json(artifacts.get(principal(res), id(req), req.query.revision === undefined ? undefined : integer(Number(req.query.revision), 'revision', 1, 1e6))));
     app.put('/api/documents/:id', (req, res) => res.json(artifacts.save(principal(res), req.body, id(req))));

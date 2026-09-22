@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Connection, QueryDocument, Run, RunEvent, Schema, Script, Published } from '../shared/types';
 import { formatSql, parameterNames, quoteIdentifier, selectedStatement, splitSql, insertChildFilter } from '../shared/sql';
@@ -50,6 +50,7 @@ export function Workspace({ connection, dark, experience, refresh, copy }: {
     const active = state.tabs.find(t => t.id === state.activeId) ?? state.tabs[0]!, editor = useRef<EditorHandle>(null), client = useQueryClient(), confirmation = useConfirmation();
     const [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false), latch = useRef(false), [search, setSearch] = useState(''), [panel, setPanel] = useState<Panel | null>(null), [palette, setPalette] = useState(false), [rowLimit, setRowLimit] = useState(String(connection.limits.rows)), [timeLimit, setTimeLimit] = useState(String(connection.limits.seconds)), [allHistory, setAllHistory] = useState(false), [link, setLink] = useState('');
     const [filesVisible, setFilesVisible] = useState(true), [filesCompact, setFilesCompact] = useState(true), [focusMode, setFocusMode] = useState(false), [resultDeck, setResultDeck] = useState<ResultDeckView>(active.activeRunId ? 'results' : 'closed'), [boardPreset, setBoardPreset] = useState<BoardPreset>('write'), [widgetMenu, setWidgetMenu] = useState(false), [examplesOpen, setExamplesOpen] = useState(experience === 'beginner');
+    const [eventStreamState, setEventStreamState] = useState<'idle' | 'connecting' | 'healthy' | 'failed'>('idle');
     const [localFilesOpen, setLocalFilesOpen] = useState(false), localFilesOrigin = useRef<HTMLElement | null>(null);
     useEffect(() => { setResultDeck(active.activeRunId ? 'results' : 'closed'); }, [active.id]);
     const openLocalFiles = () => { localFilesOrigin.current = document.activeElement as HTMLElement | null; setLocalFilesOpen(true); };
@@ -77,27 +78,36 @@ export function Workspace({ connection, dark, experience, refresh, copy }: {
     const patch = (values: Partial<Draft>) => update(active.id, d => ({ ...d, ...values }));
     const storageError = useWorkspacePersistence(key, state);
     const schema = useQuery({ queryKey: ['schema', connection.id], queryFn: ({ signal }) => api<Schema>(`/connections/${connection.id}/schema`, { signal }), enabled: connection.trusted, retry: false });
-    const documents = useQuery({ queryKey: ['documents', connection.id], queryFn: () => api<QueryDocument[]>('/documents?trash=true'), retry: false });
-    const history = useQuery({ queryKey: ['runs', connection.id], queryFn: () => api<Run[]>(`/runs?connectionId=${encodeURIComponent(connection.id)}`), refetchInterval: 4000, retry: false });
+    const documents = useQuery({ queryKey: ['documents', connection.id], queryFn: () => api<QueryDocument[]>(`/documents?trash=true&connectionId=${encodeURIComponent(connection.id)}`), retry: false });
+    const history = useQuery({ queryKey: ['runs', connection.id], queryFn: () => api<Run[]>(`/runs?connectionId=${encodeURIComponent(connection.id)}`), refetchInterval: 15000, refetchOnWindowFocus: true, retry: false });
     const run = useQuery({ queryKey: ['run', connection.id, active.activeRunId], queryFn: async ({ signal }) => { const value = await api<Run>(`/runs/${active.activeRunId}`, { signal }); if (value.connectionId !== connection.id)
-            throw new Error('This saved run belongs to another connection.'); return value; }, enabled: Boolean(active.activeRunId), refetchInterval: q => terminal(q.state.data) ? false : 1500, retry: false,
+            throw new Error('This saved run belongs to another connection.'); return value; }, enabled: Boolean(active.activeRunId), refetchInterval: q => terminal(q.state.data) ? false : eventStreamState === 'healthy' ? false : 1500, retry: false,
         structuralSharing: (old: unknown, incoming: unknown) => { const previous = old as Run | undefined, next = incoming as Run; return previous && next && previous.sequence > next.sequence ? previous : next; } });
     const script = useQuery({ queryKey: ['script', connection.id, active.scriptId], queryFn: () => api<Script>(`/scripts/${active.scriptId}`), enabled: Boolean(active.scriptId), refetchInterval: q => q.state.data?.status === 'running' ? 800 : false, retry: false });
     const activeRunTerminal = terminal(run.data);
-    useEffect(() => { const id = active.activeRunId; if (!id || activeRunTerminal)
-        return; const source = new EventSource(`/api/runs/${id}/events`); source.onmessage = event => { try {
+    useEffect(() => { const id = active.activeRunId; if (!id || activeRunTerminal) {
+        setEventStreamState('idle');
+        return;
+    }
+        setEventStreamState('connecting');
+        const source = new EventSource(`/api/runs/${id}/events`);
+        source.onopen = () => setEventStreamState('healthy');
+        source.onerror = () => setEventStreamState('failed');
+        source.onmessage = event => { try {
         const data = JSON.parse(event.data) as RunEvent;
         if (data.run.id !== id || data.run.connectionId !== connection.id)
             return;
         client.setQueryData<Run>(['run', connection.id, id], old => !old || old.sequence <= data.sequence ? data.run : old);
         if (terminal(data.run)) {
             source.close();
+            setEventStreamState('idle');
             void client.invalidateQueries({ queryKey: ['runs', connection.id] });
         }
     }
     catch {
+        setEventStreamState('failed');
         source.close();
-    } }; return () => source.close(); }, [active.activeRunId, activeRunTerminal, connection.id, client]);
+    } }; return () => { source.close(); setEventStreamState('idle'); }; }, [active.activeRunId, activeRunTerminal, connection.id, client]);
     useEffect(() => {
         if (!active.scriptId || script.data?.id !== active.scriptId || script.data.connectionId !== connection.id) return;
         const ids = script.data.statements.flatMap(statement => statement.runId ? [statement.runId] : []);
@@ -111,10 +121,24 @@ export function Workspace({ connection, dark, experience, refresh, copy }: {
         connectionId: connection.id, documentId: active.serverId, allFiles: allHistory,
         runIds: [...active.runIds, ...(script.data?.statements.flatMap(statement => statement.runId ? [statement.runId] : []) ?? [])],
     }), [history.data, connection.id, active.serverId, active.runIds, script.data, allHistory]);
-    const searchText = search.trim().toLowerCase();
+    const deferredSearch = useDeferredValue(search), searchText = deferredSearch.trim().toLowerCase();
     const matchingDocuments = visibleDocuments.filter(d => !d.deletedAt && d.name.toLowerCase().includes(searchText));
-    const matchingTables = (schema.data?.tables ?? []).filter(t => `${t.database}.${t.name}`.toLowerCase().includes(searchText) ||
-        (schema.data?.columns ?? []).some(c => c.database === t.database && c.table === t.name && c.name.toLowerCase().includes(searchText)));
+    const schemaIndex = useMemo(() => {
+        const columnsByTable = new Map<string, Schema['columns']>(), searchableByTable = new Map<string, string>();
+        for (const column of schema.data?.columns ?? []) {
+            const key = `${column.database}\u0000${column.table}`;
+            const columns = columnsByTable.get(key) ?? [];
+            columns.push(column);
+            columnsByTable.set(key, columns);
+        }
+        for (const table of schema.data?.tables ?? []) {
+            const key = `${table.database}\u0000${table.name}`;
+            const columns = columnsByTable.get(key) ?? [];
+            searchableByTable.set(key, `${table.database}.${table.name} ${table.engine} ${columns.map(column => `${column.name} ${column.type}`).join(' ')}`.toLowerCase());
+        }
+        return { columnsByTable, searchableByTable };
+    }, [schema.data]);
+    const matchingTables = (schema.data?.tables ?? []).filter(t => schemaIndex.searchableByTable.get(`${t.database}\u0000${t.name}`)?.includes(searchText));
     const parsed = useMemo(() => { try {
         return { statements: splitSql(active.sql), parameters: parameterNames(active.sql), error: '' };
     }
@@ -271,7 +295,7 @@ export function Workspace({ connection, dark, experience, refresh, copy }: {
  <div className={['workspace-grid', (!panel || focusMode) && 'drawer-closed', (!filesVisible || focusMode) && 'sidebar-closed', filesCompact && filesVisible && !focusMode && 'sidebar-compact'].filter(Boolean).join(' ')}><aside id="workspace-files" className={`sidebar stack ${filesCompact ? 'sidebar-compact' : ''}`} aria-label={copy.workspace.title} hidden={!filesVisible || focusMode}><h2>{copy.workspace.title}</h2><Action data-rail-icon="+" onClick={() => addDraft(newDraft())}>{copy.workspace.newTab}</Action><Action data-rail-icon="↥" onClick={openLocalFiles}>{copy.workspace.importBackup}</Action><div className="sidebar-search"><TextField aria-label={copy.workspace.searchPlaceholder} placeholder={copy.workspace.searchPlaceholder} value={search} onChange={setSearch}/></div><details className="nav-section" open><summary data-rail-icon="▤">{copy.workspace.savedFiles}</summary>{matchingDocuments.map(d => <Action type="empty" align="left" key={d.id} onClick={() => openDocument(d)}>{d.name} <small>r{d.revision}{d.verifiedRevision ? ' · self-reviewed' : ''}</small></Action>)}
  {documents.isFetching && <p role="status">Loading saved files…</p>}{documents.error && <Callout danger>{message(documents.error)}</Callout>}{!documents.isFetching && !documents.error && !matchingDocuments.length && <p className="muted">{searchText ? 'No saved files match this search.' : 'No saved files yet. Save a revision to add one here.'}</p>}</details>
  <details className="nav-section"><summary data-rail-icon="◇">{copy.workspace.schema}</summary>{schema.isFetching && <p role="status">Loading schema…</p>}{schema.error && <Callout danger>{message(schema.error)}</Callout>}<Action disabled={!connection.trusted} onClick={() => void schema.refetch()}>{copy.workspace.refreshSchema}</Action>
- {matchingTables.map(t => <details key={`${t.database}.${t.name}`}><summary>{t.database}.{t.name}</summary><Action type="empty" onClick={() => editor.current?.insert(`${quoteIdentifier(t.database)}.${quoteIdentifier(t.name)}`)}>Insert table</Action>{schema.data?.columns.filter(c => c.table === t.name && c.database === t.database).map(c => <Action type="empty" align="left" key={c.name} title={`${c.type} · ${c.comment}`} onClick={() => editor.current?.insert(quoteIdentifier(c.name))}>{c.name}<small>{c.type}</small></Action>)}</details>)}
+ {matchingTables.map(t => <details key={`${t.database}.${t.name}`}><summary>{t.database}.{t.name}</summary><Action type="empty" onClick={() => editor.current?.insert(`${quoteIdentifier(t.database)}.${quoteIdentifier(t.name)}`)}>Insert table</Action>{(schemaIndex.columnsByTable.get(`${t.database}\u0000${t.name}`) ?? []).map(c => <Action type="empty" align="left" key={c.name} title={`${c.type} · ${c.comment}`} onClick={() => editor.current?.insert(quoteIdentifier(c.name))}>{c.name}<small>{c.type}</small></Action>)}</details>)}
  {schema.data && !schema.isFetching && !matchingTables.length && <p className="muted">{searchText ? 'No tables or columns match this search.' : 'No tables are visible to this connection.'}</p>}
  {schema.data?.warnings.map((warning, i) => <p className="muted" key={i}>{warning}</p>)}</details><details className="nav-section" open><summary data-rail-icon="≡">{copy.workspace.statementOutline}</summary>{parsed.statements.map((s, i) => <Action key={s.from} type="empty" onClick={() => { patch({ from: s.from, to: s.to }); editor.current?.focus(); }}>Statement {i + 1} · {s.sql.slice(0, 32)}</Action>)}
  </details><Action data-rail-icon="⇩" onClick={exportLocalDrafts} title="Backup contains SQL and parameter values.">{copy.workspace.exportDrafts}</Action></aside>

@@ -414,11 +414,11 @@
 
 /* Click UI sizes Select popovers to the trigger by default. Let the menu grow
    to the option text so the full label remains visible when it is opened. */
-[data-radix-popper-content-wrapper]:has([cui-select-item])>div[role=dialog]{width:max-content!important;min-width:100%!important;max-width:min(440px,calc(100vw - 24px))!important}
-[data-radix-popper-content-wrapper]:has([cui-select-item]) [cui-select-item]{width:max-content!important;min-width:100%!important;max-width:none!important;overflow:visible!important;text-overflow:clip!important;white-space:nowrap!important}
-[data-radix-popper-content-wrapper]:has([cui-select-item]) [cui-select-item]>div,
-[data-radix-popper-content-wrapper]:has([cui-select-item]) [data-testid="ellipsed-icon-wrapper-text"],
-[data-radix-popper-content-wrapper]:has([cui-select-item]) [data-testid="ellipsed-icon-wrapper-text"]>*{width:max-content!important;max-width:none!important;overflow:visible!important;text-overflow:clip!important;white-space:nowrap!important}
+body:has(button[id^=header-][data-state=open]) [data-radix-popper-content-wrapper]:has([cui-select-item])>div[role=dialog]{width:max-content!important;min-width:100%!important;max-width:min(440px,calc(100vw - 24px))!important}
+body:has(button[id^=header-][data-state=open]) [data-radix-popper-content-wrapper]:has([cui-select-item]) [cui-select-item]{width:max-content!important;min-width:100%!important;max-width:none!important;overflow:visible!important;text-overflow:clip!important;white-space:nowrap!important}
+body:has(button[id^=header-][data-state=open]) [data-radix-popper-content-wrapper]:has([cui-select-item]) [cui-select-item]>div,
+body:has(button[id^=header-][data-state=open]) [data-radix-popper-content-wrapper]:has([cui-select-item]) [data-testid="ellipsed-icon-wrapper-text"],
+body:has(button[id^=header-][data-state=open]) [data-radix-popper-content-wrapper]:has([cui-select-item]) [data-testid="ellipsed-icon-wrapper-text"]>*{width:max-content!important;max-width:none!important;overflow:visible!important;text-overflow:clip!important;white-space:nowrap!important}
 
 /* Editable fields should keep their normal horizontal editing behavior inside
    flex rows instead of inheriting a clipped minimum size from a sibling. */

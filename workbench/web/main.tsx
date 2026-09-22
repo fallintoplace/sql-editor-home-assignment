@@ -1,6 +1,6 @@
 // Declare cascade layer order before Click UI injects its component styles.
 import './styles.css';
-import React, { useEffect, useState, type ReactNode } from 'react';
+import React, { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { ClickUIProvider, PasswordField } from '@clickhouse/click-ui';
@@ -8,10 +8,10 @@ import type { Connection, Principal, Published } from '../shared/types';
 import { displayValue, exportCsv } from '../shared/results';
 import { api, download, message, post } from './api';
 import { Action, Callout, Select } from './ui';
-import { Workspace } from './Workspace';
 import { Chart } from './components/Chart';
 import { experienceOptions, getCopy, localeOptions, themeOptions, themeValues, type Copy, type ExperienceLevel, type Locale, type Theme } from './i18n';
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } } });
+const Workspace = lazy(() => import('./Workspace').then(module => ({ default: module.Workspace })));
 class Boundary extends React.Component<{
     copy: Copy;
     children: ReactNode;
@@ -58,7 +58,7 @@ function Authenticated({ dark, experience, copy }: {
         return <main className="login"><h1>{copy.auth.title}</h1><p>{copy.auth.description}</p><PasswordField label={copy.auth.tokenLabel} value={token} onChange={setToken}/><Action type="primary" disabled={busy || !token} onClick={() => { setBusy(true); setError(''); void post('/session', { token }).then(() => { setToken(''); return session.refetch(); }).catch(e => setError(message(e))).finally(() => setBusy(false)); }}>{copy.auth.signIn}</Action>{error && <Callout danger>{error}</Callout>}</main>;
     return <>{session.data.demo && <Callout>{copy.app.demoMode}</Callout>}
  <div className="connection-picker"><Select label={copy.connection.profile} value={connection?.id ?? ''} options={(connections.data ?? []).map(c => ({ value: c.id, label: c.name }))} onSelect={setSelected}/><span className="muted">{copy.connection.privateWorkspace}</span>{session.data.requiresLogin && <Action onClick={() => void api('/session', { method: 'DELETE' }).then(() => { queryClient.clear(); location.reload(); }).catch(e => setError(message(e)))}>{copy.auth.signOut}</Action>}</div>
- {connection && <Workspace key={connection.id} connection={connection} dark={dark} experience={experience} copy={copy} refresh={() => connections.refetch()}/>} {connections.error && <Callout danger>{message(connections.error)}</Callout>}</>;
+ {connection && <Suspense fallback={<p className="center" role="status">{copy.auth.opening}</p>}><Workspace key={connection.id} connection={connection} dark={dark} experience={experience} copy={copy} refresh={() => connections.refetch()}/></Suspense>} {connections.error && <Callout danger>{message(connections.error)}</Callout>}</>;
 }
 function Root() {
     const [theme, setTheme] = useState<Theme>(() => { try {
@@ -105,6 +105,6 @@ function Root() {
     }
     catch { } }, [experience]);
     const token = /^\/share\/([^/]+)$/.exec(location.pathname)?.[1];
-    return <ClickUIProvider theme={dark ? 'dark' : 'light'}><div className="application"><header className="app-header"><div><span className="wordmark">{copy.app.name}</span><span className="tagline">{copy.app.tagline}</span></div><div className="app-header-actions"><Select label={copy.app.language} value={locale} options={localeOptions} useFullWidthItems itemCharacterLimit="32ch" onSelect={value => setLocale(value as Locale)}/><div className="theme-picker"><span className="theme-charm" aria-hidden="true">✦</span><Select label={copy.app.theme} value={theme} options={themeOptions} useFullWidthItems itemCharacterLimit="32ch" onSelect={value => setTheme(value as Theme)}/></div><div className="level-picker"><Select label={copy.app.experience} value={experience} options={experienceOptions(copy)} useFullWidthItems itemCharacterLimit="32ch" onSelect={value => setExperience(value as ExperienceLevel)}/></div></div></header><Boundary copy={copy}>{token ? <Shared token={token} copy={copy} locale={locale}/> : <Authenticated dark={dark} experience={experience} copy={copy}/>}</Boundary></div></ClickUIProvider>;
+    return <ClickUIProvider theme={dark ? 'dark' : 'light'}><div className="application"><header className="app-header"><div><span className="wordmark">{copy.app.name}</span><span className="tagline">{copy.app.tagline}</span></div><div className="app-header-actions"><div className="language-picker"><Select label={copy.app.language} value={locale} options={localeOptions} useFullWidthItems itemCharacterLimit="32ch" triggerProps={{ id: 'header-language-picker' }} onSelect={value => setLocale(value as Locale)}/></div><div className="theme-picker"><span className="theme-charm" aria-hidden="true">✦</span><Select label={copy.app.theme} value={theme} options={themeOptions} useFullWidthItems itemCharacterLimit="32ch" triggerProps={{ id: 'header-theme-picker' }} onSelect={value => setTheme(value as Theme)}/></div><div className="level-picker"><Select label={copy.app.experience} value={experience} options={experienceOptions(copy)} useFullWidthItems itemCharacterLimit="32ch" triggerProps={{ id: 'header-level-picker' }} onSelect={value => setExperience(value as ExperienceLevel)}/></div></div></header><Boundary copy={copy}>{token ? <Shared token={token} copy={copy} locale={locale}/> : <Authenticated dark={dark} experience={experience} copy={copy}/>}</Boundary></div></ClickUIProvider>;
 }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><QueryClientProvider client={queryClient}><Root /></QueryClientProvider></React.StrictMode>);

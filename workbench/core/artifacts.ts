@@ -6,6 +6,7 @@ import { canWrite, mustOwn } from './guards.js';
 import { hash, audit, MemoryStore, type Store } from './store.js';
 import { integer, record, stringMap, text } from './validation.js';
 import { boundResult, type RunService } from './runs.js';
+import { MAX_CHART_SERIES } from '../shared/results.js';
 interface Share {
     id: string;
     owner: string;
@@ -14,8 +15,8 @@ interface Share {
 }
 export class ArtifactService {
     constructor(private readonly store: Store, private readonly runs: RunService, private readonly authorizeConnection: (p: Principal, id: string) => void) { }
-    list(p: Principal, includeTrash = false): QueryDocument[] {
-        return this.store.list<QueryDocument>('documents').filter(d => d.owner === p.id && (includeTrash || !d.deletedAt));
+    list(p: Principal, includeTrash = false, connectionId?: string): QueryDocument[] {
+        return this.store.list<QueryDocument>('documents').filter(d => d.owner === p.id && (!connectionId || d.connectionId === connectionId) && (includeTrash || !d.deletedAt));
     }
     get(p: Principal, id: string, revision?: number): QueryDocument {
         const current = this.store.get<QueryDocument>('documents', id);
@@ -256,7 +257,7 @@ export function parseChart(value: unknown): ChartConfig {
         return { kind: 'table', x: 0, ys: [], title: 'Query result' };
     const v = record(value), kinds = ['table', 'number', 'line', 'bar', 'area', 'stacked', 'pie', 'scatter'];
     requireThat(kinds.includes(String(v.kind)), 400, 'CHART_CONFIG', 'Invalid chart kind');
-    requireThat(Array.isArray(v.ys) && v.ys.length <= 20, 400, 'CHART_CONFIG', 'Invalid chart series');
+    requireThat(Array.isArray(v.ys) && v.ys.length <= MAX_CHART_SERIES, 400, 'CHART_CONFIG', 'Invalid chart series');
     return { kind: v.kind as ChartConfig['kind'], x: integer(v.x, 'x', 0, 499), ys: v.ys.map(y => integer(y, 'y', 0, 499)), title: text(v.title, 'chart title', 200, true) };
 }
 function parseMetric(value: unknown): MetricContract {

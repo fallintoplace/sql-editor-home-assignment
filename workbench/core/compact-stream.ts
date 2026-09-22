@@ -12,11 +12,16 @@ export async function collectCompactStream(stream: AsyncIterable<Buffer | string
         if (!line.trim())
             return;
         const size = Buffer.byteLength(line);
-        if (stage >= 2 && (rows.length >= limits.rows || bytes + size > limits.bytes)) {
+        if (bytes + size > limits.bytes) {
+            if (stage < 2)
+                throw new AppError(413, 'METADATA_TOO_LARGE', 'Result metadata exceeds the configured byte limit');
             truncated = true;
             return;
         }
-        requireThat(size <= limits.bytes, 413, 'METADATA_TOO_LARGE', 'Result metadata exceeds the configured byte limit');
+        if (stage >= 2 && rows.length >= limits.rows) {
+            truncated = true;
+            return;
+        }
         let data: unknown;
         try {
             data = JSON.parse(line);
@@ -64,5 +69,5 @@ export async function collectCompactStream(stream: AsyncIterable<Buffer | string
             consume(pending);
     }
     requireThat(stage === 2, 502, 'RESULT_INCOMPLETE', 'The server did not return a complete result header');
-    return { columns, rows, truncated };
+    return { columns, rows, bytes, truncated, bounded: { rows: limits.rows, bytes: limits.bytes } };
 }

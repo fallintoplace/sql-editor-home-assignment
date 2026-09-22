@@ -1,0 +1,35 @@
+name: Prepare offline UX validation
+on:
+  push:
+    branches: ["ux/workbench-navigation-20260922"]
+    paths: [".github/workflows/ux-offline-validation.yml"]
+permissions:
+  contents: read
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 67438c5ae2e3dbc82ad767469dd171b0f59b5e41
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: workbench/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        working-directory: workbench
+      - name: Archive tracked source and locked dependencies only
+        run: |
+          git archive HEAD > /tmp/source.tar
+          tar -czf /tmp/dependencies.tar.gz -C workbench node_modules
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ux-validation-inputs
+          path: |
+            /tmp/source.tar
+            /tmp/dependencies.tar.gz
+          retention-days: 1
+          compression-level: 0

@@ -484,6 +484,18 @@ body:has(button[id^=header-][data-state=open]) [data-radix-popper-content-wrappe
     .level-picker{width:min(174px,calc(100vw - 24px))!important;min-width:0!important}
 }
 
+@media(min-width:1121px){
+.sidebar-compact{display:flex;gap:9px;padding:10px 6px 14px;border:1px solid color-mix(in srgb,var(--accent-strong) 42%,var(--line));border-radius:14px;background:linear-gradient(180deg,color-mix(in srgb,var(--chrome) 82%,var(--accent-strong) 18%),var(--chrome));box-shadow:0 12px 28px color-mix(in srgb,var(--accent-strong) 18%,transparent)}
+.sidebar-compact h2{display:grid;place-items:center;height:38px;margin:0;color:var(--accent-strong)!important}
+.sidebar-compact h2::after{content:'QS';font-size:15px;letter-spacing:.08em;text-shadow:0 0 12px color-mix(in srgb,var(--accent-strong) 70%,transparent)}
+.sidebar-compact>button,.sidebar-compact .nav-section>summary{min-height:50px;margin:0;padding:8px 0;border:1px solid color-mix(in srgb,var(--chrome-text) 16%,transparent);border-radius:11px;background:color-mix(in srgb,var(--chrome) 76%,var(--accent) 24%);color:var(--chrome-text)!important;box-shadow:inset 0 1px 0 color-mix(in srgb,#fff 8%,transparent);transition:transform .16s ease,background-color .16s ease,border-color .16s ease,box-shadow .16s ease}
+.sidebar-compact>button:hover,.sidebar-compact .nav-section>summary:hover{transform:translateY(-2px);border-color:var(--accent-strong);background:var(--accent-strong);color:var(--chrome)!important;box-shadow:0 6px 16px color-mix(in srgb,var(--accent-strong) 32%,transparent)}
+.sidebar-compact>button::before,.sidebar-compact .nav-section>summary::before{color:inherit;font-weight:800}
+.sidebar-compact .nav-section{padding-top:7px;border-top:1px solid color-mix(in srgb,var(--chrome-text) 18%,transparent)}
+.sidebar-compact .nav-section>summary{width:100%}
+.sidebar-compact .nav-section>summary:focus-visible,.sidebar-compact>button:focus-visible{outline:2px solid var(--kraken-cyan);outline-offset:2px}
+}
+
 .pipeline-canvas{height:clamp(280px,42vw,520px);min-height:0}
 .pipeline-canvas svg{height:100%;min-height:0}
 .beginner-demo-preview{display:flex;flex-direction:column}

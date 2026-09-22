@@ -48,6 +48,14 @@ jobs:
             workbench/playwright-report
             workbench/test-results
           if-no-files-found: ignore
+      - name: Preserve UX screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-ux-screenshots
+          path: workbench/test-results/**/workbench-*.png
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Preserve generated dependency lock for review
         if: always()
         uses: actions/upload-artifact@v4

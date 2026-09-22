@@ -28,3 +28,7 @@
  .result-pagination>.toolbar{width:100%;justify-content:space-between}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+/* Flex labels must be allowed to shrink before long SQL or names are clipped. */
+.workspace-grid .history-row>button{max-width:100%}
+.workspace-grid .history-row>button:first-child{flex:1 1 240px}
+.workspace-grid .history-row>button>span,.workspace-grid .tabs button>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

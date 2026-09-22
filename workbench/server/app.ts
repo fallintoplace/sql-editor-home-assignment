@@ -15,13 +15,14 @@ import { AppError, asError, requireThat } from '../core/errors.js';
 import { canWrite, mustOwn } from '../core/guards.js';
 import { identifier, integer, record, stringMap, text } from '../core/validation.js';
 import { exportCsv } from '../shared/results.js';
+import { buildQueryProfile } from '../shared/profile.js';
 import { configuredSecrets, redactor, type Config } from './config.js';
 import { ClickHouseDriver } from './clickhouse.js';
 import { DemoDriver } from './demo.js';
 import { OpenAIDriver } from './openai.js';
 import { OpenAIVoiceService, safetyIdentifier, type VoiceService } from './voice.js';
 import { telemetry, recordRun } from './telemetry.js';
-type Driver = QueryDriver & ImportDriver & Pick<ClickHouseDriver, 'connection' | 'connections' | 'test' | 'targets' | 'profileEvidence' | 'close'>;
+type Driver = QueryDriver & ImportDriver & Pick<ClickHouseDriver, 'connection' | 'connections' | 'test' | 'targets' | 'profileEvidence' | 'profilePipeline' | 'close'>;
 function mappingFields(value: unknown) { const fields = record(value, 'mapping'); requireThat(Object.keys(fields).length <= 200, 400, 'IMPORT_MAPPING', 'Too many mapping fields'); return Object.fromEntries(Object.entries(fields).map(([key, value]) => [text(key, 'source column', 256), text(value, 'destination column', 256)])); }
 const body = (req: Request) => record(req.body), id = (req: Request, name = 'id') => identifier(req.params[name], name);
 function boolean(v: unknown, name: string) { requireThat(typeof v === 'boolean', 400, 'INVALID_REQUEST', `${name} must be a boolean`); return v; }
@@ -124,13 +125,21 @@ export function createApp(config: Config, overrides: {
         const run = runs.get(principal(res), id(req));
         requireThat(authorized(principal(res), run.connectionId), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before inspecting live query-log evidence');
         const evidence = await driver.profileEvidence(run);
+        const connection = driver.connection(principal(res), run.connectionId);
+        let pipelineEvidence: string[] | undefined;
+        if (connection.manifest?.pipeline.available) {
+            try {
+                pipelineEvidence = await driver.profilePipeline(run);
+            }
+            catch { }
+        }
         let traceUrl: string | undefined;
         if (config.traceUrl && run.traceId) {
             const url = new URL(config.traceUrl.replace('{traceId}', encodeURIComponent(run.traceId)));
             if (['http:', 'https:'].includes(url.protocol))
                 traceUrl = url.toString();
         }
-        res.json({ queryId: run.queryId, runId: run.id, evidence, traceUrl, notice: 'Query-log rows may arrive after a server flush interval. This is server evidence, not an operator-level performance model.' });
+        res.json(buildQueryProfile(run, evidence, { queryLogAvailable: true, pipelineAvailable: Boolean(connection.manifest?.pipeline.available), pipelineEvidence, traceUrl, notice: 'Query-log rows may arrive after a server flush interval. This is server evidence, not an operator-level performance model.' }));
     });
     app.post('/api/scripts', (req, res) => { const v = body(req); res.status(202).json(runs.submitScript(principal(res), v, v.stopOnError === undefined ? true : boolean(v.stopOnError, 'stopOnError'))); });
     app.get('/api/scripts/:id', (req, res) => res.json(runs.getScript(principal(res), id(req))));

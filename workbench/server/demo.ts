@@ -26,4 +26,5 @@ export class DemoDriver {
     allowed(_id: string, _table: string) { return false; }
     async insert() { throw new AppError(403, 'DEMO_READ_ONLY', 'Fixture mode never inserts'); }
     async profileEvidence(_run: Run) { return [{ notice: 'Fixture mode has no real server profile' }]; }
+    async profilePipeline(_run: Run) { return ['(Fixture pipeline)', '  ReadFromFixture × 1', '    ExpressionTransform × 1', '      Output × 1']; }
 }

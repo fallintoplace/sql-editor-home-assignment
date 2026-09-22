@@ -131,6 +131,61 @@ export interface Run {
     traceId?: string;
     serverVersion?: string;
 }
+export interface ProfileSummary {
+    durationMs: number;
+    readRows?: string;
+    readBytes?: string;
+    resultRows: number;
+    resultBytes?: string;
+    memory?: string;
+}
+export type ProfileInsightSeverity = 'info' | 'warning' | 'critical';
+export interface ProfileInsight {
+    id: string;
+    severity: ProfileInsightSeverity;
+    title: string;
+    description: string;
+}
+export type ProfilePipelineNodeKind = 'read' | 'filter' | 'aggregate' | 'sort' | 'output' | 'stage';
+export interface ProfilePipelineNode {
+    id: string;
+    label: string;
+    kind: ProfilePipelineNodeKind;
+    detail?: string;
+    status: 'measured' | 'estimated';
+    durationMs?: number;
+    rows?: string;
+    bytes?: string;
+}
+export interface ProfilePipelineEdge {
+    source: string;
+    target: string;
+}
+export interface ProfilePipeline {
+    available: boolean;
+    source: 'explain_pipeline' | 'query_shape';
+    nodes: ProfilePipelineNode[];
+    edges: ProfilePipelineEdge[];
+    raw?: string[];
+    notice: string;
+}
+export interface QueryProfile {
+    version: 1;
+    queryId: string;
+    runId: string;
+    summary: ProfileSummary;
+    insights: ProfileInsight[];
+    pipeline: ProfilePipeline;
+    capabilities: {
+        queryLog: boolean;
+        pipelineGraph: boolean;
+        indexAnalysis: boolean;
+        runtimePlan: boolean;
+    };
+    evidence: unknown;
+    traceUrl?: string;
+    notice: string;
+}
 export interface ApiError {
     code: string;
     message: string;

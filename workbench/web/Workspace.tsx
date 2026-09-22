@@ -38,7 +38,7 @@ const learnerExamples: Array<{ name: string; level: string; description: string;
     { name: '04 · Explore system tables.sql', level: 'Beginner', description: 'Inspect visible ClickHouse tables and their engines.', sql: 'SELECT\n    database,\n    name,\n    engine\nFROM system.tables\nORDER BY database, name\nLIMIT 20', chart: { kind: 'table', x: 0, ys: [], title: 'Visible tables' } },
     { name: '05 · Explain a query.sql', level: 'Intermediate', description: 'Inspect the plan before running a bounded read-only query.', sql: "EXPLAIN indexes = 1\nSELECT\n    toDate('2026-01-01') + number AS day\nFROM numbers(14)\nWHERE number % 2 = 0\nORDER BY day", chart: { kind: 'table', x: 0, ys: [], title: 'Query plan' } },
 ];
-export function Workspace({ connection, dark, refresh, copy }: {
+export function Workspace({ connection, dark, experience, refresh, copy }: {
     connection: Connected;
     dark: boolean;
     experience: ExperienceLevel;

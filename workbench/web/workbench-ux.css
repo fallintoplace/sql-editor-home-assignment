@@ -201,3 +201,21 @@
  .panel-switcher{grid-template-columns:repeat(2,minmax(0,1fr))}
  .results,.history{padding:10px;border-radius:10px}
 }
+
+.sidebar .nav-section{border-top:1px solid var(--line);padding-top:4px}
+.sidebar .nav-section>summary{display:flex;align-items:center;justify-content:space-between;padding:9px 2px;font-size:11px;font-weight:750;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.sidebar .nav-section>summary::-webkit-details-marker{display:none}
+.sidebar .nav-section>summary::after{content:'+';font-size:16px;line-height:1;font-weight:400}
+.sidebar .nav-section[open]>summary::after{content:'−'}
+.sidebar .nav-section>button{margin-top:5px}
+.editor-advanced{border:1px solid var(--line);border-radius:10px;background:var(--page);overflow:hidden}
+.editor-advanced>summary{display:flex;align-items:center;gap:10px;padding:10px 12px;font-weight:700;color:var(--muted)}
+.editor-advanced>summary::-webkit-details-marker{display:none}
+.editor-advanced>summary::before{content:'⚙';font-size:13px;color:var(--text)}
+.advanced-summary{margin-left:auto;font-size:11px;font-weight:500;white-space:nowrap}
+.editor-advanced[open]>summary{border-bottom:1px solid var(--line);color:var(--text)}
+.editor-advanced>.execution-limits{padding:12px 12px 0}
+.editor-advanced>.editor-tools{padding:12px}
+.editor-advanced>p{padding:0 12px 12px}
+.editor-advanced>details{margin:0 12px 12px}
+@media(max-width:560px){.advanced-summary{white-space:normal;text-align:right}.editor-advanced>summary{align-items:flex-start}}

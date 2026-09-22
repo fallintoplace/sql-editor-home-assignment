@@ -8,6 +8,8 @@ export interface Store {
     put<T>(bucket: string, id: string, value: T): void;
     delete(bucket: string, id: string): void;
     list<T>(bucket: string): T[];
+    keys(bucket: string): string[];
+    count(bucket: string): number;
 }
 export class MemoryStore implements Store {
     private data = new Map<string, Map<string, unknown>>();
@@ -19,9 +21,12 @@ export class MemoryStore implements Store {
     }
     delete(bucket: string, id: string) { this.data.get(bucket)?.delete(id); }
     list<T>(bucket: string): T[] { return structuredClone([...(this.data.get(bucket)?.values() ?? [])]) as T[]; }
+    keys(bucket: string): string[] { return [...(this.data.get(bucket)?.keys() ?? [])]; }
+    count(bucket: string): number { return this.data.get(bucket)?.size ?? 0; }
 }
 /** Atomic single-process persistence. Do not share this directory between replicas. */
 export class FileStore implements Store {
+    private counts = new Map<string, number>();
     constructor(private readonly directory: string) { mkdirSync(directory, { recursive: true, mode: 0o700 }); }
     private syncDirectory(directory: string) {
         const dirfd = openSync(directory, 'r');
@@ -49,7 +54,7 @@ export class FileStore implements Store {
         }
     }
     put<T>(bucket: string, id: string, value: T) {
-        const directory = this.path(bucket), target = this.path(bucket, id);
+        const directory = this.path(bucket), target = this.path(bucket, id), existed = existsSync(target);
         mkdirSync(directory, { recursive: true, mode: 0o700 });
         const temp = join(directory, `.${randomUUID()}.tmp`);
         const fd = openSync(temp, 'wx', 0o600);
@@ -70,6 +75,8 @@ export class FileStore implements Store {
         }
         // Persist the directory entry, not only the temporary file contents.
         this.syncDirectory(directory);
+        if (!existed && this.counts.has(bucket))
+            this.counts.set(bucket, this.counts.get(bucket)! + 1);
     }
     delete(bucket: string, id: string) {
         const directory = this.path(bucket);
@@ -82,10 +89,13 @@ export class FileStore implements Store {
             if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
                 throw error;
         }
-        if (removed)
+        if (removed) {
             this.syncDirectory(directory);
+            if (this.counts.has(bucket))
+                this.counts.set(bucket, Math.max(0, this.counts.get(bucket)! - 1));
+        }
     }
-    list<T>(bucket: string): T[] {
+    keys(bucket: string): string[] {
         let names: string[];
         try {
             names = readdirSync(this.path(bucket));
@@ -95,8 +105,18 @@ export class FileStore implements Store {
                 return [];
             throw error;
         }
-        return names.filter(n => /^[A-Za-z0-9][A-Za-z0-9_-]*\.json$/.test(n))
-            .map(n => this.get<T>(bucket, n.slice(0, -5))!).filter(Boolean);
+        return names.filter(n => /^[A-Za-z0-9][A-Za-z0-9_-]*\.json$/.test(n)).map(n => n.slice(0, -5));
+    }
+    count(bucket: string): number {
+        const cached = this.counts.get(bucket);
+        if (cached !== undefined)
+            return cached;
+        const count = this.keys(bucket).length;
+        this.counts.set(bucket, count);
+        return count;
+    }
+    list<T>(bucket: string): T[] {
+        return this.keys(bucket).map(id => this.get<T>(bucket, id)!).filter(Boolean);
     }
 }
 export function stableStringify(value: unknown): string {
@@ -109,11 +129,14 @@ export function stableStringify(value: unknown): string {
 }
 export function hash(value: unknown): string { return createHash('sha256').update(stableStringify(value)).digest('hex'); }
 export function audit(store: Store, principal: Principal, action: string, resourceId: string, outcome: AuditEvent['outcome'] = 'allowed', ruleId?: string) {
-    const event: AuditEvent = { id: randomUUID(), at: new Date().toISOString(), owner: principal.id, action, resourceId, outcome, ruleId };
+    const event: AuditEvent = { id: `t${Date.now().toString(36)}-${randomUUID()}`, at: new Date().toISOString(), owner: principal.id, action, resourceId, outcome, ruleId };
     store.put('audit', event.id, event);
-    // Bound telemetry independently of SQL/result retention. Audit stores no raw SQL or credentials.
-    const all = store.list<AuditEvent>('audit');
-    if (all.length > 5000)
-        for (const old of all.sort((a, b) => a.at.localeCompare(b.at)).slice(0, all.length - 5000))
-            store.delete('audit', old.id);
+    // Keep the hot path O(1) after the first bucket count. When pruning is needed,
+    // filenames are enough: new IDs sort by timestamp and legacy UUIDs age out first.
+    if (store.count('audit') > 5000) {
+        const order = (id: string) => /^t[0-9a-z]+-[0-9a-f-]{36}$/.test(id) ? `1-${id}` : `0-${id}`;
+        const ids = store.keys('audit').sort((a, b) => order(a).localeCompare(order(b)));
+        for (const id of ids.slice(0, Math.max(0, ids.length - 4500)))
+            store.delete('audit', id);
+    }
 }

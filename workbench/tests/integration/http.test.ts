@@ -1,0 +1,76 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import type { AddressInfo } from 'node:net';
+import { randomUUID } from 'node:crypto';
+import { createApp } from '../../server/app.js';
+import { loadConfig } from '../../server/config.js';
+import { MemoryStore } from '../../core/store.js';
+import { DemoDriver } from '../../server/demo.js';
+import type { QueryDocument, Run, Published } from '../../shared/types.js';
+async function start(token?: string) {
+    const config = loadConfig({ DEMO_MODE: 'true', WORKBENCH_TOKEN: token });
+    const service = createApp(config, { store: new MemoryStore(), driver: new DemoDriver() });
+    const server = service.app.listen(0, '127.0.0.1');
+    await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
+    config.port = (server.address() as AddressInfo).port;
+    config.origin = `http://127.0.0.1:${config.port}`;
+    const call = (path: string, body?: unknown, headers: Record<string, string> = {}, method = body === undefined ? 'GET' : 'POST') => fetch(config.origin + '/api' + path, { method, headers: { 'content-type': 'application/json', 'x-workbench-intent': '1', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
+    return { ...service, call, origin: config.origin, stop: async () => { await service.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); } };
+}
+const owner = { id: 'local-owner', role: 'owner' } as const;
+test('HTTP query flow requires explicit trust and is idempotent', async (t) => {
+    const s = await start();
+    t.after(() => s.stop());
+    const input = { clientRequestId: randomUUID(), connectionId: 'demo', sql: 'SELECT 1' };
+    assert.equal((await s.call('/runs', input)).status, 403);
+    assert.equal((await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' })).status, 200);
+    const a = await s.call('/runs', input);
+    assert.equal(a.status, 202);
+    const run = await a.json() as Run;
+    const duplicate = await (await s.call('/runs', input)).json() as Run;
+    assert.equal(duplicate.id, run.id);
+    await s.runs.wait(owner, run.id);
+    const page = await s.call(`/runs/${run.id}/result?offset=0&count=2`);
+    assert.equal(page.status, 200);
+    assert.equal((await page.json()).rows.length, 2);
+    const event = await s.call(`/runs/${run.id}/events`);
+    const text = await event.text();
+    assert.match(text, /data: /);
+    assert.match(text, /succeeded/);
+});
+test('Cookie login, request intent and Origin checks are enforced', async (t) => {
+    const token = 'owner-token-'.repeat(4), s = await start(token);
+    t.after(() => s.stop());
+    assert.equal((await s.call('/connections')).status, 401);
+    assert.equal((await s.call('/session', { token }, { origin: 'https://untrusted.example' })).status, 403);
+    assert.equal((await s.call('/session', { token }, { 'x-workbench-intent': '' })).status, 403);
+    assert.equal((await s.call('/session', { token: 'wrong' })).status, 401);
+    const login = await s.call('/session', { token });
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
+    assert.equal((await s.call('/connections', undefined, { cookie })).status, 200);
+    assert.equal((await s.call('/session', {}, { cookie }, 'DELETE')).status, 200);
+    assert.equal((await s.call('/connections', undefined, { cookie })).status, 401);
+});
+test('Sharing exposes an immutable snapshot, not an execution credential', async (t) => {
+    const s = await start();
+    t.after(() => s.stop());
+    await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' });
+    const run = await (await s.call('/runs', { clientRequestId: randomUUID(), connectionId: 'demo', sql: 'SELECT 1' })).json() as Run;
+    await s.runs.wait(owner, run.id);
+    const doc = await (await s.call('/documents', { name: 'Evidence.sql', connectionId: 'demo', sql: 'SELECT 1', runId: run.id })).json() as QueryDocument;
+    const pub = await (await s.call(`/documents/${doc.id}/publish`, { revision: 1 })).json() as Published;
+    assert.equal((await s.call(`/published/${pub.id}/share`, {})).status, 400);
+    const share = await (await s.call(`/published/${pub.id}/share`, { acknowledgeShare: true })).json();
+    await s.call(`/documents/${doc.id}`, { ...doc, baseRevision: 1, sql: 'SELECT 2' }, {}, 'PUT');
+    const snapshot = await (await s.call(`/shared/${share.token}`)).json() as Published;
+    assert.equal(snapshot.document.sql, 'SELECT 1');
+    assert.equal((await s.call('/runs', { clientRequestId: randomUUID(), connectionId: 'unrecognized', sql: 'SELECT 1' })).status, 404);
+});
+test('Invalid workspace import is rejected without partially saving documents', async (t) => {
+    const s = await start();
+    t.after(() => s.stop());
+    const input = { format: 'cathedral-workspace', version: 1, documents: [{ name: 'ok.sql', connectionId: 'demo', sql: 'SELECT 1' }, { name: 'bad.sql', connectionId: 'demo', sql: 7 }] };
+    assert.equal((await s.call('/workspace/import', input)).status, 400);
+    assert.deepEqual(await (await s.call('/documents')).json(), []);
+});

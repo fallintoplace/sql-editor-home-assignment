@@ -1,0 +1,33 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { loadConfig, publicProfile, redactor } from '../../.core-build/server/config.js';
+import { insertChildFilter } from '../../.core-build/shared/sql.js';
+test('Local startup binds loopback by default', () => assert.equal(loadConfig({}).host, '127.0.0.1'));
+test('Non-loopback startup requires an owner access token', () => assert.throws(() => loadConfig({ HOST: '0.0.0.0' }), { code: 'AUTH_REQUIRED' }));
+test('A shared binding cannot use the default ClickHouse identity', () => assert.throws(() => loadConfig({ HOST: '0.0.0.0', WORKBENCH_TOKEN: 'a'.repeat(40) }), { code: 'RESTRICTED_IDENTITY' }));
+test('Fixture mode cannot be exposed on a shared bind address', () => assert.throws(() => loadConfig({ HOST: '0.0.0.0', WORKBENCH_TOKEN: 'a'.repeat(40), CLICKHOUSE_USER: 'reader', DEMO_MODE: 'true' }), { code: 'DEMO_LOCAL_ONLY' }));
+test('Connection URLs cannot carry credentials', () => assert.throws(() => loadConfig({ CLICKHOUSE_URL: 'https://user:secret@example.com' }), { code: 'CONNECTION_URL' }));
+test('Connection URLs cannot carry arbitrary paths', () => assert.throws(() => loadConfig({ CLICKHOUSE_URL: 'http://localhost:8123/other-api' }), { code: 'CONNECTION_URL' }));
+test('Public profiles omit read and write passwords', () => { const c = loadConfig({ CLICKHOUSE_PASSWORD: 'reader-pass', CLICKHOUSE_WRITER_USER: 'writer', CLICKHOUSE_WRITER_PASSWORD: 'writer-pass', CLICKHOUSE_IMPORT_TABLES: 'default.target' }); const output = JSON.stringify(publicProfile(c.profiles[0])); assert.ok(!output.includes('reader-pass')); assert.ok(!output.includes('writer-pass')); assert.ok(!output.includes('writer')); });
+test('Configured secrets are redacted before diagnostic truncation', () => { const c = loadConfig({ CLICKHOUSE_PASSWORD: 'private-password' }); const result = redactor(c)('x'.repeat(2995) + 'private-password'); assert.ok(!result.includes('private')); assert.ok(result.length <= 3000); });
+test('Import allowlists reject expressions and wildcard targets', () => { for (const target of ['default.*', 'url(http://other)', 'default.table;DROP'])
+    assert.throws(() => loadConfig({ CLICKHOUSE_WRITER_USER: 'writer', CLICKHOUSE_IMPORT_TABLES: target }), { code: 'IMPORT_TABLES' }); });
+test('Null child filters use IS NULL semantics rather than a printable value', () => { const child = insertChildFilter('SELECT NULL AS value', 'value', null); assert.ok(child.sql.includes('isNull(`value`)')); assert.deepEqual(child.parameters, {}); });
+test('Child filters do not overwrite an existing query parameter', () => { const child = insertChildFilter('SELECT {wb_filter:String} AS value', 'value', 'next'); assert.deepEqual(child.parameters, { wb_filter_child: 'next' }); assert.ok(child.sql.includes('{wb_filter_child:String}')); });
+test('Demo publications remain labeled fixtures outside the workspace', async () => {
+    const { DemoDriver } = await import('../../.core-build/server/demo.js');
+    const { MemoryStore } = await import('../../.core-build/core/store.js');
+    const { RunService } = await import('../../.core-build/core/runs.js');
+    const { ArtifactService } = await import('../../.core-build/core/artifacts.js');
+    const { randomUUID } = await import('node:crypto');
+    const store = new MemoryStore(), driver = new DemoDriver(), owner = { id: 'local-owner', role: 'owner' }, authorize = (p, id) => driver.connection(p, id);
+    const runs = new RunService(store, driver, authorize), artifacts = new ArtifactService(store, runs, authorize);
+    runs.trust(owner, 'demo', true);
+    const run = runs.submit(owner, { clientRequestId: randomUUID(), connectionId: 'demo', sql: 'SELECT 1' });
+    await runs.wait(owner, run.id);
+    const doc = artifacts.save(owner, { name: 'fixture.sql', connectionId: 'demo', sql: 'SELECT 1', runId: run.id });
+    const pub = artifacts.publish(owner, doc.id, 1);
+    assert.equal(pub.source, 'fixture');
+    assert.equal(pub.run.dataSource, 'fixture');
+    await runs.close();
+});

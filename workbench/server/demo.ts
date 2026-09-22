@@ -1,0 +1,29 @@
+import { setTimeout as sleep } from 'node:timers/promises';
+import type { Connection, Principal, Progress, Run, Schema } from '../shared/types.js';
+import { DEFAULT_LIMITS } from '../shared/types.js';
+import { AppError } from '../core/errors.js';
+/** Explicit UI/test fixtures, not a SQL emulator and never an automatic fallback for a real database. */
+export class DemoDriver {
+    connection(_p: Principal, id: string): Connection { if (!['demo', 'demo-second'].includes(id))
+        throw new AppError(404, 'CONNECTION_NOT_FOUND', 'Fixture connection not found'); const yes = { available: true }; return { dataSource: 'fixture', id, name: id === 'demo' ? 'Demo fixtures (not live data)' : 'Second isolated fixture', host: 'fixture://local', database: 'demo', username: 'fixture-reader', readonly: true, limits: { ...DEFAULT_LIMITS }, manifest: { version: 1, serverVersion: 'fixture—not a ClickHouse server', testedAt: new Date().toISOString(), schema: yes, progress: yes, cancellation: yes, explain: yes, pipeline: yes, queryLog: yes, documentation: { available: false, reason: 'Fixture mode' }, import: { available: false, reason: 'Fixture mode never writes data' }, scripts: yes, parameters: yes } }; }
+    connections(p: Principal) { return ['demo', 'demo-second'].map(id => this.connection(p, id)); }
+    async test(id: string) { return this.connection({ id: 'local-owner', role: 'owner' }, id); }
+    async schema(id: string): Promise<Schema> { this.connection({ id: 'local-owner', role: 'owner' }, id); return { connectionId: id, fetchedAt: new Date().toISOString(), tables: [{ database: 'demo', name: 'events', engine: 'Fixture' }], columns: [{ database: 'demo', table: 'events', name: 'day', type: 'Date', comment: 'Fixture day', defaultKind: '' }, { database: 'demo', table: 'events', name: 'events', type: 'UInt64', comment: 'Fixture count', defaultKind: '' }], truncated: false, warnings: ['These are deterministic fixtures, not live database results.'] }; }
+    async execute(run: Run, signal: AbortSignal, progress: (p: Progress) => void) {
+        if (/fixture_error/i.test(run.sql))
+            throw new AppError(400, 'FIXTURE_ERROR', 'Deliberate fixture error; the draft is preserved');
+        for (let i = 0; i < 5; i++) {
+            await sleep(/fixture_slow/i.test(run.sql) ? 400 : 35, undefined, { signal });
+            progress({ readRows: String(i * 20), readBytes: String(i * 160), elapsedMs: i * 35 });
+        }
+        if (run.kind !== 'query')
+            return { columns: [{ name: 'explain', type: 'String' }], rows: [['Fixture plan — not a live ClickHouse EXPLAIN']], truncated: false };
+        return { columns: [{ name: 'day', type: 'Date' }, { name: 'events', type: 'UInt64' }], rows: Array.from({ length: 7 }, (_, i) => [`2026-01-${String(i + 1).padStart(2, '0')}`, String((i + 1) * 10)]), truncated: false, warnings: ['DEMO FIXTURE: this does not evaluate the supplied SQL.'] };
+    }
+    async cancel(_run: Run) { }
+    async close() { }
+    targets(_id: string) { return []; }
+    allowed(_id: string, _table: string) { return false; }
+    async insert() { throw new AppError(403, 'DEMO_READ_ONLY', 'Fixture mode never inserts'); }
+    async profileEvidence(_run: Run) { return [{ notice: 'Fixture mode has no real server profile' }]; }
+}

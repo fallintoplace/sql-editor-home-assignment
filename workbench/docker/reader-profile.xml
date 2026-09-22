@@ -1,0 +1,34 @@
+<clickhouse>
+  <profiles>
+    <!-- Query access is read-only. Only bounded operational settings may change. -->
+    <cathedral_reader>
+      <readonly>1</readonly>
+      <allow_ddl>0</allow_ddl>
+      <max_execution_time>30</max_execution_time>
+      <max_memory_usage>536870912</max_memory_usage>
+      <max_threads>4</max_threads>
+      <max_result_rows>100000</max_result_rows>
+      <max_result_bytes>50000000</max_result_bytes>
+      <max_rows_to_read>100000000</max_rows_to_read>
+      <max_bytes_to_read>5000000000</max_bytes_to_read>
+      <result_overflow_mode>throw</result_overflow_mode>
+      <output_format_json_quote_64bit_integers>1</output_format_json_quote_64bit_integers>
+      <output_format_json_quote_decimals>1</output_format_json_quote_decimals>
+      <constraints>
+        <readonly><const/></readonly>
+        <allow_ddl><const/></allow_ddl>
+        <max_execution_time><min>1</min><max>120</max><changeable_in_readonly/></max_execution_time>
+        <max_memory_usage><min>1048576</min><max>1073741824</max><changeable_in_readonly/></max_memory_usage>
+        <max_threads><min>1</min><max>8</max><changeable_in_readonly/></max_threads>
+        <max_result_rows><min>1</min><max>100000</max><changeable_in_readonly/></max_result_rows>
+        <max_result_bytes><min>1</min><max>50000000</max><changeable_in_readonly/></max_result_bytes>
+        <max_rows_to_read><min>1</min><max>100000000</max><changeable_in_readonly/></max_rows_to_read>
+        <max_bytes_to_read><min>1</min><max>5000000000</max><changeable_in_readonly/></max_bytes_to_read>
+        <result_overflow_mode><const/></result_overflow_mode>
+        <output_format_json_quote_64bit_integers><const/></output_format_json_quote_64bit_integers>
+        <output_format_json_quote_decimals><const/></output_format_json_quote_decimals>
+        <log_comment><changeable_in_readonly/></log_comment>
+      </constraints>
+    </cathedral_reader>
+  </profiles>
+</clickhouse>

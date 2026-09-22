@@ -1,0 +1,58 @@
+name: Workbench validation
+on:
+  push:
+    paths: ["workbench/**", "package.json", "src/index.ts", ".github/workflows/workbench.yml"]
+  pull_request:
+    paths: ["workbench/**", "package.json", "src/index.ts", ".github/workflows/workbench.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: workbench
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else
+            echo '::warning::Bootstrap install: review and commit workbench/package-lock.json for reproducible releases.'
+            npm install
+          fi
+      - name: Core tests and dependency-aware build
+        run: npm test && npm run build
+      - name: Local-only credentials and ClickHouse 24.6
+        run: npm run init:env && docker compose up -d --wait clickhouse && npm run db:setup
+      - name: HTTP integration and LIVE ClickHouse fixture checks
+        run: CLICKHOUSE_INTEGRATION=1 npm run test:integration
+      - name: Deterministic SQL evaluations
+        run: npm run eval
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+      - name: Browser flow tests (explicit fixture driver)
+        run: npm run test:e2e
+      - name: Preserve browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-browser-diagnostics
+          path: |
+            workbench/playwright-report
+            workbench/test-results
+          if-no-files-found: ignore
+      - name: Preserve generated dependency lock for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-dependency-lock
+          path: workbench/package-lock.json
+          if-no-files-found: ignore
+      - name: Stop local services
+        if: always()
+        run: docker compose down -v

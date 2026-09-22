@@ -3,8 +3,15 @@
   "version": "1.0.0",
   "main": "dist/index.js",
   "scripts": {
-    "start": "tsx src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "setup": "npm --prefix workbench install",
+    "dev": "npm --prefix workbench run dev",
+    "start": "npm --prefix workbench start",
+    "start:production": "npm --prefix workbench run start:production",
+    "build": "npm --prefix workbench run build",
+    "typecheck": "npm --prefix workbench run typecheck",
+    "test": "npm --prefix workbench test",
+    "test:integration": "npm --prefix workbench run test:integration",
+    "test:e2e": "npm --prefix workbench run test:e2e"
   },
   "keywords": [],
   "author": "",

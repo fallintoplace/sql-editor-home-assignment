@@ -1,0 +1,34 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { loadConfig } from '../../server/config.js';
+import { ClickHouseDriver } from '../../server/clickhouse.js';
+import { MemoryStore } from '../../core/store.js';
+import { RunService } from '../../core/runs.js';
+const enabled = process.env.CLICKHOUSE_INTEGRATION === '1';
+const owner = { id: 'integration-owner', role: 'owner' } as const;
+test('LIVE ClickHouse: typed values, bounds, scripts and explicit cancellation', { skip: !enabled }, async (t) => {
+    const config = loadConfig(), driver = new ClickHouseDriver(config), store = new MemoryStore();
+    const service = new RunService(store, driver, (p, c) => driver.connection(p, c));
+    t.after(async () => { await service.close(); await driver.close(); });
+    const connectionId = config.profiles[0]!.id;
+    service.trust(owner, connectionId, true);
+    const connection = await driver.test(connectionId);
+    assert.notEqual(connection.manifest?.serverVersion, 'unknown');
+    assert.ok((await driver.schema(connectionId)).tables.length > 0);
+    const input = (sql: string, limits?: {
+        rows?: number;
+        seconds?: number;
+    }) => ({ clientRequestId: randomUUID(), connectionId, sql, limits });
+    const exact = service.submit(owner, input("SELECT toUInt64('18446744073709551615') AS large, toDecimal128('12345678901234567890.12',2) AS decimal, CAST(NULL AS Nullable(String)) AS absent, ['a','b'] AS nested"));
+    assert.equal((await service.wait(owner, exact.id)).status, 'succeeded');
+    assert.deepEqual(service.result(owner, exact.id).rows[0], ['18446744073709551615', '12345678901234567890.12', null, ['a', 'b']]);
+    const bounded = service.submit(owner, input('SELECT number FROM numbers(100)', { rows: 5 }));
+    assert.equal((await service.wait(owner, bounded.id)).status, 'truncated');
+    assert.equal(service.result(owner, bounded.id).rows.length, 5);
+    const slow = service.submit(owner, input('SELECT sum(sin(number)) FROM numbers(100000000)', { seconds: 10 }));
+    await service.cancel(owner, slow.id);
+    assert.equal((await service.wait(owner, slow.id)).status, 'cancelled');
+    const duplicate = input('SELECT 1');
+    assert.equal(service.submit(owner, duplicate).id, service.submit(owner, duplicate).id);
+});

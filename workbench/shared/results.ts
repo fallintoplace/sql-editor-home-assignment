@@ -56,15 +56,18 @@ export function filterRows(rows: Row[], term: string, searchableRows?: string[])
     const needle = term.toLocaleLowerCase();
     return needle ? rows.filter((r, index) => (searchableRows?.[index] ?? r.map(v => displayValue(v).toLocaleLowerCase()).join('\u0001')).includes(needle)) : rows;
 }
-export function csvCell(value: Json | undefined): string {
+export function csvCell(value: Json | undefined, type?: string): string {
     let cell = value === null || value === undefined ? '' : displayValue(value);
-    // Make CSV safe to open in spreadsheet programs; JSON export remains exact.
-    if (/^[\t\r\n ]*[=+\-@]/.test(cell))
-        cell = "'" + cell;
+    // Formula-prefix escaping is for textual spreadsheet cells. Numeric ClickHouse
+    // values such as -42 stay numeric in CSV; JSON remains the exact typed export.
+    if (!type || !numericType(type)) {
+        if (/^[\t\r\n ]*[=+\-@]/.test(cell))
+            cell = "'" + cell;
+    }
     return /[",\r\n]/.test(cell) ? '"' + cell.replace(/"/g, '""') + '"' : cell;
 }
 export function exportCsv(result: Pick<Result, 'columns' | 'rows'>): string {
-    return [result.columns.map(c => csvCell(c.name)).join(','), ...result.rows.map(r => r.map(csvCell).join(','))].join('\r\n');
+    return [result.columns.map(c => csvCell(c.name)).join(','), ...result.rows.map(r => r.map((value, index) => csvCell(value, result.columns[index]?.type)).join(','))].join('\r\n');
 }
 export function columnStats(rows: Row[], index: number) {
     let nulls = 0;

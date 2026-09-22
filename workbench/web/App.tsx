@@ -133,11 +133,6 @@ function App() {
         finally { setBusy(false); }
     };
 
-    const logout = async () => {
-        try { await api('/session', { method: 'DELETE' }); setConnections([]); setSession({ principal: null, requiresLogin: true, demo: false }); }
-        catch (error) { setSessionError(message(error)); }
-    };
-
     if (!session) return <main className="auth-screen"><section className="auth-card animate-enter"><Brand/><span className="eyebrow mt-8">PRIVATE WORKSPACE</span><h1>{sessionError ? 'Workspace unavailable' : copy.auth.opening}</h1>{sessionError ? <><p>{sessionError}</p><Button variant="primary" onClick={() => { setSessionError(''); void loadSession().catch(error => setSessionError(message(error))); }}>Try again</Button></> : <div className="splash-status"><span className="loading-orbit"/><p>{copy.auth.opening}</p></div>}</section></main>;
     if (!session.principal) return <main className="auth-screen"><form className="auth-card animate-enter" onSubmit={event => { event.preventDefault(); void login(); }}><Brand/><span className="eyebrow mt-8">Private workspace</span><h1>{copy.auth.title}</h1><p>{copy.auth.description}</p><label className="field-label">{copy.auth.token}<input className="field-input mt-2" type="password" autoComplete="current-password" value={token} onChange={event => setToken(event.target.value)} autoFocus/></label>{sessionError && <div className="callout callout-error">{sessionError}</div>}<Button variant="primary" type="submit" disabled={busy || !token} className="mt-4 w-full">{busy ? copy.auth.opening : copy.auth.open}<span className="button-arrow">↗</span></Button><div className="auth-footnote"><Icon name="lock"/> Credentials are handled by the workspace server.</div></form></main>;
 
@@ -163,7 +158,6 @@ function App() {
                 <SelectControl label={copy.app.language} value={locale} options={localeOptions} onChange={value => setLocale(value as Locale)}/>
                 <SelectControl label={copy.app.theme} value={theme} options={themeOptions} onChange={value => setTheme(value as Theme)}/>
             </div>
-            <Button variant="ghost" className="account-button" title="Sign out" onClick={() => void logout()}>HV</Button>
         </header>
         {session.demo && <div className="demo-ribbon"><span className="status-light is-warning"/> DEMO DATA · queries are not sent to a live database</div>}
         {connection ? <Workspace key={connection.id} connection={connection} connections={connections} onSelectConnection={setConnectionId} onRefreshConnections={async () => { const latest = await api<Connected[]>('/connections'); setConnections(latest); }} experience={experience} dark={dark} copy={copy} locale={locale}/> : <div className="empty-connection"><Icon name="schema"/><h1>{copy.app.name}</h1><p>No connection profiles are configured for this workspace.</p></div>}

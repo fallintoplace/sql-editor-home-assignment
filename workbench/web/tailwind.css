@@ -161,7 +161,6 @@
     .select-control { position: relative; display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 9px; }
     .select-control select { max-width: 128px; appearance: none; padding: 7px 24px 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text-soft); font-size: 10px; cursor: pointer; }
     .select-chevron { position: absolute; right: 6px; width: 13px !important; height: 13px !important; pointer-events: none; color: var(--muted); }
-    .account-button { width: 33px; height: 33px; flex: none; padding: 0 !important; border-radius: 50% !important; color: var(--text-soft); font-size: 10px !important; font-weight: 750 !important; }
     .demo-ribbon { display: flex; flex: none; align-items: center; justify-content: center; gap: 9px; padding: 6px; border-bottom: 1px solid color-mix(in srgb, var(--amber) 20%, transparent); background: color-mix(in srgb, var(--amber) 5%, transparent); color: var(--amber); font-size: 9px; font-weight: 760; letter-spacing: .12em; }
     .workspace-root { position: relative; display: flex; min-height: 0; flex: 1; flex-direction: column; }
     .connection-strip { z-index: 3; display: flex; flex: none; align-items: center; justify-content: space-between; gap: 16px; min-height: 70px; padding: 10px 24px 10px 25px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 58%, transparent); }
@@ -703,7 +702,6 @@
     .experience-switch button { gap: 5px; padding: 7px 8px; font-size: 9px; }
     .topbar-preferences { gap: 4px; }
     .select-control select { max-width: 82px; padding: 6px 21px 6px 6px; font-size: 9px; }
-    .account-button { display: none !important; }
     .connection-strip { min-height: 60px; padding: 8px 12px; }
     .connection-icon { width: 31px; height: 31px; }
     .connection-summary strong { font-size: 10px; }

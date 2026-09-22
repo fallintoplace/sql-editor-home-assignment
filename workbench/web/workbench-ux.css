@@ -255,4 +255,24 @@
 @media(max-width:760px){
     .app-header{background:var(--text);color:var(--panel);border-bottom:0}.app-header .tagline{color:color-mix(in srgb,var(--panel) 68%,transparent)}.app-header-actions button{background:transparent;color:var(--panel);border-color:color-mix(in srgb,var(--panel) 28%,transparent)}.workspace-view-controls{top:64px}.editor-column{border-radius:0;box-shadow:none}.result-deck{border-radius:0}
 }
+@media(min-width:1121px){
+    .application{background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 34%,var(--page)),var(--page) 260px)}
+    .workspace-view-controls{width:min(1880px,calc(100% - 32px));margin-top:8px;padding:5px 8px;border:0;border-radius:9px;background:var(--text);color:var(--panel);box-shadow:0 8px 20px color-mix(in srgb,var(--text) 14%,transparent)}
+    .workspace-view-controls .view-controls-label,.workspace-view-controls .muted{color:color-mix(in srgb,var(--panel) 66%,transparent)}
+    .workspace-view-controls .surface-tabs{border-color:color-mix(in srgb,var(--panel) 24%,transparent);background:transparent}
+    .workspace-view-controls .surface-tabs>button,.workspace-view-controls>button{border-color:transparent;background:transparent;color:var(--panel)}
+    .workspace-view-controls .surface-tabs>button:hover,.workspace-view-controls>button:hover{background:color-mix(in srgb,var(--panel) 14%,transparent)}
+    .workspace-grid,.workspace-grid.drawer-closed,.workspace-grid.sidebar-closed,.workspace-grid.sidebar-compact,.workspace-grid.sidebar-compact.drawer-closed{width:min(1880px,calc(100% - 32px));grid-template-columns:64px minmax(0,1fr)!important;gap:16px;align-items:stretch;min-height:calc(100vh - 164px);margin-top:12px;margin-bottom:18px}
+    .workspace-grid.sidebar-closed,.workspace-grid.sidebar-closed.drawer-closed,.workspace-grid.sidebar-compact.sidebar-closed{grid-template-columns:minmax(0,1fr)!important}
+    .sidebar{position:sticky;top:112px;max-height:calc(100vh - 128px);padding:8px 5px 14px;border-right:0;border-radius:12px;background:var(--text);color:var(--panel);box-shadow:0 12px 28px color-mix(in srgb,var(--text) 16%,transparent)}
+    .sidebar h2{color:var(--panel)}.sidebar .nav-section{border-color:color-mix(in srgb,var(--panel) 18%,transparent)}.sidebar .nav-section>summary{color:color-mix(in srgb,var(--panel) 70%,transparent)}.sidebar .nav-section>summary::after{color:var(--panel)}
+    .sidebar button{color:var(--panel)}.sidebar button:hover{background:color-mix(in srgb,var(--panel) 13%,transparent)}.sidebar small{color:color-mix(in srgb,var(--panel) 54%,transparent)}
+    .editor-column{min-height:calc(100vh - 164px);padding:0 0 20px;gap:8px;border:0;border-radius:0;background:transparent;box-shadow:none}
+    .tabs{padding:0 0 4px;border:0;border-bottom:2px solid var(--text);border-radius:0;background:transparent}.tabs button{border-radius:6px}
+    .editor-tab-actions{padding:0}.editor-header{padding:4px 0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}.editor-actions{padding:5px 0;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}.editor-actions>button{min-height:32px}
+    .sql-editor{height:clamp(360px,calc(100vh - 500px),640px);min-height:360px;border:2px solid var(--text);border-radius:12px;box-shadow:0 12px 28px color-mix(in srgb,var(--text) 8%,transparent)}
+    .editor-advanced{border:0;border-top:1px solid var(--line);border-radius:0;background:transparent}.panel-switcher{padding:4px;border:0;border-radius:9px;background:var(--text)}.panel-switcher>button{color:var(--panel);border-color:transparent}.panel-switcher>button:hover{background:color-mix(in srgb,var(--panel) 14%,transparent)}
+    .result-deck{position:sticky;bottom:10px;z-index:10;max-height:min(48vh,540px);overflow:auto;margin-top:0;padding:10px;border:2px solid var(--text);border-radius:14px;background:color-mix(in srgb,var(--panel) 94%,transparent);box-shadow:0 14px 32px color-mix(in srgb,var(--text) 16%,transparent);backdrop-filter:blur(16px)}.result-deck-closed{max-height:52px}.result-deck-toolbar{position:sticky;top:-11px;z-index:2;padding:5px 2px 8px;background:color-mix(in srgb,var(--panel) 94%,transparent);backdrop-filter:blur(16px)}.results,.history{border-radius:9px;box-shadow:none}
+    .inspector-drawer{position:fixed;top:126px;right:max(16px,calc((100vw - 1880px) / 2 + 16px));bottom:0;width:min(430px,34vw);max-height:none;z-index:18;padding:16px;border-width:0 0 0 3px;border-radius:16px 0 0 0;background:var(--panel);box-shadow:-16px 0 32px color-mix(in srgb,var(--text) 16%,transparent)}.inspector-drawer>.toolbar{top:-17px;margin:-17px -17px 16px;padding:14px 16px;background:color-mix(in srgb,var(--panel) 96%,transparent)}
+}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}

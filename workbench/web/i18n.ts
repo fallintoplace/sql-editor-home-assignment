@@ -7,7 +7,11 @@ export const messages = {
             darkMode: 'Dark mode',
             demoMode: 'DEMO MODE — no ClickHouse queries or imports are executed. SQL text is not evaluated; this mode exercises UI and lifecycle behavior only.',
             language: 'Language',
-            theme: 'Theme'
+            theme: 'Theme',
+            experience: 'Workspace level',
+            beginner: 'Beginner',
+            intermediate: 'Intermediate',
+            advanced: 'Advanced'
         },
         common: {
             cancel: 'Cancel',
@@ -190,7 +194,11 @@ export const messages = {
             darkMode: 'Dunkler Modus',
             demoMode: 'DEMO-MODUS — es werden keine ClickHouse-Abfragen oder Importe ausgeführt. SQL wird nicht ausgewertet; dieser Modus testet nur Oberfläche und Ablauf.',
             language: 'Sprache',
-            theme: 'Thema'
+            theme: 'Thema',
+            experience: 'Arbeitsbereichsstufe',
+            beginner: 'Anfänger',
+            intermediate: 'Mittelstufe',
+            advanced: 'Fortgeschritten'
         },
         common: {
             cancel: 'Abbrechen',
@@ -373,7 +381,11 @@ export const messages = {
             darkMode: 'Modo oscuro',
             demoMode: 'MODO DEMO — no se ejecutan consultas de ClickHouse ni importaciones. El texto SQL no se evalúa; este modo solo prueba la interfaz y el ciclo de vida.',
             language: 'Idioma',
-            theme: 'Tema'
+            theme: 'Tema',
+            experience: 'Nivel del espacio',
+            beginner: 'Principiante',
+            intermediate: 'Intermedio',
+            advanced: 'Avanzado'
         },
         common: {
             cancel: 'Cancelar',
@@ -556,7 +568,11 @@ export const messages = {
             darkMode: 'Donkere modus',
             demoMode: 'DEMOMODUS — er worden geen ClickHouse-query’s of imports uitgevoerd. SQL wordt niet geëvalueerd; deze modus test alleen de interface en levenscyclus.',
             language: 'Taal',
-            theme: 'Thema'
+            theme: 'Thema',
+            experience: 'Werkruimteniveau',
+            beginner: 'Beginner',
+            intermediate: 'Gemiddeld',
+            advanced: 'Geavanceerd'
         },
         common: {
             cancel: 'Annuleren',
@@ -739,7 +755,11 @@ export const messages = {
             darkMode: '深色模式',
             demoMode: '演示模式 — 不会执行 ClickHouse 查询或导入操作。SQL 文本不会被求值；此模式仅用于体验界面和生命周期行为。',
             language: '语言',
-            theme: '主题'
+            theme: '主题',
+            experience: '工作区级别',
+            beginner: '入门',
+            intermediate: '中级',
+            advanced: '高级'
         },
         common: {
             cancel: '取消',
@@ -922,7 +942,11 @@ export const messages = {
             darkMode: 'Темная тема',
             demoMode: 'ДЕМО-РЕЖИМ — запросы ClickHouse и импорты не выполняются. Текст SQL не обрабатывается; режим нужен только для просмотра интерфейса и сценариев жизненного цикла.',
             language: 'Язык',
-            theme: 'Тема'
+            theme: 'Тема',
+            experience: 'Уровень рабочего пространства',
+            beginner: 'Начальный',
+            intermediate: 'Средний',
+            advanced: 'Продвинутый'
         },
         common: {
             cancel: 'Отмена',
@@ -1100,6 +1124,7 @@ export const messages = {
 } as const;
 
 export type Locale = keyof typeof messages;
+export type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
 export type Theme = 'kraken-night' | 'monokai' | 'mariana' | 'dracula' | 'nord' | 'solarized-light' | 'clickhouse-light' | 'one-dark' | 'tokyo-night' | 'high-contrast' | 'github-light' | 'catppuccin-latte' | 'rose-pine-dawn' | 'ayu-light';
 export type Copy = {
     [Section in keyof typeof messages.en]: {
@@ -1132,6 +1157,11 @@ export const themeOptions: Array<{ value: Theme; label: string }> = [
     { value: 'catppuccin-latte', label: 'Catppuccin Latte' },
     { value: 'rose-pine-dawn', label: 'Rosé Pine Dawn' },
     { value: 'ayu-light', label: 'Ayu Light' }
+];
+export const experienceOptions = (copy: Copy): Array<{ value: ExperienceLevel; label: string }> => [
+    { value: 'beginner', label: copy.app.beginner },
+    { value: 'intermediate', label: copy.app.intermediate },
+    { value: 'advanced', label: copy.app.advanced }
 ];
 
 export function getCopy(locale: Locale = 'en'): Copy {

@@ -10,7 +10,7 @@ import { api, download, message, post } from './api';
 import { Action, Callout, Select } from './ui';
 import { Workspace } from './Workspace';
 import { Chart } from './components/Chart';
-import { getCopy, localeOptions, themeOptions, themeValues, type Copy, type Locale, type Theme } from './i18n';
+import { experienceOptions, getCopy, localeOptions, themeOptions, themeValues, type Copy, type ExperienceLevel, type Locale, type Theme } from './i18n';
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } } });
 class Boundary extends React.Component<{
     copy: Copy;
@@ -34,8 +34,9 @@ function Shared({ token, copy, locale }: {
     const p = query.data;
     return <main className="shared"><header><h1>{copy.shared.title}</h1><p>{copy.shared.description}</p></header>{query.error && <Callout danger>{message(query.error)}</Callout>}{p && <><h2>{p.document.name} · revision {p.revision}</h2>{p.source === 'fixture' && <Callout>{copy.shared.fixture}</Callout>}<Callout>{p.result.completeness === 'truncated' ? copy.shared.truncated : copy.shared.complete} · {copy.shared.executed} {new Date(p.result.createdAt).toLocaleString(locale)} · {copy.shared.expires} {new Date(p.expiresAt).toLocaleString(locale)} · {p.run.queryId}</Callout><pre className="code-block">{p.document.sql}</pre><p>{copy.shared.connection}: {p.document.connectionId}. {copy.shared.parameters}: {JSON.stringify(p.document.parameters)}. {copy.shared.executedAs}: {p.run.executedAs}.</p><Chart result={p.result} config={p.document.chart}/><div className="table-scroll"><table><thead><tr>{p.result.columns.map((c, i) => <th key={i}>{c.name}<small>{c.type}</small></th>)}</tr></thead><tbody>{p.result.rows.slice(page * 200, page * 200 + 200).map((row, i) => <tr key={i}>{row.map((v, j) => <td key={j}>{displayValue(v)}</td>)}</tr>)}</tbody></table></div><div className="toolbar"><Action disabled={page === 0} onClick={() => setPage(page - 1)}>{copy.common.previous}</Action><span>{copy.shared.page} {page + 1} {copy.common.of} {Math.max(1, Math.ceil(p.result.rows.length / 200))}</span><Action disabled={(page + 1) * 200 >= p.result.rows.length} onClick={() => setPage(page + 1)}>{copy.common.next}</Action><Action onClick={() => download('query-studio-shared-result.json', p)}>{copy.shared.evidenceJson}</Action><Action onClick={() => download('query-studio-shared-result.csv', exportCsv(p.result), 'text/csv')}>{copy.shared.csv}</Action></div></>}</main>;
 }
-function Authenticated({ dark, copy }: {
+function Authenticated({ dark, experience, copy }: {
     dark: boolean;
+    experience: ExperienceLevel;
     copy: Copy;
 }) {
     const session = useQuery({ queryKey: ['session'], queryFn: () => api<{
@@ -57,7 +58,7 @@ function Authenticated({ dark, copy }: {
         return <main className="login"><h1>{copy.auth.title}</h1><p>{copy.auth.description}</p><PasswordField label={copy.auth.tokenLabel} value={token} onChange={setToken}/><Action type="primary" disabled={busy || !token} onClick={() => { setBusy(true); setError(''); void post('/session', { token }).then(() => { setToken(''); return session.refetch(); }).catch(e => setError(message(e))).finally(() => setBusy(false)); }}>{copy.auth.signIn}</Action>{error && <Callout danger>{error}</Callout>}</main>;
     return <>{session.data.demo && <Callout>{copy.app.demoMode}</Callout>}
  <div className="connection-picker"><Select label={copy.connection.profile} value={connection?.id ?? ''} options={(connections.data ?? []).map(c => ({ value: c.id, label: c.name }))} onSelect={setSelected}/><span className="muted">{copy.connection.privateWorkspace}</span>{session.data.requiresLogin && <Action onClick={() => void api('/session', { method: 'DELETE' }).then(() => { queryClient.clear(); location.reload(); }).catch(e => setError(message(e)))}>{copy.auth.signOut}</Action>}</div>
- {connection && <Workspace key={connection.id} connection={connection} dark={dark} copy={copy} refresh={() => connections.refetch()}/>} {connections.error && <Callout danger>{message(connections.error)}</Callout>}</>;
+ {connection && <Workspace key={connection.id} connection={connection} dark={dark} experience={experience} copy={copy} refresh={() => connections.refetch()}/>} {connections.error && <Callout danger>{message(connections.error)}</Callout>}</>;
 }
 function Root() {
     const [theme, setTheme] = useState<Theme>(() => { try {
@@ -68,6 +69,13 @@ function Root() {
     }
     catch {
         return 'kraken-night';
+    } });
+    const [experience, setExperience] = useState<ExperienceLevel>(() => { try {
+        const stored = localStorage.getItem('cathedral:experience');
+        return stored === 'beginner' || stored === 'advanced' ? stored : 'intermediate';
+    }
+    catch {
+        return 'intermediate';
     } });
     const [locale, setLocale] = useState<Locale>(() => {
         try {
@@ -88,7 +96,11 @@ function Root() {
         localStorage.setItem('cathedral:locale', locale);
     }
     catch { } }, [locale]);
+    useEffect(() => { try {
+        localStorage.setItem('cathedral:experience', experience);
+    }
+    catch { } }, [experience]);
     const token = /^\/share\/([^/]+)$/.exec(location.pathname)?.[1];
-    return <ClickUIProvider theme={dark ? 'dark' : 'light'}><div className="application"><header className="app-header"><div><span className="wordmark">{copy.app.name}</span><span className="tagline">{copy.app.tagline}</span></div><div className="app-header-actions"><Select label={copy.app.language} value={locale} options={localeOptions} onSelect={value => setLocale(value as Locale)}/><div className="theme-picker"><span className="theme-charm" aria-hidden="true">✦</span><Select label={copy.app.theme} value={theme} options={themeOptions} onSelect={value => setTheme(value as Theme)}/></div></div></header><Boundary copy={copy}>{token ? <Shared token={token} copy={copy} locale={locale}/> : <Authenticated dark={dark} copy={copy}/>}</Boundary></div></ClickUIProvider>;
+    return <ClickUIProvider theme={dark ? 'dark' : 'light'}><div className="application"><header className="app-header"><div><span className="wordmark">{copy.app.name}</span><span className="tagline">{copy.app.tagline}</span></div><div className="app-header-actions"><Select label={copy.app.language} value={locale} options={localeOptions} onSelect={value => setLocale(value as Locale)}/><div className="theme-picker"><span className="theme-charm" aria-hidden="true">✦</span><Select label={copy.app.theme} value={theme} options={themeOptions} onSelect={value => setTheme(value as Theme)}/></div><div className="level-picker"><Select label={copy.app.experience} value={experience} options={experienceOptions(copy)} onSelect={value => setExperience(value as ExperienceLevel)}/></div></div></header><Boundary copy={copy}>{token ? <Shared token={token} copy={copy} locale={locale}/> : <Authenticated dark={dark} experience={experience} copy={copy}/>}</Boundary></div></ClickUIProvider>;
 }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><QueryClientProvider client={queryClient}><Root /></QueryClientProvider></React.StrictMode>);

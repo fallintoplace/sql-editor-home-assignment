@@ -10,6 +10,7 @@ import { api, download, message, post } from './api';
 import { Action, Callout, Select } from './ui';
 import { Workspace } from './Workspace';
 import { Chart } from './components/Chart';
+import { copy } from './i18n';
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false }, mutations: { retry: false } } });
 class Boundary extends React.Component<{
     children: ReactNode;
@@ -66,6 +67,6 @@ function Root() {
     }
     catch { } }, [dark]);
     const token = /^\/share\/([^/]+)$/.exec(location.pathname)?.[1];
-    return <ClickUIProvider theme={dark ? 'dark' : 'light'}><div className="application"><header className="app-header"><div><span className="wordmark">CATHEDRAL</span><span className="tagline">ClickHouse evidence workspace</span></div><Action onClick={() => setDark(v => !v)}>{dark ? 'Light mode' : 'Dark mode'}</Action></header><Boundary>{token ? <Shared token={token}/> : <Authenticated dark={dark}/>}</Boundary></div></ClickUIProvider>;
+    return <ClickUIProvider theme={dark ? 'dark' : 'light'}><div className="application"><header className="app-header"><div><span className="wordmark">{copy.app.name}</span><span className="tagline">{copy.app.tagline}</span></div><Action onClick={() => setDark(v => !v)}>{dark ? copy.app.lightMode : copy.app.darkMode}</Action></header><Boundary>{token ? <Shared token={token}/> : <Authenticated dark={dark}/>}</Boundary></div></ClickUIProvider>;
 }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><QueryClientProvider client={queryClient}><Root /></QueryClientProvider></React.StrictMode>);

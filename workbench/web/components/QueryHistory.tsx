@@ -22,7 +22,7 @@ export function QueryHistory({ runs, selectedRunId, allFiles, fetching, error, b
     const searching = search !== deferredSearch;
     const displayed = matches.slice(0, limit);
     const clear = () => { setSearch(''); setStatus('all'); setLimit(50); };
-    return <section className="history" aria-label="Query history">
+    return <section id="query-history" className="history" aria-label="Query history">
         <div className="toolbar spread wrap"><h3>Query history</h3><Action onClick={() => { setLimit(50); onToggleScope(); }}>{allFiles ? 'Show current file' : 'Show all workspace files'}</Action></div>
         <div className="history-controls">
             <TextField label="Search query history" placeholder="Find SQL or a query ID" value={search} maxLength={256}

@@ -28,6 +28,8 @@
 .workspace-view-controls{width:min(1760px,calc(100% - 32px));margin:5px auto 0;padding:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .view-controls-label{margin-right:auto;color:var(--muted);font-size:10px;font-weight:750;letter-spacing:.12em;text-transform:uppercase}
 .workspace-view-controls .muted{font-size:11px}
+.surface-tabs{display:flex;align-items:center;gap:2px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--page)}
+.surface-tabs>button{min-height:30px;padding:4px 9px;border-radius:6px;white-space:nowrap}
 .studio-context{width:min(1760px,calc(100% - 32px));margin:4px auto 0;padding:6px 10px;display:flex;align-items:center;gap:10px;min-width:0;border:1px solid var(--line);border-radius:8px;background:color-mix(in srgb,var(--panel) 82%,var(--page));box-shadow:0 5px 16px color-mix(in srgb,var(--text) 4%,transparent)}
 .studio-context-file{display:flex;align-items:baseline;gap:9px;min-width:0}
 .studio-context-file strong{max-width:min(42vw,520px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -167,6 +169,8 @@
     .connection-picker>.muted{max-width:none}
     .workspace-view-controls{width:calc(100% - 16px);align-items:stretch}
     .view-controls-label{width:100%;margin-right:0}
+    .surface-tabs{flex:1 1 100%}
+    .surface-tabs>button{flex:1 1 0}
     .workspace-view-controls>button{flex:1 1 auto}
     .workspace-grid,.workspace-grid.drawer-closed,.workspace-grid.sidebar-closed{width:calc(100% - 16px);grid-template-columns:minmax(0,1fr);gap:8px;margin-bottom:28px}
     .sidebar{position:static;max-height:280px;padding:14px 12px}

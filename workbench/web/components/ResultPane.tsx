@@ -50,7 +50,7 @@ export function ResultPane({ run, draftSql, draftParameters, config, onChart, on
             setCopying(false);
         }
     };
-    return <section className="results" aria-label="Query results">
+    return <section id="query-results" className="results" aria-label="Query results">
         <div className="toolbar spread"><h2>Results <span className={`status ${run.status}`}>{run.status}</span></h2>
             <div className="toolbar"><Action aria-expanded={showSql} onClick={() => setShowSql(v => !v)}>Executed SQL</Action>
                 {result && <><Action aria-pressed={view === 'table'} type={view === 'table' ? 'primary' : 'secondary'} onClick={() => setView('table')}>Table</Action>

@@ -82,7 +82,10 @@ export const messages = {
             advancedControls: 'Advanced execution',
             parameters: 'Query parameters',
             currentFile: 'Current file',
-            statementCount: 'SQL statements'
+            statementCount: 'SQL statements',
+            editor: 'Editor',
+            results: 'Results',
+            history: 'History'
         },
         editor: {
             runStatement: 'Run statement',
@@ -195,7 +198,10 @@ export const messages = {
             advancedControls: 'Erweiterte Ausführung',
             parameters: 'Abfrageparameter',
             currentFile: 'Aktuelle Datei',
-            statementCount: 'SQL-Anweisungen'
+            statementCount: 'SQL-Anweisungen',
+            editor: 'Editor',
+            results: 'Ergebnisse',
+            history: 'Verlauf'
         },
         editor: {
             runStatement: 'Anweisung ausführen',
@@ -308,7 +314,10 @@ export const messages = {
             advancedControls: 'Ejecución avanzada',
             parameters: 'Parámetros de consulta',
             currentFile: 'Archivo actual',
-            statementCount: 'instrucciones SQL'
+            statementCount: 'instrucciones SQL',
+            editor: 'Editor',
+            results: 'Resultados',
+            history: 'Historial'
         },
         editor: {
             runStatement: 'Ejecutar instrucción',
@@ -421,7 +430,10 @@ export const messages = {
             advancedControls: 'Geavanceerde uitvoering',
             parameters: 'Queryparameters',
             currentFile: 'Huidig bestand',
-            statementCount: 'SQL-instructies'
+            statementCount: 'SQL-instructies',
+            editor: 'Editor',
+            results: 'Resultaten',
+            history: 'Geschiedenis'
         },
         editor: {
             runStatement: 'Instructie uitvoeren',
@@ -534,7 +546,10 @@ export const messages = {
             advancedControls: '高级执行',
             parameters: '查询参数',
             currentFile: '当前文件',
-            statementCount: '条 SQL 语句'
+            statementCount: '条 SQL 语句',
+            editor: '编辑器',
+            results: '结果',
+            history: '历史记录'
         },
         editor: {
             runStatement: '运行语句',
@@ -647,7 +662,10 @@ export const messages = {
             advancedControls: 'Расширенное выполнение',
             parameters: 'Параметры запроса',
             currentFile: 'Текущий файл',
-            statementCount: 'SQL-инструкции'
+            statementCount: 'SQL-инструкции',
+            editor: 'Редактор',
+            results: 'Результаты',
+            history: 'История'
         },
         editor: {
             runStatement: 'Выполнить оператор',

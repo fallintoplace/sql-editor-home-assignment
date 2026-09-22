@@ -1,468 +1,656 @@
-import { useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from 'react';
-import type { Connection, Json, Principal, Result, Run, RunStatus, Schema } from '../shared/types';
+import { useCallback, useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import type { AssistantAction, Connection, Principal, ProfilePipeline, Proposal, QueryProfile, QueryDocument, Result, ResultPage, Run, RunEvent, Schema, Script } from '../shared/types';
 import { DEFAULT_LIMITS } from '../shared/types';
+import { displayValue, exportCsv, recommendChart, chartNumber } from '../shared/results';
+import { formatSql, parameterNames, quoteIdentifier, selectedStatement, splitSql } from '../shared/sql';
 import { api, download, message, post } from './api';
-import { SqlEditor, type SqlEditorHandle } from './components/SqlEditor';
+import { SqlEditor, type EditorHandle } from './components/SqlEditor';
+import { checkpoint, closeDraft, MAX_TABS, newDraft, recover, reopenDraft, type Draft, type WorkspaceState } from './workspace-state';
+import { useWorkspacePersistence } from './useWorkspacePersistence';
+import { getCopy, localeOptions, themeOptions, type Copy, type ExperienceLevel, type Locale, type Theme } from './i18n';
+import clickhouseLogomarkDark from './assets/clickhouse-logomark-dark.svg';
+import clickhouseLogomarkLight from './assets/clickhouse-logomark-light.svg';
 
 type Connected = Connection & { trusted: boolean };
 type Session = { principal: Principal | null; requiresLogin: boolean; demo: boolean };
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
+type Inspector = 'schema' | 'history' | 'documents' | 'details' | 'profile' | 'pipeline' | 'assistant';
+type ResultsView = 'results' | 'chart' | 'insights';
+type BusyAction = 'run' | 'script' | 'save' | 'ai' | '';
 
-const starterSql = `SELECT
-    number,
-    number * 2 AS doubled
-FROM numbers(20)
-ORDER BY number;`;
-const terminalStatuses: RunStatus[] = ['succeeded', 'truncated', 'failed', 'cancelled', 'timed_out', 'interrupted'];
+const terminal = (run?: Run) => Boolean(run && ['succeeded', 'truncated', 'failed', 'cancelled', 'timed_out', 'interrupted'].includes(run.status));
+const stateKey = (connectionId: string) => `clickstudio:workspace:${connectionId}:v1`;
+const pref = <T extends string>(key: string, values: readonly T[], fallback: T): T => {
+    try {
+        const value = localStorage.getItem(key);
+        return values.includes(value as T) ? value as T : fallback;
+    } catch { return fallback; }
+};
 
-function cx(...values: Array<string | false | undefined>) {
-    return values.filter(Boolean).join(' ');
-}
+function cx(...values: Array<string | false | undefined>) { return values.filter(Boolean).join(' '); }
 
-function buttonClasses(variant: ButtonVariant) {
-    const common = 'inline-flex min-h-8 items-center justify-center gap-2 rounded border px-3 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40';
-    const variants: Record<ButtonVariant, string> = {
-        primary: 'border-violet-400/60 bg-violet-500 text-white hover:bg-violet-400',
-        secondary: 'border-slate-700 bg-slate-800/70 text-slate-200 hover:border-slate-600 hover:bg-slate-700',
-        ghost: 'border-transparent bg-transparent text-slate-400 hover:border-slate-700 hover:bg-slate-800/70 hover:text-slate-100',
-        danger: 'border-rose-500/50 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20',
+function Icon({ name, className = '' }: { name: string; className?: string }) {
+    const paths: Record<string, ReactNode> = {
+        schema: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></>,
+        history: <><path d="M3 12a9 9 0 1 0 2.64-6.36L3 8"/><path d="M3 3v5h5m4-1v5l3 2"/></>,
+        assistant: <><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></>,
+        chart: <><path d="M4 19V5m0 14h17"/><path d="m7 15 4-4 3 2 6-7"/></>,
+        details: <><path d="M4 19V5m0 14h16"/><path d="m7 15 3-4 3 2 5-7"/><circle cx="18" cy="6" r="1"/></>,
+        pipeline: <><rect x="3" y="4" width="6" height="5" rx="1"/><rect x="15" y="15" width="6" height="5" rx="1"/><rect x="15" y="4" width="6" height="5" rx="1"/><path d="M9 6.5h3a3 3 0 0 1 3 3V15"/></>,
+        documents: <><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7m-7 4h7"/></>,
+        search: <><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></>,
+        settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.6 2.77-.08-.02a1.7 1.7 0 0 0-1.8.72l-.04.07h-3.2l-.03-.08a1.7 1.7 0 0 0-1.54-1.1 1.7 1.7 0 0 0-1.45.75l-.04.07-2.77-1.6.02-.08a1.7 1.7 0 0 0-.72-1.8l-.07-.04v-3.2l.08-.03a1.7 1.7 0 0 0 1.1-1.54 1.7 1.7 0 0 0-.75-1.45l-.07-.04 1.6-2.77.08.02a1.7 1.7 0 0 0 1.8-.72l.04-.07h3.2l.03.08a1.7 1.7 0 0 0 1.54 1.1 1.7 1.7 0 0 0 1.45-.75l.04-.07 2.77 1.6-.02.08a1.7 1.7 0 0 0 .72 1.8l.07.04v3.2l-.08.03a1.7 1.7 0 0 0-.66.74Z"/></>,
+        close: <path d="m6 6 12 12M18 6 6 18"/>,
+        play: <path d="m8 5 11 7-11 7V5Z"/>,
+        chevron: <path d="m8 10 4 4 4-4"/>,
+        plus: <path d="M12 5v14M5 12h14"/>,
+        lock: <><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/></>,
+        bolt: <path d="m13 2-9 12h7l-1 8 10-13h-7l1-7Z"/>,
+        copy: <><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></>,
     };
-    return `${common} ${variants[variant]}`;
+    return <svg aria-hidden="true" className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round">{paths[name] ?? paths.details}</svg>;
 }
 
-function Button({ variant = 'secondary', className, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
-    return <button {...props} className={cx(buttonClasses(variant), className)} />;
-}
-
-function TextInput({ label, className, ...props }: InputHTMLAttributes<HTMLInputElement> & { label?: string }) {
-    return <label className="block min-w-0 space-y-1">
-        {label && <span className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</span>}
-        <input {...props} className={cx('h-8 w-full rounded border border-slate-700 bg-[#0f1117] px-2.5 text-xs text-slate-200 placeholder:text-slate-600 focus:border-violet-400 focus:outline-none', className)} />
-    </label>;
-}
-
-function Callout({ children, danger = false }: { children: ReactNode; danger?: boolean }) {
-    return <div role={danger ? 'alert' : 'status'} className={cx('border-l-2 px-3 py-2 text-xs leading-5', danger ? 'border-rose-400 bg-rose-400/10 text-rose-200' : 'border-violet-400 bg-violet-400/10 text-slate-300')}>
-        {children}
-    </div>;
-}
-
-function StatusDot({ trusted }: { trusted: boolean }) {
-    return <span className={cx('inline-flex items-center gap-1.5 text-[11px]', trusted ? 'text-emerald-300' : 'text-amber-300')}>
-        <span className={cx('h-1.5 w-1.5 rounded-full', trusted ? 'bg-emerald-400' : 'bg-amber-400')} />
-        {trusted ? 'Connected' : 'Untrusted'}
-    </span>;
-}
-
-function RunBadge({ status }: { status: RunStatus }) {
-    const color = status === 'succeeded' || status === 'truncated' ? 'text-emerald-300 border-emerald-400/40 bg-emerald-400/10' :
-        status === 'failed' || status === 'cancelled' || status === 'timed_out' || status === 'interrupted' ? 'text-rose-300 border-rose-400/40 bg-rose-400/10' :
-            'text-amber-300 border-amber-400/40 bg-amber-400/10';
-    return <span className={cx('inline-flex rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]', color)}>{status}</span>;
-}
-
-function displayValue(value: Json | undefined) {
-    if (value === null)
-        return 'NULL';
-    if (value === undefined)
-        return '';
-    return typeof value === 'object' ? JSON.stringify(value) : String(value);
-}
-
-function csvValue(value: Json | undefined) {
-    const text = displayValue(value);
-    return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-}
-
-function exportCsv(result: Result) {
-    return [result.columns.map(column => csvValue(column.name)).join(','), ...result.rows.map(row => row.map(csvValue).join(','))].join('\n');
-}
-
-function LoginScreen({ onLogin, busy, error }: { onLogin: (token: string) => void; busy: boolean; error?: string }) {
-    const [token, setToken] = useState('');
-    return <main className="grid min-h-screen place-items-center bg-[#0b0d11] p-6 text-slate-200">
-        <section className="w-full max-w-sm border border-slate-800 bg-[#101218] p-6 shadow-2xl shadow-black/20">
-            <div className="mb-8">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-violet-300">SQL / PRO</p>
-                <h1 className="text-xl font-semibold tracking-tight text-slate-100">Open your workspace</h1>
-                <p className="mt-2 text-xs leading-5 text-slate-500">Local-first ClickHouse SQL. Credentials stay on the server.</p>
-            </div>
-            <form className="space-y-4" onSubmit={event => { event.preventDefault(); onLogin(token); }}>
-                <TextInput label="Workspace token" type="password" value={token} onChange={event => setToken(event.target.value)} autoFocus />
-                <Button variant="primary" type="submit" disabled={busy || !token} className="w-full">{busy ? 'Opening…' : 'Open workspace'}</Button>
-            </form>
-            {error && <p className="mt-4 text-xs text-rose-300">{error}</p>}
-        </section>
-    </main>;
-}
-
-function ResultPanel({ run, result }: { run?: Run; result?: Result }) {
-    const [filter, setFilter] = useState('');
-    const [page, setPage] = useState(0);
-    const [view, setView] = useState<'table' | 'json'>('table');
-    const pageSize = 100;
-    const filteredRows = useMemo(() => {
-        if (!result || !filter.trim())
-            return result?.rows ?? [];
-        const term = filter.toLocaleLowerCase();
-        return result.rows.filter(row => row.map(displayValue).join('\u0001').toLocaleLowerCase().includes(term));
-    }, [filter, result]);
-    const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
-    const currentPage = Math.min(page, pageCount - 1);
-    const rows = filteredRows.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
-
-    useEffect(() => setPage(0), [filter, result?.runId]);
-
-    return <section className="flex min-h-0 flex-1 flex-col bg-[#0d0f14]" aria-label="Query results">
-        <header className="flex min-h-11 flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-4 py-2">
-            <div className="flex min-w-0 items-center gap-3">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Output</span>
-                {run && <RunBadge status={run.status} />}
-                {run && <span className="truncate font-mono text-[11px] text-slate-500">{run.queryId}</span>}
-            </div>
-            <div className="flex items-center gap-1">
-                <Button variant={view === 'table' ? 'secondary' : 'ghost'} className="min-h-7 px-2" onClick={() => setView('table')}>Table</Button>
-                <Button variant={view === 'json' ? 'secondary' : 'ghost'} className="min-h-7 px-2" onClick={() => setView('json')}>JSON</Button>
-                {result && <Button variant="ghost" className="min-h-7 px-2" onClick={() => download(`${run?.queryId ?? 'result'}.csv`, exportCsv(result), 'text/csv')}>Export CSV</Button>}
-            </div>
-        </header>
-        {!run && <div className="grid min-h-0 flex-1 place-items-center p-8 text-center"><div><p className="text-sm text-slate-400">Run a query to inspect results</p><p className="mt-1 text-xs text-slate-600">⌘ / Ctrl + Enter runs the current statement.</p></div></div>}
-        {run && <div className="min-h-0 flex-1 overflow-auto p-4">
-            <div className="mb-4 grid grid-cols-2 gap-px border border-slate-800 bg-slate-800 sm:grid-cols-4">
-                <div className="bg-[#111318] px-3 py-2"><p className="text-[10px] uppercase tracking-[0.12em] text-slate-600">Duration</p><p className="mt-1 font-mono text-xs text-slate-200">{Math.round(run.elapsedMs)} ms</p></div>
-                <div className="bg-[#111318] px-3 py-2"><p className="text-[10px] uppercase tracking-[0.12em] text-slate-600">Rows</p><p className="mt-1 font-mono text-xs text-slate-200">{run.rowCount.toLocaleString()}</p></div>
-                <div className="bg-[#111318] px-3 py-2"><p className="text-[10px] uppercase tracking-[0.12em] text-slate-600">Bytes</p><p className="mt-1 font-mono text-xs text-slate-200">{run.bytes.toLocaleString()}</p></div>
-                <div className="bg-[#111318] px-3 py-2"><p className="text-[10px] uppercase tracking-[0.12em] text-slate-600">Server</p><p className="mt-1 truncate font-mono text-xs text-slate-200">{run.serverVersion ?? '—'}</p></div>
-            </div>
-            {run.error && <Callout danger>{run.error.code}: {run.error.message}</Callout>}
-            {run.warnings.map((warning, index) => <div key={index} className="mt-3"><Callout>{warning}</Callout></div>)}
-            {run.status === 'queued' || run.status === 'running' ? <div className="flex items-center gap-2 py-6 text-xs text-slate-500"><span className="h-2 w-2 animate-pulse rounded-full bg-violet-400" />Waiting for ClickHouse…</div> : !result ? <p className="py-6 text-xs text-slate-500">No retained result is available for this run.</p> : view === 'json' ? <pre className="max-h-full overflow-auto border border-slate-800 bg-[#090b0f] p-4 font-mono text-[11px] leading-5 text-slate-300">{JSON.stringify(result, null, 2)}</pre> : <>
-                <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-                    <TextInput aria-label="Filter result rows" placeholder="Filter retained rows" value={filter} onChange={event => setFilter(event.target.value)} className="min-w-56" />
-                    <span className="text-[11px] text-slate-500">{filteredRows.length.toLocaleString()} rows · {result.columns.length} columns</span>
-                </div>
-                <div className="overflow-auto border border-slate-800">
-                    <table className="min-w-full border-collapse text-left font-mono text-[11px]">
-                        <thead className="sticky top-0 z-10 bg-[#181b23] text-[10px] uppercase tracking-[0.08em] text-slate-500">
-                            <tr><th className="border-b border-slate-700 px-3 py-2 font-medium">#</th>{result.columns.map((column, index) => <th key={index} className="max-w-64 border-b border-slate-700 px-3 py-2 font-medium"><span className="block truncate text-slate-300">{column.name}</span><span className="mt-1 block normal-case tracking-normal text-[10px] text-slate-600">{column.type}</span></th>)}</tr>
-                        </thead>
-                        <tbody>{rows.map((row, rowIndex) => <tr key={rowIndex} className="hover:bg-violet-400/[0.04]"><th className="border-b border-slate-800 px-3 py-2 font-normal text-slate-600">{currentPage * pageSize + rowIndex + 1}</th>{result.columns.map((_, columnIndex) => <td key={columnIndex} title={displayValue(row[columnIndex])} className="max-w-72 border-b border-slate-800 px-3 py-2 align-top text-slate-300"><span className={row[columnIndex] === null ? 'text-slate-600' : undefined}>{displayValue(row[columnIndex])}</span></td>)}</tr>)}</tbody>
-                    </table>
-                    {!rows.length && <p className="p-8 text-center text-xs text-slate-500">No rows match this filter.</p>}
-                </div>
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-500">
-                    <span>Page {currentPage + 1} of {pageCount} · showing at most {pageSize} rows</span>
-                    <div className="flex gap-1"><Button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>Previous</Button><Button disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>Next</Button></div>
-                </div>
-            </>}
-        </div>}
-    </section>;
-}
-
-function SchemaExplorer({ schema, loading, error, onRefresh, onInsert }: { schema?: Schema; loading: boolean; error?: string; onRefresh: () => void; onInsert: (value: string) => void }) {
-    const [search, setSearch] = useState('');
-    const term = search.trim().toLocaleLowerCase();
-    const columns = schema?.columns ?? [];
-    const tables = (schema?.tables ?? []).filter(table => {
-        if (!term)
-            return true;
-        return `${table.database}.${table.name}`.toLocaleLowerCase().includes(term) || columns.some(column => column.database === table.database && column.table === table.name && column.name.toLocaleLowerCase().includes(term));
-    });
-    return <div className="flex min-h-0 flex-1 flex-col">
-        <div className="space-y-2 border-b border-slate-800 p-3"><TextInput aria-label="Filter schema" placeholder="Filter tables and columns" value={search} onChange={event => setSearch(event.target.value)} /><div className="flex items-center justify-between"><span className="text-[10px] uppercase tracking-[0.14em] text-slate-600">Explorer</span><Button variant="ghost" className="min-h-6 px-1.5 text-[10px]" onClick={onRefresh} disabled={loading}>{loading ? 'Loading…' : 'Refresh'}</Button></div></div>
-        <div className="min-h-0 flex-1 overflow-auto p-2">
-            {error && <Callout danger>{error}</Callout>}
-            {!schema && !loading && !error && <p className="p-3 text-xs leading-5 text-slate-600">Trust the connection to inspect its schema.</p>}
-            {loading && <p className="p-3 text-xs text-slate-500">Reading schema…</p>}
-            {schema?.warnings.map((warning, index) => <p key={index} className="p-2 text-[11px] text-amber-300">{warning}</p>)}
-            <div className="space-y-1">{tables.map(table => <details key={`${table.database}.${table.name}`} className="group rounded border border-transparent hover:border-slate-800">
-                <summary className="flex items-center gap-2 px-2 py-2 text-xs text-slate-300 hover:bg-slate-800/50"><span className="font-mono text-[10px] text-violet-300">▾</span><span className="truncate">{table.database}.{table.name}</span><span className="ml-auto text-[10px] text-slate-600">{table.engine}</span></summary>
-                <div className="border-t border-slate-800/70 py-1">{columns.filter(column => column.database === table.database && column.table === table.name && (!term || column.name.toLocaleLowerCase().includes(term) || `${table.database}.${table.name}`.toLocaleLowerCase().includes(term))).map(column => <button key={column.name} type="button" className="flex w-full items-center justify-between gap-2 px-4 py-1.5 text-left text-[11px] text-slate-500 hover:bg-violet-400/[0.05] hover:text-slate-200" title={column.comment || column.type} onClick={() => onInsert(column.name)}><span className="truncate">{column.name}</span><span className="shrink-0 font-mono text-[10px] text-slate-600">{column.type}</span></button>)}</div>
-            </details>)}</div>
-            {schema && !tables.length && <p className="p-3 text-xs text-slate-600">No matching tables.</p>}
-        </div>
-    </div>;
-}
-
-function HistoryList({ runs, selectedId, onOpen }: { runs: Run[]; selectedId?: string; onOpen: (run: Run) => void }) {
-    return <div className="min-h-0 flex-1 overflow-auto p-2">
-        {!runs.length && <p className="p-3 text-xs leading-5 text-slate-600">Runs from this connection will appear here.</p>}
-        <div className="space-y-1">{runs.map(run => <button key={run.id} type="button" onClick={() => onOpen(run)} className={cx('w-full border px-2.5 py-2 text-left', selectedId === run.id ? 'border-violet-400/50 bg-violet-400/[0.08]' : 'border-transparent hover:border-slate-800 hover:bg-slate-800/50')}><div className="flex items-center justify-between gap-2"><RunBadge status={run.status} /><span className="font-mono text-[10px] text-slate-600">{Math.round(run.elapsedMs)} ms</span></div><p className="mt-1 line-clamp-2 font-mono text-[11px] leading-4 text-slate-400">{run.sql.replace(/\s+/g, ' ')}</p><p className="mt-1 text-[10px] text-slate-600">{new Date(run.createdAt).toLocaleString()} · {run.rowCount.toLocaleString()} rows</p></button>)}</div>
-    </div>;
-}
-
-function Workspace({ connection, onSelectConnection, connections, onRefreshConnections }: { connection: Connected; connections: Connected[]; onSelectConnection: (id: string) => void; onRefreshConnections: () => Promise<void> }) {
-    const editor = useRef<SqlEditorHandle>(null);
-    const poll = useRef<number | undefined>(undefined);
-    const storageKey = `sql-pro:draft:${connection.id}`;
-    const [sql, setSql] = useState(() => localStorage.getItem(storageKey) ?? starterSql);
-    const [schema, setSchema] = useState<Schema>();
-    const [schemaLoading, setSchemaLoading] = useState(false);
-    const [schemaError, setSchemaError] = useState('');
-    const [history, setHistory] = useState<Run[]>([]);
-    const [run, setRun] = useState<Run>();
-    const [result, setResult] = useState<Result>();
-    const [busy, setBusy] = useState(false);
-    const [error, setError] = useState('');
-    const [sidebar, setSidebar] = useState<'schema' | 'history'>('schema');
-    const [sidebarOpen, setSidebarOpen] = useState(false);
-    const [limits, setLimits] = useState({ rows: String(connection.limits.rows || DEFAULT_LIMITS.rows), seconds: String(connection.limits.seconds || DEFAULT_LIMITS.seconds) });
-
-    const loadHistory = async () => {
-        try {
-            setHistory(await api<Run[]>(`/runs?connectionId=${encodeURIComponent(connection.id)}`));
-        }
-        catch (caught) {
-            setError(message(caught));
-        }
+function Button({ variant = 'secondary', className = '', type = 'button', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger' }) {
+    const variants = {
+        primary: 'button-primary',
+        secondary: 'button-secondary',
+        ghost: 'button-ghost',
+        danger: 'button-danger',
     };
-    const loadSchema = async () => {
-        if (!connection.trusted)
-            return;
-        setSchemaLoading(true);
-        setSchemaError('');
-        try {
-            setSchema(await api<Schema>(`/connections/${encodeURIComponent(connection.id)}/schema`));
-        }
-        catch (caught) {
-            setSchemaError(message(caught));
-        }
-        finally {
-            setSchemaLoading(false);
-        }
-    };
-    const loadResult = async (nextRun: Run) => {
-        if (nextRun.resultState !== 'reopenable') {
-            setResult(undefined);
-            return;
-        }
-        try {
-            setResult(await api<Result>(`/runs/${encodeURIComponent(nextRun.id)}/snapshot`));
-        }
-        catch (caught) {
-            setError(message(caught));
-        }
-    };
-    const watchRun = async (id: string) => {
-        if (poll.current !== undefined)
-            window.clearInterval(poll.current);
-        let finished = false;
-        const tick = async () => {
-            try {
-                const next = await api<Run>(`/runs/${encodeURIComponent(id)}`);
-                setRun(next);
-                if (terminalStatuses.includes(next.status)) {
-                    finished = true;
-                    if (poll.current !== undefined)
-                        window.clearInterval(poll.current);
-                    poll.current = undefined;
-                    await loadResult(next);
-                    await loadHistory();
-                }
-            }
-            catch (caught) {
-                if (poll.current !== undefined)
-                    window.clearInterval(poll.current);
-                poll.current = undefined;
-                setError(message(caught));
-            }
-        };
-        await tick();
-        if (!finished)
-            poll.current = window.setInterval(() => void tick(), 600);
-    };
-
-    useEffect(() => {
-        setSql(localStorage.getItem(storageKey) ?? starterSql);
-        setSchema(undefined);
-        setSchemaError('');
-        setRun(undefined);
-        setResult(undefined);
-        setLimits({ rows: String(connection.limits.rows || DEFAULT_LIMITS.rows), seconds: String(connection.limits.seconds || DEFAULT_LIMITS.seconds) });
-        void loadHistory();
-        if (connection.trusted)
-            void loadSchema();
-        return () => {
-            if (poll.current !== undefined)
-                window.clearInterval(poll.current);
-            poll.current = undefined;
-        };
-    }, [connection.id, connection.trusted]);
-
-    useEffect(() => {
-        localStorage.setItem(storageKey, sql);
-    }, [sql, storageKey]);
-
-    const runQuery = async () => {
-        if (!connection.trusted) {
-            setError('Trust this connection before running SQL.');
-            return;
-        }
-        if (!sql.trim()) {
-            setError('Write a SQL statement before running it.');
-            return;
-        }
-        setBusy(true);
-        setError('');
-        setResult(undefined);
-        try {
-            const next = await post<Run>('/runs', {
-                clientRequestId: crypto.randomUUID(),
-                connectionId: connection.id,
-                sql,
-                parameters: {},
-                limits: { rows: Number(limits.rows), seconds: Number(limits.seconds) },
-                tags: { surface: 'sql-pro' },
-            });
-            setRun(next);
-            await watchRun(next.id);
-        }
-        catch (caught) {
-            setError(message(caught));
-        }
-        finally {
-            setBusy(false);
-        }
-    };
-    const cancelRun = async () => {
-        if (!run || terminalStatuses.includes(run.status))
-            return;
-        setBusy(true);
-        try {
-            const next = await post<Run>(`/runs/${encodeURIComponent(run.id)}/cancel`);
-            setRun(next);
-            await loadHistory();
-        }
-        catch (caught) {
-            setError(message(caught));
-        }
-        finally {
-            setBusy(false);
-        }
-    };
-    const testConnection = async () => {
-        setBusy(true);
-        setError('');
-        try {
-            await post(`/connections/${encodeURIComponent(connection.id)}/test`);
-            await onRefreshConnections();
-            setSchemaError('Connection test completed.');
-        }
-        catch (caught) {
-            setError(message(caught));
-        }
-        finally {
-            setBusy(false);
-        }
-    };
-    const toggleTrust = async () => {
-        if (!connection.trusted && !window.confirm(`Trust the read-only connection ${connection.id}?`))
-            return;
-        setBusy(true);
-        setError('');
-        try {
-            await post(`/connections/${encodeURIComponent(connection.id)}/trust`, { trusted: !connection.trusted, confirmation: connection.id });
-            await onRefreshConnections();
-        }
-        catch (caught) {
-            setError(message(caught));
-        }
-        finally {
-            setBusy(false);
-        }
-    };
-    const openRun = async (selected: Run) => {
-        setRun(selected);
-        setSql(selected.sql);
-        setResult(undefined);
-        await loadResult(selected);
-        setSidebarOpen(false);
-    };
-
-    return <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#0b0d11]">
-        <header className="flex min-h-12 flex-wrap items-center gap-3 border-b border-slate-800 bg-[#101218] px-3 py-2 lg:px-4">
-            <button type="button" className="flex items-center gap-2 text-left" onClick={() => setSidebarOpen(value => !value)}><span className="text-[11px] font-bold tracking-[0.2em] text-violet-300">SQL / PRO</span><span className="hidden text-[10px] uppercase tracking-[0.12em] text-slate-600 sm:inline">ClickHouse workspace</span></button>
-            <div className="hidden h-5 w-px bg-slate-800 sm:block" />
-            <select aria-label="Connection" value={connection.id} onChange={event => onSelectConnection(event.target.value)} className="h-7 max-w-52 rounded border border-slate-700 bg-[#0b0d11] px-2 text-xs text-slate-200 focus:border-violet-400 focus:outline-none">{connections.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-            <StatusDot trusted={connection.trusted} />
-            <span className="hidden text-[11px] text-slate-600 md:inline">{connection.database} · {connection.username}</span>
-            <div className="ml-auto flex items-center gap-1.5"><Button variant="ghost" className="min-h-7 px-2" onClick={testConnection} disabled={busy}>Test</Button><Button variant={connection.trusted ? 'danger' : 'primary'} className="min-h-7 px-2" onClick={toggleTrust} disabled={busy}>{connection.trusted ? 'Revoke trust' : 'Trust connection'}</Button></div>
-        </header>
-        {error && <div className="border-b border-slate-800 bg-[#111318] px-4 py-2"><Callout danger>{error}</Callout></div>}
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-            <aside className={cx('fixed inset-y-12 left-0 z-30 w-72 flex-col border-r border-slate-800 bg-[#0f1117] lg:static lg:flex', sidebarOpen ? 'flex' : 'hidden')}>
-                <div className="grid grid-cols-2 border-b border-slate-800 p-2"><Button variant={sidebar === 'schema' ? 'secondary' : 'ghost'} className="min-h-7 rounded-sm px-2 text-[11px]" onClick={() => setSidebar('schema')}>Explorer</Button><Button variant={sidebar === 'history' ? 'secondary' : 'ghost'} className="min-h-7 rounded-sm px-2 text-[11px]" onClick={() => setSidebar('history')}>History</Button></div>
-                {sidebar === 'schema' ? <SchemaExplorer schema={schema} loading={schemaLoading} error={schemaError} onRefresh={() => void loadSchema()} onInsert={value => editor.current?.insert(value)} /> : <HistoryList runs={history} selectedId={run?.id} onOpen={selected => void openRun(selected)} />}
-                <footer className="border-t border-slate-800 p-3 text-[10px] leading-4 text-slate-600"><p className="font-mono">{connection.host}</p><p className="mt-1">Read-only identity · {connection.manifest?.serverVersion ?? 'version unknown'}</p></footer>
-            </aside>
-            <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                <div className="flex min-h-9 items-center gap-1 overflow-x-auto border-b border-slate-800 bg-[#0d0f14] px-2"><button type="button" className="flex h-8 min-w-36 items-center gap-2 border-b-2 border-violet-400 px-3 text-left text-xs text-slate-200"><span className="h-1.5 w-1.5 rounded-full bg-violet-400" />main.sql<span className="ml-auto text-slate-600">×</span></button><span className="ml-auto whitespace-nowrap px-3 text-[10px] text-slate-600">Local draft</span></div>
-                <div className="flex min-h-0 flex-1 flex-col">
-                    <section className="flex min-h-[360px] min-w-0 flex-[3] flex-col">
-                        <div className="flex min-h-10 flex-wrap items-center gap-2 border-b border-slate-800 bg-[#111318] px-3 py-2"><span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Query editor</span><span className="text-[11px] text-slate-600">{sql.split(/;\s*/).filter(Boolean).length || 1} statement</span><div className="ml-auto flex gap-1"><Button variant="ghost" className="min-h-7 px-2" onClick={() => setSql(starterSql)}>Reset</Button><Button variant="ghost" className="min-h-7 px-2" onClick={() => setSql(value => value.replace(/\s+$/g, ''))}>Trim</Button></div></div>
-                        <div className="min-h-0 flex-1 bg-[#111318]"><SqlEditor ref={editor} value={sql} schema={schema} onChange={setSql} onRun={() => void runQuery()} /></div>
-                        <div className="flex flex-wrap items-end gap-2 border-t border-slate-800 bg-[#0f1117] p-3"><Button variant="primary" onClick={() => void runQuery()} disabled={busy || !connection.trusted}>{busy ? 'Running…' : 'Run query'}<span className="hidden text-[10px] text-violet-100/70 sm:inline">⌘↵</span></Button><Button variant="secondary" onClick={() => void cancelRun()} disabled={busy || !run || terminalStatuses.includes(run.status)}>Cancel</Button><div className="ml-auto grid grid-cols-2 gap-2"><TextInput label="Rows" inputMode="numeric" value={limits.rows} onChange={event => setLimits(current => ({ ...current, rows: event.target.value }))} className="w-24" /><TextInput label="Seconds" inputMode="numeric" value={limits.seconds} onChange={event => setLimits(current => ({ ...current, seconds: event.target.value }))} className="w-24" /></div></div>
-                    </section>
-                    <ResultPanel run={run} result={result} />
-                </div>
-            </main>
-            <aside className="hidden w-64 shrink-0 flex-col border-l border-slate-800 bg-[#0f1117] xl:flex">
-                <div className="border-b border-slate-800 px-3 py-3"><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Run context</p><p className="mt-1 truncate text-xs text-slate-200">{run?.queryId ?? 'No run selected'}</p></div>
-                <div className="space-y-4 overflow-auto p-3 text-xs">
-                    <section><p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">Connection</p><dl className="space-y-2"><div className="flex justify-between gap-3"><dt className="text-slate-600">Host</dt><dd className="max-w-32 truncate text-right font-mono text-slate-400">{connection.host}</dd></div><div className="flex justify-between gap-3"><dt className="text-slate-600">Database</dt><dd className="text-slate-400">{connection.database}</dd></div><div className="flex justify-between gap-3"><dt className="text-slate-600">Identity</dt><dd className="text-slate-400">{connection.username}</dd></div><div className="flex justify-between gap-3"><dt className="text-slate-600">Access</dt><dd><StatusDot trusted={connection.trusted} /></dd></div></dl></section>
-                    <section><p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">Shortcuts</p><div className="space-y-2 text-slate-500"><div className="flex justify-between gap-2"><span>Run query</span><kbd className="font-mono text-slate-400">⌘ ↵</kbd></div><div className="flex justify-between gap-2"><span>Schema insert</span><kbd className="font-mono text-slate-400">click</kbd></div><div className="flex justify-between gap-2"><span>Filter result</span><kbd className="font-mono text-slate-400">input</kbd></div></div></section>
-                    {run && <section><p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600">Latest run</p><div className="space-y-2 border border-slate-800 bg-[#111318] p-2.5"><div className="flex items-center justify-between"><span className="text-slate-500">State</span><RunBadge status={run.status} /></div><div className="flex items-center justify-between"><span className="text-slate-500">Rows</span><span className="font-mono text-slate-300">{run.rowCount.toLocaleString()}</span></div><div className="flex items-center justify-between"><span className="text-slate-500">Elapsed</span><span className="font-mono text-slate-300">{Math.round(run.elapsedMs)} ms</span></div></div></section>}
-                </div>
-            </aside>
-        </div>
-    </div>;
+    return <button {...props} type={type} className={cx('button-base', variants[variant], className)} />;
 }
 
-export function App() {
+function Status({ run, trusted }: { run?: Run; trusted?: boolean }) {
+    if (trusted !== undefined) return <span className={cx('inline-flex items-center gap-2 text-xs', trusted ? 'text-emerald-300' : 'text-amber-300')}><span className={cx('status-light', trusted ? 'is-trusted' : 'is-warning')}/>{trusted ? 'Trusted · read only' : 'Needs review'}</span>;
+    const kind = terminal(run) ? run?.status === 'succeeded' ? 'is-trusted' : run?.status === 'truncated' ? 'is-warning' : 'is-error' : 'is-running';
+    return <span className="inline-flex items-center gap-2 text-[11px] capitalize text-muted"><span className={cx('status-light', kind)}/>{run?.status ?? 'Ready'}</span>;
+}
+
+function SelectControl({ label, value, options, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void }) {
+    return <label className="select-control"><span>{label}</span><select value={value} onChange={event => onChange(event.target.value)}>{options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select><Icon name="chevron" className="select-chevron"/></label>;
+}
+
+function App() {
+    const [locale, setLocale] = useState<Locale>(() => pref('cathedral:locale', ['en', 'de', 'es', 'nl', 'zh', 'ru'] as const, 'en'));
+    const [theme, setTheme] = useState<Theme>(() => pref('cathedral:theme', ['monokai', 'catppuccin-latte'] as const, 'monokai'));
+    const [experience, setExperience] = useState<ExperienceLevel>(() => pref('cathedral:experience', ['beginner', 'expert'] as const, 'beginner'));
     const [session, setSession] = useState<Session>();
     const [connections, setConnections] = useState<Connected[]>([]);
-    const [selectedId, setSelectedId] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [loginBusy, setLoginBusy] = useState(false);
-    const [error, setError] = useState('');
+    const [connectionId, setConnectionId] = useState(() => new URLSearchParams(location.search).get('connection') ?? '');
+    const [sessionError, setSessionError] = useState('');
+    const [token, setToken] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [connectionPicker, setConnectionPicker] = useState(false);
+    const copy = getCopy(locale);
+    const connection = connections.find(item => item.id === connectionId) ?? connections[0];
+    const dark = theme === 'monokai';
 
-    const refreshSession = async () => {
+    useEffect(() => {
+        document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+        document.documentElement.lang = locale;
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        try {
+            localStorage.setItem('cathedral:theme', theme);
+            localStorage.setItem('cathedral:locale', locale);
+            localStorage.setItem('cathedral:experience', experience);
+        } catch { }
+    }, [dark, experience, locale, theme]);
+
+    const loadSession = useCallback(async () => {
         const next = await api<Session>('/session');
         setSession(next);
         if (next.principal) {
-            const nextConnections = await api<Connected[]>('/connections');
-            setConnections(nextConnections);
-            setSelectedId(current => nextConnections.some(connection => connection.id === current) ? current : nextConnections[0]?.id ?? '');
+            const profiles = await api<Connected[]>('/connections');
+            setConnections(profiles);
+            setConnectionId(current => profiles.some(item => item.id === current) ? current : profiles[0]?.id ?? '');
         }
-    };
-    useEffect(() => {
-        void refreshSession().catch(caught => setError(message(caught))).finally(() => setLoading(false));
     }, []);
-    const login = async (token: string) => {
-        setLoginBusy(true);
-        setError('');
+
+    useEffect(() => { void loadSession().catch(error => setSessionError(message(error))); }, [loadSession]);
+
+    const login = async () => {
+        if (!token || busy) return;
+        setBusy(true); setSessionError('');
         try {
             await post('/session', { token });
-            await refreshSession();
-        }
-        catch (caught) {
-            setError(message(caught));
-        }
-        finally {
-            setLoginBusy(false);
-        }
+            setToken('');
+            await loadSession();
+        } catch (error) { setSessionError(message(error)); }
+        finally { setBusy(false); }
     };
-    const signOut = async () => {
-        await api('/session', { method: 'DELETE' });
-        setSession({ principal: null, requiresLogin: true, demo: false });
-        setConnections([]);
+
+    const logout = async () => {
+        try { await api('/session', { method: 'DELETE' }); setConnections([]); setSession({ principal: null, requiresLogin: true, demo: false }); }
+        catch (error) { setSessionError(message(error)); }
     };
-    if (loading)
-        return <div className="grid min-h-screen place-items-center bg-[#0b0d11] text-xs text-slate-500">Opening workspace…</div>;
-    if (session?.requiresLogin && !session.principal)
-        return <LoginScreen onLogin={token => void login(token)} busy={loginBusy} error={error} />;
-    const connection = connections.find(item => item.id === selectedId) ?? connections[0];
-    if (!connection)
-        return <main className="grid min-h-screen place-items-center bg-[#0b0d11] p-6 text-center text-slate-300"><div><p className="text-sm">No connection profiles are configured.</p><p className="mt-2 text-xs text-slate-600">Configure a local profile, then reload this workspace.</p>{error && <p className="mt-4 text-rose-300">{error}</p>}<Button className="mt-5" onClick={() => void signOut()}>Sign out</Button></div></main>;
-    return <div className="flex min-h-screen flex-col bg-[#0b0d11] text-slate-200"><Workspace connection={connection} connections={connections} onSelectConnection={setSelectedId} onRefreshConnections={async () => { const next = await api<Connected[]>('/connections'); setConnections(next); }} /><button type="button" className="fixed bottom-3 left-3 z-40 hidden rounded border border-slate-700 bg-[#171a22] px-2 py-1 text-[10px] text-slate-500 hover:text-slate-200 lg:block" onClick={() => void signOut()}>Sign out</button></div>;
+
+    if (!session) return <main className="auth-screen"><section className="auth-card animate-enter"><Brand dark={dark}/><span className="eyebrow mt-8">PRIVATE WORKSPACE</span><h1>{sessionError ? 'Workspace unavailable' : copy.auth.opening}</h1>{sessionError ? <><p>{sessionError}</p><Button variant="primary" onClick={() => { setSessionError(''); void loadSession().catch(error => setSessionError(message(error))); }}>Try again</Button></> : <div className="splash-status"><span className="loading-orbit"/><p>{copy.auth.opening}</p></div>}</section></main>;
+    if (!session.principal) return <main className="auth-screen"><form className="auth-card animate-enter" onSubmit={event => { event.preventDefault(); void login(); }}><Brand dark={dark}/><span className="eyebrow mt-8">Private workspace</span><h1>{copy.auth.title}</h1><p>{copy.auth.description}</p><label className="field-label">{copy.auth.token}<input className="field-input mt-2" type="password" autoComplete="current-password" value={token} onChange={event => setToken(event.target.value)} autoFocus/></label>{sessionError && <div className="callout callout-error">{sessionError}</div>}<Button variant="primary" type="submit" disabled={busy || !token} className="mt-4 w-full">{busy ? copy.auth.opening : copy.auth.open}<span className="button-arrow">↗</span></Button><div className="auth-footnote"><Icon name="lock"/> Credentials are handled by the workspace server.</div></form></main>;
+
+    return <div className="application" data-experience={experience}>
+        <header className="topbar">
+            <Brand dark={dark}/>
+            <div className="topbar-divider"/>
+            <div className="connection-wrap">
+                <button className="connection-trigger" type="button" aria-expanded={connectionPicker} onClick={() => setConnectionPicker(value => !value)}>
+                    <span className="connection-env"><span className="status-light is-trusted"/> LIVE CONNECTION</span>
+                    <strong>{connection?.name ?? 'Choose connection'}</strong>
+                    <span className="connection-database">{connection?.database ?? '—'} <Icon name="chevron"/></span>
+                </button>
+                {connectionPicker && <div className="connection-menu animate-enter" role="listbox">{connections.map(item => <button key={item.id} type="button" onClick={() => { setConnectionId(item.id); setConnectionPicker(false); }}><span><strong>{item.name}</strong><small>{item.database} · {item.host}</small></span><Status trusted={item.trusted}/></button>)}</div>}
+            </div>
+            <div className="topbar-spacer"/>
+            <div className="experience-switch" role="group" aria-label="Workspace mode">
+                <span className="mode-caption">WORKSPACE</span>
+                {(['beginner', 'expert'] as const).map(level => <button type="button" key={level} aria-pressed={experience === level} onClick={() => setExperience(level)} className={experience === level ? 'is-active' : ''}><span className={level === 'expert' ? 'expert-diamond' : 'beginner-dot'}/>{level === 'beginner' ? copy.app.beginner : copy.app.expert}</button>)}
+            </div>
+            <div className="topbar-divider topbar-divider-short"/>
+            <div className="topbar-preferences">
+                <SelectControl label={copy.app.language} value={locale} options={localeOptions} onChange={value => setLocale(value as Locale)}/>
+                <SelectControl label={copy.app.theme} value={theme} options={themeOptions} onChange={value => setTheme(value as Theme)}/>
+            </div>
+            <Button variant="ghost" className="account-button" title="Sign out" onClick={() => void logout()}>HV</Button>
+        </header>
+        {session.demo && <div className="demo-ribbon"><span className="status-light is-warning"/> DEMO DATA · queries are not sent to a live database</div>}
+        {connection ? <Workspace key={connection.id} connection={connection} connections={connections} onSelectConnection={setConnectionId} onRefreshConnections={async () => { const latest = await api<Connected[]>('/connections'); setConnections(latest); }} experience={experience} dark={dark} copy={copy}/> : <div className="empty-connection"><Icon name="schema"/><h1>{copy.app.name}</h1><p>No connection profiles are configured for this workspace.</p></div>}
+    </div>;
 }
+
+function Brand({ dark }: { dark: boolean }) {
+    return <div className="brand-lockup"><img className="brand-symbol" src={dark ? clickhouseLogomarkDark : clickhouseLogomarkLight} alt="ClickHouse logo"/><span className="brand-name">Click<span>Studio</span><small>CLICKHOUSE WORKSPACE</small></span></div>;
+}
+
+function Workspace({ connection, connections, onSelectConnection, onRefreshConnections, experience, dark, copy }: {
+    connection: Connected;
+    connections: Connected[];
+    onSelectConnection: (id: string) => void;
+    onRefreshConnections: () => Promise<void>;
+    experience: ExperienceLevel;
+    dark: boolean;
+    copy: Copy;
+}) {
+    const key = stateKey(connection.id);
+    const [workspace, setWorkspace] = useState<WorkspaceState>(() => recover(key));
+    const workspaceRef = useRef(workspace);
+    workspaceRef.current = workspace;
+    const active = workspace.tabs.find(tab => tab.id === workspace.activeId) ?? workspace.tabs[0]!;
+    const editor = useRef<EditorHandle>(null);
+    const [schema, setSchema] = useState<Schema>();
+    const [schemaLoading, setSchemaLoading] = useState(false);
+    const [schemaError, setSchemaError] = useState('');
+    const [documents, setDocuments] = useState<QueryDocument[]>([]);
+    const [history, setHistory] = useState<Run[]>([]);
+    const [run, setRun] = useState<Run>();
+    const [resultPage, setResultPage] = useState<ResultPage>();
+    const [snapshot, setSnapshot] = useState<Result>();
+    const [profile, setProfile] = useState<QueryProfile>();
+    const [pipeline, setPipeline] = useState<ProfilePipeline>();
+    const [script, setScript] = useState<Script>();
+    const [page, setPage] = useState(0);
+    const [view, setView] = useState<ResultsView>('results');
+    const [inspector, setInspector] = useState<Inspector>('schema');
+    const [drawerOpen, setDrawerOpen] = useState(false);
+    const [layout, setLayout] = useState<'write' | 'analyze' | 'performance' | 'ai'>('write');
+    const [busy, setBusy] = useState<BusyAction>('');
+    const [error, setError] = useState('');
+    const [notice, setNotice] = useState('');
+    const [eventState, setEventState] = useState<'idle' | 'live' | 'reconnecting'>('idle');
+    const [search, setSearch] = useState('');
+    const [trusting, setTrusting] = useState(false);
+    const storageError = useWorkspacePersistence(key, workspace);
+    const parameters = useMemo(() => {
+        try { return parameterNames(active.sql); } catch { return []; }
+    }, [active.sql]);
+    const activeRunId = active.activeRunId;
+    const running = Boolean(run && !terminal(run));
+    const currentConnection = connections.find(item => item.id === connection.id) ?? connection;
+    const trusted = currentConnection.trusted;
+
+    const update = useCallback((id: string, change: (draft: Draft) => Draft) => {
+        setWorkspace(current => ({ ...current, tabs: current.tabs.map(draft => draft.id === id ? change(draft) : draft) }));
+    }, []);
+    const patch = useCallback((values: Partial<Draft>) => update(active.id, draft => ({ ...draft, ...values })), [active.id, update]);
+
+    const loadHistory = useCallback(async () => {
+        setHistory(await api<Run[]>(`/runs?connectionId=${encodeURIComponent(connection.id)}`));
+    }, [connection.id]);
+    const loadDocuments = useCallback(async () => {
+        setDocuments(await api<QueryDocument[]>(`/documents?trash=true&connectionId=${encodeURIComponent(connection.id)}`));
+    }, [connection.id]);
+    const loadSchema = useCallback(async () => {
+        if (!trusted) { setSchema(undefined); return; }
+        setSchemaLoading(true); setSchemaError('');
+        try { setSchema(await api<Schema>(`/connections/${encodeURIComponent(connection.id)}/schema`)); }
+        catch (caught) { setSchemaError(message(caught)); }
+        finally { setSchemaLoading(false); }
+    }, [connection.id, trusted]);
+
+    useEffect(() => {
+        void Promise.all([loadHistory(), loadDocuments()]).catch(caught => setError(message(caught)));
+        if (trusted) void loadSchema();
+        const interval = window.setInterval(() => { void loadHistory().catch(() => undefined); }, 15000);
+        return () => window.clearInterval(interval);
+    }, [loadDocuments, loadHistory, loadSchema, trusted]);
+
+    useEffect(() => {
+        if (!activeRunId) { setRun(undefined); setResultPage(undefined); setSnapshot(undefined); setProfile(undefined); setPipeline(undefined); return; }
+        let cancelled = false;
+        void api<Run>(`/runs/${encodeURIComponent(activeRunId)}`).then(next => {
+            if (cancelled || next.connectionId !== connection.id) return;
+            setRun(next);
+            setPage(0);
+            if (terminal(next)) void loadHistory().catch(() => undefined);
+        }).catch(caught => { if (!cancelled) setError(message(caught)); });
+        return () => { cancelled = true; };
+    }, [activeRunId, connection.id, loadHistory]);
+
+    useEffect(() => {
+        if (!activeRunId || !run || !terminal(run) || run.resultState !== 'reopenable') { setResultPage(undefined); return; }
+        let cancelled = false;
+        void api<ResultPage>(`/runs/${encodeURIComponent(activeRunId)}/result?offset=${page * 200}&count=200`).then(next => { if (!cancelled) setResultPage(next); }).catch(caught => { if (!cancelled) setError(message(caught)); });
+        return () => { cancelled = true; };
+    }, [activeRunId, page, run]);
+
+    useEffect(() => {
+        if (!activeRunId || !run || terminal(run)) { setEventState('idle'); return; }
+        setEventState('reconnecting');
+        const stream = new EventSource(`/api/runs/${encodeURIComponent(activeRunId)}/events`);
+        stream.onopen = () => setEventState('live');
+        stream.onmessage = event => {
+            try {
+                const payload = JSON.parse(event.data) as RunEvent;
+                if (payload.run.id !== activeRunId || payload.run.connectionId !== connection.id) return;
+                setRun(current => !current || current.sequence <= payload.sequence ? payload.run : current);
+                if (terminal(payload.run)) {
+                    stream.close(); setEventState('idle');
+                    void loadHistory().catch(() => undefined);
+                }
+            } catch { setEventState('reconnecting'); }
+        };
+        stream.onerror = () => setEventState('reconnecting');
+        return () => stream.close();
+    }, [activeRunId, connection.id, loadHistory, run?.status]);
+
+    useEffect(() => {
+        if (!running || eventState === 'live' || !activeRunId) return;
+        let closed = false;
+        const timer = window.setInterval(() => {
+            void api<Run>(`/runs/${encodeURIComponent(activeRunId)}`).then(next => {
+                if (closed || next.connectionId !== connection.id) return;
+                setRun(current => !current || current.sequence <= next.sequence ? next : current);
+                if (terminal(next)) void loadHistory().catch(() => undefined);
+            }).catch(() => undefined);
+        }, 1500);
+        return () => { closed = true; window.clearInterval(timer); };
+    }, [activeRunId, connection.id, eventState, loadHistory, running]);
+
+    useEffect(() => {
+        if (!script?.id || script.status !== 'running') return;
+        let closed = false;
+        const timer = window.setInterval(() => {
+            void api<Script>(`/scripts/${encodeURIComponent(script.id)}`).then(next => {
+                if (closed) return;
+                setScript(next);
+                const latest = [...next.statements].reverse().find(item => item.runId);
+                if (latest?.runId) {
+                    update(active.id, draft => ({ ...draft, activeRunId: latest.runId, runIds: [...new Set([...draft.runIds, latest.runId!])] }));
+                }
+                if (next.status !== 'running') void loadHistory().catch(() => undefined);
+            }).catch(caught => { if (!closed) setError(message(caught)); });
+        }, 900);
+        return () => { closed = true; window.clearInterval(timer); };
+    }, [active.id, loadHistory, script?.id, script?.status, update]);
+
+    const perform = async (task: () => Promise<void>, kind: BusyAction = 'save') => {
+        if (busy) return;
+        setBusy(kind); setError(''); setNotice('');
+        try { await task(); }
+        catch (caught) { setError(message(caught)); }
+        finally { setBusy(''); }
+    };
+
+    const addDraft = (draft: Draft) => {
+        if (workspaceRef.current.tabs.length >= MAX_TABS) { setError(`Close a tab before creating another. This workspace supports ${MAX_TABS} open drafts.`); return; }
+        setWorkspace(current => ({ ...current, tabs: [...current.tabs, draft], activeId: draft.id }));
+    };
+
+    const execute = (wholeScript = false, kind: 'query' | 'explain' | 'pipeline' = 'query') => perform(async () => {
+        if (!trusted) throw new Error('Review and trust this read only connection before running SQL.');
+        const selected = editor.current?.selection() ?? { from: active.from, to: active.to };
+        const statement = wholeScript ? undefined : selectedStatement(active.sql, selected.from, selected.to);
+        if (!wholeScript && !statement) throw new Error('Write or select a SQL statement before running it.');
+        const payload = {
+            clientRequestId: crypto.randomUUID(), connectionId: connection.id, documentId: active.serverId,
+            sql: wholeScript ? active.sql : statement!.sql, parameters: active.parameters,
+            parentRunId: active.parentRunId, kind, limits: { rows: connection.limits.rows || DEFAULT_LIMITS.rows, seconds: connection.limits.seconds || DEFAULT_LIMITS.seconds },
+            tags: { workspace: 'clickstudio', experience },
+            ...(wholeScript ? {} : { sourceFrom: statement!.from, sourceTo: statement!.to }),
+        };
+        if (wholeScript) {
+            const created = await post<Script>('/scripts', { ...payload, stopOnError: true });
+            setScript(created);
+            const first = created.statements.find(item => item.runId);
+            if (first?.runId) patch({ activeRunId: first.runId, scriptId: created.id, runIds: [...active.runIds, first.runId] });
+            else patch({ scriptId: created.id });
+            setView('results');
+        } else {
+            const created = await post<Run>('/runs', payload);
+            setRun(created);
+            setResultPage(undefined); setSnapshot(undefined); setProfile(undefined); setPipeline(undefined); setPage(0); setView('results');
+            patch({ activeRunId: created.id, scriptId: undefined, runIds: [...new Set([...active.runIds, created.id])] });
+            editor.current?.focus();
+        }
+        setDrawerOpen(false);
+        setNotice(wholeScript ? 'Script started. Each statement has its own run evidence.' : 'Query submitted to the selected ClickHouse connection.');
+        void loadHistory().catch(() => undefined);
+    }, wholeScript ? 'script' : 'run');
+
+    const cancel = () => perform(async () => {
+        if (script?.status === 'running') { setScript(await post<Script>(`/scripts/${encodeURIComponent(script.id)}/cancel`)); return; }
+        if (!run || terminal(run)) return;
+        setRun(await post<Run>(`/runs/${encodeURIComponent(run.id)}/cancel`));
+        setNotice('Cancellation requested. The server will confirm the final state.');
+    }, 'run');
+
+    const openRun = (selected: Run) => {
+        if (selected.connectionId !== connection.id) { onSelectConnection(selected.connectionId); return; }
+        const draft = newDraft(`${selected.kind === 'query' ? 'Query' : selected.kind.toUpperCase()} ${new Date(selected.createdAt).toLocaleTimeString()}.sql`, selected.sql);
+        draft.parameters = selected.parameters;
+        draft.activeRunId = selected.id;
+        draft.runIds = [selected.id];
+        setWorkspace(current => ({ ...current, tabs: [...current.tabs, draft].slice(-MAX_TABS), activeId: draft.id }));
+        setView('results'); setDrawerOpen(false); setNotice(`Opened retained run ${selected.queryId}. No query was rerun.`);
+    };
+
+    const saveDraft = async () => perform(async () => {
+        const payload = { name: active.name, sql: active.sql, connectionId: connection.id, baseRevision: active.baseRevision, parameters: active.parameters, chart: active.chart, runId: active.activeRunId, parentDocumentId: active.parentDocumentId, kind: active.kind, metric: active.metric, dependencies: active.dependencies };
+        const saved = await api<QueryDocument>(active.serverId ? `/documents/${encodeURIComponent(active.serverId)}` : '/documents', { method: active.serverId ? 'PUT' : 'POST', body: payload });
+        patch({ serverId: saved.id, baseRevision: saved.revision });
+        setDocuments(current => [saved, ...current.filter(document => document.id !== saved.id)]);
+        setNotice(`Saved ${saved.name} · revision ${saved.revision}`);
+    }, 'save');
+
+    const loadSnapshot = async () => {
+        if (!activeRunId || snapshot || !run || run.resultState !== 'reopenable') return;
+        const full = await api<Result>(`/runs/${encodeURIComponent(activeRunId)}/snapshot`);
+        setSnapshot(full);
+        const suggestion = recommendChart(full.columns, full.rows);
+        if (active.chart.kind === 'table' && suggestion.config.kind !== 'table') patch({ chart: suggestion.config });
+    };
+
+    const loadProfile = async () => {
+        if (!activeRunId) return;
+        const response = await api<QueryProfile>(`/runs/${encodeURIComponent(activeRunId)}/profile`);
+        setProfile(response);
+    };
+
+    const loadPipeline = async () => {
+        if (!activeRunId) return;
+        if (!profile) await loadProfile();
+        const response = await api<ProfilePipeline>(`/runs/${encodeURIComponent(activeRunId)}/profile/pipeline`);
+        setPipeline(response);
+    };
+
+    const showInspector = (next: Inspector) => {
+        setInspector(next);
+        if (experience === 'beginner') setDrawerOpen(true);
+        if (next === 'profile') void perform(loadProfile, 'save');
+        if (next === 'pipeline') void perform(loadPipeline, 'save');
+    };
+
+    const trustConnection = () => perform(async () => {
+        if (!trusted && !window.confirm(`Review connection ${connection.name} at ${connection.host}, database ${connection.database}, identity ${connection.username}. Trust its read only access?`)) return;
+        setTrusting(true);
+        try {
+            await post(`/connections/${encodeURIComponent(connection.id)}/trust`, { trusted: !trusted, confirmation: connection.id });
+            await onRefreshConnections();
+            setNotice(trusted ? 'Connection trust revoked.' : 'Connection trusted. Schema access is ready.');
+        } finally { setTrusting(false); }
+    }, 'save');
+
+    const sortedHistory = useMemo(() => [...history].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [history]);
+    const filteredTables = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return schema?.tables ?? [];
+        return (schema?.tables ?? []).filter(table => `${table.database}.${table.name} ${table.engine}`.toLowerCase().includes(q) || schema?.columns.some(column => column.database === table.database && column.table === table.name && `${column.name} ${column.type}`.toLowerCase().includes(q)));
+    }, [schema, search]);
+    const selectedLayout = (next: typeof layout) => {
+        setLayout(next);
+        if (next === 'write') setInspector('schema');
+        else if (next === 'analyze') { setInspector('details'); setView('results'); }
+        else if (next === 'performance') { setInspector('profile'); void perform(loadProfile, 'save'); }
+        else { setInspector('assistant'); }
+    };
+
+    return <div className={cx('workspace-root', experience === 'expert' && 'is-expert')}>
+        <section className="connection-strip">
+            <div className="connection-summary"><span className="connection-icon"><Icon name="bolt"/></span><div><span className="eyebrow">ACTIVE TARGET</span><strong>{connection.name}<span className="slash">/</span>{connection.database}</strong><small>{connection.host} · ClickHouse {connection.manifest?.serverVersion ?? 'version unknown'}</small></div></div>
+            <div className="connection-status"><Status trusted={trusted}/><span className="connection-readonly"><Icon name="lock"/> READ ONLY</span><Button variant={trusted ? 'ghost' : 'primary'} disabled={Boolean(busy) || trusting} onClick={() => void trustConnection()}>{trusting ? 'Updating…' : trusted ? 'Revoke trust' : 'Review & trust'}</Button></div>
+        </section>
+        {!trusted && <div className="trust-callout animate-enter"><span className="trust-callout-icon"><Icon name="lock"/></span><span><strong>This connection needs your review.</strong><small>Check the host, database, and identity above before allowing schema access or query execution.</small></span><Button variant="primary" onClick={() => void trustConnection()}>Review connection <span>↗</span></Button></div>}
+        {error && <div className="toast toast-error animate-enter" role="alert"><span>!</span>{error}<button onClick={() => setError('')} aria-label="Dismiss error"><Icon name="close"/></button></div>}
+        {notice && <div className="toast toast-success animate-enter" role="status"><span>✓</span>{notice}<button onClick={() => setNotice('')} aria-label="Dismiss message"><Icon name="close"/></button></div>}
+        {storageError && <div className="toast toast-error" role="alert">Local draft storage could not save changes: {storageError}</div>}
+
+        <div className="workspace-layout">
+            <aside className="icon-rail" aria-label="Workspace tools">
+                <span className="rail-separator"/>
+                <RailButton icon="schema" label={copy.common.schema} active={inspector === 'schema' && drawerOpen} onClick={() => showInspector('schema')}/>
+                <RailButton icon="history" label={copy.common.history} active={inspector === 'history' && drawerOpen} onClick={() => showInspector('history')}/>
+                <RailButton icon="documents" label="Documents" active={inspector === 'documents' && drawerOpen} onClick={() => showInspector('documents')}/>
+                <span className="rail-spacer"/>
+                <RailButton icon="assistant" label={copy.common.assistant} accent active={inspector === 'assistant' && drawerOpen} onClick={() => showInspector('assistant')}/>
+                {experience === 'expert' && <><RailButton icon="details" label="Run details" active={inspector === 'details'} onClick={() => showInspector('details')}/><RailButton icon="pipeline" label="Pipeline" active={inspector === 'pipeline'} onClick={() => showInspector('pipeline')}/></>}
+                <span className="rail-separator"/>
+                <button className="rail-icon-button rail-icon-muted" type="button" title="Export local drafts" onClick={() => download('clickstudio-local-drafts.json', workspace)}><Icon name="settings"/></button>
+            </aside>
+
+            <main className="workbench-main">
+                <div className="document-tabs" role="tablist" aria-label="SQL documents">
+                    {workspace.tabs.map(draft => <div key={draft.id} className={cx('document-tab', draft.id === active.id && 'is-active')} role="tab" aria-selected={draft.id === active.id} tabIndex={draft.id === active.id ? 0 : -1} onClick={() => setWorkspace(current => ({ ...current, activeId: draft.id }))} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') setWorkspace(current => ({ ...current, activeId: draft.id })); }}>
+                        <span className="tab-file-dot"/><span className="document-tab-name">{draft.name}</span>{draft.serverId ? <span className="tab-revision">r{draft.baseRevision}</span> : <span className="tab-unsaved"/>}<button type="button" aria-label={`Close ${draft.name}`} onClick={event => { event.stopPropagation(); setWorkspace(current => closeDraft(current, draft.id)); }}>×</button>
+                    </div>)}
+                    <button className="new-tab-button" type="button" title="New SQL tab" onClick={() => addDraft(newDraft())}><Icon name="plus"/></button>
+                    <div className="tabs-spacer"/>
+                    {experience === 'expert' && <div className="layout-presets" role="group" aria-label="Workspace layouts">{(['write', 'analyze', 'performance', 'ai'] as const).map(item => <button key={item} type="button" aria-pressed={layout === item} onClick={() => selectedLayout(item)}>{item === 'write' ? 'Write' : item === 'analyze' ? 'Analyze' : item === 'performance' ? 'Performance' : 'AI'}</button>)}</div>}
+                    <span className="draft-status"><span className="status-light is-trusted"/>Local draft</span>
+                </div>
+
+                <div className="workspace-content">
+                    <section className="editor-surface">
+                        <div className="editor-heading">
+                            <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">QUERY</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label><span className="edit-indicator" title={active.serverId ? `Saved revision ${active.baseRevision}` : 'Only in this browser'}>{active.serverId ? `REV ${active.baseRevision}` : 'LOCAL'}</span></div>
+                            <div className="editor-heading-actions"><Button variant="ghost" className="icon-only" title="Format SQL" onClick={() => patch({ sql: formatSql(active.sql) })}>⌘</Button><Button variant="secondary" onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/> {copy.common.save}</Button></div>
+                        </div>
+                        <div className="editor-toolbar">
+                            <div className="editor-mode-label"><span className="editor-language-dot"/>ClickHouse SQL<span className="toolbar-divider"/><span>{splitSql(active.sql).length || 0} statement{splitSql(active.sql).length === 1 ? '' : 's'}</span></div>
+                            <div className="editor-actions">
+                                {experience === 'expert' && <><Button variant="ghost" className="toolbar-small" onClick={() => void execute(false, 'explain')} disabled={!trusted || Boolean(busy) || !connection.manifest?.explain.available} title={connection.manifest?.explain.reason}>EXPLAIN</Button><Button variant="ghost" className="toolbar-small" onClick={() => void execute(false, 'pipeline')} disabled={!trusted || Boolean(busy) || !connection.manifest?.pipeline.available} title={connection.manifest?.pipeline.reason}>PIPELINE</Button><Button variant="ghost" className="toolbar-small" onClick={() => void execute(true)} disabled={!trusted || Boolean(busy) || !connection.manifest?.scripts.available} title={connection.manifest?.scripts.reason}>Run script</Button></>}
+                                <Button variant="primary" className="run-query-button" onClick={() => void execute()} disabled={!trusted || Boolean(busy)}><Icon name="play"/>{busy === 'run' ? 'Running…' : copy.common.run}<kbd>⌘ ↵</kbd></Button>
+                            </div>
+                        </div>
+                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={schema} dark={dark} error={run?.error && (run.sql === active.sql || run.sql === selectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)}/></div>
+                        {parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => patch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
+                        <div className="editor-footer"><span><span className="key-hint">⌘↵</span> Run current statement <span className="footer-dot">·</span> <span className="key-hint">⌘⇧↵</span> Run script</span><span>{active.sql.length.toLocaleString()} characters <span className="footer-dot">·</span> {active.sql.split('\n').length} lines</span></div>
+                    </section>
+
+                    <section className={cx('results-surface', experience === 'expert' && 'results-expert')}>
+                        <div className="results-header">
+                            <div className="results-title"><span className="results-mark"><Icon name="chart"/></span><div><span className="eyebrow">WORKSPACE OUTPUT</span><h2>{copy.common.results}</h2></div>{run && <Status run={run}/>}</div>
+                            <div className="results-actions">
+                                <div className="results-tabs" role="tablist" aria-label="Result views">{(['results', 'chart', 'insights'] as const).map(tab => <button key={tab} role="tab" aria-selected={view === tab} type="button" onClick={() => { setView(tab); if (tab === 'chart') void perform(loadSnapshot, 'save'); if (tab === 'insights') void perform(loadProfile, 'save'); }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : copy.common.insights}{tab === 'chart' && snapshot && <span className="suggested-dot"/>}</button>)}</div>
+                                {run?.resultState === 'reopenable' && <Button variant="ghost" className="toolbar-small" onClick={() => { const link = document.createElement('a'); link.href = `/api/runs/${encodeURIComponent(run.id)}/export?format=csv`; link.download = `${run.queryId}.csv`; link.click(); }}>Export <Icon name="chevron"/></Button>}
+                            </div>
+                        </div>
+                        {!run && <EmptyWorkspace onRun={() => editor.current?.focus()} beginner={experience === 'beginner'}/>}
+                        {run && view === 'results' && <ResultGrid run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/>}
+                        {run && view === 'chart' && <ChartView result={snapshot} loading={!snapshot && run.resultState === 'reopenable'} chart={active.chart} onChart={chart => patch({ chart })}/>}
+                        {run && view === 'insights' && <InsightsView run={run} profile={profile} onLoad={() => void perform(loadProfile, 'save')} loading={busy === 'save'}/>}
+                    </section>
+                </div>
+            </main>
+
+            {experience === 'expert' && <InspectorPane inspector={inspector} setInspector={showInspector} connection={connection} schema={schema} schemaLoading={schemaLoading} schemaError={schemaError} search={search} setSearch={setSearch} tables={filteredTables} history={sortedHistory} documents={documents} run={run} profile={profile} pipeline={pipeline} onRefreshSchema={() => void loadSchema()} onInsert={value => editor.current?.insert(value)} onOpenRun={openRun} onOpenDocument={document => { const draft = newDraft(document.name, document.sql); Object.assign(draft, { serverId: document.id, baseRevision: document.revision, parameters: document.parameters, chart: document.chart, activeRunId: document.runId }); addDraft(draft); }} onLoadProfile={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} connectionId={connection.id} sql={active.sql} trusted={trusted} runId={run?.id} onApplySql={sql => patch({ ...checkpoint(active, 'Before accepted AI proposal'), sql, from: 0, to: 0 })} onRefreshDocuments={() => void loadDocuments()}/>}
+            {experience === 'beginner' && drawerOpen && <><button className="drawer-backdrop" type="button" aria-label="Close panel" onClick={() => setDrawerOpen(false)}/><InspectorPane drawer inspector={inspector} setInspector={showInspector} onClose={() => setDrawerOpen(false)} connection={connection} schema={schema} schemaLoading={schemaLoading} schemaError={schemaError} search={search} setSearch={setSearch} tables={filteredTables} history={sortedHistory} documents={documents} run={run} profile={profile} pipeline={pipeline} onRefreshSchema={() => void loadSchema()} onInsert={value => { editor.current?.insert(value); setDrawerOpen(false); }} onOpenRun={openRun} onOpenDocument={document => { const draft = newDraft(document.name, document.sql); Object.assign(draft, { serverId: document.id, baseRevision: document.revision, parameters: document.parameters, chart: document.chart, activeRunId: document.runId }); addDraft(draft); setDrawerOpen(false); }} onLoadProfile={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} connectionId={connection.id} sql={active.sql} trusted={trusted} runId={run?.id} onApplySql={sql => patch({ ...checkpoint(active, 'Before accepted AI proposal'), sql, from: 0, to: 0 })} onRefreshDocuments={() => void loadDocuments()}/></>}
+        </div>
+        {run && <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} busy={Boolean(busy)}/>}
+    </div>;
+}
+
+function RailButton({ icon, label, active, accent, onClick }: { icon: string; label: string; active?: boolean; accent?: boolean; onClick: () => void }) {
+    return <button className={cx('rail-icon-button', active && 'is-active', accent && 'is-accent')} type="button" title={label} aria-label={label} aria-pressed={active} onClick={onClick}><Icon name={icon}/><span className="rail-tooltip">{label}</span></button>;
+}
+
+function EmptyWorkspace({ onRun, beginner }: { onRun: () => void; beginner: boolean }) {
+    return <div className="empty-workspace"><div className="empty-graphic"><span className="empty-orbit orbit-one"/><span className="empty-orbit orbit-two"/><span className="empty-core"><Icon name="bolt"/></span><span className="empty-spark spark-one"/><span className="empty-spark spark-two"/></div><span className="eyebrow">YOUR NEXT INSIGHT STARTS HERE</span><h3>Make the data<br/><em>say something.</em></h3><p>{beginner ? 'Run a query to see your data. Results stay in this workspace when you switch modes.' : 'Run the current statement. Your query, run, and evidence stay linked.'}</p><Button variant="primary" onClick={onRun}><Icon name="play"/>Focus SQL editor</Button><span className="empty-shortcut">or press <kbd>⌘ ↵</kbd> to run</span></div>;
+}
+
+function ResultGrid({ run, page, pageIndex, loading, onPage }: { run: Run; page?: ResultPage; pageIndex: number; loading: boolean; onPage: (page: number) => void }) {
+    if (run.resultState === 'expired') return <div className="result-empty-state"><span className="empty-result-icon">⌛</span><strong>Result retention expired</strong><p>The SQL and query ID are still available. Run it again to fetch fresh data.</p></div>;
+    if (run.resultState !== 'reopenable') return <div className="result-empty-state"><span className="loading-orbit"/><strong>{terminal(run) ? 'No retained result' : 'Query is running'}</strong><p>{terminal(run) ? 'This run did not produce result rows.' : 'The live execution status appears in the bottom bar.'}</p>{run.error && <div className="callout callout-error mt-4">{run.error.code}: {run.error.message}</div>}</div>;
+    if (loading || !page) return <div className="result-loading"><span className="loading-orbit"/><span>Loading retained rows…</span></div>;
+    const pageCount = Math.max(1, Math.ceil(page.totalRows / 200));
+    return <div className="result-grid-wrap animate-enter"><div className="result-summary-row"><span><strong>{page.totalRows.toLocaleString()}</strong> rows <i>·</i> <strong>{page.columns.length}</strong> columns</span><span className="result-completeness"><span className={cx('status-light', page.completeness === 'truncated' ? 'is-warning' : 'is-trusted')}/>{page.completeness === 'truncated' ? 'Retained prefix · truncated' : 'Complete result'}</span><span>Page {pageIndex + 1} of {pageCount}</span></div><div className="data-table-scroll"><table className="data-table"><thead><tr><th className="row-number">#</th>{page.columns.map((column, index) => <th key={`${column.name}-${index}`}><span>{column.name}</span><small>{column.type}</small></th>)}</tr></thead><tbody>{page.rows.map((row, rowIndex) => <tr key={`${page.offset}-${rowIndex}`} style={{ animationDelay: `${Math.min(rowIndex, 12) * 16}ms` }}><td className="row-number">{page.offset + rowIndex + 1}</td>{row.map((value, index) => <td key={index} title={displayValue(value)} className={value === null ? 'cell-null' : ''}>{displayValue(value)}</td>)}</tr>)}</tbody></table>{page.rows.length === 0 && <div className="no-rows">This query returned zero rows.</div>}</div><div className="table-pagination"><span>Showing {page.rows.length.toLocaleString()} of {page.totalRows.toLocaleString()} retained rows</span><div><Button variant="secondary" disabled={pageIndex === 0} onClick={() => onPage(0)}>First</Button><Button variant="secondary" disabled={pageIndex === 0} onClick={() => onPage(pageIndex - 1)}>←</Button><Button variant="secondary" disabled={pageIndex + 1 >= pageCount} onClick={() => onPage(pageIndex + 1)}>→</Button><Button variant="secondary" disabled={pageIndex + 1 >= pageCount} onClick={() => onPage(pageCount - 1)}>Last</Button></div></div></div>;
+}
+
+function ChartView({ result, loading, chart, onChart }: { result?: Result; loading: boolean; chart: Draft['chart']; onChart: (chart: Draft['chart']) => void }) {
+    if (loading || !result) return <div className="result-loading"><span className="loading-orbit"/><span>Preparing a chart from retained rows…</span></div>;
+    const suggestion = recommendChart(result.columns, result.rows);
+    const xIndex = Math.min(chart.x, Math.max(0, result.columns.length - 1));
+    const yIndex = chart.ys.find(index => index < result.columns.length) ?? suggestion.config.ys[0] ?? 0;
+    const values = result.rows.map(row => chartNumber(row[yIndex])).filter((value): value is number => value !== null);
+    const max = Math.max(...values, 1), min = Math.min(...values, 0), range = max - min || 1;
+    const bars = result.rows.slice(0, 24).map((row, index) => ({ label: displayValue(row[xIndex]), value: chartNumber(row[yIndex]) ?? 0, index }));
+    const points = bars.map((item, index) => `${32 + index * (700 / Math.max(1, bars.length - 1))},${190 - ((item.value - min) / range) * 150}`).join(' ');
+    return <div className="chart-workspace animate-enter"><div className="chart-title-row"><div><span className="eyebrow">VISUAL EXPLORATION</span><h3>{chart.title || result.columns[yIndex]?.name || 'Query result'}</h3><p>{suggestion.reason} Chart uses retained rows only.</p></div><div className="chart-controls"><label>X axis<select value={xIndex} onChange={event => onChart({ ...chart, x: Number(event.target.value) })}>{result.columns.map((column, index) => <option value={index} key={index}>{column.name}</option>)}</select></label><label>Measure<select value={yIndex} onChange={event => onChart({ ...chart, ys: [Number(event.target.value)] })}>{result.columns.map((column, index) => <option value={index} key={index} disabled={!/^(U?Int\d+|Float\d+|Decimal)/.test(column.type)}>{column.name}</option>)}</select></label><label>Type<select value={chart.kind === 'line' ? 'line' : 'bar'} onChange={event => onChart({ ...chart, kind: event.target.value as Draft['chart']['kind'] })}><option value="line">Line</option><option value="bar">Bar</option></select></label></div></div>{!values.length ? <div className="chart-empty">Choose a numeric result column to plot.</div> : <div className="chart-canvas"><div className="chart-axis-labels"><span>{max.toLocaleString()}</span><span>{(min + range / 2).toLocaleString()}</span><span>{min.toLocaleString()}</span></div><svg viewBox="0 0 760 230" role="img" aria-label={`${chart.kind} chart of ${result.columns[yIndex]?.name}`}><defs><linearGradient id="chart-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="var(--accent)" stopOpacity=".35"/><stop offset="100%" stopColor="var(--accent)" stopOpacity="0"/></linearGradient></defs>{[40, 115, 190].map(y => <line key={y} x1="32" x2="732" y1={y} y2={y} className="chart-gridline"/>)}{chart.kind === 'line' ? <><polygon points={`32,190 ${points} ${32 + Math.max(0, bars.length - 1) * (700 / Math.max(1, bars.length - 1))},190`} fill="url(#chart-fill)"/><polyline points={points} className="chart-line"/>{bars.map((point, index) => <circle key={point.index} cx={32 + index * (700 / Math.max(1, bars.length - 1))} cy={190 - ((point.value - min) / range) * 150} r="3.5" className="chart-point"/> )}</> : bars.map((bar, index) => <rect key={bar.index} x={40 + index * (680 / Math.max(1, bars.length))} y={190 - (bar.value / max) * 150} width={Math.max(4, 20 - bars.length / 2)} height={Math.max(1, (bar.value / max) * 150)} rx="3" className="chart-bar" style={{ animationDelay: `${index * 20}ms` }}/>)}</svg><div className="chart-x-labels"><span>{bars[0]?.label}</span><span>{bars[Math.floor(bars.length / 2)]?.label}</span><span>{bars.at(-1)?.label}</span></div></div>}<div className="chart-footer"><span><span className="chart-legend-dot"/>{result.columns[yIndex]?.name}</span><span>{Math.min(result.rows.length, 24)} plotted points <i>·</i> {result.completeness === 'truncated' ? 'truncated result' : 'complete result'}</span></div></div>;
+}
+
+function InsightsView({ run, profile, onLoad, loading }: { run: Run; profile?: QueryProfile; onLoad: () => void; loading: boolean }) {
+    const summary = profile?.summary;
+    const metrics = [
+        { label: 'Execution time', value: `${Math.round(summary?.durationMs ?? run.elapsedMs)} ms`, icon: 'bolt' },
+        { label: 'Rows scanned', value: summary?.readRows ? Number(summary.readRows).toLocaleString() : 'Unavailable', icon: 'schema' },
+        { label: 'Data read', value: summary?.readBytes ? formatBytes(summary.readBytes) : 'Unavailable', icon: 'details' },
+        { label: 'Peak memory', value: summary?.memory ? formatBytes(summary.memory) : 'Unavailable', icon: 'pipeline' },
+        { label: 'Rows returned', value: run.rowCount.toLocaleString(), icon: 'chart' },
+        { label: 'Result size', value: formatBytes(run.bytes), icon: 'documents' },
+    ];
+    return <div className="insights-view animate-enter"><div className="insights-heading"><div><span className="eyebrow">EXECUTION INSIGHTS</span><h3>What happened when this ran?</h3><p>Measurements come from this run's execution and ClickHouse query log.</p></div>{!profile && <Button variant="secondary" onClick={onLoad} disabled={loading}>{loading ? 'Loading…' : 'Load execution details'}</Button>}</div><div className="insight-metrics">{metrics.map(metric => <article className="insight-metric" key={metric.label}><span className="insight-icon"><Icon name={metric.icon}/></span><span className="eyebrow">{metric.label}</span><strong>{metric.value}</strong></article>)}</div>{profile?.insights.length ? <div className="insight-list">{profile.insights.map(insight => <article key={insight.id} className={`insight-card severity-${insight.severity}`}><span className="insight-severity">{insight.severity}</span><div><strong>{insight.title}</strong><p>{insight.description}</p></div></article>)}</div> : profile ? <div className="profile-empty">No deterministic issue was identified in the available evidence.</div> : <p className="profile-note">Query log details can take a short time to appear after execution. Values marked unavailable are not inferred.</p>}{profile?.notice && <p className="profile-note">{profile.notice}</p>}</div>;
+}
+
+function InspectorPane({ inspector, setInspector, connection, schema, schemaLoading, schemaError, search, setSearch, tables, history, documents, run, profile, pipeline, onRefreshSchema, onInsert, onOpenRun, onOpenDocument, onLoadProfile, onLoadPipeline, connectionId, sql, trusted, runId, onApplySql, onRefreshDocuments, drawer = false, onClose }: {
+    inspector: Inspector;
+    setInspector: (inspector: Inspector) => void;
+    connection: Connected;
+    schema?: Schema;
+    schemaLoading: boolean;
+    schemaError: string;
+    search: string;
+    setSearch: (search: string) => void;
+    tables: Schema['tables'];
+    history: Run[];
+    documents: QueryDocument[];
+    run?: Run;
+    profile?: QueryProfile;
+    pipeline?: ProfilePipeline;
+    onRefreshSchema: () => void;
+    onInsert: (value: string) => void;
+    onOpenRun: (run: Run) => void;
+    onOpenDocument: (document: QueryDocument) => void;
+    onLoadProfile: () => void;
+    onLoadPipeline: () => void;
+    connectionId: string;
+    sql: string;
+    trusted: boolean;
+    runId?: string;
+    onApplySql: (sql: string) => void;
+    onRefreshDocuments: () => void;
+    drawer?: boolean;
+    onClose?: () => void;
+}) {
+    const visibleDocuments = documents.filter(document => document.connectionId === connectionId && !document.deletedAt);
+    const [assistantAction, setAssistantAction] = useState<AssistantAction>('generate');
+    const [question, setQuestion] = useState('');
+    const [context, setContext] = useState<{ id: string; summary: string[] }>();
+    const [proposal, setProposal] = useState<Proposal>();
+    const [assistantBusy, setAssistantBusy] = useState(false);
+    const [assistantError, setAssistantError] = useState('');
+    const [includeResult, setIncludeResult] = useState(false);
+    const closeButton = drawer && <Button variant="ghost" className="icon-only" aria-label="Close inspector" onClick={onClose}><Icon name="close"/></Button>;
+
+    const prepareContext = async () => {
+        setAssistantBusy(true); setAssistantError('');
+        try {
+            const result = await post<{ id: string; summary: string[] }>('/assistant/context', { connectionId, action: assistantAction, question, sql, runId, includeResult });
+            setContext(result); setProposal(undefined);
+        } catch (error) { setAssistantError(message(error)); }
+        finally { setAssistantBusy(false); }
+    };
+    const requestProposal = async () => {
+        if (!context || assistantBusy) return;
+        if (!window.confirm(`Send the reviewed SQL and selected context to the configured AI provider? ${context.summary.join(' ')}`)) return;
+        setAssistantBusy(true); setAssistantError('');
+        try { setProposal(await post<Proposal>('/assistant/proposals', { contextId: context.id, consent: true })); }
+        catch (error) { setAssistantError(message(error)); }
+        finally { setAssistantBusy(false); }
+    };
+    const decideProposal = async (decision: 'accepted' | 'rejected') => {
+        if (!proposal) return;
+        setAssistantBusy(true); setAssistantError('');
+        try {
+            const reviewed = await post<Proposal>(`/assistant/proposals/${encodeURIComponent(proposal.id)}/decision`, { decision, connectionId, currentSql: sql });
+            setProposal(reviewed);
+            if (decision === 'accepted' && reviewed.sql !== null) onApplySql(reviewed.sql);
+        } catch (error) { setAssistantError(message(error)); }
+        finally { setAssistantBusy(false); }
+    };
+
+    return <aside className={cx('inspector-pane', drawer && 'is-drawer animate-drawer')}>
+        <header className="inspector-header"><div><span className="eyebrow">WORKSPACE INSPECTOR</span><h2>{inspectorLabel(inspector)}</h2></div>{closeButton}</header>
+        <nav className="inspector-tabs" aria-label="Inspector panels">{(['schema', 'history', 'documents', 'details', 'pipeline', 'assistant'] as Inspector[]).filter(item => item !== 'details' || Boolean(run)).map(item => <button key={item} type="button" aria-label={inspectorLabel(item)} title={inspectorLabel(item)} aria-pressed={inspector === item} onClick={() => setInspector(item)}><Icon name={item === 'details' ? 'details' : item === 'pipeline' ? 'pipeline' : item === 'assistant' ? 'assistant' : item}/></button>)}</nav>
+        <div className="inspector-content">
+            {inspector === 'schema' && <section className="inspector-section"><div className="inspector-search"><Icon name="search"/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search tables and columns…" aria-label="Search schema"/><kbd>⌘ F</kbd></div><div className="schema-heading"><span>{schema?.tables.length ?? 0} TABLES</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshSchema} disabled={schemaLoading || !trusted}>{schemaLoading ? 'Loading…' : 'Refresh'}</Button></div>{schemaError && <div className="callout callout-error">{schemaError}</div>}{!trusted && <div className="inspector-empty"><Icon name="lock"/><strong>Schema is private</strong><p>Trust the connection to inspect tables and columns.</p></div>}{schemaLoading && <div className="inspector-empty"><span className="loading-orbit"/><p>Reading ClickHouse schema…</p></div>}{trusted && schema && tables.map(table => <details className="schema-table" key={`${table.database}.${table.name}`} open={Boolean(search)}><summary><span className="table-glyph">▦</span><span className="schema-table-name"><strong>{table.name}</strong><small>{table.database}</small></span><span className="engine-tag">{table.engine}</span><Icon name="chevron" className="schema-chevron"/></summary><div className="schema-columns"><button type="button" className="insert-table-button" onClick={() => onInsert(`${quoteIdentifier(table.database)}.${quoteIdentifier(table.name)}`)}>Insert table name <span>↵</span></button>{schema.columns.filter(column => column.database === table.database && column.table === table.name && (!search || `${column.name} ${column.type}`.toLowerCase().includes(search.toLowerCase()))).map(column => <button type="button" className="schema-column" key={column.name} title={column.comment || column.type} onClick={() => onInsert(quoteIdentifier(column.name))}><span className="column-type-dot"/><span>{column.name}</span><code>{column.type}</code></button>)}</div></details>)}{trusted && schema && !tables.length && <div className="inspector-empty">No tables match this search.</div>}</section>}
+            {inspector === 'history' && <section className="inspector-section"><div className="schema-heading"><span>RECENT RUNS</span><Button variant="ghost" className="toolbar-small" onClick={() => void api<Run[]>(`/runs?connectionId=${encodeURIComponent(connection.id)}`).then(() => undefined)}>↻ Refresh</Button></div>{history.length ? history.slice(0, 30).map(item => <button type="button" className="history-card" key={item.id} onClick={() => onOpenRun(item)}><span className={cx('run-state-mark', `state-${item.status}`)}/><span className="history-card-copy"><strong>{item.sql.replace(/\s+/g, ' ').slice(0, 58)}</strong><small>{new Date(item.createdAt).toLocaleString()} <i>·</i> {Math.round(item.elapsedMs)} ms <i>·</i> {item.rowCount.toLocaleString()} rows</small></span><span className="history-open">↗</span></button>) : <div className="inspector-empty"><Icon name="history"/><strong>No runs yet</strong><p>Your recent ClickHouse executions appear here.</p></div>}</section>}
+            {inspector === 'documents' && <section className="inspector-section"><div className="schema-heading"><span>SAVED DOCUMENTS</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshDocuments}>↻ Refresh</Button></div>{visibleDocuments.length ? visibleDocuments.map(document => <button type="button" className="document-card" key={document.id} onClick={() => onOpenDocument(document)}><span className="file-type-icon small">SQL</span><span><strong>{document.name}</strong><small>revision {document.revision} · {new Date(document.updatedAt).toLocaleDateString()}</small></span><span className="history-open">↗</span></button>) : <div className="inspector-empty"><Icon name="documents"/><strong>Nothing saved yet</strong><p>Save the current query to keep a named revision on this connection.</p></div>}</section>}
+            {inspector === 'details' && <RunDetails run={run} profile={profile} onLoad={onLoadProfile}/>}
+            {inspector === 'pipeline' && <PipelineView run={run} profile={profile} pipeline={pipeline} onLoad={onLoadPipeline}/>}
+            {inspector === 'assistant' && <section className="assistant-panel"><div className="assistant-safety"><span className="assistant-glyph"><Icon name="assistant"/></span><div><strong>AI, with you in control.</strong><p>Review context, request a proposal, then decide whether to apply it. Nothing executes automatically.</p></div></div><label className="field-label">ACTION<select className="field-input" value={assistantAction} onChange={event => { setAssistantAction(event.target.value as AssistantAction); setContext(undefined); setProposal(undefined); }}><option value="generate">Write a query</option><option value="explain">Explain this SQL</option><option value="repair">Fix a query error</option><option value="review">Review SQL</option><option value="performance">Analyze performance</option><option value="result">Explain the result</option></select></label><label className="field-label">WHAT WOULD YOU LIKE TO KNOW?<textarea className="field-textarea" value={question} onChange={event => setQuestion(event.target.value)} placeholder="Describe the question, error, or improvement you want…" rows={4}/></label><label className="include-result"><input type="checkbox" checked={includeResult} onChange={event => setIncludeResult(event.target.checked)} disabled={!runId}/><span><strong>Include selected retained result</strong><small>Rows may contain sensitive data. Inspect before sharing.</small></span></label>{assistantError && <div className="callout callout-error">{assistantError}</div>}<div className="assistant-actions"><Button variant="secondary" className="w-full" disabled={!trusted || assistantBusy} onClick={() => void prepareContext()}>{assistantBusy && !context ? 'Preparing context…' : context ? 'Refresh context preview' : 'Preview what will be shared'}</Button>{context && <div className="context-preview animate-enter"><span className="eyebrow">CONTEXT PREVIEW</span>{context.summary.map(item => <p key={item}><span>✓</span>{item}</p>)}<Button variant="primary" className="w-full" disabled={assistantBusy} onClick={() => void requestProposal()}>{assistantBusy ? 'Waiting for proposal…' : 'Send to AI & propose'}</Button></div>}{proposal && <div className="proposal-card animate-enter"><div className="proposal-heading"><span className={cx('proposal-quality', proposal.quality?.status)}>{proposal.quality?.score ?? '—'}<small>QUALITY</small></span><div><span className="eyebrow">PROPOSAL · {proposal.decision.toUpperCase()}</span><strong>{proposal.summary}</strong></div></div>{proposal.clarification && <div className="callout">{proposal.clarification}</div>}{proposal.assumptions.map(item => <p className="proposal-point" key={item}><span>ASSUMPTION</span>{item}</p>)}{proposal.caveats.map(item => <p className="proposal-point" key={item}><span>CAVEAT</span>{item}</p>)}{proposal.findings.map(item => <p className="proposal-finding" key={`${item.severity}-${item.message}`}><strong>{item.severity}</strong>{item.message}<small>{item.evidence}</small></p>)}{proposal.sql !== null && <><span className="eyebrow mt-4">PROPOSED SQL</span><pre className="proposal-sql">{proposal.sql}</pre>{proposal.decision === 'pending' && <div className="proposal-buttons"><Button variant="secondary" onClick={() => void decideProposal('rejected')} disabled={assistantBusy}>Reject</Button><Button variant="primary" onClick={() => void decideProposal('accepted')} disabled={assistantBusy}>Apply to editor</Button></div>}</>}</div>}</div></section>}
+        </div>
+        <footer className="inspector-footer"><span className="connection-readonly"><Icon name="lock"/> Read only</span><span>{connection.name} <i>·</i> {connection.database}</span></footer>
+    </aside>;
+}
+
+function RunDetails({ run, profile, onLoad }: { run?: Run; profile?: QueryProfile; onLoad: () => void }) {
+    if (!run) return <div className="inspector-empty">Run a query to see execution details.</div>;
+    const summary = profile?.summary;
+    const items: Array<[string, string]> = [['Query ID', run.queryId], ['Duration', `${Math.round(summary?.durationMs ?? run.elapsedMs)} ms`], ['Rows read', summary?.readRows ? Number(summary.readRows).toLocaleString() : '—'], ['Bytes read', summary?.readBytes ? formatBytes(summary.readBytes) : '—'], ['Memory', summary?.memory ? formatBytes(summary.memory) : '—'], ['Rows returned', run.rowCount.toLocaleString()], ['Executed as', run.executedAs], ['Server', run.serverVersion ?? '—']];
+    return <section className="inspector-section"><div className="run-detail-hero"><span className="eyebrow">LATEST EXECUTION</span><Status run={run}/><strong>{run.queryId}</strong><small>{new Date(run.createdAt).toLocaleString()}</small></div><div className="run-fact-list">{items.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong>{label === 'Query ID' && <button title="Copy query ID" onClick={() => void navigator.clipboard.writeText(value)}><Icon name="copy"/></button>}</div>)}</div>{run.error && <div className="callout callout-error">{run.error.code}: {run.error.message}</div>}<Button variant="secondary" className="w-full mt-4" onClick={onLoad}>Load query log evidence</Button>{profile?.notice && <p className="profile-note">{profile.notice}</p>}</section>;
+}
+
+function PipelineView({ run, profile, pipeline, onLoad }: { run?: Run; profile?: QueryProfile; pipeline?: ProfilePipeline; onLoad: () => void }) {
+    if (!run) return <div className="inspector-empty">Run a query to inspect its execution pipeline.</div>;
+    const stages = pipeline?.nodes ?? profile?.pipeline.nodes ?? [];
+    return <section className="inspector-section"><div className="schema-heading"><span>EXECUTION PIPELINE</span><Button variant="ghost" className="toolbar-small" onClick={onLoad}>Load evidence</Button></div>{pipeline?.notice && <p className="profile-note">{pipeline.notice}</p>}{stages.length ? <div className="pipeline-list">{stages.map((stage, index) => <article className={`pipeline-stage stage-${stage.status}`} key={stage.id}><span className="pipeline-stage-index">{String(index + 1).padStart(2, '0')}</span><span className="pipeline-connector"/><span className="pipeline-stage-body"><strong>{stage.label}</strong><small>{stage.detail ?? stage.kind} · {stage.status}</small><span>{[stage.durationMs === undefined ? '' : `${Math.round(stage.durationMs)} ms`, stage.rows ? `${stage.rows} rows` : '', stage.bytes ? `${stage.bytes} bytes` : ''].filter(Boolean).join(' · ') || 'No stage-level measurements'}</span></span><span className="stage-evidence">{stage.status}</span></article>)}</div> : <div className="inspector-empty"><Icon name="pipeline"/><strong>Pipeline evidence is not loaded</strong><p>Available ClickHouse versions can return an EXPLAIN PIPELINE graph.</p></div>}</section>;
+}
+
+function ExecutionBar({ run, eventState, onCancel, busy }: { run: Run; eventState: string; onCancel: () => void; busy: boolean }) {
+    const progress = run.progress;
+    return <footer className={cx('execution-bar', !terminal(run) && 'is-running')}><div className="execution-state"><Status run={run}/><span className="execution-separator"/><strong>{terminal(run) ? `${Math.round(run.elapsedMs)} ms` : `${Math.max(0, Math.round(progress?.elapsedMs ?? run.elapsedMs))} ms`}</strong><span className="execution-link-state"><span className={cx('status-light', eventState === 'live' ? 'is-trusted' : eventState === 'reconnecting' ? 'is-warning' : '')}/>{eventState === 'live' ? 'Live updates' : eventState === 'reconnecting' ? 'Reconnecting' : 'Complete'}</span></div><div className="execution-telemetry"><span><strong>{progress?.readRows ? formatCount(progress.readRows) : '—'}</strong> rows read</span><span><strong>{progress?.readBytes ? formatBytes(progress.readBytes) : '—'}</strong> read</span><span><strong>{progress?.memory ? formatBytes(progress.memory) : '—'}</strong> memory</span>{run.kind !== 'query' && <span className="execution-kind">{run.kind.toUpperCase()}</span>}</div><div className="execution-right"><code title={run.queryId}>{run.queryId}</code>{!terminal(run) && <Button variant="danger" className="cancel-execution" onClick={onCancel} disabled={busy}>Cancel</Button>}</div><span className="execution-progress-line"/></footer>;
+}
+
+function formatBytes(value?: string | number): string {
+    if (value === undefined) return '—';
+    const bytes = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(bytes)) return String(value);
+    if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GiB`;
+    if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`;
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+    return `${bytes.toLocaleString()} B`;
+}
+function formatCount(value: string | number): string {
+    const number = Number(value);
+    return Number.isFinite(number) ? new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(number) : String(value);
+}
+function inspectorLabel(value: Inspector): string { return ({ schema: 'Schema explorer', history: 'Run history', documents: 'Documents', details: 'Run details', profile: 'Query profile', pipeline: 'Pipeline', assistant: 'AI copilot' })[value]; }
+
+export default App;

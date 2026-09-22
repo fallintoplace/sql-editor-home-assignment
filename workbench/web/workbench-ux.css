@@ -32,6 +32,9 @@
 .workspace-grid .history-row>button{max-width:100%}
 .workspace-grid .history-row>button:first-child{flex:1 1 240px}
 .workspace-grid .history-row>button>span,.workspace-grid .tabs button>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.workspace-grid .sidebar button{width:100%;min-width:0;white-space:normal;overflow-wrap:anywhere}
+.workspace-grid .sidebar button>span{min-width:0;white-space:normal;overflow-wrap:anywhere;text-overflow:clip}
+.workspace-grid .sidebar summary{overflow-wrap:anywhere}
 /* Revision feedback and history stay inside the existing workspace surfaces. */
 .draft-save-status{display:flex;flex-direction:column;align-items:flex-start;gap:4px;max-width:100%;min-width:0;font-size:12px}
 .draft-save-status>[role=status]{padding:4px 7px;border:1px solid var(--line);border-radius:5px;overflow-wrap:anywhere;background:var(--page)}

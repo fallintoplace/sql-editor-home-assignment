@@ -80,7 +80,9 @@ export const messages = {
             closeTab: 'Close tab',
             reopenTab: 'Reopen closed tab',
             advancedControls: 'Advanced execution',
-            parameters: 'Query parameters'
+            parameters: 'Query parameters',
+            currentFile: 'Current file',
+            statementCount: 'SQL statements'
         },
         editor: {
             runStatement: 'Run statement',
@@ -191,7 +193,9 @@ export const messages = {
             closeTab: 'Tab schließen',
             reopenTab: 'Geschlossenen Tab erneut öffnen',
             advancedControls: 'Erweiterte Ausführung',
-            parameters: 'Abfrageparameter'
+            parameters: 'Abfrageparameter',
+            currentFile: 'Aktuelle Datei',
+            statementCount: 'SQL-Anweisungen'
         },
         editor: {
             runStatement: 'Anweisung ausführen',
@@ -302,7 +306,9 @@ export const messages = {
             closeTab: 'Cerrar pestaña',
             reopenTab: 'Reabrir pestaña cerrada',
             advancedControls: 'Ejecución avanzada',
-            parameters: 'Parámetros de consulta'
+            parameters: 'Parámetros de consulta',
+            currentFile: 'Archivo actual',
+            statementCount: 'instrucciones SQL'
         },
         editor: {
             runStatement: 'Ejecutar instrucción',
@@ -413,7 +419,9 @@ export const messages = {
             closeTab: 'Tabblad sluiten',
             reopenTab: 'Gesloten tabblad opnieuw openen',
             advancedControls: 'Geavanceerde uitvoering',
-            parameters: 'Queryparameters'
+            parameters: 'Queryparameters',
+            currentFile: 'Huidig bestand',
+            statementCount: 'SQL-instructies'
         },
         editor: {
             runStatement: 'Instructie uitvoeren',
@@ -524,7 +532,9 @@ export const messages = {
             closeTab: '关闭标签页',
             reopenTab: '重新打开已关闭的标签页',
             advancedControls: '高级执行',
-            parameters: '查询参数'
+            parameters: '查询参数',
+            currentFile: '当前文件',
+            statementCount: '条 SQL 语句'
         },
         editor: {
             runStatement: '运行语句',
@@ -635,7 +645,9 @@ export const messages = {
             closeTab: 'Закрыть вкладку',
             reopenTab: 'Снова открыть закрытую вкладку',
             advancedControls: 'Расширенное выполнение',
-            parameters: 'Параметры запроса'
+            parameters: 'Параметры запроса',
+            currentFile: 'Текущий файл',
+            statementCount: 'SQL-инструкции'
         },
         editor: {
             runStatement: 'Выполнить оператор',

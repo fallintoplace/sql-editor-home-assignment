@@ -62,15 +62,21 @@ export class RunService {
         this.sweep();
     }
     get acceptingRuns(): boolean { return !this.closed; }
+    private trustFingerprint(principal: Principal, connectionId: string): string {
+        const connection = this.connection(principal, connectionId);
+        return hash([connection.dataSource ?? 'clickhouse', connection.host, connection.database, connection.username, connection.readonly]);
+    }
     isTrusted(principal: Principal, connectionId: string): boolean {
-        return this.store.get<{
+        const trust = this.store.get<{
             trusted: boolean;
-        }>('trust', hash([principal.id, connectionId]))?.trusted === true;
+            fingerprint?: string;
+        }>('trust', hash([principal.id, connectionId]));
+        return trust?.trusted === true && trust.fingerprint === this.trustFingerprint(principal, connectionId);
     }
     trust(principal: Principal, connectionId: string, trusted: boolean) {
         canWrite(principal);
-        this.connection(principal, connectionId);
-        this.store.put('trust', hash([principal.id, connectionId]), { owner: principal.id, connectionId, trusted });
+        const fingerprint = this.trustFingerprint(principal, connectionId);
+        this.store.put('trust', hash([principal.id, connectionId]), { owner: principal.id, connectionId, fingerprint, trusted });
         audit(this.store, principal, trusted ? 'connection.trust' : 'connection.untrust', connectionId);
         if (!trusted)
             for (const run of this.list(principal, connectionId))
@@ -243,9 +249,12 @@ export class RunService {
         }
     }
     private emit(run: Run, type: RunEvent['type'] = 'state', options: { persist?: boolean } = {}) {
-        run.sequence++;
-        if (options.persist !== false)
+        // sequence is a durable state revision. Ephemeral progress must never outrank
+        // a later authoritative state recovered from disk after a process restart.
+        if (options.persist !== false) {
+            run.sequence++;
             this.store.put('runs', run.id, run);
+        }
         const event: RunEvent = { sequence: run.sequence, type, run: structuredClone(run) };
         for (const fn of this.listeners.get(run.id) ?? []) {
             try {

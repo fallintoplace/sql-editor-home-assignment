@@ -4,7 +4,7 @@ on:
     branches: [cathedral/workbench-validation]
     paths: [package.json, .github/workflows/dependencies.yml]
 permissions:
-  contents: read
+  contents: write
 jobs:
   dependencies:
     runs-on: ubuntu-latest
@@ -14,8 +14,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-audit --no-fund
-      - run: tar -czf /tmp/cathedral-dependencies.tgz node_modules package-lock.json
+      - run: npm install --save-dev --save-exact prettier@3.6.2 --no-audit --no-fund
+      - name: Commit only the dependency manifest and generated lockfile
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json
+          git diff --cached --quiet || git commit -m 'build: lock workbench dependencies'
+          git push origin HEAD:cathedral/workbench-validation
+      - run: tar -czf /tmp/cathedral-dependencies.tgz node_modules package.json package-lock.json
       - uses: actions/upload-artifact@v4
         with:
           name: cathedral-dependencies

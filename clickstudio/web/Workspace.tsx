@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AssistantAction, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Result, Run, Schema, Script } from '../shared/types';
 import { DEFAULT_LIMITS } from '../shared/types';
 import { filterSchemaTables, indexSchemaColumns } from '../shared/schema-browser';
-import { recommendChart } from '../shared/results';
+import { exportCsv, recommendChart } from '../shared/results';
 import { matchesDraft } from '../shared/evidence';
 import { formatSql, parameterNames, selectedStatement, splitSql } from '../shared/sql';
 import { api, download, isFrontendDemoPreview, message, post } from './api';
@@ -49,6 +49,7 @@ type WorkspaceProps = {
     onSelectConnection: (id: string) => void;
     onRefreshConnections: () => Promise<void>;
     trustActionRef: { current: () => Promise<void> };
+    testConnectionActionRef: { current: () => Promise<void> };
     demoMode: boolean;
     experience: ExperienceLevel;
     dark: boolean;
@@ -56,7 +57,7 @@ type WorkspaceProps = {
     locale: Locale;
 };
 
-export function Workspace({ connection, connectionLabel, connections, onSelectConnection, onRefreshConnections, trustActionRef, demoMode, experience, dark, copy, locale }: WorkspaceProps) {
+export function Workspace({ connection, connectionLabel, connections, onSelectConnection, onRefreshConnections, trustActionRef, testConnectionActionRef, demoMode, experience, dark, copy, locale }: WorkspaceProps) {
     const key = stateKey(connection.id);
     const [workspace, setWorkspace] = useState<WorkspaceState>(() => {
         const recovered = recover(key);
@@ -408,7 +409,9 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         }
         setDrawerOpen(false);
         if (!isFrontendDemoPreview)
-            setNotice(wholeScript ? 'Script submitted to the selected ClickHouse connection.' : 'Query submitted to the selected ClickHouse connection.');
+            setNotice(demoMode
+                ? wholeScript ? 'Sample results were generated. Script SQL was not sent to ClickHouse.' : 'Sample results were generated. Query SQL was not sent to ClickHouse.'
+                : wholeScript ? 'Script submitted to the selected ClickHouse connection.' : 'Query submitted to the selected ClickHouse connection.');
         void loadHistory().catch(() => undefined);
     }, wholeScript ? 'script' : 'run');
 
@@ -467,6 +470,23 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         if (active.chart.kind === 'table' && suggestion.config.kind !== 'table') patch({ chart: suggestion.config });
     };
 
+    const exportCurrentCsv = async () => {
+        if (!run) return;
+        try {
+            if (isFrontendDemoPreview) {
+                const full = snapshot?.runId === run.id ? snapshot : await api<Result>(`/runs/${encodeURIComponent(run.id)}/snapshot`);
+                download(`${run.queryId}.csv`, exportCsv(full), 'text/csv;charset=utf-8');
+                return;
+            }
+            const link = document.createElement('a');
+            link.href = `/api/runs/${encodeURIComponent(run.id)}/export?format=csv`;
+            link.download = `${run.queryId}.csv`;
+            link.click();
+        } catch (caught) {
+            setError(message(caught));
+        }
+    };
+
     const loadProfile = async () => {
         if (!activeRunId) return;
         const runId = activeRunId;
@@ -496,6 +516,13 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         setNotice(demoMode ? 'Sample data is ready. You can explore the workspace.' : trusted ? 'Read-only access was turned off.' : 'Connection is ready for read-only queries.');
     }, 'save');
     trustActionRef.current = trustConnection;
+
+    const testConnection = () => perform(async () => {
+        const tested = await post<Connected>(`/connections/${encodeURIComponent(connection.id)}/test`);
+        await onRefreshConnections();
+        setNotice(`Connection tested · ClickHouse ${tested.manifest?.serverVersion ?? 'server'}. Review the connection, then trust it to run queries.`);
+    }, 'save');
+    testConnectionActionRef.current = testConnection;
 
     const sortedHistory = useMemo(() => [...history].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [history]);
     const savedDocument = documents.find(document => document.id === active.serverId);
@@ -654,7 +681,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                 </>}
                             </div>
                         </div>
-                        {experience === 'beginner' && !trusted && <div className="beginner-connection-notice" role="status"><span>{demoMode ? 'Start the sample workspace to run this query.' : 'Review this connection before running SQL.'}</span><Button variant="secondary" className="toolbar-small" onClick={() => void trustActionRef.current()}>{demoMode ? 'Start exploring' : 'Review connection'}</Button></div>}
+                        {experience === 'beginner' && (!trusted || (!demoMode && !connection.manifest)) && <div className="beginner-connection-notice" role="status"><span>{demoMode ? 'Start the sample workspace to run this query.' : !connection.manifest ? trusted ? 'Retest this connection to refresh its feature checks.' : 'Test this connection to discover its ClickHouse features.' : 'Trust this connection to run SQL.'}</span><Button variant="secondary" className="toolbar-small" onClick={() => void (!demoMode && !connection.manifest ? testConnectionActionRef.current() : trustActionRef.current())}>{demoMode ? 'Start exploring' : !connection.manifest ? trusted ? 'Retest connection' : 'Test connection' : 'Trust connection'}</Button></div>}
                         <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} parserStatus={nativeParserStatus} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus} onNativeParseSnapshot={snapshot => setNativeParseSnapshot(snapshot)}/></div>
                         {parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => patch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
                         <div className="editor-footer"><span><span className="key-hint">⌘↵</span> {experience === 'beginner' ? 'Run query' : <>Run current statement <span className="footer-dot">·</span> <span className="key-hint">⌘⇧↵</span> Run script</>}</span>{experience === 'expert' && <span>{active.sql.length.toLocaleString()} characters <span className="footer-dot">·</span> {active.sql.split('\n').length} lines</span>}</div>
@@ -665,7 +692,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             <div className="results-title"><span className="results-mark"><Icon name="chart"/></span><div><span className="eyebrow">WORKSPACE OUTPUT</span><h2>{copy.common.results}</h2></div>{run && <Status run={run}/>}</div>
                             <div className="results-actions">
                                 <div className="results-tabs" role="tablist" aria-label="Result views">{(experience === 'beginner' ? ['results', 'chart'] as const : ['results', 'chart', 'insights'] as const).map(tab => <button key={tab} role="tab" aria-selected={visibleResultsView === tab} type="button" onClick={() => { setView(tab); if (tab === 'chart') void perform(loadSnapshot, 'save'); if (tab === 'insights') void perform(loadProfile, 'save'); }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : copy.common.insights}{tab === 'chart' && snapshot && <span className="suggested-dot"/>}</button>)}</div>
-                                {run?.resultState === 'reopenable' && <Button variant="ghost" className="toolbar-small" onClick={() => { const link = document.createElement('a'); link.href = `/api/runs/${encodeURIComponent(run.id)}/export?format=csv`; link.download = `${run.queryId}.csv`; link.click(); }}>Export <Icon name="chevron"/></Button>}
+                                {run?.resultState === 'reopenable' && <Button variant="ghost" className="toolbar-small" onClick={() => void exportCurrentCsv()}>Export <Icon name="chevron"/></Button>}
                             </div>
                         </div>
                         {staleResult && <div className="result-provenance" aria-live="polite"><span className="status-light is-warning"/><span><strong>Result from previous execution</strong><small>SQL or bound parameters changed since this run. Rerun to refresh the result.</small></span></div>}

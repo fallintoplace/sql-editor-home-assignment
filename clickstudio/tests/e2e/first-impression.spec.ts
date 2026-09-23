@@ -18,24 +18,17 @@ test('Expert mode gives the editor the full work area before the first run', asy
     await expect(page.getByRole('button', { name: 'Run statement', exact: true })).toBeVisible();
 });
 
-test('Run options preserve script and explain actions behind the primary Run button', async ({ page }) => {
+test('Run script and explain actions stay visible beside the primary Run button', async ({ page }) => {
     await trust(page);
-    const trigger = page.getByRole('button', { name: 'More run options', exact: true });
-    await trigger.click();
-
-    const menu = page.getByRole('menu', { name: 'Run options', exact: true });
-    await expect(menu.locator('.run-action-item > span')).toHaveText(['Run script', 'EXPLAIN', 'EXPLAIN PIPELINE']);
-    await expect(menu.getByRole('menuitem', { name: 'Run script' })).toBeEnabled();
-    await expect(menu.getByRole('menuitem', { name: 'Run script' })).toBeFocused();
-    await page.keyboard.press('ArrowDown');
-    await expect(menu.getByRole('menuitem', { name: 'EXPLAIN', exact: true })).toBeFocused();
-    await page.keyboard.press('End');
-    await expect(menu.getByRole('menuitem', { name: 'EXPLAIN PIPELINE', exact: true })).toBeFocused();
-    await page.keyboard.press('Home');
-    await expect(menu.getByRole('menuitem', { name: 'Run script' })).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(menu).toHaveCount(0);
-    await expect(trigger).toBeFocused();
+    const actions = page.getByRole('group', { name: 'Run actions', exact: true });
+    const runScript = actions.getByRole('button', { name: /^Run script/ });
+    await expect(actions.getByRole('button', { name: 'Run statement', exact: true })).toBeVisible();
+    await expect(runScript).toBeVisible();
+    await expect(actions.getByRole('button', { name: 'EXPLAIN', exact: true })).toBeVisible();
+    await expect(actions.getByRole('button', { name: 'EXPLAIN PIPELINE', exact: true })).toBeVisible();
+    await expect(runScript).toBeEnabled();
+    await runScript.focus();
+    await expect(runScript).toBeFocused();
 });
 
 test('Expert panels stay reachable through SQL AI and More', async ({ page }) => {

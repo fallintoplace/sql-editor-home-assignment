@@ -17,6 +17,5 @@ export async function trustCurrentConnection(page: Page) {
 }
 
 export async function runScript(page: Page) {
-    await page.getByRole('button', { name: 'More run options', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Run script' }).click();
+    await page.getByRole('button', { name: /^Run script/ }).click();
 }

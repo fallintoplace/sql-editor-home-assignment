@@ -147,7 +147,10 @@ let parserPromise: ReturnType<typeof initialize> | undefined;
 
 async function initialize() {
     try {
-        const response = await fetch('/api/editor/clickhouse-parser.wasm');
+        const artifactUrl = import.meta.env.VITE_DEMO_MODE === 'true'
+            ? '/assets/clickhouse-parser.wasm'
+            : '/api/editor/clickhouse-parser.wasm';
+        const response = await fetch(artifactUrl);
         if (!response.ok)
             throw new Error(`ClickHouse parser artifact returned HTTP ${response.status}`);
         const parser = createParser(await instantiate(new Uint8Array(await response.arrayBuffer())));

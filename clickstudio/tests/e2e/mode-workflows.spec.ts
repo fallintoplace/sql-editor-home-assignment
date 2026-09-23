@@ -35,6 +35,7 @@ test('Beginner opens on SQL and can run a query without opening AI', async ({ pa
     await runQuery.click();
     const results = page.getByRole('region', { name: 'Query results', exact: true });
     await expect(results.getByRole('table', { name: 'Retained query rows', exact: true })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'Sample results were generated. Query SQL was not sent to ClickHouse.' })).toBeVisible();
     expect(contextRequests).toBe(0);
     await expect(results.getByRole('tab', { name: 'Insights', exact: true })).toHaveCount(0);
 

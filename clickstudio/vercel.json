@@ -1,8 +1,17 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "vite",
-  "buildCommand": "VITE_DEMO_MODE=true npx vite build",
+  "buildCommand": "npm run build:vercel-preview",
   "outputDirectory": "dist/web",
+  "headers": [
+    {
+      "source": "/assets/clickhouse-parser.wasm",
+      "headers": [
+        { "key": "Content-Type", "value": "application/wasm" },
+        { "key": "Cache-Control", "value": "public, max-age=3600" }
+      ]
+    }
+  ],
   "rewrites": [
     {
       "source": "/(.*)",

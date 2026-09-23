@@ -1,4 +1,5 @@
-import { DEFAULT_LIMITS, type ChartConfig, type Connection, type QueryDocument, type Result, type ResultPage, type Run, type Schema, type SchemaColumn, type Script } from '../shared/types';
+import { DEFAULT_LIMITS, type ChartConfig, type Connection, type QueryDocument, type Result, type ResultPage, type Run, type Schema, type SchemaColumn, type Script } from '../shared/types.js';
+import { splitSql } from '../shared/sql.js';
 
 export const DEMO_PREVIEW_RUN_ID = 'preview-sample-run';
 export const DEMO_PREVIEW_STARTER_DOCUMENT_ID = 'preview-starter-getting-started';
@@ -471,10 +472,10 @@ export class DemoPreviewApi {
         if (pathname === '/scripts' && method === 'POST') {
             const sql = typeof body.sql === 'string' ? body.sql : DEMO_PREVIEW_SQL;
             const id = crypto.randomUUID();
-            const statements = sql.split(';').map(value => value.trim()).filter(Boolean);
-            const items = statements.map((statement, index) => {
-                const run = this.addRun(crypto.randomUUID(), statement, 'query', record(body.parameters) as Record<string, string>);
-                return { sql: statement, from: 0, to: statement.length, runId: run.id, status: 'succeeded' as const };
+            const statements = splitSql(sql);
+            const items = statements.map(statement => {
+                const run = this.addRun(crypto.randomUUID(), statement.sql, 'query', record(body.parameters) as Record<string, string>);
+                return { ...statement, runId: run.id, status: 'succeeded' as const };
             });
             const script: Script = { id, owner, connectionId: 'demo', sql, createdAt: now(), status: 'succeeded', stopOnError: body.stopOnError !== false, cancelled: false, statements: items };
             this.scripts.set(id, script);

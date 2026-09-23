@@ -27,8 +27,9 @@ function App() {
     const [token, setToken] = useState('');
     const [busy, setBusy] = useState(false);
     const [connectionPicker, setConnectionPicker] = useState(false);
-    const [trustActionBusy, setTrustActionBusy] = useState(false);
+    const [connectionActionBusy, setConnectionActionBusy] = useState(false);
     const trustActionRef = useRef<() => Promise<void>>(async () => undefined);
+    const testConnectionActionRef = useRef<() => Promise<void>>(async () => undefined);
     const copy = getCopy(locale);
     const connection = connections.find(item => item.id === connectionId) ?? connections[0];
     const otherConnections = connection ? connections.filter(item => item.id !== connection.id && (!session?.demo || experience === 'expert')) : [];
@@ -75,15 +76,20 @@ function App() {
         finally { setBusy(false); }
     };
 
-    const runTrustAction = async () => {
-        if (trustActionBusy) return;
-        setTrustActionBusy(true);
-        try { await trustActionRef.current(); }
-        finally { setTrustActionBusy(false); }
+    const runConnectionAction = async (testConnection: boolean) => {
+        if (connectionActionBusy) return;
+        setConnectionActionBusy(true);
+        try { await (testConnection ? testConnectionActionRef.current : trustActionRef.current)(); }
+        finally { setConnectionActionBusy(false); }
     };
 
     if (!session) return <main className="auth-screen"><section className="auth-card animate-enter"><Brand theme={theme}/><span className="eyebrow mt-8">PRIVATE WORKSPACE</span><h1>{sessionError ? 'Workspace unavailable' : copy.auth.opening}</h1>{sessionError ? <><p>{sessionError}</p><Button variant="primary" onClick={() => { setSessionError(''); void loadSession().catch(error => setSessionError(message(error))); }}>Try again</Button></> : <div className="splash-status"><span className="loading-orbit"/><p>{copy.auth.opening}</p></div>}</section></main>;
     if (!session.principal) return <main className="auth-screen"><form className="auth-card animate-enter" onSubmit={event => { event.preventDefault(); void login(); }}><Brand theme={theme}/><span className="eyebrow mt-8">Private workspace</span><h1>{copy.auth.title}</h1><p>{copy.auth.description}</p><label className="field-label">{copy.auth.token}<input className="field-input mt-2" type="password" autoComplete="current-password" value={token} onChange={event => setToken(event.target.value)} autoFocus/></label>{sessionError && <div className="callout callout-error">{sessionError}</div>}<Button variant="primary" type="submit" disabled={busy || !token} className="mt-4 w-full">{busy ? copy.auth.opening : copy.auth.open}<span className="button-arrow">↗</span></Button><div className="auth-footnote"><Icon name="lock"/> Credentials are handled by the workspace server.</div></form></main>;
+
+    const connectionNeedsTest = Boolean(connection && !session.demo && !connection.manifest);
+    const connectionStatus = connection?.trusted
+        ? connectionNeedsTest ? 'Retest needed' : 'Read-only'
+        : connection?.manifest ? 'Review needed' : 'Test needed';
 
     return <div className="application" data-experience={experience}>
         <header className="topbar">
@@ -92,7 +98,7 @@ function App() {
             <div className="connection-wrap">
                 <button className="connection-trigger" type="button" aria-haspopup="dialog" aria-expanded={connectionPicker} aria-controls="connection-menu" onClick={() => setConnectionPicker(value => !value)}>
                     <span className={cx('connection-env', session.demo && 'is-demo')} title={session.demo ? 'Queries are not sent to a live database.' : undefined}><span className={cx('status-light', session.demo ? 'is-warning' : connection?.trusted ? 'is-trusted' : 'is-warning')}/>{session.demo ? 'DEMO DATA' : 'LIVE CONNECTION'}</span>
-                    {!session.demo && <span className={cx('connection-quick-status', connection?.trusted ? 'is-ready' : 'is-review')}>{connection?.trusted ? 'Read-only' : 'Review needed'}</span>}
+                    {!session.demo && <span className={cx('connection-quick-status', connection?.trusted && !connectionNeedsTest ? 'is-ready' : 'is-review')}>{connectionStatus}</span>}
                     <strong>{connection ? connectionLabel(connection, session.demo) : 'Choose connection'}</strong>
                     <span className="connection-database">{connection?.database ?? '—'} <Icon name="chevron"/></span>
                 </button>
@@ -102,11 +108,11 @@ function App() {
                         <strong>{connectionLabel(connection, session.demo)}</strong>
                         <small>{session.demo ? 'Local sample data' : `Database: ${connection.database} · Server: ${connection.host}`}</small>
                     </div>
-                    <p className={cx('connection-menu-note', session.demo ? 'is-sample' : connection.trusted ? 'is-ready' : 'is-review')} role="status">
-                        {session.demo ? 'This demo uses sample data. Your SQL is not sent to a real database.' : connection.trusted ? 'Read-only access is on. Queries can read data but cannot change it.' : 'Review this connection before you run a query.'}
+                    <p className={cx('connection-menu-note', session.demo ? 'is-sample' : connection.trusted && !connectionNeedsTest ? 'is-ready' : 'is-review')} role="status">
+                        {session.demo ? 'This demo uses sample data. Your SQL is not sent to a real database.' : connectionNeedsTest ? connection.trusted ? 'Read-only access is on, but this server needs a fresh capability check.' : 'Test this connection to discover its ClickHouse features.' : connection.trusted ? 'Read-only access is on. Queries can read data but cannot change it.' : 'Connection tested. Turn on read-only access when you are ready to query.'}
                     </p>
-                    {(!session.demo || !connection.trusted) && <Button variant={connection.trusted ? 'ghost' : 'primary'} className="connection-menu-action" disabled={trustActionBusy} onClick={() => void runTrustAction()}>
-                        {trustActionBusy ? 'Saving…' : session.demo ? 'Start exploring' : connection.trusted ? 'Turn off read-only access' : 'Review connection'}
+                    {(!session.demo || !connection.trusted) && <Button variant={!session.demo && connection.trusted ? 'ghost' : 'primary'} className="connection-menu-action" disabled={connectionActionBusy} onClick={() => void runConnectionAction(connectionNeedsTest)}>
+                        {connectionActionBusy ? connectionNeedsTest ? 'Testing…' : 'Saving…' : session.demo ? 'Start exploring' : connectionNeedsTest ? connection.trusted ? 'Retest connection' : 'Test connection' : connection.trusted ? 'Turn off read-only access' : 'Trust connection'}
                     </Button>}
                     {otherConnections.length > 0 && <div className="connection-switch-list">
                         <span className="connection-menu-heading">Switch connection</span>
@@ -134,7 +140,7 @@ function App() {
                 <SelectControl label={copy.app.theme} value={theme} options={themeOptions} onChange={setTheme}/>
             </div>
         </header>
-        {connection ? <Workspace key={connection.id} connection={connection} connectionLabel={connectionLabel(connection, session.demo)} connections={connections} onSelectConnection={selectConnection} onRefreshConnections={async () => { const latest = await api<Connected[]>('/connections'); setConnections(latest); }} trustActionRef={trustActionRef} demoMode={session.demo} experience={experience} dark={dark} copy={copy} locale={locale}/> : <div className="empty-connection"><Icon name="schema"/><h1>{copy.app.name}</h1><p>No connection profiles are configured for this workspace.</p></div>}
+        {connection ? <Workspace key={connection.id} connection={connection} connectionLabel={connectionLabel(connection, session.demo)} connections={connections} onSelectConnection={selectConnection} onRefreshConnections={async () => { const latest = await api<Connected[]>('/connections'); setConnections(latest); }} trustActionRef={trustActionRef} testConnectionActionRef={testConnectionActionRef} demoMode={session.demo} experience={experience} dark={dark} copy={copy} locale={locale}/> : <div className="empty-connection"><Icon name="schema"/><h1>{copy.app.name}</h1><p>No connection profiles are configured for this workspace.</p></div>}
     </div>;
 }
 

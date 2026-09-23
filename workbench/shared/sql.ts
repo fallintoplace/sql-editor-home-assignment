@@ -127,6 +127,11 @@ export function selectedStatement(sql: string, from: number, to = from): Stateme
         all.find(s => s.from > from) ?? all.at(-1);
 }
 
+export function hasSqlComments(sql: string): boolean {
+    return protectedSqlRanges(sql).some(range =>
+        sql.startsWith('--', range.from) || sql[range.from] === '#' || sql.startsWith('/*', range.from));
+}
+
 function protectedSqlRanges(sql: string): Array<{ from: number; to: number }> {
     const ranges: Array<{ from: number; to: number }> = [];
     for (let i = 0; i < sql.length;) {

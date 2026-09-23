@@ -9,7 +9,7 @@ import { sql, SQLDialect } from '@codemirror/lang-sql';
 import { setDiagnostics } from '@codemirror/lint';
 import type { ApiError, Schema } from '../../shared/types';
 import { nativeDiagnosticForStatement, type NativeDiagnostic, type NativeParserStatus } from '../../shared/native-parser';
-import { quoteIdentifier } from '../../shared/sql';
+import { hasSqlComments, quoteIdentifier } from '../../shared/sql';
 import { activeStatementIndex, CLICKHOUSE_KEYWORDS, completionTarget, matchingNames, tableAliases as aliasesFor } from '../../shared/editor-tools';
 import { clickhouseSnippetCompletions, sqlEditorTools, sqlStatementOutline } from './editor-tools';
 import { clickHouseNativeParser } from '../clickhouse-native-parser';
@@ -90,7 +90,7 @@ export interface EditorHandle {
     insert: (text: string) => void;
     focus: () => void;
     indent: () => void;
-    formatNative: () => Promise<'formatted' | 'unavailable' | 'rejected'>;
+    formatNative: () => Promise<'formatted' | 'fallback' | 'unavailable' | 'rejected'>;
     selection: () => {
         from: number;
         to: number;
@@ -187,6 +187,8 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
             if (outline.error || !outline.statements.length)
                 return 'rejected';
             const before = editor.state.doc.toString(), statements = outline.statements;
+            if (statements.some(statement => hasSqlComments(statement.sql)))
+                return 'fallback';
             try {
                 const results = await clickHouseNativeParser.formatMany(statements.map(statement => statement.sql));
                 if (view.current !== editor || editor.state.doc.toString() !== before)

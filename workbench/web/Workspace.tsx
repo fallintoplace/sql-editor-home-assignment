@@ -232,7 +232,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             return;
         }
         const result = await editor.current?.formatNative();
-        if (result === 'unavailable')
+        if (result === 'unavailable' || result === 'fallback')
             patch({ sql: formatSql(active.sql) });
     }, [active.sql, nativeParserStatus, patch]);
 

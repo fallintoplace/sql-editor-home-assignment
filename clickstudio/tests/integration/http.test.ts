@@ -86,6 +86,16 @@ test('Native ClickHouse parser bytes are served same-origin behind the session b
     assert.match(response.headers.get('content-security-policy') ?? '', /script-src 'self' 'wasm-unsafe-eval'/);
     assert.deepEqual(new Uint8Array(await response.arrayBuffer()), fixture);
 });
+test('Vendored ClickHouse parser artifact is served without a remote fetch', async (t) => {
+    const s = await start();
+    t.after(() => s.stop());
+    const response = await s.call('/editor/clickhouse-parser.wasm');
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /^application\/wasm/);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    assert.ok(bytes.length >= 8 && bytes.length <= 64 * 1024 * 1024);
+    assert.deepEqual([...bytes.slice(0, 8)], [0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+});
 test('Assistant evaluation report is available without a provider and keeps SQL out of the summary', async (t) => {
     const s = await start();
     t.after(() => s.stop());

@@ -1,6 +1,7 @@
 import express, { type Request, type Response, type ErrorRequestHandler } from 'express';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { AssistantAction, AuditEvent, Principal, Proposal, Run, Schema } from '../shared/types.js';
 import type { QueryDriver } from '../core/runs.js';
@@ -23,31 +24,21 @@ import { OpenAIDriver } from './openai.js';
 import { OpenAIVoiceService, safetyIdentifier, type VoiceService } from './voice.js';
 import { telemetry, recordRun } from './telemetry.js';
 type Driver = QueryDriver & ImportDriver & Pick<ClickHouseDriver, 'connection' | 'connections' | 'test' | 'targets' | 'profileEvidence' | 'profilePipeline' | 'systemTableDocumentation' | 'close'>;
-const CLICKHOUSE_WASM_PARSER_PR = 118591;
-const CLICKHOUSE_WASM_PARSER_SHA = '68085149131ee43144b975f7c0ec01137208fb8a';
-const CLICKHOUSE_WASM_PARSER_URL = `https://clickhouse-builds.s3.amazonaws.com/PRs/${CLICKHOUSE_WASM_PARSER_PR}/${CLICKHOUSE_WASM_PARSER_SHA}/build_wasm_parser/parser.wasm`;
 const MAX_WASM_PARSER_BYTES = 64 * 1024 * 1024;
 let parserWasmCache: Promise<Uint8Array> | undefined;
-async function fetchClickHouseParserWasm(): Promise<Uint8Array> {
-    let response: globalThis.Response;
+async function loadClickHouseParserWasm(): Promise<Uint8Array> {
+    let bytes: Buffer;
     try {
-        response = await fetch(CLICKHOUSE_WASM_PARSER_URL, { signal: AbortSignal.timeout(5000) });
+        bytes = await readFile(new URL('../vendor/clickhouse-parser/parser.wasm', import.meta.url));
     } catch {
-        throw new AppError(503, 'PARSER_UNAVAILABLE', 'ClickHouse native parser artifact is unavailable');
+        throw new AppError(503, 'PARSER_UNAVAILABLE', 'The bundled ClickHouse native parser is unavailable');
     }
-    if (!response.ok)
-        throw new AppError(503, 'PARSER_UNAVAILABLE', 'ClickHouse native parser artifact is unavailable');
-    const declared = Number(response.headers.get('content-length'));
-    if (Number.isFinite(declared) && declared > MAX_WASM_PARSER_BYTES)
-        throw new AppError(503, 'PARSER_UNAVAILABLE', 'ClickHouse native parser artifact is unexpectedly large');
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    const magic = Buffer.from(bytes.subarray(0, 4));
-    if (bytes.length < 8 || bytes.length > MAX_WASM_PARSER_BYTES || !magic.equals(Buffer.from([0x00, 0x61, 0x73, 0x6d])))
-        throw new AppError(503, 'PARSER_UNAVAILABLE', 'ClickHouse native parser artifact is invalid');
+    if (bytes.length < 8 || bytes.length > MAX_WASM_PARSER_BYTES || !bytes.subarray(0, 4).equals(Buffer.from([0x00, 0x61, 0x73, 0x6d])))
+        throw new AppError(503, 'PARSER_UNAVAILABLE', 'The bundled ClickHouse native parser is invalid');
     return bytes;
 }
 function cachedClickHouseParserWasm(): Promise<Uint8Array> {
-    parserWasmCache ??= fetchClickHouseParserWasm().catch(error => {
+    parserWasmCache ??= loadClickHouseParserWasm().catch(error => {
         parserWasmCache = undefined;
         throw error;
     });

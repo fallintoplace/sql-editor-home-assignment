@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "start": "tsx --env-file-if-exists=.env server/index.ts",
-    "build": "npm run typecheck && vite build && tsc -p tsconfig.server.json",
+    "build": "npm run typecheck && vite build && tsc -p tsconfig.server.json && node scripts/copy-parser-vendor.mjs",
     "start:production": "node --env-file-if-exists=.env dist/server/index.js",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.server.json",
     "test": "npm run test:core && npm run test:workspace",

@@ -1,0 +1,183 @@
+import { test, expect, type Page } from '@playwright/test';
+import { trust } from './helpers.js';
+
+const schema = {
+    connectionId: 'live',
+    fetchedAt: '2026-09-23T00:00:00.000Z',
+    tables: [{ database: 'demo', name: 'events', engine: 'MergeTree' }],
+    columns: [
+        { database: 'demo', table: 'events', name: 'day', type: 'Date', defaultKind: '', comment: '' },
+        { database: 'demo', table: 'events', name: 'events', type: 'UInt64', defaultKind: '', comment: '' },
+    ],
+    warnings: [],
+    truncated: false,
+};
+
+async function mockWritableWorkspace(page: Page, targets = ['demo.events']) {
+    await page.route('**/api/session', route => route.fulfill({ json: { principal: { id: 'test-owner', role: 'owner' }, requiresLogin: false, demo: false } }));
+    await page.route('**/api/connections', route => route.fulfill({ json: [{
+        id: 'live', name: 'Test database', host: 'https://clickhouse.example', database: 'demo', username: 'reader', readonly: true, trusted: true,
+        limits: { rows: 5000, bytes: 2000000, seconds: 30, memory: 536870912, threads: 4 },
+        manifest: { version: 1, serverVersion: '26.1', testedAt: '2026-09-23T00:00:00.000Z', schema: { available: true }, progress: { available: true }, cancellation: { available: true }, explain: { available: true }, pipeline: { available: true }, queryLog: { available: true }, documentation: { available: false }, import: { available: true }, scripts: { available: true }, parameters: { available: true } },
+    }] }));
+    await page.route('**/api/connections/live/schema', route => route.fulfill({ json: schema }));
+    await page.route('**/api/connections/live/import-targets', route => route.fulfill({ json: targets }));
+    await page.route('**/api/runs**', route => route.fulfill({ json: [] }));
+    await page.route('**/api/documents**', route => route.fulfill({ json: [] }));
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'Import data', exact: true })).toBeVisible();
+}
+
+async function previewCsv(page: Page) {
+    const dialog = page.getByRole('dialog', { name: 'Import data', exact: true });
+    await dialog.getByLabel('Choose a CSV, JSON, or NDJSON file').setInputFiles({
+        name: 'events.csv',
+        mimeType: 'text/csv',
+        buffer: Buffer.from('day,events\n2026-01-01,10\n2026-01-02,20\n'),
+    });
+    await dialog.getByRole('button', { name: 'Preview file', exact: true }).click();
+    await expect(dialog).toContainText(/\d+ rows · 2 columns · CSV/);
+    return dialog;
+}
+
+test('File import previews, maps, confirms, and reports a successful insert', async ({ page }) => {
+    await mockWritableWorkspace(page);
+    let mappingBody: Record<string, unknown> | undefined;
+    let commitBody: Record<string, unknown> | undefined;
+
+    await page.route('**/api/imports/preview', route => route.fulfill({ status: 201, json: {
+        id: 'input-1', name: 'events.csv', format: 'csv', columns: ['day', 'events'], rows: [{ day: '2026-01-01', events: '10' }, { day: '2026-01-02', events: '20' }], rowCount: 2,
+    } }));
+    await page.route('**/api/imports/input-1/mapping', async route => {
+        mappingBody = route.request().postDataJSON() as Record<string, unknown>;
+        await route.fulfill({ json: { id: 'mapping-1', inputId: 'input-1', connectionId: 'live', table: 'demo.events', fields: { day: 'day', events: 'events' }, rows: [{ day: '2026-01-01', events: '10' }], rowCount: 2 } });
+    });
+    await page.route('**/api/imports/mapping-1/commit', async route => {
+        commitBody = route.request().postDataJSON() as Record<string, unknown>;
+        await route.fulfill({ json: { id: 'mapping-1', table: 'demo.events', rows: 2, status: 'succeeded' } });
+    });
+
+    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    const dialog = await previewCsv(page);
+    await dialog.getByRole('button', { name: 'Map columns', exact: true }).click();
+    await expect(dialog.getByLabel('Map day to destination')).toHaveValue('day');
+    await dialog.getByRole('button', { name: 'Review import', exact: true }).click();
+    await expect(dialog).toContainText('2 rows into demo.events');
+
+    const commit = dialog.getByRole('button', { name: 'Import rows', exact: true });
+    await expect(commit).toBeDisabled();
+    await dialog.getByLabel('Type INSERT 2 ROWS to confirm').fill('INSERT 2 ROWS');
+    await expect(commit).toBeEnabled();
+    await commit.click();
+
+    await expect(dialog).toContainText('Inserted 2 rows into demo.events');
+    expect(mappingBody).toMatchObject({ connectionId: 'live', table: 'demo.events', fields: { day: 'day', events: 'events' } });
+    expect(commitBody).toEqual({ confirmation: 'INSERT 2 ROWS' });
+});
+
+test('File import rejects oversized files in the browser before upload', async ({ page }) => {
+    await mockWritableWorkspace(page);
+    let previewRequests = 0;
+    await page.route('**/api/imports/preview', route => { previewRequests++; return route.fulfill({ status: 500, json: {} }); });
+
+    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Import data', exact: true });
+    await dialog.getByLabel('Choose a CSV, JSON, or NDJSON file').setInputFiles({ name: 'large.csv', mimeType: 'text/csv', buffer: Buffer.alloc(2_000_001) });
+    await expect(dialog.getByRole('alert')).toContainText('larger than the 2 MB import limit');
+    await expect(dialog.getByRole('button', { name: 'Preview file' })).toBeDisabled();
+    expect(previewRequests).toBe(0);
+});
+
+test('File import rejects unsupported file types before upload', async ({ page }) => {
+    await mockWritableWorkspace(page);
+    let previewRequests = 0;
+    await page.route('**/api/imports/preview', route => { previewRequests++; return route.fulfill({ status: 500, json: {} }); });
+
+    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Import data', exact: true });
+    await dialog.getByLabel('Choose a CSV, JSON, or NDJSON file').setInputFiles({ name: 'events.txt', mimeType: 'text/plain', buffer: Buffer.from('not csv') });
+    await expect(dialog.getByRole('alert')).toContainText('Choose a .csv, .json, .ndjson, or .jsonl file');
+    await expect(dialog.getByRole('button', { name: 'Preview file' })).toBeDisabled();
+    expect(previewRequests).toBe(0);
+});
+
+test('File import shows server mapping errors without attempting a write', async ({ page }) => {
+    await mockWritableWorkspace(page);
+    let commitRequests = 0;
+    await page.route('**/api/imports/preview', route => route.fulfill({ status: 201, json: {
+        id: 'input-1', name: 'events.csv', format: 'csv', columns: ['day', 'events'], rows: [{ day: '2026-01-01', events: '10' }], rowCount: 1,
+    } }));
+    await page.route('**/api/imports/input-1/mapping', route => route.fulfill({ status: 400, json: { error: { code: 'IMPORT_MISSING_FIELD', message: 'An input row is missing events' } } }));
+    await page.route('**/api/imports/mapping-1/commit', route => { commitRequests++; return route.fulfill({ json: {} }); });
+
+    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    const dialog = await previewCsv(page);
+    await dialog.getByRole('button', { name: 'Map columns', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Review import', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toContainText('IMPORT_MISSING_FIELD: An input row is missing events');
+    expect(commitRequests).toBe(0);
+});
+
+test('File import explains when the connection has no allowlisted targets', async ({ page }) => {
+    await mockWritableWorkspace(page, []);
+    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Import data', exact: true });
+    await expect(dialog.getByRole('status')).toContainText('No import targets are configured');
+    await expect(dialog.getByLabel('Choose a CSV, JSON, or NDJSON file')).toHaveCount(0);
+});
+
+test('File import reports an unknown insert without retrying automatically', async ({ page }) => {
+    await mockWritableWorkspace(page);
+    let commitRequests = 0;
+    await page.route('**/api/imports/preview', route => route.fulfill({ status: 201, json: {
+        id: 'input-1', name: 'events.csv', format: 'csv', columns: ['day', 'events'], rows: [{ day: '2026-01-01', events: '10' }], rowCount: 1,
+    } }));
+    await page.route('**/api/imports/input-1/mapping', route => route.fulfill({ json: { id: 'mapping-1', inputId: 'input-1', connectionId: 'live', table: 'demo.events', fields: { day: 'day', events: 'events' }, rows: [{ day: '2026-01-01', events: '10' }], rowCount: 1 } }));
+    await page.route('**/api/imports/mapping-1/commit', async route => {
+        commitRequests++;
+        await route.fulfill({ json: { id: 'mapping-1', table: 'demo.events', rows: 1, status: 'unknown', error: 'The insert may have partially completed. Inspect the destination; automatic retry is disabled.' } });
+    });
+
+    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    const dialog = await previewCsv(page);
+    await dialog.getByRole('button', { name: 'Map columns', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Review import', exact: true }).click();
+    await dialog.getByLabel('Type INSERT 1 ROWS to confirm').fill('INSERT 1 ROWS');
+    await dialog.getByRole('button', { name: 'Import rows', exact: true }).click();
+
+    await expect(dialog).toContainText('The insert outcome is not confirmed.');
+    await expect(dialog).toContainText('Inspect the destination; automatic retry is disabled.');
+    expect(commitRequests).toBe(1);
+});
+
+test('File import reloads the destination mapping when the server detects a schema change', async ({ page }) => {
+    await mockWritableWorkspace(page);
+    let schemaRequests = 0;
+    let commitRequests = 0;
+    await page.route('**/api/connections/live/schema', route => { schemaRequests++; return route.fulfill({ json: schema }); });
+    await page.route('**/api/imports/preview', route => route.fulfill({ status: 201, json: {
+        id: 'input-1', name: 'events.csv', format: 'csv', columns: ['day', 'events'], rows: [{ day: '2026-01-01', events: '10' }], rowCount: 1,
+    } }));
+    await page.route('**/api/imports/input-1/mapping', route => route.fulfill({ json: { id: 'mapping-1', inputId: 'input-1', connectionId: 'live', table: 'demo.events', fields: { day: 'day', events: 'events' }, rows: [{ day: '2026-01-01', events: '10' }], rowCount: 1 } }));
+    await page.route('**/api/imports/mapping-1/commit', route => { commitRequests++; return route.fulfill({ status: 409, json: { error: { code: 'SCHEMA_CHANGED', message: 'The destination schema changed; review a new mapping' } } }); });
+
+    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    const dialog = await previewCsv(page);
+    await dialog.getByRole('button', { name: 'Map columns', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Review import', exact: true }).click();
+    await dialog.getByLabel('Type INSERT 1 ROWS to confirm').fill('INSERT 1 ROWS');
+    await dialog.getByRole('button', { name: 'Import rows', exact: true }).click();
+
+    await expect(dialog).toContainText('The destination schema changed. Review the updated mapping');
+    await expect(dialog.getByRole('button', { name: 'Review import', exact: true })).toBeVisible();
+    expect(schemaRequests).toBeGreaterThanOrEqual(2);
+    expect(commitRequests).toBe(1);
+});
+
+test('Fixture workspace explains that imports never write sample data', async ({ page }) => {
+    await trust(page);
+    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Import data', exact: true });
+    await expect(dialog.getByRole('status')).toContainText('This workspace never writes to a database');
+    await expect(dialog.getByLabel('Choose a CSV, JSON, or NDJSON file')).toHaveCount(0);
+});

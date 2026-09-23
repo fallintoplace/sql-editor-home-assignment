@@ -407,9 +407,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             editor.current?.focus();
         }
         setDrawerOpen(false);
-        setNotice(wholeScript
-            ? 'Sample results were generated for each statement. SQL is not executed in this preview.'
-            : isFrontendDemoPreview ? 'Sample rows were generated. SQL is not executed in this preview.' : 'Query submitted to the selected ClickHouse connection.');
+        if (!isFrontendDemoPreview)
+            setNotice(wholeScript ? 'Script submitted to the selected ClickHouse connection.' : 'Query submitted to the selected ClickHouse connection.');
         void loadHistory().catch(() => undefined);
     }, wholeScript ? 'script' : 'run');
 
@@ -571,9 +570,11 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     } satisfies InspectorPaneProps;
 
     return <div className={cx('workspace-root', experience === 'expert' && 'is-expert', experience === 'beginner' && 'is-beginner')}>
-        {error && <div className="toast toast-error animate-enter" role="alert"><span>!</span>{error}<button onClick={() => setError('')} aria-label="Dismiss error"><Icon name="close"/></button></div>}
-        {notice && <div className="toast toast-success animate-enter" role="status"><span>✓</span>{notice}<button onClick={() => setNotice('')} aria-label="Dismiss message"><Icon name="close"/></button></div>}
-        {storageError && <div className="toast toast-error" role="alert">Local draft storage could not save changes: {storageError}</div>}
+        <div className="toast-stack">
+            {error && <div className="toast toast-error animate-enter" role="alert"><span>!</span>{error}<button onClick={() => setError('')} aria-label="Dismiss error"><Icon name="close"/></button></div>}
+            {notice && <div className="toast toast-success animate-enter" role="status"><span>✓</span>{notice}<button onClick={() => setNotice('')} aria-label="Dismiss message"><Icon name="close"/></button></div>}
+            {storageError && <div className="toast toast-error" role="alert">Local draft storage could not save changes: {storageError}</div>}
+        </div>
 
         <div className="workspace-layout">
             <aside className="icon-rail" aria-label="Workspace tools">

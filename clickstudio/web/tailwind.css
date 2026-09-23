@@ -665,7 +665,8 @@
     .cancel-execution { min-height: 27px; }
     .execution-progress-line { position: absolute; right: 100%; bottom: 0; left: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), #fff6, var(--accent)); box-shadow: 0 0 12px var(--accent); }
     .is-running .execution-progress-line { animation: progressSweep 1.7s ease-in-out infinite; }
-    .toast { position: relative; z-index: 90; display: flex; width: fit-content; max-width: min(500px, calc(100vw - 32px)); flex: none; align-self: flex-end; align-items: center; gap: 10px; margin: 8px 22px 0; padding: 10px 12px; border: 1px solid var(--line-bright); border-radius: 10px; background: var(--panel-raised); color: var(--text-soft); font-size: 10px; line-height: 1.5; box-shadow: var(--shadow); pointer-events: none; }
+    .toast-stack { position: fixed; z-index: 90; right: 22px; bottom: calc(60px + env(safe-area-inset-bottom, 0px)); display: flex; width: min(500px, calc(100vw - 44px)); flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: none; }
+    .toast { position: relative; z-index: 1; display: flex; width: fit-content; max-width: 100%; align-items: center; gap: 10px; margin: 0; padding: 10px 12px; border: 1px solid var(--line-bright); border-radius: 10px; background: var(--panel-raised); color: var(--text-soft); font-size: 10px; line-height: 1.5; box-shadow: var(--shadow); pointer-events: none; }
     .toast > span { display: grid; width: 20px; height: 20px; flex: none; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--green) 10%, transparent); color: var(--green); }
     .toast-error { border-color: color-mix(in srgb, var(--red) 29%, transparent); }
     .toast-error > span { background: color-mix(in srgb, var(--red) 10%, transparent); color: var(--red); }
@@ -804,6 +805,7 @@
     .execution-bar { min-height: 40px; flex-wrap: wrap; gap: 7px 12px; padding: 6px 10px; }
     .execution-telemetry { justify-content: flex-start; }
     .execution-right code { max-width: 90px; }
+    .toast-stack { right: 10px; bottom: calc(82px + env(safe-area-inset-bottom, 0px)); width: calc(100vw - 20px); }
     .results-header { gap: 5px; padding: 6px 8px; }
     .results-title, .results-actions { gap: 6px; }
     .results-mark { display: none; }
@@ -868,7 +870,7 @@
     .execution-right { margin-left: auto; }
     .execution-right code { max-width: 76px; }
     .execution-bar { justify-content: flex-start; }
-    .toast { margin-right: 8px; margin-left: 8px; }
+    .toast-stack { right: 8px; width: calc(100vw - 16px); }
 }
 
 @media (min-width: 1180px) {

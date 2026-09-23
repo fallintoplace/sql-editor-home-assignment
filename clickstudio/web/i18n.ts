@@ -89,8 +89,8 @@ export const localeOptions = [
 ] as const satisfies readonly SelectOption<Locale>[];
 
 export const themeOptions = [
-    { value: 'click-dark', label: 'ClickDark' },
-    { value: 'click-light', label: 'ClickLight' },
+    { value: 'click-dark', label: '🌙' },
+    { value: 'click-light', label: '☀️' },
 ] as const satisfies readonly SelectOption<Theme>[];
 
 export const experienceOptions = (copy: Copy) => [

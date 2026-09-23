@@ -1,4 +1,4 @@
-import type { ChartConfig, MetricContract } from '../shared/types.js';
+import type { ChartConfig, MetricContract, QueryDocument } from '../shared/types.js';
 export const SAMPLE_SQL = "SELECT\n    toDate('2026-01-01') + number AS day,\n    (number + 1) * 10 AS events\nFROM numbers(7)\nORDER BY day";
 export interface Checkpoint {
     id: string;
@@ -39,6 +39,26 @@ export interface WorkspaceState {
 export const newDraft = (name = 'Untitled.sql', sql = SAMPLE_SQL): Draft => ({ id: crypto.randomUUID(), name, sql, parameters: {}, chart: { kind: 'table', x: 0, ys: [], title: 'Query result' }, runIds: [], checkpoints: [], from: 0, to: 0, kind: 'query', dependencies: [] });
 export const MAX_TABS = 30;
 export const MAX_CLOSED_TABS = 10;
+export function draftFromDocument(document: QueryDocument): Draft {
+    return {
+        ...newDraft(document.name, document.sql),
+        serverId: document.id,
+        baseRevision: document.revision,
+        parameters: { ...document.parameters },
+        chart: { ...document.chart, ys: [...document.chart.ys] },
+        runIds: document.runId ? [document.runId] : [],
+        activeRunId: document.runId,
+        parentDocumentId: document.parentDocumentId,
+        kind: document.kind,
+        metric: document.metric ? {
+            ...document.metric,
+            dimensions: [...document.metric.dimensions],
+            sourceColumns: [...document.metric.sourceColumns],
+        } : undefined,
+        dependencies: [...document.dependencies],
+    };
+}
+
 const record = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 const text = (value: unknown, fallback = '') => typeof value === 'string' ? value : fallback;

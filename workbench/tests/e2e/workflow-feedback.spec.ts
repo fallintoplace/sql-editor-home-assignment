@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import type { Run } from '../../shared/types';
+import type { QueryDocument, Run } from '../../shared/types';
 import { trust } from './helpers.js';
 async function replaceSql(page: Page, sql: string) {
     await page.locator('.cm-content').click();
@@ -23,6 +23,49 @@ async function runStatement(page: Page) {
     await page.getByRole('button', { name: 'Run statement', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Query results' }).getByText('succeeded', { exact: true })).toBeVisible();
 }
+
+test('Reopening and saving a metric keeps its saved contract and dependency', async ({ page }) => {
+    const savedDocument: QueryDocument = {
+        id: 'saved-metric', owner: 'local-owner', name: 'Daily revenue', connectionId: 'demo', sql: 'SELECT {currency:String}', revision: 4,
+        createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-02T00:00:00.000Z', parameters: { currency: 'USD' },
+        chart: { kind: 'line', x: 0, ys: [1], title: 'Revenue by day' }, runId: 'saved-metric-run', parentDocumentId: 'metric-parent',
+        dependencies: ['metric-source'], kind: 'metric',
+        metric: { definition: 'sum(amount)', grain: 'day', dimensions: ['region'], timezone: 'UTC', filters: 'paid', nullTreatment: 'exclude', sourceColumns: ['orders.amount'] },
+    };
+    const savedRun: Run = {
+        id: 'saved-metric-run', queryId: 'saved-metric-query', owner: 'local-owner', connectionId: 'demo', dataSource: 'fixture',
+        sql: savedDocument.sql, kind: 'query', parameters: savedDocument.parameters,
+        limits: { rows: 5000, bytes: 2000000, seconds: 30, memory: 536870912, threads: 4 }, tags: {}, status: 'succeeded',
+        createdAt: savedDocument.createdAt, elapsedMs: 12, rowCount: 1, bytes: 8, columns: [{ name: 'amount', type: 'UInt64' }],
+        warnings: [], sequence: 1, resultState: 'expired', requestedBy: 'local-owner', executedAs: 'fixture-reader',
+        permissionSnapshot: { readonly: true, role: 'owner' }, retryPolicy: 'never',
+    };
+    let savePayload: Record<string, unknown> | undefined;
+    await page.route(url => url.pathname === '/api/documents' && url.searchParams.get('trash') === 'true', route => route.fulfill({ json: [savedDocument] }));
+    await page.route('**/api/runs/saved-metric-run', route => route.fulfill({ json: savedRun }));
+    await page.route(url => url.pathname === '/api/documents/saved-metric' && url.searchParams.size === 0, async route => {
+        if (route.request().method() !== 'PUT') return route.continue();
+        savePayload = route.request().postDataJSON() as Record<string, unknown>;
+        await route.fulfill({ json: { ...savedDocument, ...savePayload, revision: 5, updatedAt: '2026-01-03T00:00:00.000Z' } });
+    });
+    await trust(page);
+    await page.getByRole('complementary', { name: 'Workspace tools' }).getByRole('button', { name: 'Documents', exact: true }).click();
+    await page.getByRole('button', { name: /Daily revenue/ }).click();
+    await expect(page.locator('.cm-content')).toContainText(savedDocument.sql);
+    await expect(page.locator('.execution-bar code')).toHaveText(savedRun.queryId);
+    await page.getByRole('button', { name: 'Save revision', exact: true }).click();
+    await expect.poll(() => savePayload).toBeDefined();
+    expect(savePayload).toMatchObject({
+        baseRevision: 4,
+        parameters: savedDocument.parameters,
+        chart: savedDocument.chart,
+        runId: savedDocument.runId,
+        parentDocumentId: savedDocument.parentDocumentId,
+        kind: 'metric',
+        metric: savedDocument.metric,
+        dependencies: savedDocument.dependencies,
+    });
+});
 
 test('Revision status tracks content changes, reverts and explicit saves', async ({ page }) => {
     const counts = requests(page);

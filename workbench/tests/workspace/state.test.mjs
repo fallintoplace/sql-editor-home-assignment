@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { checkpoint, closeDraft, MAX_CLOSED_TABS, MAX_TABS, newDraft, recover, reopenDraft } from '../../.workspace-build/web/workspace-state.js';
+import { checkpoint, closeDraft, draftFromDocument, MAX_CLOSED_TABS, MAX_TABS, newDraft, recover, reopenDraft } from '../../.workspace-build/web/workspace-state.js';
 
 const workspace = (...tabs) => ({ version: 1, tabs, activeId: tabs[0].id });
 const read = value => ({ getItem: () => JSON.stringify(value) });
@@ -12,6 +12,26 @@ test('Existing version-1 drafts preserve SQL, parameters, evidence and saved rev
         dependencies: ['metric-1'], parentDocumentId: 'parent-1', parentRunId: 'parent-run-1' };
     const result = recover('key', read(workspace(draft))).tabs[0];
     for (const [key, value] of Object.entries(draft)) assert.deepEqual(result[key], value, key);
+});
+
+test('Opening a saved metric preserves its revision, run, parent and dependency semantics', () => {
+    const metric = { definition: 'sum(amount)', grain: 'day', dimensions: ['region'], timezone: 'UTC', filters: 'paid', nullTreatment: 'exclude', sourceColumns: ['orders.amount'] };
+    const document = { id: 'metric-document', owner: 'owner', name: 'Daily revenue', connectionId: 'demo', sql: 'SELECT sum(amount) FROM orders', revision: 4,
+        createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-02T00:00:00.000Z', parameters: { currency: 'EUR' },
+        chart: { kind: 'line', x: 0, ys: [1], title: 'Revenue by day' }, runId: 'metric-run', parentDocumentId: 'parent-document',
+        dependencies: ['source-document'], kind: 'metric', metric };
+    const draft = draftFromDocument(document);
+    assert.notEqual(draft.id, document.id);
+    assert.equal(draft.serverId, document.id);
+    assert.equal(draft.baseRevision, document.revision);
+    assert.equal(draft.activeRunId, document.runId);
+    assert.deepEqual(draft.runIds, [document.runId]);
+    assert.equal(draft.parentDocumentId, document.parentDocumentId);
+    assert.equal(draft.kind, document.kind);
+    assert.deepEqual(draft.metric, metric);
+    assert.deepEqual(draft.dependencies, document.dependencies);
+    assert.deepEqual(draft.parameters, document.parameters);
+    assert.deepEqual(draft.chart, document.chart);
 });
 
 test('Malformed optional metadata cannot crash a restored SQL draft', () => {

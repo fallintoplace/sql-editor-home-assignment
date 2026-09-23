@@ -12,7 +12,7 @@ import { ChartView, InsightsView, ResultGrid } from './components/ResultViews';
 import { InspectorPane, type InspectorPaneProps } from './components/InspectorPane';
 import { Button, cx, Icon, Status, terminal } from './components/ui';
 import { EmptyWorkspace, ExecutionBar, RailButton, ScriptResults } from './components/WorkspaceChrome';
-import { checkpoint, closeDraft, MAX_TABS, newDraft, recover, reopenDraft, type Draft, type WorkspaceState } from './workspace-state';
+import { checkpoint, closeDraft, draftFromDocument, MAX_TABS, newDraft, recover, reopenDraft, type Draft, type WorkspaceState } from './workspace-state';
 import { draftSaveStatus } from '../shared/workbench-view';
 import { useWorkspacePersistence } from './useWorkspacePersistence';
 import { useRunEvidence } from './useRunEvidence';
@@ -403,9 +403,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         changed: 'Unsaved changes', conflict: 'Newer revision available', deleted: 'Saved file in trash', unavailable: 'Save status unavailable',
     } as const)[saveStatus.state];
     const openDocument = (document: QueryDocument) => {
-        const draft = newDraft(document.name, document.sql);
-        Object.assign(draft, { serverId: document.id, baseRevision: document.revision, parameters: document.parameters, chart: document.chart, activeRunId: document.runId });
-        addDraft(draft);
+        addDraft(draftFromDocument(document));
     };
     const inspectorProps = {
         inspector,

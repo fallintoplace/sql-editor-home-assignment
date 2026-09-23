@@ -4,7 +4,7 @@ import { parseCsv, parseInput, ImportService } from '../../.core-build/core/impo
 import { AssistantService, buildContext } from '../../.core-build/core/assistant.js';
 import { evaluateProposal, runAssistantBenchmarks } from '../../.core-build/core/assistant-evaluation.js';
 import { MemoryStore } from '../../.core-build/core/store.js';
-import { exportCsv, chartNumber, filterRows } from '../../.core-build/shared/results.js';
+import { exportCsv, chartNumber, filterRows, sampleChartRows, MAX_CHART_RENDER_POINTS } from '../../.core-build/shared/results.js';
 import { owner, other, schema } from './helpers.mjs';
 const proposal = { sql: 'SELECT 1', summary: 'A proposal', assumptions: [], tables: [], caveats: [], clarification: null, findings: [] };
 function aiFixture(content = proposal) { const store = new MemoryStore(); let calls = 0; const driver = { available: true, model: 'fixture', async propose() { calls++; return { content, responseId: 'fixture-response' }; } }; const ai = new AssistantService(store, driver, () => true); return { store, ai, get calls() { return calls; }, input: { connectionId: 'local', sql: 'SELECT 2', action: 'generate', question: 'Count events', schema } }; }
@@ -34,4 +34,15 @@ test('Credential-like literals in SQL are refused for AI sharing', () => assert.
 test('CSV exports protect formula-like cells and escape quotes', () => { const csv = exportCsv({ columns: [{ name: 'x', type: 'String' }], rows: [['=1+1'], ['a"b']] }); assert.ok(csv.includes("'=1+1")); assert.ok(csv.includes('"a""b"')); });
 test('CSV keeps numeric negatives numeric while protecting formula-like text', () => { const csv = exportCsv({ columns: [{ name: 'n', type: 'Int64' }, { name: 'label', type: 'String' }], rows: [['-42', '-42']] }); assert.ok(csv.includes("-42,'-42")); });
 test('Charts reject unsafe integer coordinates, tables remain lossless', () => { assert.equal(chartNumber('18446744073709551615'), null); assert.equal(chartNumber('1.25'), 1.25); });
+test('Chart sampling stays bounded and includes the first and last retained rows', () => {
+    const rows = Array.from({ length: 350 }, (_, index) => [`row-${index}`, index === 349 ? 1000000 : index]);
+    const sampled = sampleChartRows(rows, MAX_CHART_RENDER_POINTS);
+    assert.equal(sampled.length, MAX_CHART_RENDER_POINTS);
+    assert.deepEqual(sampled[0], rows[0]);
+    assert.deepEqual(sampled.at(-1), rows.at(-1));
+    assert.equal(sampled.at(-1)?.[1], 1000000);
+    assert.equal(sampleChartRows(rows.slice(0, 3), MAX_CHART_RENDER_POINTS).length, 3);
+    assert.deepEqual(sampleChartRows(rows, 0), []);
+    assert.deepEqual(sampleChartRows(rows, 1), [rows[0]]);
+});
 test('Local filters operate only on retained rows', () => assert.equal(filterRows([['alpha'], ['beta']], 'ALP').length, 1));

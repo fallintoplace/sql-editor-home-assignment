@@ -61,8 +61,11 @@ test('Connection switches keep run evidence isolated and recover each connection
     const picker = page.locator('.connection-trigger');
     await picker.click();
     await page.getByRole('dialog', { name: 'Connection details' }).getByRole('button', { name: /Another sample/ }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('connection')).toBe('demo-second');
     await expect(page.locator('.execution-bar')).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Query results', exact: true }).getByRole('table', { name: 'Retained query rows' })).toHaveCount(0);
+    await page.reload();
+    await expect(page.locator('.connection-trigger')).toContainText('Another sample');
     await trustCurrentConnection(page);
     await runQuery(page);
     const secondQueryId = await page.locator('.execution-bar code').innerText();
@@ -70,6 +73,7 @@ test('Connection switches keep run evidence isolated and recover each connection
 
     await picker.click();
     await page.getByRole('dialog', { name: 'Connection details' }).getByRole('button', { name: /Sample data/ }).click();
+    await expect.poll(() => new URL(page.url()).searchParams.get('connection')).toBe('demo');
     await expect(page.locator('.execution-bar code')).toHaveText(firstQueryId);
 });
 
@@ -164,6 +168,59 @@ test('Charts keep NULL missing and plot nullable negative values from zero', asy
     await expect(results.locator('.chart-zero-line')).toHaveAttribute('y1', '100');
 });
 
+test('Charts sample the full retained range and report the sampled row count', async ({ page }) => {
+    await page.route('**/api/runs/*/snapshot', async route => {
+        const response = await route.fetch();
+        const result = await response.json();
+        await route.fulfill({ response, json: {
+            ...result,
+            columns: [{ name: 'label', type: 'String' }, { name: 'value', type: 'Int64' }],
+            rows: Array.from({ length: 350 }, (_, index) => [`row-${index + 1}`, index === 349 ? 1000000 : 1]),
+            completeness: 'complete',
+        } });
+    });
+    await trust(page);
+    const results = await runQuery(page);
+    await results.getByRole('tab', { name: 'Chart', exact: true }).click();
+    await expect(results.locator('.chart-bar')).toHaveCount(240);
+    await expect(results.locator('.chart-footer')).toContainText('240 sampled rows from 350 retained rows');
+    await expect(results.locator('.chart-x-labels span').last()).toHaveText('row-350');
+    expect(Number(await results.locator('.chart-bar').last().getAttribute('y'))).toBeCloseTo(40, 0);
+});
+
+test('Single-row numeric results render as a number and expose only supported chart types', async ({ page }) => {
+    await page.route('**/api/runs/*/snapshot', async route => {
+        const response = await route.fetch();
+        const result = await response.json();
+        await route.fulfill({ response, json: {
+            ...result,
+            columns: [{ name: 'event_count', type: 'UInt64' }],
+            rows: [['42']],
+            completeness: 'complete',
+        } });
+    });
+    await trust(page);
+    const results = await runQuery(page);
+    await results.getByRole('tab', { name: 'Chart', exact: true }).click();
+    await expect(results.locator('.chart-number-card')).toContainText('42');
+    await expect(results.getByLabel('Type').locator('option')).toHaveText(['Number', 'Line', 'Bar']);
+});
+
+test('Refreshing run history replaces the visible list with the latest response', async ({ page }) => {
+    let refreshed = false;
+    const run = {
+        id: 'history-refresh-run', status: 'succeeded', sql: 'SELECT refreshed_history_entry',
+        createdAt: '2026-09-23T00:00:00.000Z', elapsedMs: 12, rowCount: 7,
+    };
+    await page.route(/\/api\/runs\?connectionId=demo$/, route => route.fulfill({ json: refreshed ? [run] : [] }));
+    await trust(page);
+    await page.getByRole('button', { name: 'Runs', exact: true }).click();
+    await expect(page.getByText('No runs yet')).toBeVisible();
+    refreshed = true;
+    await page.getByRole('button', { name: /Refresh/ }).click();
+    await expect(page.getByText('SELECT refreshed_history_entry')).toBeVisible();
+});
+
 test('A late AI context preview cannot attach to an edited question', async ({ page }) => {
     let release!: () => void;
     const responseGate = new Promise<void>(resolve => { release = resolve; });
@@ -206,6 +263,23 @@ test('Scripts show each statement outcome and open that statement’s retained r
     await second.click();
     await expect(results.locator('.result-empty-state')).toContainText('FIXTURE_ERROR');
     await expect(page.locator('.cm-content')).toContainText('SELECT 1; SELECT fixture_error; SELECT 3;');
+});
+
+test('Selecting an earlier script statement stops automatic following while later work runs', async ({ page }) => {
+    await trust(page);
+    await replaceSql(page, 'SELECT 1; SELECT fixture_slow;');
+    await page.getByRole('button', { name: 'Run script', exact: true }).click();
+
+    const results = page.getByRole('region', { name: 'Query results', exact: true });
+    const first = results.getByRole('button', { name: 'Statement 1: succeeded', exact: true });
+    const second = results.getByRole('button', { name: 'Statement 2: running', exact: true });
+    await expect(second).toHaveAttribute('aria-pressed', 'true');
+    const nextPoll = page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.startsWith('/api/scripts/'));
+    await first.click();
+    await expect(first).toHaveAttribute('aria-pressed', 'true');
+    await nextPoll;
+    await expect(first).toHaveAttribute('aria-pressed', 'true');
+    await expect(second).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('Cancelling a long-running query reaches a terminal cancelled state', async ({ page }) => {

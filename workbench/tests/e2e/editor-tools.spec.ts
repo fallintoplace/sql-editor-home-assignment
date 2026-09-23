@@ -1,12 +1,16 @@
 import { test, expect, type Page } from '@playwright/test';
 import { trust } from './helpers.js';
 
+function readSql(page: Page) {
+    return page.locator('.cm-content').evaluate(editor => Array.from(editor.querySelectorAll('.cm-line')).map(line => line.textContent ?? '').join('\n'));
+}
+
 async function replaceSql(page: Page, sql: string) {
     const editor = page.locator('.cm-content');
     await editor.click();
     await page.keyboard.press('ControlOrMeta+a');
     await page.keyboard.insertText(sql);
-    await expect.poll(() => editor.innerText()).toBe(sql);
+    await expect.poll(() => readSql(page)).toBe(sql);
 }
 
 test('navigate and select statements without executing SQL', async ({ page }) => {
@@ -27,7 +31,7 @@ test('navigate and select statements without executing SQL', async ({ page }) =>
     await page.keyboard.press('Alt+PageUp');
     await tools.getByRole('button', { name: 'Select current SQL statement', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe('SELECT 2');
-    await expect(page.locator('.cm-content')).toHaveText(sql);
+    await expect.poll(() => readSql(page)).toBe(sql);
     expect(runs).toBe(0);
 });
 
@@ -42,16 +46,18 @@ test('snippets preserve the existing query, offer linked fields, and undo', asyn
     await expect(editor).toHaveText('SELECT 1 -- keep this');
     await tools.getByRole('button', { name: 'Add snippet as a new query' }).click();
     await expect(tools.getByRole('combobox', { name: 'Jump to SQL statement' }).locator('option')).toHaveCount(2);
-    await expect.poll(() => editor.innerText()).toContain('SELECT 1 -- keep this\n;\n\nSELECT');
+    await expect.poll(async () => (await readSql(page)).split('\n').map(line => line.trim()).filter(Boolean).slice(0, 3)).toEqual(['SELECT 1 -- keep this', ';', 'SELECT']);
     await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe('event_time');
     await page.keyboard.insertText('created_at');
-    await expect.poll(async () => ((await editor.innerText()).match(/created_at/g) ?? []).length).toBe(2);
+    await expect.poll(async () => ((await readSql(page)).match(/created_at/g) ?? []).length).toBe(2);
     await page.keyboard.press('Tab');
     await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe('events');
     await page.keyboard.press('Escape');
     await page.keyboard.press('ControlOrMeta+z');
+    await expect.poll(() => readSql(page)).toContain('event_time');
+    await expect.poll(() => readSql(page)).toContain('SELECT 1 -- keep this');
     await page.keyboard.press('ControlOrMeta+z');
-    await expect(editor).toHaveText('SELECT 1 -- keep this');
+    await expect.poll(() => readSql(page)).toBe('SELECT 1 -- keep this');
     expect(runs).toBe(0);
 });
 

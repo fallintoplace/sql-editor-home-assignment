@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import type { AssistantAction, Connection, Principal, ProfilePipeline, Proposal, QueryProfile, QueryDocument, Result, ResultPage, Run, RunEvent, Schema, Script } from '../shared/types';
 import { DEFAULT_LIMITS } from '../shared/types';
-import { displayValue, exportCsv, recommendChart, chartNumber, numericType, filterRows } from '../shared/results';
+import { displayValue, exportCsv, recommendChart, chartNumber, numericType, filterRows, sampleChartRows, MAX_CHART_RENDER_POINTS } from '../shared/results';
 import { matchesDraft } from '../shared/evidence';
 import { formatSql, parameterNames, quoteIdentifier, selectedStatement, splitSql } from '../shared/sql';
 import { api, download, message, post } from './api';
@@ -44,6 +44,12 @@ const pref = <T extends string>(key: string, values: readonly T[], fallback: T):
 };
 
 function cx(...values: Array<string | false | undefined>) { return values.filter(Boolean).join(' '); }
+function safeSelectedStatement(sql: string, from: number, to: number) {
+    try { return selectedStatement(sql, from, to); } catch { return undefined; }
+}
+function safeStatementCount(sql: string) {
+    try { return splitSql(sql).length; } catch { return undefined; }
+}
 
 function assistantContextKey(connectionId: string, draftId: string, sql: string, parameters: Record<string, string>, runId: string | undefined, includeResult: boolean, action: AssistantAction, question: string) {
     return JSON.stringify({ connectionId, draftId, sql, parameters: Object.entries(parameters).sort(([left], [right]) => left.localeCompare(right)), runId, includeResult, action, question });
@@ -125,6 +131,12 @@ function App() {
     const connection = connections.find(item => item.id === connectionId) ?? connections[0];
     const otherConnections = connection ? connections.filter(item => item.id !== connection.id && (!session?.demo || experience === 'expert')) : [];
     const dark = themeAppearance[theme].dark;
+    const selectConnection = useCallback((id: string) => {
+        setConnectionId(id);
+        const url = new URL(window.location.href);
+        url.searchParams.set('connection', id);
+        window.history.replaceState(window.history.state, '', url);
+    }, []);
 
     useEffect(() => {
         document.documentElement.dataset.theme = theme;
@@ -196,7 +208,7 @@ function App() {
                     </Button>}
                     {otherConnections.length > 0 && <div className="connection-switch-list">
                         <span className="connection-menu-heading">Switch connection</span>
-                        {otherConnections.map(item => <button key={item.id} type="button" onClick={() => { setConnectionId(item.id); setConnectionPicker(false); }}>
+                        {otherConnections.map(item => <button key={item.id} type="button" onClick={() => { selectConnection(item.id); setConnectionPicker(false); }}>
                             <span><strong>{connectionLabel(item, session.demo)}</strong><small>{session.demo ? 'Local sample data' : `${item.database} · ${item.host}`}</small></span>
                             <span className="connection-choice-arrow" aria-hidden="true">›</span>
                         </button>)}
@@ -217,7 +229,7 @@ function App() {
                 <SelectControl label={copy.app.theme} value={theme} options={themeOptions} onChange={value => setTheme(value as Theme)}/>
             </div>
         </header>
-        {connection ? <Workspace key={connection.id} connection={connection} connectionLabel={connectionLabel(connection, session.demo)} connections={connections} onSelectConnection={setConnectionId} onRefreshConnections={async () => { const latest = await api<Connected[]>('/connections'); setConnections(latest); }} trustActionRef={trustActionRef} demoMode={session.demo} experience={experience} dark={dark} copy={copy} locale={locale}/> : <div className="empty-connection"><Icon name="schema"/><h1>{copy.app.name}</h1><p>No connection profiles are configured for this workspace.</p></div>}
+        {connection ? <Workspace key={connection.id} connection={connection} connectionLabel={connectionLabel(connection, session.demo)} connections={connections} onSelectConnection={selectConnection} onRefreshConnections={async () => { const latest = await api<Connected[]>('/connections'); setConnections(latest); }} trustActionRef={trustActionRef} demoMode={session.demo} experience={experience} dark={dark} copy={copy} locale={locale}/> : <div className="empty-connection"><Icon name="schema"/><h1>{copy.app.name}</h1><p>No connection profiles are configured for this workspace.</p></div>}
     </div>;
 }
 
@@ -264,6 +276,7 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
     const [profile, setProfileForRun] = useScopedValue<QueryProfile>(activeRunId);
     const [pipeline, setPipelineForRun] = useScopedValue<ProfilePipeline>(activeRunId);
     const [scripts, setScripts] = useState<Record<string, Script>>({});
+    const scriptFollowRef = useRef<{ scriptId: string; enabled: boolean } | undefined>(undefined);
     const script = active.scriptId ? scripts[active.scriptId] : undefined;
     const [view, setView] = useState<ResultsView>('results');
     const [inspector, setInspector] = useState<Inspector>('schema');
@@ -510,6 +523,7 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
         const scriptId = active.scriptId;
         const draftId = active.id;
         if (!scriptId) return;
+        if (scriptFollowRef.current?.scriptId !== scriptId) scriptFollowRef.current = { scriptId, enabled: true };
         let closed = false;
         let inFlight = false;
         let finished = false;
@@ -523,7 +537,11 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
                 setScripts(current => ({ ...current, [scriptId]: next }));
                 const latest = [...next.statements].reverse().find(item => item.runId);
                 if (latest?.runId) {
-                    update(draftId, draft => ({ ...draft, activeRunId: latest.runId, runIds: [...new Set([...draft.runIds, latest.runId!])] }));
+                    update(draftId, draft => ({
+                        ...draft,
+                        ...(scriptFollowRef.current?.scriptId === scriptId && scriptFollowRef.current.enabled ? { activeRunId: latest.runId } : {}),
+                        runIds: [...new Set([...draft.runIds, latest.runId!])],
+                    }));
                 }
                 if (next.status !== 'running') {
                     finished = true;
@@ -567,6 +585,7 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
         };
         if (wholeScript) {
             const created = await post<Script>('/scripts', { ...payload, stopOnError: true });
+            scriptFollowRef.current = { scriptId: created.id, enabled: true };
             setScripts(current => ({ ...current, [created.id]: created }));
             const first = created.statements.find(item => item.runId);
             if (first?.runId) patch({ activeRunId: first.runId, scriptId: created.id, runIds: [...active.runIds, first.runId] });
@@ -659,9 +678,10 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
     const sortedHistory = useMemo(() => [...history].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [history]);
     const savedDocument = documents.find(document => document.id === active.serverId);
     const saveStatus = draftSaveStatus(active, connection.id, savedDocument, { saving: Boolean(savingDraftIds[active.id]), pending: !documentsLoaded, readError: documentsReadError });
+    const statementCount = safeStatementCount(active.sql);
     const runSourceSql = run && run.sourceFrom !== undefined && run.sourceTo !== undefined && run.sourceTo <= active.sql.length
         ? active.sql.slice(run.sourceFrom, run.sourceTo)
-        : selectedStatement(active.sql, active.from, active.to)?.sql;
+        : safeSelectedStatement(active.sql, active.from, active.to)?.sql;
     const staleResult = Boolean(run && (!runSourceSql || run.connectionId !== connection.id || !matchesDraft(run, runSourceSql, active.parameters)));
     const filteredTables = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -693,7 +713,24 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
 
             <main className="workbench-main">
                 <div className="document-tabs" role="tablist" aria-label="SQL documents">
-                    {workspace.tabs.map(draft => <div key={draft.id} className={cx('document-tab', draft.id === active.id && 'is-active')} role="tab" aria-selected={draft.id === active.id} tabIndex={draft.id === active.id ? 0 : -1} onClick={() => setWorkspace(current => ({ ...current, activeId: draft.id }))} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') setWorkspace(current => ({ ...current, activeId: draft.id })); }}>
+                    {workspace.tabs.map((draft, index) => <div key={draft.id} id={`document-tab-${draft.id}`} className={cx('document-tab', draft.id === active.id && 'is-active')} role="tab" aria-selected={draft.id === active.id} aria-controls="sql-document-panel" tabIndex={draft.id === active.id ? 0 : -1} onClick={() => setWorkspace(current => ({ ...current, activeId: draft.id }))} onKeyDown={event => {
+                        if (event.target !== event.currentTarget) return;
+                        if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setWorkspace(current => ({ ...current, activeId: draft.id }));
+                            return;
+                        }
+                        let nextIndex: number | undefined;
+                        if (event.key === 'ArrowRight') nextIndex = (index + 1) % workspace.tabs.length;
+                        else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + workspace.tabs.length) % workspace.tabs.length;
+                        else if (event.key === 'Home') nextIndex = 0;
+                        else if (event.key === 'End') nextIndex = workspace.tabs.length - 1;
+                        if (nextIndex === undefined) return;
+                        event.preventDefault();
+                        const nextDraft = workspace.tabs[nextIndex]!;
+                        setWorkspace(current => ({ ...current, activeId: nextDraft.id }));
+                        window.requestAnimationFrame(() => document.getElementById(`document-tab-${nextDraft.id}`)?.focus());
+                    }}>
                         <span className="tab-file-dot"/><span className="document-tab-name">{draft.name}</span>{draft.serverId ? <span className="tab-revision">r{draft.baseRevision}</span> : <span className="tab-unsaved"/>}<button type="button" aria-label={`Close ${draft.name}`} onClick={event => { event.stopPropagation(); setWorkspace(current => closeDraft(current, draft.id)); }}>×</button>
                     </div>)}
                     <button className="new-tab-button" type="button" title="New SQL tab" onClick={() => addDraft(newDraft())}><Icon name="plus"/></button>
@@ -705,20 +742,20 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
                     <span className="draft-status" data-save-state={saveStatus.state} title={`${saveStatus.label}. ${saveStatus.detail}`}><span className={cx('status-light', saveStatus.state === 'saved' ? 'is-trusted' : ['changed', 'conflict', 'deleted', 'unavailable'].includes(saveStatus.state) ? 'is-warning' : '')}/>{saveStatusLabel}</span>
                 </div>
 
-                <div className={cx('workspace-content', experience === 'beginner' && 'beginner-workspace-content', experience === 'beginner' && run && 'has-run')}>
+                <div id="sql-document-panel" role="tabpanel" aria-labelledby={`document-tab-${active.id}`} tabIndex={0} className={cx('workspace-content', experience === 'beginner' && 'beginner-workspace-content', experience === 'beginner' && run && 'has-run')}>
                     {experience === 'beginner' ? <AssistantWorkflow mode="beginner" sql={active.sql} action={assistantAction} onActionChange={changeAssistantAction} question={assistantQuestion} onQuestionChange={changeAssistantQuestion} context={assistantContext} proposal={assistantProposal} busy={assistantBusy} error={assistantError} trusted={trusted} runId={run?.id} includeResult={includeResult} onIncludeResult={setIncludeResult} onVoiceInput={startVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={() => void prepareAssistantContext('generate', assistantQuestion)} onRequestProposal={() => void requestAssistantProposal()} onDecideProposal={decision => void decideAssistantProposal(decision)} onRunQuery={() => void execute()} runDisabled={!trusted || Boolean(busy)} onSave={() => void saveDraft()} saveDisabled={Boolean(busy)}/> : <section className="editor-surface">
                         <div className="editor-heading">
                             <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">QUERY</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label><span className="edit-indicator" title={active.serverId ? `Saved revision ${active.baseRevision}` : 'Only in this browser'}>{active.serverId ? `REV ${active.baseRevision}` : 'LOCAL'}</span></div>
                             <div className="editor-heading-actions"><Button variant="ghost" className="icon-only" title="Format SQL" onClick={() => patch({ sql: formatSql(active.sql) })}>⌘</Button><Button variant="secondary" aria-label={copy.common.saveRevision} onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/> {copy.common.save}</Button></div>
                         </div>
                         <div className="editor-toolbar">
-                            <div className="editor-mode-label"><span className="editor-language-dot"/>ClickHouse SQL<span className="toolbar-divider"/><span>{splitSql(active.sql).length || 0} statement{splitSql(active.sql).length === 1 ? '' : 's'}</span></div>
+                            <div className="editor-mode-label"><span className="editor-language-dot"/>ClickHouse SQL<span className="toolbar-divider"/><span>{statementCount === undefined ? 'Incomplete SQL' : `${statementCount} statement${statementCount === 1 ? '' : 's'}`}</span></div>
                             <div className="editor-actions">
                                 {experience === 'expert' && <><Button variant="ghost" className="toolbar-small" onClick={() => void execute(false, 'explain')} disabled={!trusted || Boolean(busy) || !connection.manifest?.explain.available} title={connection.manifest?.explain.reason}>EXPLAIN</Button><Button variant="ghost" className="toolbar-small" onClick={() => void execute(false, 'pipeline')} disabled={!trusted || Boolean(busy) || !connection.manifest?.pipeline.available} title={connection.manifest?.pipeline.reason}>PIPELINE</Button><Button variant="ghost" className="toolbar-small" onClick={() => void execute(true)} disabled={!trusted || Boolean(busy) || !connection.manifest?.scripts.available} title={connection.manifest?.scripts.reason}>Run script</Button></>}
                                 <Button variant="primary" className="run-query-button" aria-label={copy.common.runStatement} onClick={() => void execute()} disabled={!trusted || Boolean(busy)}><Icon name="play"/>{busy === 'run' ? 'Running…' : copy.common.run}<kbd>⌘ ↵</kbd></Button>
                             </div>
                         </div>
-                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={schema} dark={dark} error={run?.error && (run.sql === active.sql || run.sql === selectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)}/></div>
+                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={schema} dark={dark} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)}/></div>
                         {parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => patch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
                         <div className="editor-footer"><span><span className="key-hint">⌘↵</span> Run current statement <span className="footer-dot">·</span> <span className="key-hint">⌘⇧↵</span> Run script</span><span>{active.sql.length.toLocaleString()} characters <span className="footer-dot">·</span> {active.sql.split('\n').length} lines</span></div>
                     </section>}
@@ -733,6 +770,7 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
                         </div>
                         {staleResult && <div className="result-provenance" aria-live="polite"><span className="status-light is-warning"/><span><strong>Result from previous execution</strong><small>SQL or bound parameters changed since this run. Rerun to refresh the result.</small></span></div>}
                         {script && <ScriptResults script={script} runs={history} activeRunId={run?.id} onSelectRun={runId => {
+                            if (active.scriptId) scriptFollowRef.current = { scriptId: active.scriptId, enabled: false };
                             update(active.id, draft => ({ ...draft, activeRunId: runId }));
                             setPage(0); setView('results');
                         }} onCancel={() => void cancel()} cancelDisabled={Boolean(busy)}/>}
@@ -745,8 +783,8 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
                 </div>
             </main>
 
-            {experience === 'expert' && <InspectorPane inspector={inspector} setInspector={showInspector} connection={connection} schema={schema} schemaLoading={schemaLoading} schemaError={schemaError} search={search} setSearch={setSearch} tables={filteredTables} history={sortedHistory} documents={documents} run={run} profile={profile} pipeline={pipeline} onRefreshSchema={() => void loadSchema()} onInsert={value => editor.current?.insert(value)} onOpenRun={openRun} onOpenDocument={document => { const draft = newDraft(document.name, document.sql); Object.assign(draft, { serverId: document.id, baseRevision: document.revision, parameters: document.parameters, chart: document.chart, activeRunId: document.runId }); addDraft(draft); }} onLoadProfile={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} connectionId={connection.id} sql={active.sql} trusted={trusted} runId={run?.id} onRefreshDocuments={() => void loadDocuments()} assistantAction={assistantAction} onAssistantAction={value => { setAssistantAction(value); setAssistantContext(undefined); setAssistantProposal(undefined); }} assistantQuestion={assistantQuestion} onAssistantQuestion={changeAssistantQuestion} assistantContext={assistantContext} assistantProposal={assistantProposal} assistantBusy={assistantBusy} assistantError={assistantError} includeResult={includeResult} onIncludeResult={setIncludeResult} onVoiceInput={startVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={() => void prepareAssistantContext()} onRequestProposal={() => void requestAssistantProposal()} onDecideProposal={decision => void decideAssistantProposal(decision)} onRunQuery={() => void execute()} runDisabled={!trusted || Boolean(busy)}/>}
-            {experience === 'beginner' && drawerOpen && <><button className="drawer-backdrop" type="button" aria-label="Close panel" onClick={() => setDrawerOpen(false)}/><InspectorPane drawer inspector={inspector} setInspector={showInspector} onClose={() => setDrawerOpen(false)} connection={connection} schema={schema} schemaLoading={schemaLoading} schemaError={schemaError} search={search} setSearch={setSearch} tables={filteredTables} history={sortedHistory} documents={documents} run={run} profile={profile} pipeline={pipeline} onRefreshSchema={() => void loadSchema()} onInsert={value => { editor.current?.insert(value); setDrawerOpen(false); }} onOpenRun={openRun} onOpenDocument={document => { const draft = newDraft(document.name, document.sql); Object.assign(draft, { serverId: document.id, baseRevision: document.revision, parameters: document.parameters, chart: document.chart, activeRunId: document.runId }); addDraft(draft); setDrawerOpen(false); }} onLoadProfile={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} connectionId={connection.id} sql={active.sql} trusted={trusted} runId={run?.id} onRefreshDocuments={() => void loadDocuments()} assistantAction={assistantAction} onAssistantAction={value => { setAssistantAction(value); setAssistantContext(undefined); setAssistantProposal(undefined); }} assistantQuestion={assistantQuestion} onAssistantQuestion={changeAssistantQuestion} assistantContext={assistantContext} assistantProposal={assistantProposal} assistantBusy={assistantBusy} assistantError={assistantError} includeResult={includeResult} onIncludeResult={setIncludeResult} onVoiceInput={startVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={() => void prepareAssistantContext()} onRequestProposal={() => void requestAssistantProposal()} onDecideProposal={decision => void decideAssistantProposal(decision)} onRunQuery={() => void execute()} runDisabled={!trusted || Boolean(busy)}/> </>}
+            {experience === 'expert' && <InspectorPane inspector={inspector} setInspector={showInspector} connection={connection} schema={schema} schemaLoading={schemaLoading} schemaError={schemaError} search={search} setSearch={setSearch} tables={filteredTables} history={sortedHistory} documents={documents} run={run} profile={profile} pipeline={pipeline} onRefreshSchema={() => void loadSchema()} onRefreshHistory={() => void loadHistory()} onInsert={value => editor.current?.insert(value)} onOpenRun={openRun} onOpenDocument={document => { const draft = newDraft(document.name, document.sql); Object.assign(draft, { serverId: document.id, baseRevision: document.revision, parameters: document.parameters, chart: document.chart, activeRunId: document.runId }); addDraft(draft); }} onLoadProfile={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} connectionId={connection.id} sql={active.sql} trusted={trusted} runId={run?.id} onRefreshDocuments={() => void loadDocuments()} assistantAction={assistantAction} onAssistantAction={value => { setAssistantAction(value); setAssistantContext(undefined); setAssistantProposal(undefined); }} assistantQuestion={assistantQuestion} onAssistantQuestion={changeAssistantQuestion} assistantContext={assistantContext} assistantProposal={assistantProposal} assistantBusy={assistantBusy} assistantError={assistantError} includeResult={includeResult} onIncludeResult={setIncludeResult} onVoiceInput={startVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={() => void prepareAssistantContext()} onRequestProposal={() => void requestAssistantProposal()} onDecideProposal={decision => void decideAssistantProposal(decision)} onRunQuery={() => void execute()} runDisabled={!trusted || Boolean(busy)}/>}
+            {experience === 'beginner' && drawerOpen && <><button className="drawer-backdrop" type="button" aria-label="Close panel" onClick={() => setDrawerOpen(false)}/><InspectorPane drawer inspector={inspector} setInspector={showInspector} onClose={() => setDrawerOpen(false)} connection={connection} schema={schema} schemaLoading={schemaLoading} schemaError={schemaError} search={search} setSearch={setSearch} tables={filteredTables} history={sortedHistory} documents={documents} run={run} profile={profile} pipeline={pipeline} onRefreshSchema={() => void loadSchema()} onRefreshHistory={() => void loadHistory()} onInsert={value => { editor.current?.insert(value); setDrawerOpen(false); }} onOpenRun={openRun} onOpenDocument={document => { const draft = newDraft(document.name, document.sql); Object.assign(draft, { serverId: document.id, baseRevision: document.revision, parameters: document.parameters, chart: document.chart, activeRunId: document.runId }); addDraft(draft); setDrawerOpen(false); }} onLoadProfile={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} connectionId={connection.id} sql={active.sql} trusted={trusted} runId={run?.id} onRefreshDocuments={() => void loadDocuments()} assistantAction={assistantAction} onAssistantAction={value => { setAssistantAction(value); setAssistantContext(undefined); setAssistantProposal(undefined); }} assistantQuestion={assistantQuestion} onAssistantQuestion={changeAssistantQuestion} assistantContext={assistantContext} assistantProposal={assistantProposal} assistantBusy={assistantBusy} assistantError={assistantError} includeResult={includeResult} onIncludeResult={setIncludeResult} onVoiceInput={startVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={() => void prepareAssistantContext()} onRequestProposal={() => void requestAssistantProposal()} onDecideProposal={decision => void decideAssistantProposal(decision)} onRunQuery={() => void execute()} runDisabled={!trusted || Boolean(busy)}/> </>}
         </div>
         {run && <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} busy={Boolean(busy)} scriptRunning={script?.status === 'running'}/>}
     </div>;
@@ -852,12 +890,17 @@ function ChartView({ result, loading, chart, onChart }: { result?: Result; loadi
     const xIndex = Math.min(chart.x, Math.max(0, result.columns.length - 1));
     const numericIndexes = result.columns.flatMap((column, index) => numericType(column.type) ? [index] : []);
     const yIndex = chart.ys.find(index => numericIndexes.includes(index)) ?? suggestion.config.ys.find(index => numericIndexes.includes(index)) ?? numericIndexes[0] ?? 0;
-    const points = result.rows.slice(0, 24).map((row, index) => ({ label: displayValue(row[xIndex]), value: chartNumber(row[yIndex]), index }));
+    const sampledRows = sampleChartRows(result.rows, MAX_CHART_RENDER_POINTS);
+    const points = sampledRows.map((row, index) => ({ label: displayValue(row[xIndex]), value: chartNumber(row[yIndex]), index }));
     const values = points.flatMap(point => point.value === null ? [] : [point.value]);
     const min = Math.min(0, ...values), max = Math.max(0, ...values), range = max - min || 1;
     const plotTop = 40, plotBottom = 190, zeroY = plotBottom - ((0 - min) / range) * (plotBottom - plotTop);
     const y = (value: number) => plotBottom - ((value - min) / range) * (plotBottom - plotTop);
     const x = (index: number) => 32 + index * (700 / Math.max(1, points.length - 1));
+    const chartKind = chart.kind === 'number' ? 'number' : chart.kind === 'line' ? 'line' : 'bar';
+    const rowSummary = sampledRows.length < result.rows.length
+        ? `${sampledRows.length.toLocaleString()} sampled rows from ${result.rows.length.toLocaleString()} retained rows`
+        : `${values.length.toLocaleString()} plotted points from ${result.rows.length.toLocaleString()} retained rows`;
     const segments: typeof points[] = [];
     let segment: typeof points = [];
     for (const point of points) {
@@ -867,15 +910,15 @@ function ChartView({ result, loading, chart, onChart }: { result?: Result; loadi
         } else segment.push(point);
     }
     if (segment.length) segments.push(segment);
-    const chartKind = chart.kind === 'line' ? 'line' : 'bar';
-    const barWidth = Math.max(4, Math.min(28, (680 / Math.max(1, points.length)) * .68));
+    const barWidth = Math.max(1, Math.min(28, (680 / Math.max(1, points.length)) * .68));
     return <div className="chart-workspace animate-enter">
-        <div className="chart-title-row"><div><span className="eyebrow">VISUAL EXPLORATION</span><h3>{chart.title || result.columns[yIndex]?.name || 'Query result'}</h3><p>{suggestion.reason} Chart uses retained rows only.</p></div><div className="chart-controls">
-            <label>X axis<select value={xIndex} onChange={event => onChart({ ...chart, x: Number(event.target.value) })}>{result.columns.map((column, index) => <option value={index} key={index}>{column.name}</option>)}</select></label>
+        <div className="chart-title-row"><div><span className="eyebrow">VISUAL EXPLORATION</span><h3>{chart.title || result.columns[yIndex]?.name || 'Query result'}</h3><p>{suggestion.reason} Long results are evenly sampled for display.</p></div><div className="chart-controls">
+            {chartKind !== 'number' && <label>X axis<select value={xIndex} onChange={event => onChart({ ...chart, x: Number(event.target.value) })}>{result.columns.map((column, index) => <option value={index} key={index}>{column.name}</option>)}</select></label>}
             <label>Measure<select value={yIndex} onChange={event => onChart({ ...chart, ys: [Number(event.target.value)] })}>{result.columns.map((column, index) => <option value={index} key={index} disabled={!numericType(column.type)}>{column.name}</option>)}</select></label>
-            <label>Type<select value={chartKind} onChange={event => onChart({ ...chart, kind: event.target.value as Draft['chart']['kind'] })}><option value="line">Line</option><option value="bar">Bar</option></select></label>
+            <label>Type<select value={chartKind} onChange={event => onChart({ ...chart, kind: event.target.value as Draft['chart']['kind'] })}><option value="number">Number</option><option value="line">Line</option><option value="bar">Bar</option></select></label>
         </div></div>
-        {!values.length ? <div className="chart-empty">Choose a numeric result column to plot.</div> : <div className="chart-canvas"><div className="chart-axis-labels"><span>{max.toLocaleString()}</span><span>{((min + max) / 2).toLocaleString()}</span><span>{min.toLocaleString()}</span></div>
+        {chartKind === 'number' ? result.rows.length !== 1 ? <div className="chart-empty">Number view needs one retained row. Choose Line or Bar for multiple rows.</div> : !numericType(result.columns[yIndex]?.type ?? '') ? <div className="chart-empty">Choose a numeric result column to show one value.</div> : <div className="chart-number-card"><span className="eyebrow">SINGLE VALUE</span><strong>{displayValue(result.rows[0]?.[yIndex])}</strong><span>{result.columns[yIndex]?.name}</span><small>1 retained row · exact result value</small></div>
+            : !values.length ? <div className="chart-empty">Choose a numeric result column to plot.</div> : <div className="chart-canvas"><div className="chart-axis-labels"><span>{max.toLocaleString()}</span><span>{((min + max) / 2).toLocaleString()}</span><span>{min.toLocaleString()}</span></div>
             <svg viewBox="0 0 760 230" role="img" aria-label={`${chartKind} chart of ${result.columns[yIndex]?.name}`}>
                 <defs><linearGradient id="chart-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="var(--accent)" stopOpacity=".28"/><stop offset="100%" stopColor="var(--accent)" stopOpacity="0"/></linearGradient></defs>
                 {[40, 115, 190].map(value => <line key={value} x1="32" x2="732" y1={value} y2={value} className="chart-gridline"/>)}
@@ -891,7 +934,7 @@ function ChartView({ result, loading, chart, onChart }: { result?: Result; loadi
                 })}
             </svg><div className="chart-x-labels"><span>{points[0]?.label}</span><span>{points[Math.floor(points.length / 2)]?.label}</span><span>{points.at(-1)?.label}</span></div>
         </div>}
-        <div className="chart-footer"><span><span className="chart-legend-dot"/>{result.columns[yIndex]?.name}</span><span>{values.length} plotted points <i>·</i> {result.completeness === 'truncated' ? 'truncated result' : 'complete result'}</span></div>
+        <div className="chart-footer"><span><span className="chart-legend-dot"/>{result.columns[yIndex]?.name}</span><span>{chartKind === 'number' ? result.rows.length === 1 ? '1 value' : `${result.rows.length.toLocaleString()} retained rows` : rowSummary} <i>·</i> {result.completeness === 'truncated' ? 'retained prefix' : 'complete result'}</span></div>
     </div>;
 }
 
@@ -910,7 +953,7 @@ function InsightsView({ run, profile, pipeline, pipelineAvailable, onLoad, onLoa
     return <div className="insights-view animate-enter"><div className="insights-heading"><div><span className="eyebrow">EXECUTION INSIGHTS</span><h3>What happened when this ran?</h3><p>Measurements come from this run's execution and ClickHouse query log.</p></div>{!profile && <Button variant="secondary" onClick={onLoad} disabled={loading}>{loading ? 'Loading…' : 'Load execution details'}</Button>}</div><div className="insight-metrics">{metrics.map(metric => <article className="insight-metric" key={metric.label}><span className="insight-icon"><Icon name={metric.icon}/></span><span className="eyebrow">{metric.label}</span><strong>{metric.value}</strong></article>)}</div>{profile && <section className="run-analysis" aria-label="Run and query plan comparison"><div className="run-analysis-heading"><div><span className="eyebrow">RUN + EXPLAIN</span><strong>Measured execution, then its plan</strong></div>{pipelineAvailable && <Button variant="secondary" className="toolbar-small" onClick={onLoadPipeline} disabled={loading}>{loading ? 'Loading…' : hasClickHousePlan ? 'Refresh pipeline' : 'Load ClickHouse pipeline'}</Button>}</div><div className="run-analysis-columns"><article><span className="eyebrow">THIS RUN</span><strong>{Math.round(summary?.durationMs ?? run.elapsedMs)} ms</strong><small>{summary?.readRows ? `${Number(summary.readRows).toLocaleString()} rows scanned` : 'Scan count unavailable'} · {summary?.readBytes ? formatBytes(summary.readBytes) : 'bytes unavailable'}</small><code>{run.queryId}</code></article><article><span className="eyebrow">QUERY PLAN</span><strong>{plan?.nodes.length ?? 0} stages</strong><small>{hasClickHousePlan ? 'EXPLAIN PIPELINE · ClickHouse' : 'Estimated from SQL shape'}</small><small>{plan?.nodes.filter(node => node.status === 'measured').length ?? 0} measured · {plan?.nodes.filter(node => node.status === 'estimated').length ?? 0} estimated</small></article></div>{plan && <><div className="run-analysis-stages" aria-label="Pipeline stages">{plan.nodes.slice(0, 8).map((node, index) => <span key={node.id}><i>{String(index + 1).padStart(2, '0')}</i><strong>{node.label}</strong><small>{node.status}</small></span>)}{plan.nodes.length > 8 && <small>+{plan.nodes.length - 8} more stages</small>}</div><p className="profile-note">{plan.notice}</p></>}</section>}{profile?.insights.length ? <div className="insight-list">{profile.insights.map(insight => <article key={insight.id} className={`insight-card severity-${insight.severity}`}><span className="insight-severity">{insight.severity}</span><div><strong>{insight.title}</strong><p>{insight.description}</p></div></article>)}</div> : profile ? <div className="profile-empty">No deterministic issue was identified in the available evidence.</div> : <p className="profile-note">Query log details can take a short time to appear after execution. Values marked unavailable are not inferred.</p>}{profile?.notice && <p className="profile-note">{profile.notice}</p>}</div>;
 }
 
-function InspectorPane({ inspector, setInspector, connection, schema, schemaLoading, schemaError, search, setSearch, tables, history, documents, run, profile, pipeline, onRefreshSchema, onInsert, onOpenRun, onOpenDocument, onLoadProfile, onLoadPipeline, connectionId, sql, trusted, runId, onRefreshDocuments, assistantAction, onAssistantAction, assistantQuestion, onAssistantQuestion, assistantContext, assistantProposal, assistantBusy, assistantError, includeResult, onIncludeResult, onVoiceInput, voiceListening, voiceError, onPreview, onRequestProposal, onDecideProposal, onRunQuery, runDisabled, drawer = false, onClose }: {
+function InspectorPane({ inspector, setInspector, connection, schema, schemaLoading, schemaError, search, setSearch, tables, history, documents, run, profile, pipeline, onRefreshSchema, onRefreshHistory, onInsert, onOpenRun, onOpenDocument, onLoadProfile, onLoadPipeline, connectionId, sql, trusted, runId, onRefreshDocuments, assistantAction, onAssistantAction, assistantQuestion, onAssistantQuestion, assistantContext, assistantProposal, assistantBusy, assistantError, includeResult, onIncludeResult, onVoiceInput, voiceListening, voiceError, onPreview, onRequestProposal, onDecideProposal, onRunQuery, runDisabled, drawer = false, onClose }: {
     inspector: Inspector;
     setInspector: (inspector: Inspector) => void;
     connection: Connected;
@@ -926,6 +969,7 @@ function InspectorPane({ inspector, setInspector, connection, schema, schemaLoad
     profile?: QueryProfile;
     pipeline?: ProfilePipeline;
     onRefreshSchema: () => void;
+    onRefreshHistory: () => void;
     onInsert: (value: string) => void;
     onOpenRun: (run: Run) => void;
     onOpenDocument: (document: QueryDocument) => void;
@@ -965,7 +1009,7 @@ function InspectorPane({ inspector, setInspector, connection, schema, schemaLoad
         <nav className="inspector-tabs" aria-label="Inspector panels">{(['schema', 'history', 'documents', 'details', 'pipeline', 'assistant'] as Inspector[]).filter(item => item !== 'details' || Boolean(run)).map(item => <button key={item} type="button" aria-label={inspectorLabel(item)} title={inspectorLabel(item)} aria-pressed={inspector === item} onClick={() => setInspector(item)}><Icon name={item === 'details' ? 'details' : item === 'pipeline' ? 'pipeline' : item === 'assistant' ? 'assistant' : item}/></button>)}</nav>
         <div className="inspector-content">
             {inspector === 'schema' && <section className="inspector-section"><div className="inspector-search"><Icon name="search"/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search tables and columns…" aria-label="Search schema"/><kbd>⌘ F</kbd></div><div className="schema-heading"><span>{schema?.tables.length ?? 0} TABLES</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshSchema} disabled={schemaLoading || !trusted}>{schemaLoading ? 'Loading…' : 'Refresh'}</Button></div>{schemaError && <div className="callout callout-error">{schemaError}</div>}{!trusted && <div className="inspector-empty"><Icon name="lock"/><strong>Schema is private</strong><p>Trust the connection to inspect tables and columns.</p></div>}{schemaLoading && <div className="inspector-empty"><span className="loading-orbit"/><p>Reading ClickHouse schema…</p></div>}{trusted && schema && tables.map(table => <details className="schema-table" key={`${table.database}.${table.name}`} open={Boolean(search)}><summary><span className="table-glyph">▦</span><span className="schema-table-name"><strong>{table.name}</strong><small>{table.database}</small></span><span className="engine-tag">{table.engine}</span><Icon name="chevron" className="schema-chevron"/></summary><div className="schema-columns"><button type="button" className="insert-table-button" onClick={() => onInsert(`${quoteIdentifier(table.database)}.${quoteIdentifier(table.name)}`)}>Insert table name <span>↵</span></button>{schema.columns.filter(column => column.database === table.database && column.table === table.name && (!search || `${column.name} ${column.type}`.toLowerCase().includes(search.toLowerCase()))).map(column => <button type="button" className="schema-column" key={column.name} title={column.comment || column.type} onClick={() => onInsert(quoteIdentifier(column.name))}><span className="column-type-dot"/><span>{column.name}</span><code>{column.type}</code></button>)}</div></details>)}{trusted && schema && !tables.length && <div className="inspector-empty">No tables match this search.</div>}</section>}
-            {inspector === 'history' && <section className="inspector-section"><div className="schema-heading"><span>RECENT RUNS</span><Button variant="ghost" className="toolbar-small" onClick={() => void api<Run[]>(`/runs?connectionId=${encodeURIComponent(connection.id)}`).then(() => undefined)}>↻ Refresh</Button></div>{history.length ? history.slice(0, 30).map(item => <button type="button" className="history-card" key={item.id} onClick={() => onOpenRun(item)}><span className={cx('run-state-mark', `state-${item.status}`)}/><span className="history-card-copy"><strong>{item.sql.replace(/\s+/g, ' ').slice(0, 58)}</strong><small>{new Date(item.createdAt).toLocaleString()} <i>·</i> {Math.round(item.elapsedMs)} ms <i>·</i> {item.rowCount.toLocaleString()} rows</small></span><span className="history-open">↗</span></button>) : <div className="inspector-empty"><Icon name="history"/><strong>No runs yet</strong><p>Your recent ClickHouse executions appear here.</p></div>}</section>}
+            {inspector === 'history' && <section className="inspector-section"><div className="schema-heading"><span>RECENT RUNS</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshHistory}>↻ Refresh</Button></div>{history.length ? history.slice(0, 30).map(item => <button type="button" className="history-card" key={item.id} onClick={() => onOpenRun(item)}><span className={cx('run-state-mark', `state-${item.status}`)}/><span className="history-card-copy"><strong>{item.sql.replace(/\s+/g, ' ').slice(0, 58)}</strong><small>{new Date(item.createdAt).toLocaleString()} <i>·</i> {Math.round(item.elapsedMs)} ms <i>·</i> {item.rowCount.toLocaleString()} rows</small></span><span className="history-open">↗</span></button>) : <div className="inspector-empty"><Icon name="history"/><strong>No runs yet</strong><p>Your recent ClickHouse executions appear here.</p></div>}</section>}
             {inspector === 'documents' && <section className="inspector-section"><div className="schema-heading"><span>SAVED DOCUMENTS</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshDocuments}>↻ Refresh</Button></div>{visibleDocuments.length ? visibleDocuments.map(document => <button type="button" className="document-card" key={document.id} onClick={() => onOpenDocument(document)}><span className="file-type-icon small">SQL</span><span><strong>{document.name}</strong><small>revision {document.revision} · {new Date(document.updatedAt).toLocaleDateString()}</small></span><span className="history-open">↗</span></button>) : <div className="inspector-empty"><Icon name="documents"/><strong>Nothing saved yet</strong><p>Save the current query to keep a named revision on this connection.</p></div>}</section>}
             {inspector === 'details' && <RunDetails run={run} profile={profile} onLoad={onLoadProfile}/>}
             {inspector === 'pipeline' && <PipelineView run={run} profile={profile} pipeline={pipeline} onLoad={onLoadPipeline}/>}

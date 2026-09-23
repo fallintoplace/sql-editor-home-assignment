@@ -1,6 +1,7 @@
 import type { ChartConfig, Column, Json, Result, Row } from './types.js';
 export const MAX_CHART_SERIES = 20;
 export const MAX_CHART_POINTS = 5000;
+export const MAX_CHART_RENDER_POINTS = 240;
 export function sampleChartRows(rows: Row[], maxPoints = MAX_CHART_POINTS): Row[] {
     if (maxPoints <= 0)
         return [];

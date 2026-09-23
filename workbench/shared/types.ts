@@ -229,7 +229,7 @@ export interface Script {
         status: 'pending' | 'skipped' | RunStatus;
     }[];
 }
-export type ChartKind = 'table' | 'number' | 'line' | 'bar' | 'area' | 'stacked' | 'pie' | 'scatter';
+export type ChartKind = 'table' | 'number' | 'line' | 'bar';
 export interface ChartConfig {
     kind: ChartKind;
     x: number;

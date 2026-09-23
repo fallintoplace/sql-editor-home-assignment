@@ -32,6 +32,11 @@ test('Malformed optional metadata cannot crash a restored SQL draft', () => {
     assert.equal(draft.checkpoints[0].to, 8);
 });
 
+test('Legacy unsupported chart kinds recover to the table view', () => {
+    const draft = { ...newDraft('Legacy.sql', 'SELECT 1'), chart: { kind: 'scatter', x: 0, ys: [0], title: 'Old chart' } };
+    assert.equal(recover('key', read(workspace(draft))).tabs[0].chart.kind, 'table');
+});
+
 test('One invalid tab does not reset valid sibling drafts', () => {
     const good = newDraft('Keep.sql', 'SELECT 123');
     const state = recover('key', read({ version: 1, tabs: [null, good, { sql: 123 }], activeId: good.id }));

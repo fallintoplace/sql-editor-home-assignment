@@ -16,21 +16,22 @@ interface Share {
 export class ArtifactService {
     constructor(private readonly store: Store, private readonly runs: RunService, private readonly authorizeConnection: (p: Principal, id: string) => void) { }
     list(p: Principal, includeTrash = false, connectionId?: string): QueryDocument[] {
-        return this.store.list<QueryDocument>('documents').filter(d => d.owner === p.id && (!connectionId || d.connectionId === connectionId) && (includeTrash || !d.deletedAt));
+        return this.store.list<QueryDocument>('documents').filter(d => d.owner === p.id && (!connectionId || d.connectionId === connectionId) && (includeTrash || !d.deletedAt)).map(document => this.normalizeDocument(document));
     }
+    private normalizeDocument(document: QueryDocument): QueryDocument { return { ...document, chart: parseChart(document.chart) }; }
     get(p: Principal, id: string, revision?: number): QueryDocument {
         const current = this.store.get<QueryDocument>('documents', id);
         requireThat(current, 404, 'NOT_FOUND', 'Document not found');
         mustOwn(p, current.owner);
         if (revision === undefined)
-            return current;
+            return this.normalizeDocument(current);
         const historical = this.store.get<QueryDocument>('revisions', `${id}-${revision}`);
         requireThat(historical, 404, 'REVISION_NOT_FOUND', 'Revision not found');
-        return historical;
+        return this.normalizeDocument(historical);
     }
     revisions(p: Principal, id: string): QueryDocument[] {
         this.get(p, id);
-        return this.store.list<QueryDocument>('revisions').filter(d => d.id === id).sort((a, b) => b.revision - a.revision);
+        return this.store.list<QueryDocument>('revisions').filter(d => d.id === id).sort((a, b) => b.revision - a.revision).map(document => this.normalizeDocument(document));
     }
     save(p: Principal, value: unknown, id?: string): QueryDocument {
         canWrite(p);
@@ -255,10 +256,11 @@ export class ArtifactService {
 export function parseChart(value: unknown): ChartConfig {
     if (value === undefined)
         return { kind: 'table', x: 0, ys: [], title: 'Query result' };
-    const v = record(value), kinds = ['table', 'number', 'line', 'bar', 'area', 'stacked', 'pie', 'scatter'];
-    requireThat(kinds.includes(String(v.kind)), 400, 'CHART_CONFIG', 'Invalid chart kind');
+    const v = record(value), supportedKinds = ['table', 'number', 'line', 'bar'];
+    const legacyKinds = ['area', 'stacked', 'pie', 'scatter'];
+    requireThat(supportedKinds.includes(String(v.kind)) || legacyKinds.includes(String(v.kind)), 400, 'CHART_CONFIG', 'Invalid chart kind');
     requireThat(Array.isArray(v.ys) && v.ys.length <= MAX_CHART_SERIES, 400, 'CHART_CONFIG', 'Invalid chart series');
-    return { kind: v.kind as ChartConfig['kind'], x: integer(v.x, 'x', 0, 499), ys: v.ys.map(y => integer(y, 'y', 0, 499)), title: text(v.title, 'chart title', 200, true) };
+    return { kind: supportedKinds.includes(String(v.kind)) ? v.kind as ChartConfig['kind'] : 'table', x: integer(v.x, 'x', 0, 499), ys: v.ys.map(y => integer(y, 'y', 0, 499)), title: text(v.title, 'chart title', 200, true) };
 }
 function parseMetric(value: unknown): MetricContract {
     const v = record(value, 'metric contract'), timezone = text(v.timezone, 'timezone', 100);

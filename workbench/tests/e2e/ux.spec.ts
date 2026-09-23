@@ -143,7 +143,7 @@ test('SQL tabs support Home, End, wrapping arrows and named panels', async ({ pa
     await trust(page);
     await page.getByRole('button', { name: 'New SQL tab', exact: true }).click();
     await page.getByRole('button', { name: 'New SQL tab', exact: true }).click();
-    const tabs = page.getByRole('tab');
+    const tabs = page.getByRole('tablist', { name: 'SQL documents' }).getByRole('tab');
     await tabs.first().focus();
     await tabs.first().press('End');
     await expect(tabs.last()).toBeFocused();
@@ -151,8 +151,12 @@ test('SQL tabs support Home, End, wrapping arrows and named panels', async ({ pa
     await expect(page.getByRole('tabpanel')).toHaveCount(1);
     await tabs.last().press('Home');
     await expect(tabs.first()).toBeFocused();
+    await expect(tabs.first()).toHaveAttribute('aria-selected', 'true');
     await tabs.first().press('ArrowLeft');
     await expect(tabs.last()).toBeFocused();
+    await expect(tabs.last()).toHaveAttribute('aria-selected', 'true');
+    await tabs.last().press('ArrowRight');
+    await expect(tabs.first()).toBeFocused();
 });
 
 test('No filter matches is distinct from zero query rows and can be cleared without running', async ({ page }) => {

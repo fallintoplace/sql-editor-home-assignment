@@ -1,5 +1,6 @@
-import { StateField, type Extension } from '@codemirror/state';
+import { StateField, Transaction, type Extension } from '@codemirror/state';
 import { EditorView, keymap, showPanel, type Panel } from '@codemirror/view';
+import { isolateHistory } from '@codemirror/commands';
 import { snippet, snippetCompletion } from '@codemirror/autocomplete';
 import { activeStatementIndex, appendQuerySeparator, CLICKHOUSE_SNIPPETS, statementOutline, type StatementOutline } from '../../shared/editor-tools';
 
@@ -82,7 +83,16 @@ function editorToolsPanel(view: EditorView): Panel {
         if (!chosen || view.state.readOnly || view.state.field(sqlStatementOutline).error) return;
         const text = view.state.doc.toString();
         // One normal CodeMirror snippet edit: undoable, with linked fields and Tab navigation.
-        snippet(appendQuerySeparator(text) + chosen.template)(view, null, text.length, text.length);
+        snippet(appendQuerySeparator(text) + chosen.template)({
+            state: view.state,
+            dispatch: transaction => view.dispatch(view.state.update({
+                changes: transaction.changes,
+                selection: transaction.selection,
+                effects: transaction.effects,
+                scrollIntoView: transaction.scrollIntoView,
+                annotations: [isolateHistory.of('full'), Transaction.userEvent.of('input.complete')],
+            })),
+        }, null, text.length, text.length);
         view.focus();
     });
     const note = doc.createElement('span');

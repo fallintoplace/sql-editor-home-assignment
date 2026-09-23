@@ -47,7 +47,7 @@ const strings = (value: unknown): string[] => Array.isArray(value) ? value.filte
 const position = (value: unknown, length: number) => typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(length, Math.trunc(value))) : 0;
 const index = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 const revision = (value: unknown) => index(value) && value > 0 ? value : undefined;
-const chartKinds: ChartConfig['kind'][] = ['table', 'number', 'line', 'bar', 'area', 'stacked', 'pie', 'scatter'];
+const chartKinds: ChartConfig['kind'][] = ['table', 'number', 'line', 'bar'];
 
 /** Browser storage is untrusted input; preserve SQL while repairing optional metadata. */
 export function recoverDraft(value: unknown): Draft | undefined {

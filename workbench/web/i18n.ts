@@ -1,12 +1,10 @@
 import type { SelectOption } from './workspace-types';
 
 export type Locale = 'en' | 'de' | 'es' | 'nl' | 'zh' | 'ru';
-export type Theme = 'monokai' | 'catppuccin-latte' | 'click-dark' | 'click-light';
+export type Theme = 'click-dark' | 'click-light';
 export type ExperienceLevel = 'beginner' | 'expert';
 
 export const themeAppearance: Record<Theme, { dark: boolean; chromeColor: string }> = {
-    monokai: { dark: true, chromeColor: '#101412' },
-    'catppuccin-latte': { dark: false, chromeColor: '#f1f3ee' },
     'click-dark': { dark: true, chromeColor: '#101010' },
     'click-light': { dark: false, chromeColor: '#f5f6f1' },
 };
@@ -91,8 +89,6 @@ export const localeOptions = [
 ] as const satisfies readonly SelectOption<Locale>[];
 
 export const themeOptions = [
-    { value: 'monokai', label: 'Monokai' },
-    { value: 'catppuccin-latte', label: 'Catppuccin Latte' },
     { value: 'click-dark', label: 'ClickDark' },
     { value: 'click-light', label: 'ClickLight' },
 ] as const satisfies readonly SelectOption<Theme>[];

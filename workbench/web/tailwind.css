@@ -39,30 +39,6 @@
     -moz-osx-font-smoothing: grayscale;
 }
 
-:root[data-theme="catppuccin-latte"] {
-    color-scheme: light;
-    --page: #f1f3ee;
-    --page-raised: #f8f9f5;
-    --panel: #ffffff;
-    --panel-raised: #f5f7f1;
-    --panel-hover: #edf1e9;
-    --line: #dfe5dc;
-    --line-bright: #cad4c8;
-    --text: #18211b;
-    --text-soft: #45534a;
-    --muted: #78857b;
-    --accent: #a17c00;
-    --accent-strong: #8d6c00;
-    --accent-action: #a17c00;
-    --accent-ink: #fff9dc;
-    --green: #19884b;
-    --amber: #a66b08;
-    --red: #bd4945;
-    --violet: #704db3;
-    --editor-selection: #dac35c66;
-    --shadow: 0 22px 70px #2a35221c;
-}
-
 :root[data-theme="click-dark"] {
     color-scheme: dark;
     --page: #101010;

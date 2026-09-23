@@ -18,7 +18,7 @@ const pref = <T extends string>(key: string, values: readonly T[], fallback: T):
 
 function App() {
     const [locale, setLocale] = useState<Locale>(() => pref('cathedral:locale', ['en', 'de', 'es', 'nl', 'zh', 'ru'] as const, 'en'));
-    const [theme, setTheme] = useState<Theme>(() => pref('cathedral:theme', ['monokai', 'catppuccin-latte', 'click-dark', 'click-light'] as const, 'monokai'));
+    const [theme, setTheme] = useState<Theme>(() => pref('cathedral:theme', ['click-dark', 'click-light'] as const, 'click-dark'));
     const [experience, setExperience] = useState<ExperienceLevel>(() => pref('cathedral:experience', ['beginner', 'expert'] as const, 'beginner'));
     const [session, setSession] = useState<Session>();
     const [connections, setConnections] = useState<Connected[]>([]);

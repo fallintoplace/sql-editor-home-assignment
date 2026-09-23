@@ -24,7 +24,9 @@ class ClickHouseNativeParser {
         this.listeners.add(listener);
         listener(this.state);
         this.ensureWorker();
-        return () => this.listeners.delete(listener);
+        return () => {
+            this.listeners.delete(listener);
+        };
     }
 
     parseMany(sql: string[]): Promise<NativeParseResult[]> {

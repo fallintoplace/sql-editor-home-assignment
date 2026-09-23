@@ -150,7 +150,14 @@ function App() {
             <div className="topbar-divider topbar-divider-short"/>
             <div className="topbar-preferences">
                 <SelectControl label={copy.app.language} value={locale} options={localeOptions} onChange={setLocale}/>
-                <SelectControl label={copy.app.theme} value={theme} options={themeOptions} onChange={setTheme}/>
+                <div className="experience-switch theme-switch">
+                    <RadioGroup className="navbar-mode-control" value={theme} onValueChange={value => {
+                        if (value === 'click-dark' || value === 'click-light') setTheme(value);
+                    }} aria-label={copy.app.theme} inline orientation="horizontal" dir="end">
+                        {themeOptions.map(option => <RadioGroup.Item key={option.value} value={option.value} className={`navbar-mode-option theme-mode-option ${theme === option.value ? 'is-active' : ''}`} label={option.label} aria-label={option.value === 'click-dark' ? 'Dark theme' : 'Light theme'} title={option.value === 'click-dark' ? 'Dark theme' : 'Light theme'}/>
+                        )}
+                    </RadioGroup>
+                </div>
             </div>
         </header>
         {connection ? <Workspace key={connection.id} connection={connection} connectionLabel={connectionLabel(connection, session.demo)} connections={connections} onSelectConnection={selectConnection} onRefreshConnections={async () => { const latest = await api<Connected[]>('/connections'); setConnections(latest); }} trustActionRef={trustActionRef} testConnectionActionRef={testConnectionActionRef} demoMode={session.demo} experience={experience} nativeParserEnabled={parserMode === 'wasm'} dark={dark} copy={copy} locale={locale}/> : <div className="empty-connection"><Icon name="schema"/><h1>{copy.app.name}</h1><p>No connection profiles are configured for this workspace.</p></div>}

@@ -82,6 +82,10 @@
 .topbar .navbar-mode-option.is-expert > label::before { border-radius: 1px; background: var(--accent); transform: rotate(45deg); }
 .topbar .parser-mode-option.is-wasm > label::before { border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 55%, transparent); }
 .topbar .parser-mode-option.is-basic > label::before { border-radius: 50%; background: var(--muted); }
+.topbar .theme-switch { gap: 0; padding: 3px; border-radius: 9px; }
+.topbar .theme-switch .navbar-mode-control { gap: 0; }
+.topbar .theme-switch .navbar-mode-option > label { min-width: 30px; min-height: 30px; justify-content: center; padding: 5px; font-size: 14px; line-height: 1; }
+.topbar .theme-switch .navbar-mode-option > label::before { display: none; }
 
 @media (max-width: 1120px) {
     .topbar { gap: 12px; padding-inline: 14px; }

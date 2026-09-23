@@ -61,7 +61,7 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
         } };
         const [schema, progress, queryLog, documentation, explain, pipeline] = await Promise.all([
             probe('SELECT name FROM system.columns LIMIT 1'), probe('SELECT query_id FROM system.processes LIMIT 0'), probe('SELECT query_id FROM system.query_log LIMIT 0'),
-            probe('SELECT name FROM system.documentation LIMIT 0'), probe('EXPLAIN SELECT 1'), probe('EXPLAIN PIPELINE SELECT 1'),
+            probe('SELECT name FROM system.documentation LIMIT 0'), probe('EXPLAIN SELECT 1'), probe('EXPLAIN PIPELINE graph = 1, compact = 0 SELECT 1'),
         ]);
         // KILL of a random, nonexistent own query checks cancellation permission without touching a real query.
         let cancellation: Manifest['cancellation'];
@@ -159,7 +159,7 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
         requireThat(this.manifests.get(run.connectionId)?.pipeline.available, 409, 'CAPABILITY_UNAVAILABLE', 'Test the connection; pipeline inspection is required');
         const statement = splitSql(run.sql)[0]?.sql;
         requireThat(statement, 400, 'EMPTY_SQL', 'The run has no SQL statement to inspect');
-        const rows = await this.rows<Record<string, unknown>>(run.connectionId, `EXPLAIN PIPELINE\n${statement}`, run.parameters);
+        const rows = await this.rows<Record<string, unknown>>(run.connectionId, `EXPLAIN PIPELINE graph = 1, compact = 0\n${statement}`, run.parameters);
         return rows.map(row => String(Object.values(row)[0] ?? '')).filter(Boolean);
     }
     targets(id: string) { return this.profile(id).writer?.tables ?? []; }

@@ -91,6 +91,10 @@ test('Insights compare one run with its ClickHouse pipeline evidence', async ({ 
     await pipelineRequest;
     await expect(queryPlan).toContainText('EXPLAIN PIPELINE');
     await expect(queryPlan).toContainText('ReadFromFixture');
+    const graph = queryPlan.getByRole('region', { name: 'Scrollable operator graph' });
+    await expect(graph.getByRole('button', { name: 'Inspect Resize 2 → 1' })).toBeVisible();
+    await graph.getByRole('button', { name: 'Inspect Resize 2 → 1' }).click();
+    await expect(queryPlan.locator('.pipeline-node-inspector')).toContainText('Resize 2 → 1');
     await expect(page.locator('.execution-bar code')).toHaveText(startedRun.queryId);
 });
 

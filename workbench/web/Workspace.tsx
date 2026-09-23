@@ -474,6 +474,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         onOpenDocument: openDocument,
         onLoadProfile: () => void perform(loadProfile, 'save'),
         onLoadPipeline: () => void perform(loadPipeline, 'save'),
+        onOpenGraph: () => { setView('insights'); setDrawerOpen(false); },
         connectionId: connection.id,
         sql: active.sql,
         trusted,

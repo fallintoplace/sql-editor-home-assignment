@@ -70,11 +70,198 @@ function pipelineKind(label: string): ProfilePipelineNodeKind {
         return 'filter';
     if (/aggregat|group.?by|distinct/.test(normalized))
         return 'aggregate';
+    if (/resize|merging.*(?:stream|sorted)|(?:\d+)\s*→\s*1/.test(normalized))
+        return 'resize';
+    if (/join/.test(normalized))
+        return 'join';
     if (/sort|order.?by|merge.?sorting/.test(normalized))
         return 'sort';
     if (/output|format|limit|sink|result/.test(normalized))
         return 'output';
+    if (/transform|expression|convert|projection/.test(normalized))
+        return 'transform';
     return 'stage';
+}
+
+const MAX_PIPELINE_DOT_CHARS = 500_000;
+const MAX_PIPELINE_GRAPH_NODES = 240;
+const MAX_PIPELINE_GRAPH_EDGES = 480;
+
+type DotToken = { kind: 'value' | 'arrow' | 'punctuation'; value: string };
+
+function tokenizeDot(source: string): { tokens: DotToken[]; truncated: boolean } {
+    const input = source.slice(0, MAX_PIPELINE_DOT_CHARS);
+    const tokens: DotToken[] = [];
+    let index = 0;
+    while (index < input.length) {
+        const char = input[index]!;
+        if (/\s/.test(char)) {
+            index++;
+            continue;
+        }
+        if (input.startsWith('//', index) || char === '#') {
+            const end = input.indexOf('\n', index);
+            index = end < 0 ? input.length : end + 1;
+            continue;
+        }
+        if (input.startsWith('/*', index)) {
+            const end = input.indexOf('*/', index + 2);
+            index = end < 0 ? input.length : end + 2;
+            continue;
+        }
+        if (input.startsWith('->', index)) {
+            tokens.push({ kind: 'arrow', value: '->' });
+            index += 2;
+            continue;
+        }
+        if (char === '"') {
+            index++;
+            let value = '';
+            while (index < input.length && input[index] !== '"') {
+                if (input[index] === '\\' && index + 1 < input.length) {
+                    const escaped = input[index + 1]!;
+                    value += escaped === 'n' || escaped === 'l' || escaped === 'r' ? '\n'
+                        : escaped === 't' ? '\t' : escaped === '"' || escaped === '\\' ? escaped : `\\${escaped}`;
+                    index += 2;
+                }
+                else value += input[index++]!;
+            }
+            if (input[index] === '"') index++;
+            tokens.push({ kind: 'value', value });
+            continue;
+        }
+        if ('{}[];,='.includes(char)) {
+            tokens.push({ kind: 'punctuation', value: char });
+            index++;
+            continue;
+        }
+        const start = index;
+        while (index < input.length && !/\s/.test(input[index]!) && !'{}[];,='.includes(input[index]!) && !input.startsWith('->', index)) index++;
+        if (start === index) index++;
+        else tokens.push({ kind: 'value', value: input.slice(start, index) });
+    }
+    return { tokens, truncated: source.length > input.length };
+}
+
+function parsePipelineDot(raw: readonly string[], profile: ProfileSummary): ProfilePipeline | undefined {
+    const source = raw.join('\n');
+    if (!/\bdigraph\b[\s\S]*\{/i.test(source))
+        return undefined;
+    const { tokens, truncated: inputTruncated } = tokenizeDot(source);
+    const open = tokens.findIndex(token => token.value === '{');
+    if (open < 0)
+        return undefined;
+    const nodes = new Map<string, ProfilePipeline['nodes'][number]>();
+    const edges: ProfilePipeline['edges'] = [];
+    let i = open + 1, depth = 1, capped = inputTruncated;
+    const valueAt = (at: number) => tokens[at]?.kind === 'value' ? tokens[at]!.value : undefined;
+    const readEndpoint = () => {
+        const value = valueAt(i++);
+        if (!value) return undefined;
+        while (tokens[i]?.value === ':') {
+            i++;
+            if (tokens[i]?.kind === 'value') i++;
+        }
+        return value;
+    };
+    const readAttributes = () => {
+        const attributes: Record<string, string> = {};
+        if (tokens[i]?.value !== '[') return attributes;
+        i++;
+        while (i < tokens.length && tokens[i]?.value !== ']') {
+            const key = valueAt(i++);
+            if (!key) { i++; continue; }
+            if (tokens[i]?.value === '=') {
+                i++;
+                const value = valueAt(i++);
+                if (value !== undefined) attributes[key.toLowerCase()] = value;
+            }
+            else if (tokens[i]?.value !== ',' && tokens[i]?.value !== ';') i++;
+        }
+        if (tokens[i]?.value === ']') i++;
+        return attributes;
+    };
+    const ensureNode = (id: string, label = id) => {
+        const existing = nodes.get(id);
+        const normalizedLabel = label.replace(/\s+/g, ' ').trim() || id;
+        if (existing) {
+            if (label !== id) {
+                existing.label = normalizedLabel;
+                existing.detail = label.trim();
+                existing.kind = pipelineKind(normalizedLabel);
+                const parallelism = /[×x*]\s*(\d+)\s*$/i.exec(normalizedLabel)?.[1];
+                existing.parallelism = parallelism ? Number(parallelism) : undefined;
+            }
+            return existing;
+        }
+        const parallelism = /[×x*]\s*(\d+)\s*$/i.exec(normalizedLabel)?.[1];
+        const kind = pipelineKind(normalizedLabel);
+        const measured = kind === 'read' || kind === 'output';
+        const node: ProfilePipeline['nodes'][number] = {
+            id,
+            label: normalizedLabel,
+            kind,
+            detail: label.trim(),
+            status: 'planned',
+            ...(parallelism ? { parallelism: Number(parallelism) } : {}),
+            ...(measured && kind === 'read' ? { rows: profile.readRows, bytes: profile.readBytes } : {}),
+            ...(measured && kind === 'output' ? { durationMs: profile.durationMs, rows: String(profile.resultRows), bytes: profile.resultBytes } : {}),
+        };
+        if (nodes.size >= MAX_PIPELINE_GRAPH_NODES) {
+            capped = true;
+            return undefined;
+        }
+        nodes.set(id, node);
+        return node;
+    };
+
+    while (i < tokens.length && depth > 0) {
+        const token = tokens[i]!;
+        if (token.value === '{') { depth++; i++; continue; }
+        if (token.value === '}') { depth--; i++; continue; }
+        if (token.value === ';' || token.value === ',') { i++; continue; }
+        if (token.kind !== 'value') { i++; continue; }
+        const first = token.value;
+        if (['graph', 'node', 'edge'].includes(first.toLowerCase()) && tokens[i + 1]?.value === '[') {
+            i++;
+            readAttributes();
+            continue;
+        }
+        if (tokens[i + 1]?.value === '=') {
+            i += 2;
+            while (i < tokens.length && tokens[i]?.value !== ';' && tokens[i]?.value !== '}') i++;
+            continue;
+        }
+        if (first.toLowerCase() === 'subgraph') { i++; if (tokens[i]?.kind === 'value') i++; continue; }
+
+        const sourceId = readEndpoint();
+        if (!sourceId) { i++; continue; }
+        const targets: string[] = [];
+        while (tokens[i]?.kind === 'arrow') {
+            i++;
+            const target = readEndpoint();
+            if (target) targets.push(target);
+        }
+        const attributes = readAttributes();
+        if (targets.length) {
+            let previous = sourceId;
+            ensureNode(sourceId);
+            for (const target of targets) {
+                ensureNode(target);
+                if (edges.length < MAX_PIPELINE_GRAPH_EDGES && nodes.has(previous) && nodes.has(target))
+                    edges.push({ source: previous, target, ...(attributes.label ? { label: attributes.label.replace(/\s+/g, ' ').trim() } : {}) });
+                else if (edges.length >= MAX_PIPELINE_GRAPH_EDGES) capped = true;
+                previous = target;
+            }
+        }
+        else if (attributes.label !== undefined) ensureNode(sourceId, attributes.label);
+        else ensureNode(sourceId);
+    }
+    if (!nodes.size)
+        return undefined;
+    const boundedRaw = source.slice(0, 100_000);
+    const notice = `Operator topology and parallel lanes come from ClickHouse EXPLAIN PIPELINE. Per-node runtime counters are not available; run metrics are shown separately.${capped ? ` The graph was bounded to ${MAX_PIPELINE_GRAPH_NODES} operators and ${MAX_PIPELINE_GRAPH_EDGES} edges.` : ''}`;
+    return { available: true, source: 'explain_pipeline', nodes: [...nodes.values()], edges, raw: [boundedRaw], ...(capped ? { truncated: true } : {}), notice };
 }
 
 function pipelineLabel(line: string) {
@@ -85,6 +272,9 @@ function pipelineLabel(line: string) {
 }
 
 function parsePipelineEvidence(raw: readonly string[], profile: ProfileSummary): ProfilePipeline | undefined {
+    const graph = parsePipelineDot(raw, profile);
+    if (graph)
+        return graph;
     const lines = raw.flatMap(line => line.replace(/\r/g, '').split('\n')).slice(0, 160);
     const nodes: ProfilePipeline['nodes'] = [], edges: ProfilePipeline['edges'] = [];
     const stack: Array<{ indent: number; id: string }> = [];

@@ -1,0 +1,186 @@
+import { useMemo, useState, useId, type KeyboardEvent } from 'react';
+import { dagre } from 'd3-dag';
+import type { ProfilePipeline, ProfilePipelineNode } from '../../shared/types';
+
+const nodeWidth = 220;
+const nodeHeight = 74;
+const graphPadding = 28;
+
+type PositionedNode = { node: ProfilePipelineNode; x: number; y: number };
+type PositionedEdge = { source: string; target: string; label?: string; points: Array<{ x: number; y: number }> };
+type GraphLayout = { width: number; height: number; nodes: PositionedNode[]; edges: PositionedEdge[] };
+
+function fallbackLayout(pipeline: ProfilePipeline): GraphLayout {
+    const byId = new Map(pipeline.nodes.map(node => [node.id, node]));
+    const ranks = new Map(pipeline.nodes.map(node => [node.id, 0]));
+    const incoming = new Map(pipeline.nodes.map(node => [node.id, 0]));
+    const outgoing = new Map(pipeline.nodes.map(node => [node.id, [] as string[]]));
+    for (const edge of pipeline.edges) {
+        if (!byId.has(edge.source) || !byId.has(edge.target)) continue;
+        incoming.set(edge.target, (incoming.get(edge.target) ?? 0) + 1);
+        outgoing.get(edge.source)?.push(edge.target);
+    }
+    const queue = pipeline.nodes.filter(node => incoming.get(node.id) === 0).map(node => node.id);
+    const visited = new Set<string>();
+    while (queue.length) {
+        const id = queue.shift()!;
+        visited.add(id);
+        for (const next of outgoing.get(id) ?? []) {
+            ranks.set(next, Math.max(ranks.get(next) ?? 0, (ranks.get(id) ?? 0) + 1));
+            incoming.set(next, (incoming.get(next) ?? 1) - 1);
+            if (incoming.get(next) === 0) queue.push(next);
+        }
+    }
+    let nextRank = Math.max(0, ...ranks.values()) + 1;
+    for (const node of pipeline.nodes) {
+        if (!visited.has(node.id)) ranks.set(node.id, nextRank++);
+    }
+    const layers = new Map<number, ProfilePipelineNode[]>();
+    for (const node of pipeline.nodes) {
+        const rank = ranks.get(node.id) ?? 0;
+        layers.set(rank, [...(layers.get(rank) ?? []), node]);
+    }
+    const maxLayerSize = Math.max(1, ...[...layers.values()].map(layer => layer.length));
+    const width = maxLayerSize * (nodeWidth + 32) + graphPadding * 2;
+    const height = layers.size * (nodeHeight + 54) + graphPadding * 2;
+    const positions = new Map<string, { x: number; y: number }>();
+    for (const [rank, layer] of layers) {
+        layer.forEach((node, index) => positions.set(node.id, {
+            x: graphPadding + (index + 0.5) * (width - graphPadding * 2) / layer.length,
+            y: graphPadding + rank * (nodeHeight + 54) + nodeHeight / 2,
+        }));
+    }
+    return {
+        width,
+        height,
+        nodes: pipeline.nodes.flatMap(node => {
+            const position = positions.get(node.id);
+            return position ? [{ node, ...position }] : [];
+        }),
+        edges: pipeline.edges.flatMap(edge => {
+            const start = positions.get(edge.source), end = positions.get(edge.target);
+            if (!start || !end) return [];
+            const middleY = (start.y + end.y) / 2;
+            return [{ ...edge, points: [{ x: start.x, y: start.y + nodeHeight / 2 }, { x: start.x, y: middleY }, { x: end.x, y: middleY }, { x: end.x, y: end.y - nodeHeight / 2 }] }];
+        }),
+    };
+}
+
+function layoutPipeline(pipeline: ProfilePipeline): GraphLayout {
+    const graph = new dagre.graphlib.Graph();
+    graph.setGraph({ rankdir: 'TB', nodesep: 34, ranksep: 74, quality: 'fast' });
+    graph.setDefaultEdgeLabel(() => ({}));
+    for (const node of pipeline.nodes) graph.setNode(node.id, { width: nodeWidth, height: nodeHeight });
+    const edgeKeys = new Set<string>();
+    for (const edge of pipeline.edges) {
+        if (!graph.hasNode(edge.source) || !graph.hasNode(edge.target)) continue;
+        const key = `${edge.source}\u0000${edge.target}`;
+        if (edgeKeys.has(key)) continue;
+        edgeKeys.add(key);
+        graph.setEdge(edge.source, edge.target);
+    }
+    try {
+        dagre.layout(graph);
+        const dimensions = graph.graph();
+        if (!Number.isFinite(dimensions.width) || !Number.isFinite(dimensions.height)) return fallbackLayout(pipeline);
+        const positions = new Map(graph.nodes().map(id => {
+            const position = graph.node(id);
+            return [id, { x: position.x + graphPadding, y: position.y + graphPadding }] as const;
+        }));
+        return {
+            width: dimensions.width + graphPadding * 2,
+            height: dimensions.height + graphPadding * 2,
+            nodes: pipeline.nodes.flatMap(node => {
+                const position = positions.get(node.id);
+                return position ? [{ node, ...position }] : [];
+            }),
+            edges: pipeline.edges.flatMap(edge => {
+                if (!graph.hasEdge(edge.source, edge.target)) return [];
+                const points = graph.edge(edge.source, edge.target).points.map(point => ({ x: point.x + graphPadding, y: point.y + graphPadding }));
+                return points.length ? [{ ...edge, points }] : [];
+            }),
+        };
+    }
+    catch {
+        return fallbackLayout(pipeline);
+    }
+}
+
+function labelLines(label: string) {
+    const words = label.split(/\s+/);
+    const lines: string[] = [];
+    let current = '';
+    for (const word of words) {
+        if (current && `${current} ${word}`.length > 28) {
+            lines.push(current);
+            current = word;
+        }
+        else current = current ? `${current} ${word}` : word;
+    }
+    if (current) lines.push(current);
+    if (lines.length > 2) lines[1] = `${lines[1]!.slice(0, 25)}…`;
+    return lines.slice(0, 2);
+}
+
+function pathFor(points: PositionedEdge['points']) {
+    return points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ');
+}
+
+export function PipelineGraph({ pipeline }: { pipeline: ProfilePipeline }) {
+    const layout = useMemo(() => layoutPipeline(pipeline), [pipeline]);
+    const [selectedId, setSelectedId] = useState<string | undefined>(pipeline.nodes[0]?.id);
+    const selected = pipeline.nodes.find(node => node.id === selectedId) ?? pipeline.nodes[0];
+    const markerId = `pipeline-arrow-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+    const incomingCount = selected ? pipeline.edges.filter(edge => edge.target === selected.id).length : 0;
+    const outgoingCount = selected ? pipeline.edges.filter(edge => edge.source === selected.id).length : 0;
+    const chooseNode = (node: ProfilePipelineNode) => setSelectedId(node.id);
+    const onNodeKeyDown = (event: KeyboardEvent<SVGGElement>, node: ProfilePipelineNode) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        chooseNode(node);
+    };
+
+    if (!pipeline.nodes.length) return <div className="pipeline-graph-empty">This pipeline did not return any operator nodes.</div>;
+
+    return <section className="pipeline-graph-card grid gap-3 rounded-xl border p-3" aria-label="Execution plan graph">
+        <div className="pipeline-graph-heading">
+            <div><span className="eyebrow">{pipeline.source === 'explain_pipeline' ? 'CLICKHOUSE OPERATOR PLAN' : 'ESTIMATED QUERY SHAPE'}</span><strong>{pipeline.nodes.length.toLocaleString()} operators <i>·</i> {pipeline.edges.length.toLocaleString()} connections</strong></div>
+            <small>{pipeline.source === 'explain_pipeline' ? 'Planned topology · runtime counters are run-level' : 'Estimated from SQL structure'}</small>
+        </div>
+        {pipeline.truncated && <p className="pipeline-graph-warning" role="status">This plan is large. The graph shows a bounded set of operators.</p>}
+        <div className="pipeline-graph-scroll overflow-auto" role="region" aria-label="Scrollable operator graph">
+            <svg className="pipeline-graph-svg" width={Math.max(480, layout.width)} height={Math.max(160, layout.height)} viewBox={`0 0 ${Math.max(480, layout.width)} ${Math.max(160, layout.height)}`} role="group" aria-label="Click an operator to inspect it">
+                <defs><marker id={markerId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" className="pipeline-graph-arrow"/></marker></defs>
+                <g className="pipeline-graph-edges" aria-hidden="true">
+                    {layout.edges.map((edge, index) => {
+                        const middle = edge.points[Math.floor(edge.points.length / 2)];
+                        return <g key={`${edge.source}-${edge.target}-${index}`}><path d={pathFor(edge.points)} markerEnd={`url(#${markerId})`}/>{edge.label && middle && <text x={middle.x + 7} y={middle.y - 5}>{edge.label}</text>}</g>;
+                    })}
+                </g>
+                {layout.nodes.map(({ node, x, y }) => {
+                    const lines = labelLines(node.label);
+                    const active = selected?.id === node.id;
+                    return <g key={node.id} role="button" tabIndex={0} aria-label={`Inspect ${node.label}`} aria-pressed={active} data-node-id={node.id} className={`pipeline-graph-node pipeline-node-${node.kind}${active ? ' is-selected' : ''}`} transform={`translate(${x - nodeWidth / 2} ${y - nodeHeight / 2})`} onClick={() => chooseNode(node)} onKeyDown={event => onNodeKeyDown(event, node)}>
+                        <title>{node.label}</title>
+                        <rect width={nodeWidth} height={nodeHeight} rx="11"/>
+                        <text className="pipeline-node-kind" x="14" y="19">{node.kind.toUpperCase()}</text>
+                        {lines.map((line, index) => <text className="pipeline-node-label" key={index} x="14" y={43 + index * 15}>{line}</text>)}
+                        {node.parallelism !== undefined && <text className="pipeline-node-parallel" x={nodeWidth - 12} y="20" textAnchor="end">× {node.parallelism}</text>}
+                        <text className="pipeline-node-status" x={nodeWidth - 12} y={nodeHeight - 11} textAnchor="end">{node.status}</text>
+                    </g>;
+                })}
+            </svg>
+        </div>
+        {selected && <div className="pipeline-node-inspector" aria-live="polite" aria-label="Selected operator details">
+            <div className="pipeline-node-inspector-main"><span className="eyebrow">SELECTED OPERATOR</span><strong>{selected.label}</strong><small>{selected.kind} <i>·</i> {selected.status}</small>{selected.detail && selected.detail !== selected.label && <p>{selected.detail}</p>}</div>
+            <div className="pipeline-node-facts">
+                {selected.parallelism !== undefined && <span><small>Parallelism</small><strong>{selected.parallelism.toLocaleString()}</strong></span>}
+                <span><small>Inputs</small><strong>{incomingCount}</strong></span>
+                <span><small>Outputs</small><strong>{outgoingCount}</strong></span>
+                {selected.durationMs !== undefined && <span><small>Run duration</small><strong>{Math.round(selected.durationMs)} ms</strong></span>}
+                {selected.rows !== undefined && <span><small>Run rows</small><strong>{Number(selected.rows).toLocaleString()}</strong></span>}
+                {selected.bytes !== undefined && <span><small>Run bytes</small><strong>{selected.bytes}</strong></span>}
+            </div>
+        </div>}
+    </section>;
+}

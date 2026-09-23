@@ -146,20 +146,22 @@ export interface ProfileInsight {
     title: string;
     description: string;
 }
-export type ProfilePipelineNodeKind = 'read' | 'filter' | 'aggregate' | 'sort' | 'output' | 'stage';
+export type ProfilePipelineNodeKind = 'read' | 'filter' | 'aggregate' | 'sort' | 'resize' | 'join' | 'transform' | 'output' | 'stage';
 export interface ProfilePipelineNode {
     id: string;
     label: string;
     kind: ProfilePipelineNodeKind;
     detail?: string;
-    status: 'measured' | 'estimated';
+    status: 'measured' | 'estimated' | 'planned';
     durationMs?: number;
     rows?: string;
     bytes?: string;
+    parallelism?: number;
 }
 export interface ProfilePipelineEdge {
     source: string;
     target: string;
+    label?: string;
 }
 export interface ProfilePipeline {
     available: boolean;
@@ -167,6 +169,7 @@ export interface ProfilePipeline {
     nodes: ProfilePipelineNode[];
     edges: ProfilePipelineEdge[];
     raw?: string[];
+    truncated?: boolean;
     notice: string;
 }
 export interface QueryProfile {

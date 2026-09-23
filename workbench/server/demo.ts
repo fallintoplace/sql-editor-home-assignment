@@ -27,5 +27,5 @@ export class DemoDriver {
     async insert() { throw new AppError(403, 'DEMO_READ_ONLY', 'Fixture mode never inserts'); }
     async inspectInsert() { return 'unknown' as const; }
     async profileEvidence(_run: Run) { return [{ notice: 'Fixture mode has no real server profile' }]; }
-    async profilePipeline(_run: Run) { return ['(Fixture pipeline)', '  ReadFromFixture × 1', '    ExpressionTransform × 1', '      Output × 1']; }
+    async profilePipeline(_run: Run) { return ['digraph {', '  node [shape=box];', '  read [label="ReadFromFixture"];', '  filter [label="FilterTransform × 2"];', '  expression [label="ExpressionTransform × 2"];', '  resize [label="Resize 2 → 1"];', '  output [label="Output"];', '  read -> filter [label="× 2"];', '  filter -> expression [label="× 2"];', '  expression -> resize;', '  resize -> output;', '}']; }
 }

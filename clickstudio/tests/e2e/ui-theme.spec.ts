@@ -1,15 +1,20 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
 const themes = [
     { value: 'click-dark', dark: true, surface: '#101010', chrome: '#101010', logoColor: '#fff' },
     { value: 'click-light', dark: false, surface: '#e9eee9', chrome: '#f5f6f1', logoColor: '#161616' },
 ] as const;
 
+function themeOption(page: Page, value: string) {
+    const label = value === 'click-dark' ? '🌙' : '☀️';
+    return page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: label });
+}
+
 for (const theme of themes) test(`${theme.value} applies its palette and survives reload`, async ({ page }) => {
     await page.goto('/');
-    const picker = page.getByLabel('Theme');
-    await expect(picker).toBeVisible();
-    await picker.selectOption(theme.value);
+    const option = themeOption(page, theme.value);
+    await expect(option).toBeVisible();
+    await page.getByRole('radiogroup', { name: 'Theme' }).getByText(theme.value === 'click-dark' ? '🌙' : '☀️', { exact: true }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme.value);
 
     const palette = await page.locator('html').evaluate(element => ({
@@ -23,20 +28,20 @@ for (const theme of themes) test(`${theme.value} applies its palette and survive
     expect(logoSvg).toContain(`fill: ${theme.logoColor}`);
 
     await page.reload();
-    await expect(page.getByLabel('Theme')).toHaveValue(theme.value);
+    await expect(themeOption(page, theme.value)).toHaveAttribute('aria-checked', 'true');
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme.value);
 });
 
 test('an unknown saved theme falls back to ClickDark', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('clickstudio:theme', 'future-theme'));
     await page.goto('/');
-    await expect(page.getByLabel('Theme')).toHaveValue('click-dark');
+    await expect(themeOption(page, 'click-dark')).toHaveAttribute('aria-checked', 'true');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'click-dark');
 });
 
 for (const removedTheme of ['monokai', 'catppuccin-latte']) test(`a saved ${removedTheme} preference falls back to ClickDark`, async ({ page }) => {
     await page.addInitScript((value) => localStorage.setItem('clickstudio:theme', value), removedTheme);
     await page.goto('/');
-    await expect(page.getByLabel('Theme')).toHaveValue('click-dark');
+    await expect(themeOption(page, 'click-dark')).toHaveAttribute('aria-checked', 'true');
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'click-dark');
 });

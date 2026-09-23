@@ -1,4 +1,5 @@
 import type { ApiError } from '../shared/types';
+import { DemoPreviewApi } from './demo-preview';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type ApiOptions = {
@@ -21,7 +22,13 @@ export class RequestError extends Error {
     constructor(public readonly status: number, public readonly detail: ApiError) { super(detail.message); }
 }
 
+export const isFrontendDemoPreview = import.meta.env.VITE_DEMO_MODE === 'true';
+const demoPreview = isFrontendDemoPreview ? new DemoPreviewApi() : undefined;
+
 export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
+    if (demoPreview)
+        return await demoPreview.request(path, options) as T;
+
     const response = await fetch(`/api${path}`, { method: options.method ?? 'GET', credentials: 'same-origin', signal: options.signal,
         headers: { 'X-ClickStudio-Intent': '1', ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }) }, body: options.body === undefined ? undefined : JSON.stringify(options.body) });
     const content: unknown = await response.json().catch(() => null);

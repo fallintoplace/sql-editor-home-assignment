@@ -5,7 +5,8 @@ import { filterSchemaTables, indexSchemaColumns } from '../shared/schema-browser
 import { recommendChart } from '../shared/results';
 import { matchesDraft } from '../shared/evidence';
 import { formatSql, parameterNames, selectedStatement, splitSql } from '../shared/sql';
-import { api, download, message, post } from './api';
+import { api, download, isFrontendDemoPreview, message, post } from './api';
+import { DEMO_PREVIEW_RUN_ID } from './demo-preview';
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { ImportWizard } from './components/ImportWizard';
 import { AssistantWorkflow } from './components/AssistantWorkflow';
@@ -50,7 +51,17 @@ type WorkspaceProps = {
 
 export function Workspace({ connection, connectionLabel, connections, onSelectConnection, onRefreshConnections, trustActionRef, demoMode, experience, dark, copy, locale }: WorkspaceProps) {
     const key = stateKey(connection.id);
-    const [workspace, setWorkspace] = useState<WorkspaceState>(() => recover(key));
+    const [workspace, setWorkspace] = useState<WorkspaceState>(() => {
+        const recovered = recover(key);
+        if (!isFrontendDemoPreview || recovered.tabs.some(tab => tab.activeRunId)) return recovered;
+        const activeId = recovered.tabs.find(tab => tab.id === recovered.activeId)?.id ?? recovered.tabs[0]!.id;
+        return {
+            ...recovered,
+            tabs: recovered.tabs.map(tab => tab.id === activeId
+                ? { ...tab, activeRunId: DEMO_PREVIEW_RUN_ID, runIds: [...new Set([...tab.runIds, DEMO_PREVIEW_RUN_ID])] }
+                : tab),
+        };
+    });
     const workspaceRef = useRef(workspace);
     workspaceRef.current = workspace;
     const active = workspace.tabs.find(tab => tab.id === workspace.activeId) ?? workspace.tabs[0]!;
@@ -376,7 +387,9 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             editor.current?.focus();
         }
         setDrawerOpen(false);
-        setNotice(wholeScript ? 'Script started. Each statement has its own run evidence.' : 'Query submitted to the selected ClickHouse connection.');
+        setNotice(wholeScript
+            ? 'Sample results were generated for each statement. SQL is not executed in this preview.'
+            : isFrontendDemoPreview ? 'Sample rows were generated. SQL is not executed in this preview.' : 'Query submitted to the selected ClickHouse connection.');
         void loadHistory().catch(() => undefined);
     }, wholeScript ? 'script' : 'run');
 

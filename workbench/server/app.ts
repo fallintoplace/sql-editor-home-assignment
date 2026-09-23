@@ -83,7 +83,7 @@ export function createApp(config: Config, overrides: {
         res.setHeader('Referrer-Policy', 'no-referrer');
         res.setHeader('X-Frame-Options', 'DENY');
         res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
-        res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws://localhost:5173 ws://127.0.0.1:5173; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
+        res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws://localhost:5173 ws://127.0.0.1:5173; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
         const allowedHosts = new Set([new URL(config.origin).host, `localhost:${config.port}`, `127.0.0.1:${config.port}`]);
         if (!allowedHosts.has(req.get('host') ?? ''))
             return res.status(403).json({ error: { code: 'HOST_NOT_ALLOWED', message: 'Use the configured application origin' } });

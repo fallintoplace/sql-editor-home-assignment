@@ -59,6 +59,7 @@ test('Native ClickHouse parser bytes are served same-origin behind the session b
     assert.equal(response.status, 200);
     assert.match(response.headers.get('content-type') ?? '', /^application\/wasm/);
     assert.match(response.headers.get('cache-control') ?? '', /private/);
+    assert.match(response.headers.get('content-security-policy') ?? '', /script-src 'self' 'wasm-unsafe-eval'/);
     assert.deepEqual(new Uint8Array(await response.arrayBuffer()), fixture);
 });
 test('Assistant evaluation report is available without a provider and keeps SQL out of the summary', async (t) => {

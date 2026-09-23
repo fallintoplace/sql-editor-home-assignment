@@ -1,5 +1,5 @@
 import express, { type Request, type Response, type ErrorRequestHandler } from 'express';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
@@ -25,7 +25,17 @@ import { OpenAIVoiceService, safetyIdentifier, type VoiceService } from './voice
 import { telemetry, recordRun } from './telemetry.js';
 type Driver = QueryDriver & ImportDriver & Pick<ClickHouseDriver, 'connection' | 'connections' | 'test' | 'targets' | 'profileEvidence' | 'profilePipeline' | 'systemTableDocumentation' | 'close'>;
 const MAX_WASM_PARSER_BYTES = 64 * 1024 * 1024;
+const CLICKHOUSE_PARSER_SHA256 = '82f4e5249c4c7ab609676f8b8420d5985e606ff2777d989df63f0a1dcb45ecb5';
 let parserWasmCache: Promise<Uint8Array> | undefined;
+export function verifyClickHouseParserWasm(bytes: Uint8Array): Uint8Array {
+    const buffer = Buffer.from(bytes);
+    if (bytes.length < 8 || bytes.length > MAX_WASM_PARSER_BYTES || !buffer.subarray(0, 4).equals(Buffer.from([0x00, 0x61, 0x73, 0x6d])))
+        throw new AppError(503, 'PARSER_UNAVAILABLE', 'The bundled ClickHouse native parser is invalid');
+    const digest = createHash('sha256').update(bytes).digest('hex');
+    if (digest !== CLICKHOUSE_PARSER_SHA256)
+        throw new AppError(503, 'PARSER_UNAVAILABLE', 'The bundled ClickHouse native parser failed its integrity check');
+    return bytes;
+}
 async function loadClickHouseParserWasm(): Promise<Uint8Array> {
     let bytes: Buffer;
     try {
@@ -33,9 +43,7 @@ async function loadClickHouseParserWasm(): Promise<Uint8Array> {
     } catch {
         throw new AppError(503, 'PARSER_UNAVAILABLE', 'The bundled ClickHouse native parser is unavailable');
     }
-    if (bytes.length < 8 || bytes.length > MAX_WASM_PARSER_BYTES || !bytes.subarray(0, 4).equals(Buffer.from([0x00, 0x61, 0x73, 0x6d])))
-        throw new AppError(503, 'PARSER_UNAVAILABLE', 'The bundled ClickHouse native parser is invalid');
-    return bytes;
+    return verifyClickHouseParserWasm(bytes);
 }
 function cachedClickHouseParserWasm(): Promise<Uint8Array> {
     parserWasmCache ??= loadClickHouseParserWasm().catch(error => {

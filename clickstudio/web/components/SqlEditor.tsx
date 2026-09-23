@@ -8,7 +8,7 @@ import { autocompletion, ifNotIn, nextSnippetField, prevSnippetField, type Compl
 import { sql, SQLDialect } from '@codemirror/lang-sql';
 import { setDiagnostics } from '@codemirror/lint';
 import type { ApiError, Schema } from '../../shared/types';
-import { nativeDiagnosticForStatement, nativeHighlightRanges, type NativeDiagnostic, type NativeHighlightType, type NativeParseSnapshot, type NativeParseStatement, type NativeParserStatus } from '../../shared/native-parser';
+import { nativeDiagnosticForStatement, nativeHighlightRanges, type NativeDiagnostic, type NativeHighlightType, type NativeParseSnapshot, type NativeParseStatement, type NativeParserFeatures, type NativeParserStatus } from '../../shared/native-parser';
 import { hasSqlComments, quoteIdentifier } from '../../shared/sql';
 import { activeStatementIndex, CLICKHOUSE_KEYWORDS, completionTarget, matchingNames, tableAliases as aliasesFor } from '../../shared/editor-tools';
 import { clickhouseSnippetCompletions, sqlEditorTools, sqlStatementOutline } from './editor-tools';
@@ -139,7 +139,7 @@ interface Props {
     onChange: (value: string) => void;
     onSelection: (from: number, to: number) => void;
     onRun: (script: boolean) => void;
-    onNativeParserStatus?: (status: NativeParserStatus) => void;
+    onNativeParserStatus?: (status: NativeParserStatus, features?: NativeParserFeatures) => void;
     onNativeParseSnapshot?: (snapshot?: NativeParseSnapshot) => void;
 }
 export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(props, ref) {
@@ -170,7 +170,7 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
                 } })] }) }); view.current = editor; return () => { editor.destroy(); view.current = undefined; }; }, []);
     useEffect(() => { const v = view.current; if (v && v.state.doc.toString() !== props.value)
         v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: props.value }, selection: { anchor: Math.min(props.from, props.value.length), head: Math.min(props.to, props.value.length) } }); }, [props.value]);
-    useEffect(() => clickHouseNativeParser.subscribe(status => current.current.onNativeParserStatus?.(status)), []);
+    useEffect(() => clickHouseNativeParser.subscribe((status, features) => current.current.onNativeParserStatus?.(status, features)), []);
     useEffect(() => {
         const editor = view.current, revision = ++validationRevision.current;
         nativeDiagnostics.current = [];

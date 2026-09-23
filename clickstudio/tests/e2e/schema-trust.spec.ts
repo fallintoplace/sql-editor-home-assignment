@@ -36,8 +36,9 @@ async function mockLiveWorkspace(page: Page, respondToSchema: (route: Route) => 
 
 async function revokeAccess(page: Page) {
     await page.locator('.connection-trigger').click();
-    await page.getByRole('dialog', { name: 'Connection details' }).getByRole('button', { name: 'Turn off read-only access', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Connection details' }).getByRole('button', { name: 'Disable query access', exact: true }).click();
     await expect(page.locator('.connection-quick-status')).toHaveText('Review needed');
+    await expect(page.locator('.toast-success')).toContainText('Query access was disabled. Review the connection again before running SQL.');
     await expect(page.getByText('Schema is private', { exact: true })).toBeVisible();
 }
 

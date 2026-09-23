@@ -1,20 +1,26 @@
-import type { NativeParseSnapshot, NativeParserStatus } from '../../shared/native-parser';
+import type { NativeParseSnapshot, NativeParserFeatures, NativeParserStatus } from '../../shared/native-parser';
 import { nativeHighlightRanges } from '../../shared/native-parser';
 import { Button, cx, Icon } from './ui';
 
 type Props = {
     status: NativeParserStatus;
+    features?: NativeParserFeatures;
     snapshot?: NativeParseSnapshot;
     onRetry: () => void;
 };
 
 const MAX_AST_PREVIEW_LENGTH = 100_000;
 
-export function NativeParserInspector({ status, snapshot, onRetry }: Props) {
+export function NativeParserInspector({ status, features, snapshot, onRetry }: Props) {
+    const capabilities = features ? [
+        features.format ? 'Formatting' : undefined,
+        features.dcl ? 'DCL parsing' : undefined,
+        features.astJson ? 'AST JSON' : undefined,
+    ].filter((feature): feature is string => Boolean(feature)).join(' · ') || 'Parsing only' : 'Capabilities unavailable';
     return <section className="inspector-section parser-inspector" aria-label="ClickHouse parser details">
         <div className={cx('parser-status-card', `parser-status-${status}`)}>
             <span className={cx('status-light', status === 'ready' ? 'is-trusted' : status === 'unavailable' ? 'is-warning' : 'is-running')}/>
-            <div><strong>ClickHouse native parser</strong><small>{status === 'ready' ? 'Ready · local WebAssembly' : status === 'loading' ? 'Loading parser…' : 'Unavailable'}</small></div>
+            <div><strong>ClickHouse native parser</strong><small>{status === 'ready' ? `Ready · local WebAssembly · ${capabilities}` : status === 'loading' ? 'Loading parser…' : 'Unavailable'}</small></div>
             {snapshot && <span className="parser-duration">{snapshot.elapsedMs.toFixed(1)} ms</span>}
             {status === 'unavailable' && <Button variant="ghost" className="toolbar-small" onClick={onRetry}>Retry</Button>}
         </div>

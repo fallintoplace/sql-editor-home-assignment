@@ -1,28 +1,35 @@
-import type { NativeFormatResult, NativeParseResult, NativeParserStatus } from '../shared/native-parser';
+import type { NativeFormatResult, NativeParseResult, NativeParserFeatures, NativeParserStatus } from '../shared/native-parser';
 
 type RequestKind = 'parseMany' | 'formatMany';
 type WorkerRequest = { id: number; kind: RequestKind; sql: string[] };
 type WorkerReply =
     | { id: number; ok: true; results: Array<NativeParseResult | NativeFormatResult> }
     | { id: number; ok: false; message: string };
-type WorkerStatus = { kind: 'status'; status: Exclude<NativeParserStatus, 'loading'>; reason?: string };
+type WorkerStatus =
+    | { kind: 'status'; status: 'ready'; features: NativeParserFeatures }
+    | { kind: 'status'; status: 'unavailable'; reason?: string };
 type Pending = { resolve: (value: Array<NativeParseResult | NativeFormatResult>) => void; reject: (error: Error) => void };
 
 class ClickHouseNativeParser {
     private worker?: Worker;
     private nextId = 1;
     private pending = new Map<number, Pending>();
-    private listeners = new Set<(status: NativeParserStatus) => void>();
+    private listeners = new Set<(status: NativeParserStatus, features?: NativeParserFeatures) => void>();
     private state: NativeParserStatus = 'loading';
     private reason = '';
+    private parserFeatures?: NativeParserFeatures;
 
     get status(): NativeParserStatus {
         return this.state;
     }
 
-    subscribe(listener: (status: NativeParserStatus) => void): () => void {
+    get features(): NativeParserFeatures | undefined {
+        return this.parserFeatures;
+    }
+
+    subscribe(listener: (status: NativeParserStatus, features?: NativeParserFeatures) => void): () => void {
         this.listeners.add(listener);
-        listener(this.state);
+        listener(this.state, this.parserFeatures);
         this.ensureWorker();
         return () => {
             this.listeners.delete(listener);
@@ -59,7 +66,7 @@ class ClickHouseNativeParser {
         worker.addEventListener('message', event => {
             const data = event.data as WorkerReply | WorkerStatus;
             if (!('id' in data)) {
-                this.setStatus(data.status, data.reason);
+                this.setStatus(data.status, data.status === 'unavailable' ? data.reason : '', data.status === 'ready' ? data.features : undefined);
                 return;
             }
             const pending = this.pending.get(data.id);
@@ -93,13 +100,17 @@ class ClickHouseNativeParser {
         });
     }
 
-    private setStatus(status: NativeParserStatus, reason = '') {
-        if (status === this.state && reason === this.reason)
+    private setStatus(status: NativeParserStatus, reason = '', features?: NativeParserFeatures) {
+        const sameFeatures = this.parserFeatures?.format === features?.format
+            && this.parserFeatures?.dcl === features?.dcl
+            && this.parserFeatures?.astJson === features?.astJson;
+        if (status === this.state && reason === this.reason && sameFeatures)
             return;
         this.state = status;
         this.reason = reason;
+        this.parserFeatures = status === 'ready' ? features : undefined;
         for (const listener of this.listeners)
-            listener(status);
+            listener(status, this.parserFeatures);
         if (status === 'unavailable')
             this.rejectPending(reason || 'ClickHouse native parser is unavailable');
     }

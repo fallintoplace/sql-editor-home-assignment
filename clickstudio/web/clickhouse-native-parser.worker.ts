@@ -1,4 +1,4 @@
-import { parseNativeParseResult, type NativeFormatResult, type NativeParseResult } from '../shared/native-parser';
+import { nativeParserFeaturesFromFlags, parseNativeParseResult, type NativeFormatResult, type NativeParseResult, type NativeParserFeatures } from '../shared/native-parser';
 
 type ParserExports = {
     memory: WebAssembly.Memory;
@@ -15,7 +15,9 @@ type WorkerRequest = { id: number; kind: 'parseMany' | 'formatMany'; sql: string
 type WorkerReply =
     | { id: number; ok: true; results: Array<NativeParseResult | NativeFormatResult> }
     | { id: number; ok: false; message: string };
-type WorkerStatus = { kind: 'status'; status: 'ready' | 'unavailable'; reason?: string };
+type WorkerStatus =
+    | { kind: 'status'; status: 'ready'; features: NativeParserFeatures }
+    | { kind: 'status'; status: 'unavailable'; reason?: string };
 
 const worker = globalThis as unknown as {
     postMessage: (message: WorkerReply | WorkerStatus) => void;
@@ -32,7 +34,7 @@ function message(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-async function instantiate(bytes: Uint8Array): Promise<ParserExports> {
+async function instantiate(bytes: Uint8Array): Promise<{ exports: ParserExports; features: NativeParserFeatures }> {
     let memory: WebAssembly.Memory | undefined;
     const view = () => {
         if (!memory)
@@ -93,15 +95,27 @@ async function instantiate(bytes: Uint8Array): Promise<ParserExports> {
         preview1[imported.name] ??= notSupported;
     }
     const instance = await WebAssembly.instantiate(module, { wasi_snapshot_preview1: preview1 });
-    const exports = instance.exports as unknown as ParserExports;
-    memory = exports.memory;
-    if (!(memory instanceof WebAssembly.Memory))
+    const wasmExports = instance.exports;
+    const wasmMemory = wasmExports.memory;
+    if (!(wasmMemory instanceof WebAssembly.Memory))
         throw new Error('ClickHouse parser did not export WebAssembly memory');
+    const requiredFunctions = ['ch_features', 'ch_alloc', 'ch_free', 'ch_parse', 'ch_result_data', 'ch_result_size'] as const;
+    for (const name of requiredFunctions) {
+        if (typeof wasmExports[name] !== 'function')
+            throw new Error(`ClickHouse parser ABI is missing ${name}`);
+    }
+    if (wasmExports._initialize !== undefined && typeof wasmExports._initialize !== 'function')
+        throw new Error('ClickHouse parser ABI has an invalid _initialize export');
+    const exports = wasmExports as unknown as ParserExports;
+    memory = wasmMemory;
     exports._initialize?.();
-    return exports;
+    const features = nativeParserFeaturesFromFlags(exports.ch_features());
+    if (features.format && typeof exports.ch_format !== 'function')
+        throw new Error('ClickHouse parser ABI advertises formatting but is missing ch_format');
+    return { exports, features };
 }
 
-function createParser(exports: ParserExports) {
+function createParser(exports: ParserExports, features: NativeParserFeatures) {
     const call = (entry: (ptr: number, size: number) => number, input: string) => {
         const bytes = encoder.encode(input), ptr = exports.ch_alloc(bytes.length);
         if (!ptr && bytes.length)
@@ -135,7 +149,7 @@ function createParser(exports: ParserExports) {
             }
         },
         format(sql: string): NativeFormatResult {
-            if (typeof exports.ch_format !== 'function')
+            if (!features.format || typeof exports.ch_format !== 'function')
                 return { error: { message: 'Formatting is unavailable in this ClickHouse parser build' } };
             const result = call((ptr, size) => exports.ch_format!(ptr, size, 0), sql);
             return result.ok ? { sql: result.out } : { error: { message: result.out } };
@@ -150,8 +164,12 @@ async function initialize() {
         const response = await fetch('/api/editor/clickhouse-parser.wasm');
         if (!response.ok)
             throw new Error(`ClickHouse parser artifact returned HTTP ${response.status}`);
-        const parser = createParser(await instantiate(new Uint8Array(await response.arrayBuffer())));
-        worker.postMessage({ kind: 'status', status: 'ready' });
+        const initialized = await instantiate(new Uint8Array(await response.arrayBuffer()));
+        const parser = createParser(initialized.exports, initialized.features);
+        const abiProbe = parser.parse('SELECT 1');
+        if (abiProbe.error)
+            throw new Error(`ClickHouse parser failed its startup ABI check: ${abiProbe.error.message}`);
+        worker.postMessage({ kind: 'status', status: 'ready', features: initialized.features });
         return parser;
     } catch (error) {
         const reason = message(error);

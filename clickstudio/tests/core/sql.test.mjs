@@ -30,7 +30,7 @@ for (const sql of [
     'SHOW CREATE DICTIONARY event_types', 'SHOW CREATE USER analyst', 'SHOW CREATE ROLE reader',
     'SHOW CREATE ROW POLICY tenant_policy ON events', 'SHOW CREATE QUOTA analyst_quota',
     'SHOW CREATE SETTINGS PROFILE analyst_profile', 'SHOW SETTINGS', "SHOW SETTINGS LIKE 'max_threads'",
-    "SHOW CHANGED SETTINGS ILIKE '%memory%'",
+    "SHOW CHANGED SETTINGS ILIKE '%memory%'", "SELECT format('{} events', count()) FROM events", "SELECT format('{}', 1)",
 ])
     test(`Read-only accepts ${sql}`, () => assert.doesNotThrow(() => guardSql(sql)));
 for (const sql of [

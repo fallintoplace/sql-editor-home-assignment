@@ -1,8 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nativeDiagnosticForStatement, nativeHighlightRanges, parseNativeParseResult, sourcePositionFromUtf8ByteOffset, utf8ByteOffsetToUtf16Index } from '../../.core-build/shared/native-parser.js';
+import { nativeDiagnosticForStatement, nativeHighlightRanges, nativeParserFeaturesFromFlags, parseNativeParseResult, sourcePositionFromUtf8ByteOffset, utf8ByteOffsetToUtf16Index } from '../../.core-build/shared/native-parser.js';
 
 const bytes = value => new TextEncoder().encode(value).length;
+
+test('native parser feature flags expose only capabilities present in the build', () => {
+    assert.deepEqual(nativeParserFeaturesFromFlags(7), { format: true, dcl: true, astJson: true });
+    assert.deepEqual(nativeParserFeaturesFromFlags(1), { format: true, dcl: false, astJson: false });
+    assert.deepEqual(nativeParserFeaturesFromFlags(8), { format: false, dcl: false, astJson: false });
+    assert.throws(() => nativeParserFeaturesFromFlags(-1), /invalid feature flags/);
+    assert.throws(() => nativeParserFeaturesFromFlags(1.5), /invalid feature flags/);
+});
 
 test('UTF-8 parser offsets map to JavaScript UTF-16 indices', () => {
     const value = "SELECT '你好🙂' FROM events";

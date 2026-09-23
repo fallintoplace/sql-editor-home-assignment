@@ -33,6 +33,8 @@ export function guardSql(sql: string, parameters: Record<string, string> = {}): 
                 continue;
             if (upper === 'SETTINGS' && token === showSettings)
                 continue;
+            if (upper === 'FORMAT' && tokens[i + 1]?.text === '(')
+                continue;
             // `system.tables` is a qualified identifier, not a SYSTEM command.
             if (upper === 'SYSTEM' && tokens[i + 1]?.text === '.')
                 continue;

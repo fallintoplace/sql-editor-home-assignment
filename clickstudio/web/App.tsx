@@ -106,7 +106,7 @@ function App() {
                         {session.demo ? 'This demo uses sample data. Your SQL is not sent to a real database.' : connection.trusted ? 'Read-only access is on. Queries can read data but cannot change it.' : 'Review this connection before you run a query.'}
                     </p>
                     {(!session.demo || !connection.trusted) && <Button variant={connection.trusted ? 'ghost' : 'primary'} className="connection-menu-action" disabled={trustActionBusy} onClick={() => void runTrustAction()}>
-                        {trustActionBusy ? 'Saving…' : session.demo ? 'Start exploring' : connection.trusted ? 'Turn off read-only access' : 'Review connection'}
+                        {trustActionBusy ? 'Saving…' : session.demo ? 'Start exploring' : connection.trusted ? 'Disable query access' : 'Review connection'}
                     </Button>}
                     {otherConnections.length > 0 && <div className="connection-switch-list">
                         <span className="connection-menu-heading">Switch connection</span>

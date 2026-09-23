@@ -23,17 +23,19 @@ async function runQuery(page: Page) {
     return results;
 }
 
-function parserWorkerStub(initialStatus: 'ready' | 'unavailable', initialResult: unknown = {}) {
+function parserWorkerStub(initialStatus: 'ready' | 'unavailable', initialResult: unknown = {}, features = { format: true, dcl: true, astJson: true }) {
     return `(() => {
         const NativeWorker = window.Worker;
         let attempts = 0;
         window.__nativeParserResult = ${JSON.stringify(initialResult)};
+        const features = ${JSON.stringify(features)};
         class FakeParserWorker extends EventTarget {
             constructor() {
                 super();
                 const status = attempts++ === 0 ? ${JSON.stringify(initialStatus)} : 'ready';
                 window.__testParserWorker = this;
-                queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', { data: { kind: 'status', status, reason: 'Temporary parser failure' } })));
+                const data = { kind: 'status', status, reason: 'Temporary parser failure', ...(status === 'ready' ? { features } : {}) };
+                queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', { data })));
             }
             postMessage(request) {
                 if (request.kind === 'parseMany') {
@@ -42,7 +44,7 @@ function parserWorkerStub(initialStatus: 'ready' | 'unavailable', initialResult:
                     if (window.__delayNativeParser) window.__resolveDelayedNativeParse = () => this.dispatchEvent(new MessageEvent('message', { data: reply }));
                     else queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', { data: reply })));
                 }
-                else window.__pendingParserFormat = request.id;
+                else { window.__parserFormatCount = (window.__parserFormatCount || 0) + 1; window.__pendingParserFormat = request.id; }
             }
             terminate() {}
         }
@@ -96,6 +98,29 @@ test('Native parser can be retried after a temporary worker failure', async ({ p
     await expect.poll(() => page.evaluate(() => Number((window as any).__parserParseCount ?? 0))).toBeGreaterThan(0);
 });
 
+test('Native parser verifies the bundled ABI with a parse before reporting ready', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByText('Native parser', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'ClickHouse parser', exact: true }).click();
+    await expect(page.locator('.parser-status-card')).toContainText('Ready · local WebAssembly');
+});
+
+test('Native parser stays unavailable when the WASM module is missing required ABI exports', async ({ page }) => {
+    const memoryOnlyWasm = Buffer.from([
+        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+        0x05, 0x03, 0x01, 0x00, 0x01,
+        0x07, 0x0a, 0x01, 0x06, 0x6d, 0x65, 0x6d, 0x6f, 0x72, 0x79, 0x02, 0x00,
+    ]);
+    await page.route('**/api/editor/clickhouse-parser.wasm', route => route.fulfill({ status: 200, contentType: 'application/wasm', body: memoryOnlyWasm }));
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'Retry parser', exact: true })).toBeVisible();
+    await expect(page.getByText('Native parser', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'ClickHouse parser', exact: true }).click();
+    await expect(page.locator('.parser-status-unavailable')).toBeVisible();
+});
+
 test('Expert parser inspector shows native AST, UTF-8 semantic highlights, and expected tokens', async ({ page }) => {
     const sql = "SELECT '🙂', uniqExact(user_id) FROM events";
     const functionPrefix = "SELECT '🙂', ";
@@ -113,6 +138,7 @@ test('Expert parser inspector shows native AST, UTF-8 semantic highlights, and e
 
     await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
     await page.getByRole('menuitem', { name: 'ClickHouse parser', exact: true }).click();
+    await expect(page.locator('.parser-status-card')).toContainText('Formatting · DCL parsing · AST JSON');
     await expect(page.getByText('SelectWithUnionQuery', { exact: true })).toBeVisible();
     await page.getByText('View native AST', { exact: true }).click();
     await expect(page.getByText(/"type": "SelectWithUnionQuery"/)).toBeVisible();
@@ -169,6 +195,16 @@ test('Failed async formatting does not overwrite edits typed while it was pendin
     await page.evaluate(() => (window as any).__failParserWorker());
     await expect(page.locator('.cm-content')).toContainText('new_value');
     await expect(page.locator('.cm-content')).not.toContainText('old_value');
+});
+
+test('SQL formatting uses the fallback when the parser build lacks native formatting', async ({ page }) => {
+    await page.addInitScript(parserWorkerStub('ready', {}, { format: false, dcl: true, astJson: true }));
+    await page.goto('/');
+    await expect(page.getByText('Native parser', { exact: true })).toBeVisible();
+    await replaceSql(page, 'select value from events');
+    await page.getByRole('button', { name: 'Format', exact: true }).click();
+    await expect(page.locator('.cm-content')).toContainText('FROM');
+    await expect.poll(() => page.evaluate(() => Number((window as any).__parserFormatCount ?? 0))).toBe(0);
 });
 
 test('Connection switches keep run evidence isolated and recover each connection workspace', async ({ page }) => {

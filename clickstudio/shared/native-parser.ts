@@ -1,5 +1,17 @@
 export type NativeParserStatus = 'loading' | 'ready' | 'unavailable';
 
+export interface NativeParserFeatures {
+    format: boolean;
+    dcl: boolean;
+    astJson: boolean;
+}
+
+export function nativeParserFeaturesFromFlags(flags: number): NativeParserFeatures {
+    if (!Number.isSafeInteger(flags) || flags < 0)
+        throw new Error('ClickHouse parser returned invalid feature flags');
+    return { format: (flags & 1) !== 0, dcl: (flags & 2) !== 0, astJson: (flags & 4) !== 0 };
+}
+
 export interface NativeParseError {
     message: string;
     begin?: number;

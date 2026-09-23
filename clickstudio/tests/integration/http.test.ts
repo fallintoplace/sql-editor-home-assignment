@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { AddressInfo } from 'node:net';
-import { randomUUID } from 'node:crypto';
-import { createApp } from '../../server/app.js';
+import { createHash, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { createApp, verifyClickHouseParserWasm } from '../../server/app.js';
 import { loadConfig } from '../../server/config.js';
 import { MemoryStore } from '../../core/store.js';
 import { DemoDriver } from '../../server/demo.js';
@@ -95,6 +96,14 @@ test('Vendored ClickHouse parser artifact is served without a remote fetch', asy
     const bytes = new Uint8Array(await response.arrayBuffer());
     assert.ok(bytes.length >= 8 && bytes.length <= 64 * 1024 * 1024);
     assert.deepEqual([...bytes.slice(0, 8)], [0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+    const manifest = await readFile(new URL('../../vendor/clickhouse-parser/SHA256SUMS', import.meta.url), 'utf8');
+    const expectedDigest = manifest.match(/^([a-f0-9]{64})\s+parser\.wasm$/m)?.[1];
+    assert.ok(expectedDigest, 'parser checksum manifest should contain parser.wasm');
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), expectedDigest);
+    assert.doesNotThrow(() => verifyClickHouseParserWasm(bytes));
+    const altered = bytes.slice();
+    altered[altered.length - 1] = (altered.at(-1) ?? 0) ^ 1;
+    assert.throws(() => verifyClickHouseParserWasm(altered), { code: 'PARSER_UNAVAILABLE' });
 });
 test('Assistant evaluation report is available without a provider and keeps SQL out of the summary', async (t) => {
     const s = await start();

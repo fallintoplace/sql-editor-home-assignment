@@ -11,7 +11,7 @@ import { AssistantWorkflow } from './components/AssistantWorkflow';
 import { ChartView, InsightsView, ResultGrid } from './components/ResultViews';
 import { InspectorPane, type InspectorPaneProps } from './components/InspectorPane';
 import { Button, cx, Icon, Status, terminal } from './components/ui';
-import { EmptyWorkspace, ExecutionBar, RailButton, ScriptResults } from './components/WorkspaceChrome';
+import { ExecutionBar, RailButton, RunActionMenu, ScriptResults } from './components/WorkspaceChrome';
 import { checkpoint, closeDraft, draftFromDocument, MAX_TABS, newDraft, recover, reopenDraft, type Draft, type WorkspaceState } from './workspace-state';
 import { draftSaveStatus, rememberRunIds } from '../shared/workbench-view';
 import type { NativeParserStatus } from '../shared/native-parser';
@@ -71,6 +71,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [view, setView] = useState<ResultsView>('results');
     const [inspector, setInspector] = useState<Inspector>('schema');
     const [drawerOpen, setDrawerOpen] = useState(false);
+    const [compactViewport, setCompactViewport] = useState(() => window.matchMedia('(max-width: 850px)').matches);
     const [importOpen, setImportOpen] = useState(false);
     const [busy, setBusy] = useState<BusyAction>('');
     const [error, setError] = useState('');
@@ -103,6 +104,16 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const assistantRequestRef = useRef(0);
     const currentConnection = connections.find(item => item.id === connection.id) ?? connection;
     const trusted = currentConnection.trusted;
+
+    useEffect(() => {
+        const media = window.matchMedia('(max-width: 850px)');
+        const update = () => {
+            setCompactViewport(media.matches);
+            if (!media.matches) setDrawerOpen(false);
+        };
+        media.addEventListener('change', update);
+        return () => media.removeEventListener('change', update);
+    }, []);
     const trustedRef = useRef(trusted);
     trustedRef.current = trusted;
     const schemaRequestRef = useRef(0);
@@ -407,7 +418,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
 
     const showInspector = (next: Inspector) => {
         setInspector(next);
-        if (experience === 'beginner') setDrawerOpen(true);
+        if (experience === 'beginner' || compactViewport) setDrawerOpen(true);
         if (next === 'profile') void perform(loadProfile, 'save');
         if (next === 'pipeline') void perform(loadPipeline, 'save');
     };
@@ -486,6 +497,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         onDecideProposal: (decision: 'accepted' | 'rejected') => void decideAssistantProposal(decision),
         onRunQuery: () => void execute(),
         runDisabled: !trusted || Boolean(busy),
+        expert: experience === 'expert',
     } satisfies InspectorPaneProps;
 
     return <div className={cx('workspace-root', experience === 'expert' && 'is-expert')}>
@@ -505,6 +517,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                 <span className="rail-separator"/>
                 <button className="rail-icon-button rail-icon-muted" type="button" title="Export local drafts" onClick={() => download('clickstudio-local-drafts.json', workspace)}><Icon name="settings"/></button>
             </aside>
+
+            {experience === 'expert' && <InspectorPane {...inspectorProps}/>}
 
             <main className="workbench-main">
                 <div className="document-tabs" role="tablist" aria-label="SQL documents">
@@ -526,7 +540,13 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         setWorkspace(current => ({ ...current, activeId: nextDraft.id }));
                         window.requestAnimationFrame(() => document.getElementById(`document-tab-${nextDraft.id}`)?.focus());
                     }}>
-                        <span className="tab-file-dot"/><span className="document-tab-name">{draft.name}</span>{draft.serverId ? <span className="tab-revision">r{draft.baseRevision}</span> : <span className="tab-unsaved"/>}<button type="button" aria-label={`Close ${draft.name}`} onClick={event => { event.stopPropagation(); setWorkspace(current => closeDraft(current, draft.id)); }}>×</button>
+                        <span className="document-tab-name">{draft.name}</span>{(() => {
+                            const status = draftSaveStatus(draft, connection.id, documents.find(document => document.id === draft.serverId), {
+                                saving: Boolean(savingDraftIds[draft.id]), pending: !documentsLoaded, readError: documentsReadError,
+                            });
+                            const unsaved = ['local', 'changed', 'conflict', 'deleted', 'unavailable'].includes(status.state);
+                            return unsaved ? <span className="tab-unsaved" title={status.label} aria-hidden="true"/> : null;
+                        })()}<button type="button" aria-label={`Close ${draft.name}`} onClick={event => { event.stopPropagation(); setWorkspace(current => closeDraft(current, draft.id)); }}>×</button>
                     </div>)}
                     <button className="new-tab-button" type="button" title="New SQL tab" onClick={() => addDraft(newDraft())}><Icon name="plus"/></button>
                     {!!workspace.closedTabs?.length && <button className="new-tab-button reopen-tab-button" type="button" aria-label="Reopen closed tab" title="Reopen closed tab" onClick={() => {
@@ -537,17 +557,24 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     <span className="draft-status" data-save-state={saveStatus.state} title={`${saveStatus.label}. ${saveStatus.detail}`}><span className={cx('status-light', saveStatus.state === 'saved' ? 'is-trusted' : ['changed', 'conflict', 'deleted', 'unavailable'].includes(saveStatus.state) ? 'is-warning' : '')}/>{saveStatusLabel}</span>
                 </div>
 
-                <div id="sql-document-panel" role="tabpanel" aria-labelledby={`document-tab-${active.id}`} tabIndex={0} className={cx('workspace-content', experience === 'beginner' && 'beginner-workspace-content', experience === 'beginner' && run && 'has-run')}>
+                <div id="sql-document-panel" role="tabpanel" aria-labelledby={`document-tab-${active.id}`} tabIndex={0} className={cx('workspace-content', experience === 'beginner' && 'beginner-workspace-content', run && 'has-run')}>
                     {experience === 'beginner' ? <AssistantWorkflow mode="beginner" sql={active.sql} action={assistantAction} onActionChange={changeAssistantAction} question={assistantQuestion} onQuestionChange={changeAssistantQuestion} context={assistantContext} proposal={assistantProposal} busy={assistantBusy} error={assistantError} trusted={trusted} runId={run?.id} includeResult={includeResult} onIncludeResult={setIncludeResult} onVoiceInput={startVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={() => void prepareAssistantContext('generate', assistantQuestion)} onRequestProposal={() => void requestAssistantProposal()} onDecideProposal={decision => void decideAssistantProposal(decision)} onRunQuery={() => void execute()} runDisabled={!trusted || Boolean(busy)} onSave={() => void saveDraft()} saveDisabled={Boolean(busy)}/> : <section className="editor-surface">
                         <div className="editor-heading">
                             <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">QUERY</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label><span className="edit-indicator" title={active.serverId ? `Saved revision ${active.baseRevision}` : 'Only in this browser'}>{active.serverId ? `REV ${active.baseRevision}` : 'LOCAL'}</span></div>
-                            <div className="editor-heading-actions"><Button variant="ghost" className="toolbar-small" title={nativeParserStatus === 'ready' ? 'Format with the native ClickHouse parser' : 'Format SQL'} onClick={() => void formatActiveSql()}>Format</Button><Button variant="secondary" aria-label={copy.common.saveRevision} onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/> {copy.common.save}</Button></div>
+                            <div className="editor-heading-actions"><Button variant="ghost" className="toolbar-small" title={nativeParserStatus === 'ready' ? 'Format with the native ClickHouse parser' : 'Format SQL'} onClick={() => void formatActiveSql()}>Format</Button></div>
                         </div>
                         <div className="editor-toolbar">
                             <div className="editor-mode-label"><span className="editor-language-dot"/>ClickHouse SQL<span className="toolbar-divider"/><span>{statementCount === undefined ? 'Incomplete SQL' : `${statementCount} statement${statementCount === 1 ? '' : 's'}`}</span>{nativeParserStatus === 'ready' && <><span className="toolbar-divider"/><span title="Syntax checks and formatting run locally in a Web Worker using ClickHouse's native parser.">Native parser</span></>}</div>
                             <div className="editor-actions">
-                                {experience === 'expert' && <><Button variant="ghost" className="toolbar-small" onClick={() => void execute(false, 'explain')} disabled={!trusted || Boolean(busy) || !connection.manifest?.explain.available} title={connection.manifest?.explain.reason}>EXPLAIN</Button><Button variant="ghost" className="toolbar-small" onClick={() => void execute(false, 'pipeline')} disabled={!trusted || Boolean(busy) || !connection.manifest?.pipeline.available} title={connection.manifest?.pipeline.reason}>PIPELINE</Button><Button variant="ghost" className="toolbar-small" onClick={() => void execute(true)} disabled={!trusted || Boolean(busy) || !connection.manifest?.scripts.available} title={connection.manifest?.scripts.reason}>Run script</Button></>}
-                                <Button variant="primary" className="run-query-button" aria-label={copy.common.runStatement} onClick={() => void execute()} disabled={!trusted || Boolean(busy)}><Icon name="play"/>{busy === 'run' ? 'Running…' : copy.common.run}<kbd>⌘ ↵</kbd></Button>
+                                {experience === 'expert' && <>
+                                    <Button variant="ghost" className="sql-ai-button" aria-pressed={inspector === 'assistant'} onClick={() => showInspector('assistant')}><Icon name="assistant"/>SQL AI</Button>
+                                    <Button variant="secondary" className="save-revision-button" aria-label={copy.common.saveRevision} onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/>{copy.common.save}</Button>
+                                    <RunActionMenu runLabel={copy.common.runStatement} running={busy === 'run' || busy === 'script'} disabled={!trusted || Boolean(busy)} onRun={() => void execute()} actions={[
+                                        { label: 'Run script', shortcut: '⌘ ⇧ ↵', disabled: !trusted || Boolean(busy) || !connection.manifest?.scripts.available, title: connection.manifest?.scripts.reason, onSelect: () => void execute(true) },
+                                        { label: 'EXPLAIN', disabled: !trusted || Boolean(busy) || !connection.manifest?.explain.available, title: connection.manifest?.explain.reason, onSelect: () => void execute(false, 'explain') },
+                                        { label: 'EXPLAIN PIPELINE', disabled: !trusted || Boolean(busy) || !connection.manifest?.pipeline.available, title: connection.manifest?.pipeline.reason, onSelect: () => void execute(false, 'pipeline') },
+                                    ]}/>
+                                </>}
                             </div>
                         </div>
                         <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus}/></div>
@@ -555,7 +582,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         <div className="editor-footer"><span><span className="key-hint">⌘↵</span> Run current statement <span className="footer-dot">·</span> <span className="key-hint">⌘⇧↵</span> Run script</span><span>{active.sql.length.toLocaleString()} characters <span className="footer-dot">·</span> {active.sql.split('\n').length} lines</span></div>
                     </section>}
 
-                    {(experience === 'expert' || run) && <section className={cx('results-surface', experience === 'expert' && 'results-expert')} aria-label="Query results">
+                    {run && <section className={cx('results-surface', experience === 'expert' && 'results-expert')} aria-label="Query results">
                         <div className="results-header">
                             <div className="results-title"><span className="results-mark"><Icon name="chart"/></span><div><span className="eyebrow">WORKSPACE OUTPUT</span><h2>{copy.common.results}</h2></div>{run && <Status run={run}/>}</div>
                             <div className="results-actions">
@@ -569,8 +596,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             update(active.id, draft => ({ ...draft, activeRunId: runId }));
                             setPage(0); setView('results');
                         }} onCancel={() => void cancel()} cancelDisabled={Boolean(busy)}/>}
-                        {!run && experience === 'expert' && <EmptyWorkspace onRun={() => editor.current?.focus()} beginner={false}/>}
-                        {!run && experience === 'beginner' && <div className="beginner-results-empty"><span className="beginner-results-orb"><Icon name="chart"/></span><span className="eyebrow">YOUR RESULTS</span><strong>They’ll appear here.</strong><p>Create a query with AI, review it, then run it when you’re ready.</p></div>}
                         {run && view === 'results' && <ResultGrid key={run.id} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/>}
                         {run && view === 'chart' && <ChartView result={snapshot} loading={!snapshot && run.resultState === 'reopenable'} chart={active.chart} onChart={chart => patch({ chart })}/>}
                         {run && view === 'insights' && <InsightsView run={run} profile={profile} pipeline={pipeline} pipelineAvailable={Boolean(trusted && connection.manifest?.pipeline.available)} onLoad={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} loading={busy === 'save'}/>}
@@ -578,8 +603,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                 </div>
             </main>
 
-            {experience === 'expert' && <InspectorPane {...inspectorProps}/>}
-            {experience === 'beginner' && drawerOpen && <><button className="drawer-backdrop" type="button" aria-label="Close panel" onClick={() => setDrawerOpen(false)}/><InspectorPane {...inspectorProps} drawer onClose={() => setDrawerOpen(false)} onInsert={value => { editor.current?.insert(value); setDrawerOpen(false); }} onOpenDocument={document => { openDocument(document); setDrawerOpen(false); }}/></>}
+            {drawerOpen && (experience === 'beginner' || compactViewport) && <><button className="drawer-backdrop" type="button" aria-label="Close panel" onClick={() => setDrawerOpen(false)}/><InspectorPane {...inspectorProps} drawer onClose={() => setDrawerOpen(false)} onInsert={value => { editor.current?.insert(value); setDrawerOpen(false); }} onOpenDocument={document => { openDocument(document); setDrawerOpen(false); }}/></>}
         </div>
         <ImportWizard open={importOpen} connectionId={connection.id} trusted={trusted} demoMode={demoMode} onClose={() => setImportOpen(false)} onImported={() => { void loadSchema(); setNotice('Import complete. The destination schema was refreshed.'); }}/>
         {run && <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} busy={Boolean(busy)} scriptRunning={script?.status === 'running'}/>}

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { AssistantAction, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Run, Schema } from '../../shared/types';
 import { quoteIdentifier } from '../../shared/sql';
 import { AssistantWorkflow } from './AssistantWorkflow';
@@ -51,6 +52,7 @@ export type InspectorPaneProps = {
     onDecideProposal: (decision: 'accepted' | 'rejected') => void;
     onRunQuery: () => void;
     runDisabled: boolean;
+    expert?: boolean;
     drawer?: boolean;
     onClose?: () => void;
 };
@@ -64,13 +66,18 @@ const inspectorTabs = [
     { id: 'assistant', icon: 'assistant' },
 ] as const satisfies readonly { id: Inspector; icon: IconName }[];
 
-export function InspectorPane({ inspector, setInspector, connection, schema, schemaLoading, schemaError, search, setSearch, tables, history, documents, run, profile, pipeline, onRefreshSchema, onRefreshHistory, onInsert, onOpenImport, onOpenRun, onOpenDocument, onLoadProfile, onLoadPipeline, connectionId, sql, trusted, runId, onRefreshDocuments, assistantAction, onAssistantAction, assistantQuestion, onAssistantQuestion, assistantContext, assistantProposal, assistantBusy, assistantError, includeResult, onIncludeResult, onVoiceInput, voiceListening, voiceError, onPreview, onRequestProposal, onDecideProposal, onRunQuery, runDisabled, drawer = false, onClose }: InspectorPaneProps) {
+export function InspectorPane({ inspector, setInspector, connection, schema, schemaLoading, schemaError, search, setSearch, tables, history, documents, run, profile, pipeline, onRefreshSchema, onRefreshHistory, onInsert, onOpenImport, onOpenRun, onOpenDocument, onLoadProfile, onLoadPipeline, connectionId, sql, trusted, runId, onRefreshDocuments, assistantAction, onAssistantAction, assistantQuestion, onAssistantQuestion, assistantContext, assistantProposal, assistantBusy, assistantError, includeResult, onIncludeResult, onVoiceInput, voiceListening, voiceError, onPreview, onRequestProposal, onDecideProposal, onRunQuery, runDisabled, expert = false, drawer = false, onClose }: InspectorPaneProps) {
     const visibleDocuments = documents.filter(document => document.connectionId === connectionId && !document.deletedAt);
     const closeButton = drawer && <Button variant="ghost" className="icon-only" aria-label="Close inspector" onClick={onClose}><Icon name="close"/></Button>;
+    const title = expert && inspector === 'schema' ? 'Tables' : expert && inspector === 'documents' ? 'Queries' : inspectorLabel(inspector);
 
-    return <aside className={cx('inspector-pane', drawer && 'is-drawer animate-drawer')}>
-        <header className="inspector-header"><div><span className="eyebrow">WORKSPACE INSPECTOR</span><h2>{inspectorLabel(inspector)}</h2></div>{closeButton}</header>
-        <nav className="inspector-tabs" aria-label="Inspector panels">{inspectorTabs.filter(item => item.id !== 'details' || Boolean(run)).map(item => <button key={item.id} type="button" aria-label={inspectorLabel(item.id)} title={inspectorLabel(item.id)} aria-pressed={inspector === item.id} onClick={() => setInspector(item.id)}><Icon name={item.icon}/></button>)}</nav>
+    return <aside className={cx('inspector-pane', expert && 'is-expert-browser', drawer && 'is-drawer animate-drawer')}>
+        <header className="inspector-header"><div><span className="eyebrow">{expert ? 'BROWSE' : 'WORKSPACE INSPECTOR'}</span><h2>{title}</h2></div>{closeButton}</header>
+        {expert ? <nav className="inspector-tabs is-browser-tabs" aria-label="Workspace browser">
+            <button type="button" aria-label="Tables" aria-pressed={inspector === 'schema'} onClick={() => setInspector('schema')}><Icon name="schema"/><span>Tables</span></button>
+            <button type="button" aria-label="Queries" aria-pressed={inspector === 'documents'} onClick={() => setInspector('documents')}><Icon name="documents"/><span>Queries</span></button>
+            <InspectorMoreMenu inspector={inspector} onSelect={setInspector} items={inspectorTabs.filter(item => item.id === 'history' || Boolean(run) && (item.id === 'details' || item.id === 'pipeline'))} />
+        </nav> : <nav className="inspector-tabs" aria-label="Inspector panels">{inspectorTabs.filter(item => item.id !== 'details' || Boolean(run)).map(item => <button key={item.id} type="button" aria-label={inspectorLabel(item.id)} title={inspectorLabel(item.id)} aria-pressed={inspector === item.id} onClick={() => setInspector(item.id)}><Icon name={item.icon}/></button>)}</nav>}
         <div className="inspector-content">
             {inspector === 'schema' && <section className="inspector-section"><div className="inspector-search"><Icon name="search"/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search tables and columns…" aria-label="Search schema"/><kbd>⌘ F</kbd></div><div className="schema-heading"><span>{schema?.tables.length ?? 0} TABLES</span><div className="flex items-center gap-1.5"><Button variant="ghost" className="toolbar-small" onClick={onOpenImport}>Import data</Button><Button variant="ghost" className="toolbar-small" onClick={onRefreshSchema} disabled={schemaLoading || !trusted}>{schemaLoading ? 'Loading…' : 'Refresh'}</Button></div></div>{schemaError && <div className="callout callout-error">{schemaError}</div>}{!trusted && <div className="inspector-empty"><Icon name="lock"/><strong>Schema is private</strong><p>Trust the connection to inspect tables and columns.</p></div>}{schemaLoading && <div className="inspector-empty"><span className="loading-orbit"/><p>Reading ClickHouse schema…</p></div>}{trusted && schema && tables.map(table => <details className="schema-table" key={`${table.database}.${table.name}`} open={Boolean(search)}><summary><span className="table-glyph">▦</span><span className="schema-table-name"><strong>{table.name}</strong><small>{table.database}</small></span><span className="engine-tag">{table.engine}</span><Icon name="chevron" className="schema-chevron"/></summary><div className="schema-columns"><button type="button" className="insert-table-button" onClick={() => onInsert(`${quoteIdentifier(table.database)}.${quoteIdentifier(table.name)}`)}>Insert table name <span>↵</span></button>{schema.columns.filter(column => column.database === table.database && column.table === table.name && (!search || `${column.name} ${column.type}`.toLowerCase().includes(search.toLowerCase()))).map(column => <button type="button" className="schema-column" key={column.name} title={column.comment || column.type} onClick={() => onInsert(quoteIdentifier(column.name))}><span className="column-type-dot"/><span>{column.name}</span><code>{column.type}</code></button>)}</div></details>)}{trusted && schema && !tables.length && <div className="inspector-empty">No tables match this search.</div>}</section>}
             {inspector === 'history' && <section className="inspector-section"><div className="schema-heading"><span>RECENT RUNS</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshHistory}>↻ Refresh</Button></div>{history.length ? history.slice(0, 30).map(item => <button type="button" className="history-card" key={item.id} onClick={() => onOpenRun(item)}><span className={cx('run-state-mark', `state-${item.status}`)}/><span className="history-card-copy"><strong>{item.sql.replace(/\s+/g, ' ').slice(0, 58)}</strong><small>{new Date(item.createdAt).toLocaleString()} <i>·</i> {Math.round(item.elapsedMs)} ms <i>·</i> {item.rowCount.toLocaleString()} rows</small></span><span className="history-open">↗</span></button>) : <div className="inspector-empty"><Icon name="history"/><strong>No runs yet</strong><p>Your recent ClickHouse executions appear here.</p></div>}</section>}
@@ -81,6 +88,50 @@ export function InspectorPane({ inspector, setInspector, connection, schema, sch
         </div>
         <footer className="inspector-footer"><span className="connection-readonly"><Icon name="lock"/> Read only</span><span>{connection.name} <i>·</i> {connection.database}</span></footer>
     </aside>;
+}
+
+function InspectorMoreMenu({ inspector, onSelect, items }: { inspector: Inspector; onSelect: (inspector: Inspector) => void; items: Array<{ id: Inspector; icon: IconName }> }) {
+    const [open, setOpen] = useState(false);
+    const root = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null), menu = useRef<HTMLDivElement>(null);
+    const active = items.some(item => item.id === inspector);
+
+    useEffect(() => {
+        if (!open) return;
+        const closeOutside = (event: PointerEvent) => {
+            if (!root.current?.contains(event.target as Node)) setOpen(false);
+        };
+        const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+            if (event.key !== 'Escape') return;
+            event.preventDefault();
+            setOpen(false);
+            trigger.current?.focus();
+        };
+        const frame = window.requestAnimationFrame(() => menu.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus());
+        document.addEventListener('pointerdown', closeOutside);
+        document.addEventListener('keydown', closeOnEscape);
+        return () => {
+            window.cancelAnimationFrame(frame);
+            document.removeEventListener('pointerdown', closeOutside);
+            document.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [open]);
+
+    const moveMenuFocus = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+        const items = Array.from(menu.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+        if (!items.length) return;
+        const current = items.indexOf(document.activeElement as HTMLButtonElement);
+        const next = event.key === 'ArrowDown' ? (current + 1) % items.length
+            : event.key === 'ArrowUp' ? (current - 1 + items.length) % items.length
+                : event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : undefined;
+        if (next === undefined) return;
+        event.preventDefault();
+        items[next]?.focus();
+    };
+
+    return <div className="inspector-more" ref={root}>
+        <button ref={trigger} type="button" className={cx('inspector-more-trigger', active && 'is-active')} aria-label="More workspace panels" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>More <Icon name="chevron"/></button>
+        {open && <div className="inspector-more-menu" role="menu" aria-label="More workspace panels" ref={menu} onKeyDown={moveMenuFocus}>{items.map(item => <button key={item.id} type="button" role="menuitem" aria-pressed={inspector === item.id} onClick={() => { onSelect(item.id); setOpen(false); }}><Icon name={item.icon}/><span>{inspectorLabel(item.id)}</span></button>)}</div>}
+    </div>;
 }
 
 function RunDetails({ run, profile, onLoad }: { run?: Run; profile?: QueryProfile; onLoad: () => void }) {

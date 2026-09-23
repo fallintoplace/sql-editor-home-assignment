@@ -15,3 +15,8 @@ export async function trustCurrentConnection(page: Page) {
     if (await start.isVisible()) await start.click();
     if (await trigger.getAttribute('aria-expanded') === 'true') await trigger.click();
 }
+
+export async function runScript(page: Page) {
+    await page.getByRole('button', { name: 'More run options', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Run script' }).click();
+}

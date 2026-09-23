@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { trust, trustCurrentConnection } from './helpers.js';
+import { runScript, trust, trustCurrentConnection } from './helpers.js';
 
 async function replaceSql(page: Page, sql: string) {
     const editor = page.locator('.cm-content');
@@ -49,7 +49,7 @@ test('Run evidence stays with its draft through tab and mode switches', async ({
     await page.getByText('Expert', { exact: true }).click();
     await expect(page.locator('.execution-bar code')).toHaveText(firstQueryId);
     await expect(page.getByRole('group', { name: 'Workspace layouts' })).toHaveCount(0);
-    await expect(page.getByRole('navigation', { name: 'Inspector panels' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Workspace browser' })).toBeVisible();
     expect(runRequests).toBe(2);
 });
 
@@ -230,7 +230,7 @@ test('A delayed chart snapshot cannot update the draft after selecting another s
     try {
         await trust(page);
         await replaceSql(page, 'SELECT 1; SELECT 2;');
-        await page.getByRole('button', { name: 'Run script', exact: true }).click();
+        await runScript(page);
         const results = page.getByRole('region', { name: 'Query results', exact: true });
         const first = results.getByRole('button', { name: 'Statement 1: succeeded', exact: true });
         const second = results.getByRole('button', { name: 'Statement 2: succeeded', exact: true });
@@ -259,7 +259,8 @@ test('Refreshing run history replaces the visible list with the latest response'
     };
     await page.route(/\/api\/runs\?connectionId=demo$/, route => route.fulfill({ json: refreshed ? [run] : [] }));
     await trust(page);
-    await page.getByRole('button', { name: 'Runs', exact: true }).click();
+    await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Run history', exact: true }).click();
     await expect(page.getByText('No runs yet')).toBeVisible();
     refreshed = true;
     await page.getByRole('button', { name: /Refresh/ }).click();
@@ -292,7 +293,7 @@ test('A late AI context preview cannot attach to an edited question', async ({ p
 test('Scripts show each statement outcome and open that statement’s retained result', async ({ page }) => {
     await trust(page);
     await replaceSql(page, 'SELECT 1; SELECT fixture_error; SELECT 3;');
-    await page.getByRole('button', { name: 'Run script', exact: true }).click();
+    await runScript(page);
 
     const results = page.getByRole('region', { name: 'Query results', exact: true });
     await expect(results.getByLabel('Script statement results')).toContainText('partial');
@@ -334,7 +335,14 @@ test('Script polling persists every statement run ID, including fast intermediat
     };
     await page.route('**/api/scripts', route => route.fulfill({ status: 202, json: created }));
     await page.route('**/api/scripts/script-fast', route => route.fulfill({ json: completed }));
-    await page.getByRole('button', { name: 'Run script', exact: true }).click();
+    await page.route('**/api/runs/run-c', route => route.fulfill({ json: {
+        id: 'run-c', queryId: 'query-c', owner: 'local-owner', connectionId: 'demo', dataSource: 'fixture',
+        sql: 'SELECT 3', kind: 'query', parameters: {}, limits: { rows: 5000, bytes: 2000000, seconds: 30, memory: 536870912, threads: 4 },
+        tags: {}, status: 'succeeded', createdAt: created.createdAt, elapsedMs: 1, rowCount: 1, bytes: 8,
+        columns: [], warnings: [], sequence: 1, resultState: 'expired', requestedBy: 'local-owner', executedAs: 'fixture-reader',
+        permissionSnapshot: { readonly: true, role: 'owner' }, retryPolicy: 'never',
+    } }));
+    await runScript(page);
 
     const results = page.getByRole('region', { name: 'Query results', exact: true });
     await expect(results.getByRole('button', { name: 'Statement 3: succeeded', exact: true })).toBeVisible();
@@ -361,7 +369,7 @@ test('Script polling persists every statement run ID, including fast intermediat
 test('Selecting an earlier script statement stops automatic following while later work runs', async ({ page }) => {
     await trust(page);
     await replaceSql(page, 'SELECT 1; SELECT fixture_slow;');
-    await page.getByRole('button', { name: 'Run script', exact: true }).click();
+    await runScript(page);
 
     const results = page.getByRole('region', { name: 'Query results', exact: true });
     const first = results.getByRole('button', { name: 'Statement 1: succeeded', exact: true });

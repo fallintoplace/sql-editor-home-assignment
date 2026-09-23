@@ -114,9 +114,10 @@ test('Expert editor, insights, pipeline and AI copilot stay read-only until a us
     if (await loadDetails.count()) await loadDetails.click();
     await expect(results.getByText('Execution time', { exact: true })).toBeVisible();
 
-    await page.locator('.icon-rail').getByRole('button', { name: 'Pipeline', exact: true }).click();
+    await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Pipeline', exact: true }).click();
     await expect(page.locator('.pipeline-stage').first()).toBeVisible();
-    await page.locator('.icon-rail').getByRole('button', { name: 'AI', exact: true }).click();
+    await page.getByRole('button', { name: 'SQL AI', exact: true }).click();
     await page.locator('.assistant-panel select').selectOption('performance');
     await page.locator('.assistant-panel textarea').fill('Why is this query slow?');
     await page.getByRole('checkbox').check();

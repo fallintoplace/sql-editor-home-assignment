@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import type { QueryDocument, Run } from '../../shared/types';
-import { trust } from './helpers.js';
+import { runScript, trust } from './helpers.js';
 async function replaceSql(page: Page, sql: string) {
     await page.locator('.cm-content').click();
     await page.keyboard.press('ControlOrMeta+a');
@@ -49,7 +49,7 @@ test('Reopening and saving a metric keeps its saved contract and dependency', as
         await route.fulfill({ json: { ...savedDocument, ...savePayload, revision: 5, updatedAt: '2026-01-03T00:00:00.000Z' } });
     });
     await trust(page);
-    await page.getByRole('complementary', { name: 'Workspace tools' }).getByRole('button', { name: 'Documents', exact: true }).click();
+    await page.getByRole('navigation', { name: 'Workspace browser', exact: true }).getByRole('button', { name: 'Queries', exact: true }).click();
     await page.getByRole('button', { name: /Daily revenue/ }).click();
     await expect(page.locator('.cm-content')).toContainText(savedDocument.sql);
     await expect(page.locator('.execution-bar code')).toHaveText(savedRun.queryId);
@@ -160,7 +160,9 @@ test('Invalid limits explain the problem and block buttons, keyboard and palette
     await expect(rows).toHaveAttribute('aria-invalid', 'true');
     await expect(page.getByText('Maximum returned rows must be a whole number from 1 to 20,000.', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Run statement', exact: true })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Run script', exact: true })).toBeDisabled();
+    await page.getByRole('button', { name: 'More run options', exact: true }).click();
+    await expect(page.getByRole('menuitem', { name: 'Run script', exact: true })).toBeDisabled();
+    await page.keyboard.press('Escape');
     await expect(page.getByRole('button', { name: 'Save revision', exact: true })).toBeEnabled();
     await page.locator('.cm-content').click();
     await page.keyboard.press('ControlOrMeta+Enter');
@@ -277,7 +279,7 @@ test('Script history survives a later query and a reload', async ({ page }) => {
     const counts = requests(page);
     await trust(page);
     await replaceSql(page, 'SELECT 1; SELECT fixture_error; SELECT 3;');
-    await page.getByRole('button', { name: 'Run script', exact: true }).click();
+    await runScript(page);
     await expect(page.getByRole('button', { name: /Statement 2: failed/ })).toBeVisible();
     await expect(history(page).locator('.history-entry')).toHaveCount(2, { timeout: 10000 });
     await replaceSql(page, 'SELECT 4'); await runStatement(page);

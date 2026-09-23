@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { trust, trustCurrentConnection } from './helpers.js';
+import { runScript, trust, trustCurrentConnection } from './helpers.js';
 test('Run, chart, save, reload and retain the same run evidence', async ({ page }) => {
     const runs = countRunRequests(page);
     await trust(page);
@@ -23,7 +23,7 @@ test('A script exposes its failed run without losing editor text', async ({ page
     await editor.click();
     await page.keyboard.press('ControlOrMeta+a');
     await page.keyboard.insertText('SELECT 1; SELECT fixture_error; SELECT 3;');
-    await page.getByRole('button', { name: 'Run script', exact: true }).click();
+    await runScript(page);
     await expect(page.getByRole('status')).toContainText('Script started');
     await expect(page.getByRole('region', { name: 'Query results' })).toContainText('FIXTURE_ERROR: Deliberate fixture error');
     await expect(page.getByText('failed', { exact: true }).first()).toBeVisible();

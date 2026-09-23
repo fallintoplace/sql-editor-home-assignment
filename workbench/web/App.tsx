@@ -268,7 +268,6 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
     const [view, setView] = useState<ResultsView>('results');
     const [inspector, setInspector] = useState<Inspector>('schema');
     const [drawerOpen, setDrawerOpen] = useState(false);
-    const [layout, setLayout] = useState<'write' | 'analyze' | 'performance' | 'ai'>('write');
     const [busy, setBusy] = useState<BusyAction>('');
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
@@ -669,13 +668,6 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
         if (!q) return schema?.tables ?? [];
         return (schema?.tables ?? []).filter(table => `${table.database}.${table.name} ${table.engine}`.toLowerCase().includes(q) || schema?.columns.some(column => column.database === table.database && column.table === table.name && `${column.name} ${column.type}`.toLowerCase().includes(q)));
     }, [schema, search]);
-    const selectedLayout = (next: typeof layout) => {
-        setLayout(next);
-        if (next === 'write') setInspector('schema');
-        else if (next === 'analyze') { setInspector('details'); setView('results'); }
-        else if (next === 'performance') { setInspector('profile'); void perform(loadProfile, 'save'); }
-        else { setInspector('assistant'); }
-    };
     const saveStatusLabel = ({
         local: 'Local draft', checking: 'Checking save…', saving: 'Saving…', saved: `Saved r${active.baseRevision}`,
         changed: 'Unsaved changes', conflict: 'Newer revision available', deleted: 'Saved file in trash', unavailable: 'Save status unavailable',
@@ -710,7 +702,6 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
                         setWorkspace(current => reopenDraft(current));
                     }}>↶</button>}
                     <div className="tabs-spacer"/>
-                    {experience === 'expert' && <div className="layout-presets" role="group" aria-label="Workspace layouts">{(['write', 'analyze', 'performance', 'ai'] as const).map(item => <button key={item} type="button" aria-pressed={layout === item} onClick={() => selectedLayout(item)}>{item === 'write' ? 'Write' : item === 'analyze' ? 'Analyze' : item === 'performance' ? 'Performance' : 'AI'}</button>)}</div>}
                     <span className="draft-status" data-save-state={saveStatus.state} title={`${saveStatus.label}. ${saveStatus.detail}`}><span className={cx('status-light', saveStatus.state === 'saved' ? 'is-trusted' : ['changed', 'conflict', 'deleted', 'unavailable'].includes(saveStatus.state) ? 'is-warning' : '')}/>{saveStatusLabel}</span>
                 </div>
 

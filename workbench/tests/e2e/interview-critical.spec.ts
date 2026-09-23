@@ -48,6 +48,8 @@ test('Run evidence stays with its draft through tab and mode switches', async ({
     await expect(page.locator('.execution-bar code')).toHaveText(firstQueryId);
     await page.getByText('Expert', { exact: true }).click();
     await expect(page.locator('.execution-bar code')).toHaveText(firstQueryId);
+    await expect(page.getByRole('group', { name: 'Workspace layouts' })).toHaveCount(0);
+    await expect(page.getByRole('navigation', { name: 'Inspector panels' })).toBeVisible();
     expect(runRequests).toBe(2);
 });
 

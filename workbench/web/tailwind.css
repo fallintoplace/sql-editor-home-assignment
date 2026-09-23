@@ -230,10 +230,6 @@
     .new-tab-button:hover { border-color: var(--line); background: var(--panel); color: var(--accent); }
     .new-tab-button svg { width: 16px; height: 16px; }
     .draft-status { display: inline-flex; align-items: center; gap: 7px; padding: 0 9px; color: var(--muted); font-size: 9px; white-space: nowrap; }
-    .layout-presets { display: flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: #00000012; }
-    .layout-presets button { padding: 5px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font-size: 9px; cursor: pointer; }
-    .layout-presets button:hover { background: var(--panel-hover); color: var(--text); }
-    .layout-presets button[aria-pressed="true"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px #00000012, inset 0 0 0 1px var(--line); }
     .workspace-content { display: grid; min-height: 0; flex: 1; grid-template-rows: minmax(230px, 1.08fr) minmax(210px, .92fr); gap: 10px; padding: 12px; overflow: auto; }
     .editor-surface, .results-surface { position: relative; display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: 0 12px 36px #00000012, inset 0 1px #ffffff05; transition: border-color .2s ease, box-shadow .2s ease; }
     .editor-surface:focus-within { border-color: color-mix(in srgb, var(--accent) 34%, var(--line)); box-shadow: 0 12px 42px #0002, 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent), inset 0 1px #ffffff08; }
@@ -797,8 +793,6 @@
     .document-tabs { padding-right: 6px; padding-left: 6px; }
     .document-tab { min-width: 85px; max-width: 145px; gap: 5px; padding: 0 7px; font-size: 9px; }
     .draft-status { display: none; }
-    .layout-presets { margin-left: auto; }
-    .layout-presets button { padding: 5px; font-size: 8px; }
     .editor-heading { min-height: 47px; padding: 6px 9px; }
     .editor-toolbar { min-height: 40px; padding: 5px 8px; }
     .editor-actions { gap: 4px; }

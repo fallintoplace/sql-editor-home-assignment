@@ -34,14 +34,9 @@ jobs:
       - name: Deterministic SQL evaluations
         run: npm run eval
       - name: Install browser
-        # Temporarily paused while the dense workbench UX selectors are repaired.
-        # Backend, ClickHouse, SQL, and build checks remain active.
-        if: ${{ false }}
         run: npx playwright install --with-deps chromium
-      - name: Browser flow tests (explicit fixture driver)
-        # Re-enable after the focused UX selector/layout follow-up.
-        if: ${{ false }}
-        run: npm run test:e2e
+      - name: Interview-critical browser flows (explicit fixture driver)
+        run: npm run test:e2e:critical
       - name: Preserve browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v4

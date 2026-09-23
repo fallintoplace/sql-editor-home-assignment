@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import type { AssistantAction, Connection, Principal, ProfilePipeline, Proposal, QueryProfile, QueryDocument, Result, ResultPage, Run, RunEvent, Schema, Script } from '../shared/types';
 import { DEFAULT_LIMITS } from '../shared/types';
-import { displayValue, exportCsv, recommendChart, chartNumber } from '../shared/results';
+import { displayValue, exportCsv, recommendChart, chartNumber, numericType, filterRows } from '../shared/results';
+import { matchesDraft } from '../shared/evidence';
 import { formatSql, parameterNames, quoteIdentifier, selectedStatement, splitSql } from '../shared/sql';
 import { api, download, message, post } from './api';
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { checkpoint, closeDraft, MAX_TABS, newDraft, recover, reopenDraft, type Draft, type WorkspaceState } from './workspace-state';
+import { draftSaveStatus } from '../shared/workbench-view';
 import { useWorkspacePersistence } from './useWorkspacePersistence';
 import { getCopy, localeOptions, themeAppearance, themeOptions, type Copy, type ExperienceLevel, type Locale, type Theme } from './i18n';
 import { RadioGroup } from '@clickhouse/click-ui/RadioGroup';
@@ -17,7 +19,7 @@ type Session = { principal: Principal | null; requiresLogin: boolean; demo: bool
 type Inspector = 'schema' | 'history' | 'documents' | 'details' | 'profile' | 'pipeline' | 'assistant';
 type ResultsView = 'results' | 'chart' | 'insights';
 type BusyAction = 'run' | 'script' | 'save' | 'ai' | '';
-type AssistantContext = { id: string; summary: string[] };
+type AssistantContext = { id: string; summary: string[]; key: string };
 type SpeechRecognitionLike = {
     continuous: boolean;
     interimResults: boolean;
@@ -42,6 +44,26 @@ const pref = <T extends string>(key: string, values: readonly T[], fallback: T):
 };
 
 function cx(...values: Array<string | false | undefined>) { return values.filter(Boolean).join(' '); }
+
+function assistantContextKey(connectionId: string, draftId: string, sql: string, parameters: Record<string, string>, runId: string | undefined, includeResult: boolean, action: AssistantAction, question: string) {
+    return JSON.stringify({ connectionId, draftId, sql, parameters: Object.entries(parameters).sort(([left], [right]) => left.localeCompare(right)), runId, includeResult, action, question });
+}
+
+function useScopedValue<T>(key: string | undefined) {
+    const keyRef = useRef(key);
+    keyRef.current = key;
+    const [scoped, setScoped] = useState<Record<string, T>>({});
+    const value = key === undefined ? undefined : scoped[key];
+    const setForKey = useCallback((target: string, next: T | ((current: T | undefined) => T), allowInactive = false) => {
+        setScoped(current => {
+            if (!allowInactive && keyRef.current !== target) return current;
+            const previous = current[target];
+            const value = typeof next === 'function' ? (next as (current: T | undefined) => T)(previous) : next;
+            return { ...current, [target]: value };
+        });
+    }, []);
+    return [value, setForKey] as const;
+}
 
 function Icon({ name, className = '' }: { name: string; className?: string }) {
     const paths: Record<string, ReactNode> = {
@@ -222,19 +244,27 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
     const workspaceRef = useRef(workspace);
     workspaceRef.current = workspace;
     const active = workspace.tabs.find(tab => tab.id === workspace.activeId) ?? workspace.tabs[0]!;
+    const activeRunId = active.activeRunId;
+    const activeRunIdRef = useRef(activeRunId);
+    activeRunIdRef.current = activeRunId;
     const editor = useRef<EditorHandle>(null);
     const [schema, setSchema] = useState<Schema>();
     const [schemaLoading, setSchemaLoading] = useState(false);
     const [schemaError, setSchemaError] = useState('');
     const [documents, setDocuments] = useState<QueryDocument[]>([]);
+    const [documentsLoaded, setDocumentsLoaded] = useState(false);
+    const [documentsReadError, setDocumentsReadError] = useState(false);
+    const [savingDraftIds, setSavingDraftIds] = useState<Record<string, boolean>>({});
     const [history, setHistory] = useState<Run[]>([]);
-    const [run, setRun] = useState<Run>();
-    const [resultPage, setResultPage] = useState<ResultPage>();
-    const [snapshot, setSnapshot] = useState<Result>();
-    const [profile, setProfile] = useState<QueryProfile>();
-    const [pipeline, setPipeline] = useState<ProfilePipeline>();
-    const [script, setScript] = useState<Script>();
     const [page, setPage] = useState(0);
+    const [run, setRunForRun] = useScopedValue<Run>(activeRunId);
+    const [resultPageState, setResultPageForRun] = useScopedValue<{ page: number; value: ResultPage }>(activeRunId);
+    const resultPage = resultPageState?.page === page ? resultPageState.value : undefined;
+    const [snapshot, setSnapshotForRun] = useScopedValue<Result>(activeRunId);
+    const [profile, setProfileForRun] = useScopedValue<QueryProfile>(activeRunId);
+    const [pipeline, setPipelineForRun] = useScopedValue<ProfilePipeline>(activeRunId);
+    const [scripts, setScripts] = useState<Record<string, Script>>({});
+    const script = active.scriptId ? scripts[active.scriptId] : undefined;
     const [view, setView] = useState<ResultsView>('results');
     const [inspector, setInspector] = useState<Inspector>('schema');
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -246,11 +276,11 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
     const [search, setSearch] = useState('');
     const [assistantAction, setAssistantAction] = useState<AssistantAction>('generate');
     const [assistantQuestion, setAssistantQuestion] = useState('');
-    const [assistantContext, setAssistantContext] = useState<AssistantContext>();
-    const [assistantProposal, setAssistantProposal] = useState<Proposal>();
-    const [assistantBusy, setAssistantBusy] = useState(false);
-    const [assistantError, setAssistantError] = useState('');
-    const [includeResult, setIncludeResult] = useState(false);
+    const [assistantContextState, setAssistantContextForDraft] = useScopedValue<AssistantContext | undefined>(active.id);
+    const [assistantProposalState, setAssistantProposalForDraft] = useScopedValue<{ key: string; value: Proposal } | undefined>(active.id);
+    const [assistantBusyKey, setAssistantBusyKey] = useState<string>();
+    const [assistantErrors, setAssistantErrors] = useState<Record<string, string>>({});
+    const [includeResult, setIncludeResultState] = useState(false);
     const [voiceListening, setVoiceListening] = useState(false);
     const [voiceError, setVoiceError] = useState('');
     const recognitionRef = useRef<SpeechRecognitionLike | undefined>(undefined);
@@ -259,7 +289,16 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
     const parameters = useMemo(() => {
         try { return parameterNames(active.sql); } catch { return []; }
     }, [active.sql]);
-    const activeRunId = active.activeRunId;
+    const assistantKey = assistantContextKey(connection.id, active.id, active.sql, active.parameters, activeRunId, includeResult, assistantAction, assistantQuestion);
+    const assistantKeyRef = useRef(assistantKey);
+    assistantKeyRef.current = assistantKey;
+    const assistantBusy = assistantBusyKey === assistantKey;
+    const assistantError = assistantErrors[active.id] ?? '';
+    const setAssistantError = (error: string) => setAssistantErrors(current => ({ ...current, [active.id]: error }));
+    const assistantContext = assistantContextState?.key === assistantKey ? assistantContextState : undefined;
+    const assistantProposal = assistantProposalState && (assistantProposalState.key === assistantKey || (assistantProposalState.value.decision === 'accepted' && assistantProposalState.value.sql === active.sql))
+        ? assistantProposalState.value : undefined;
+    const assistantRequestRef = useRef(0);
     const running = Boolean(run && !terminal(run));
     const currentConnection = connections.find(item => item.id === connection.id) ?? connection;
     const trusted = currentConnection.trusted;
@@ -281,8 +320,10 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
             const transcript = Array.from(event.results).map(result => result[0]?.transcript ?? '').join(' ').replace(/\s+/g, ' ').trim();
             const base = promptBeforeVoiceRef.current;
             setAssistantQuestion(`${base}${base && transcript ? ' ' : ''}${transcript}`);
-            setAssistantContext(undefined);
-            setAssistantProposal(undefined);
+            assistantRequestRef.current++;
+            setAssistantBusyKey(undefined);
+            setAssistantContextForDraft(active.id, undefined);
+            setAssistantProposalForDraft(active.id, undefined);
         };
         recognition.onerror = event => {
             setVoiceError(event.error === 'not-allowed' ? 'Microphone access was denied. Allow access or type your question instead.' : `Voice input stopped (${event.error}). You can continue by typing.`);
@@ -297,37 +338,88 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
     const prepareAssistantContext = async (action = assistantAction, question = assistantQuestion) => {
         if (!trusted) return;
         if (!question.trim() && action === 'generate') { setAssistantError('Describe what you want to learn from your data first.'); return; }
-        setAssistantBusy(true); setAssistantError(''); setAssistantAction(action);
+        const draftId = active.id;
+        const requestKey = assistantContextKey(connection.id, draftId, active.sql, active.parameters, activeRunId, includeResult, action, question);
+        const requestId = ++assistantRequestRef.current;
+        setAssistantBusyKey(requestKey); setAssistantError(''); setAssistantAction(action);
         try {
             const result = await post<AssistantContext>('/assistant/context', { connectionId: connection.id, action, question, sql: active.sql, runId: activeRunId, includeResult });
-            setAssistantContext(result); setAssistantProposal(undefined);
-        } catch (caught) { setAssistantError(message(caught)); }
-        finally { setAssistantBusy(false); }
+            if (assistantRequestRef.current !== requestId || assistantKeyRef.current !== requestKey) return;
+            setAssistantContextForDraft(draftId, { ...result, key: requestKey });
+            setAssistantProposalForDraft(draftId, undefined);
+        } catch (caught) {
+            if (assistantRequestRef.current === requestId && assistantKeyRef.current === requestKey) setAssistantError(message(caught));
+        } finally { if (assistantRequestRef.current === requestId) setAssistantBusyKey(undefined); }
     };
 
     const requestAssistantProposal = async () => {
         if (!assistantContext || assistantBusy) return;
+        const context = assistantContext;
+        if (context.key !== assistantKeyRef.current) { setAssistantError('The draft changed. Preview the current context before asking for a proposal.'); return; }
         if (!window.confirm(`Send the reviewed SQL and selected context to the configured AI provider? ${assistantContext.summary.join(' ')}`)) return;
-        setAssistantBusy(true); setAssistantError('');
-        try { setAssistantProposal(await post<Proposal>('/assistant/proposals', { contextId: assistantContext.id, consent: true })); }
-        catch (caught) { setAssistantError(message(caught)); }
-        finally { setAssistantBusy(false); }
+        const draftId = active.id;
+        const requestId = ++assistantRequestRef.current;
+        setAssistantBusyKey(context.key); setAssistantError('');
+        try {
+            const proposal = await post<Proposal>('/assistant/proposals', { contextId: context.id, consent: true });
+            if (assistantRequestRef.current !== requestId || assistantKeyRef.current !== context.key) return;
+            setAssistantProposalForDraft(draftId, { key: context.key, value: proposal });
+        } catch (caught) {
+            if (assistantRequestRef.current === requestId && assistantKeyRef.current === context.key) setAssistantError(message(caught));
+        } finally { if (assistantRequestRef.current === requestId) setAssistantBusyKey(undefined); }
     };
 
     const decideAssistantProposal = async (decision: 'accepted' | 'rejected') => {
-        if (!assistantProposal) return;
-        setAssistantBusy(true); setAssistantError('');
+        if (!assistantProposal || assistantProposal.decision !== 'pending' || assistantProposal.baseSql !== active.sql) return;
+        const proposal = assistantProposal;
+        const draftId = active.id;
+        const requestKey = assistantContextKey(connection.id, draftId, active.sql, active.parameters, activeRunId, includeResult, assistantAction, assistantQuestion);
+        const requestId = ++assistantRequestRef.current;
+        setAssistantBusyKey(requestKey); setAssistantError('');
         try {
-            const reviewed = await post<Proposal>(`/assistant/proposals/${encodeURIComponent(assistantProposal.id)}/decision`, { decision, connectionId: connection.id, currentSql: active.sql });
-            setAssistantProposal(reviewed);
-            if (decision === 'accepted' && reviewed.sql !== null) patch({ ...checkpoint(active, 'Before accepted AI proposal'), sql: reviewed.sql, from: 0, to: 0 });
-        } catch (caught) { setAssistantError(message(caught)); }
-        finally { setAssistantBusy(false); }
+            const reviewed = await post<Proposal>(`/assistant/proposals/${encodeURIComponent(proposal.id)}/decision`, { decision, connectionId: connection.id, currentSql: active.sql });
+            setAssistantProposalForDraft(draftId, { key: requestKey, value: reviewed }, true);
+            const currentDraft = workspaceRef.current.tabs.find(draft => draft.id === draftId);
+            if (decision === 'accepted' && reviewed.sql !== null && currentDraft?.sql === proposal.baseSql) {
+                update(draftId, draft => ({ ...checkpoint(draft, 'Before accepted AI proposal'), sql: reviewed.sql!, from: 0, to: 0 }));
+            }
+        } catch (caught) {
+            if (assistantRequestRef.current === requestId && assistantKeyRef.current === requestKey) setAssistantError(message(caught));
+        } finally { if (assistantRequestRef.current === requestId) setAssistantBusyKey(undefined); }
     };
 
     const changeAssistantQuestion = (question: string) => {
-        setAssistantQuestion(question); setAssistantContext(undefined); setAssistantProposal(undefined); setAssistantError('');
+        assistantRequestRef.current++;
+        setAssistantBusyKey(undefined);
+        setAssistantQuestion(question); setAssistantContextForDraft(active.id, undefined); setAssistantProposalForDraft(active.id, undefined); setAssistantError('');
     };
+    const clearAssistantReview = () => {
+        assistantRequestRef.current++;
+        setAssistantBusyKey(undefined);
+        setAssistantContextForDraft(active.id, undefined);
+        setAssistantProposalForDraft(active.id, undefined);
+        setAssistantError('');
+    };
+    const changeAssistantAction = (action: AssistantAction) => {
+        setAssistantAction(action);
+        clearAssistantReview();
+    };
+    const changeIncludeResult = (include: boolean) => {
+        if (include === includeResult) return;
+        setIncludeResultState(include);
+        clearAssistantReview();
+    };
+    const setAssistantContext = (context?: AssistantContext) => {
+        assistantRequestRef.current++;
+        setAssistantBusyKey(undefined);
+        setAssistantContextForDraft(active.id, context);
+    };
+    const setAssistantProposal = (proposal?: Proposal) => {
+        assistantRequestRef.current++;
+        setAssistantBusyKey(undefined);
+        setAssistantProposalForDraft(active.id, proposal ? { key: assistantKey, value: proposal } : undefined);
+    };
+    const setIncludeResult = changeIncludeResult;
 
     const update = useCallback((id: string, change: (draft: Draft) => Draft) => {
         setWorkspace(current => ({ ...current, tabs: current.tabs.map(draft => draft.id === id ? change(draft) : draft) }));
@@ -338,7 +430,13 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
         setHistory(await api<Run[]>(`/runs?connectionId=${encodeURIComponent(connection.id)}`));
     }, [connection.id]);
     const loadDocuments = useCallback(async () => {
-        setDocuments(await api<QueryDocument[]>(`/documents?trash=true&connectionId=${encodeURIComponent(connection.id)}`));
+        try {
+            setDocuments(await api<QueryDocument[]>(`/documents?trash=true&connectionId=${encodeURIComponent(connection.id)}`));
+            setDocumentsReadError(false);
+        } catch (caught) {
+            setDocumentsReadError(true);
+            throw caught;
+        } finally { setDocumentsLoaded(true); }
     }, [connection.id]);
     const loadSchema = useCallback(async () => {
         if (!trusted) { setSchema(undefined); return; }
@@ -356,11 +454,11 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
     }, [loadDocuments, loadHistory, loadSchema, trusted]);
 
     useEffect(() => {
-        if (!activeRunId) { setRun(undefined); setResultPage(undefined); setSnapshot(undefined); setProfile(undefined); setPipeline(undefined); return; }
+        if (!activeRunId) return;
         let cancelled = false;
         void api<Run>(`/runs/${encodeURIComponent(activeRunId)}`).then(next => {
             if (cancelled || next.connectionId !== connection.id) return;
-            setRun(next);
+            setRunForRun(activeRunId, next);
             setPage(0);
             if (terminal(next)) void loadHistory().catch(() => undefined);
         }).catch(caught => { if (!cancelled) setError(message(caught)); });
@@ -368,9 +466,11 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
     }, [activeRunId, connection.id, loadHistory]);
 
     useEffect(() => {
-        if (!activeRunId || !run || !terminal(run) || run.resultState !== 'reopenable') { setResultPage(undefined); return; }
+        if (!activeRunId || !run || !terminal(run) || run.resultState !== 'reopenable') return;
         let cancelled = false;
-        void api<ResultPage>(`/runs/${encodeURIComponent(activeRunId)}/result?offset=${page * 200}&count=200`).then(next => { if (!cancelled) setResultPage(next); }).catch(caught => { if (!cancelled) setError(message(caught)); });
+        void api<ResultPage>(`/runs/${encodeURIComponent(activeRunId)}/result?offset=${page * 200}&count=200`).then(next => {
+            if (!cancelled) setResultPageForRun(activeRunId, { page, value: next });
+        }).catch(caught => { if (!cancelled) setError(message(caught)); });
         return () => { cancelled = true; };
     }, [activeRunId, page, run]);
 
@@ -383,7 +483,7 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
             try {
                 const payload = JSON.parse(event.data) as RunEvent;
                 if (payload.run.id !== activeRunId || payload.run.connectionId !== connection.id) return;
-                setRun(current => !current || current.sequence <= payload.sequence ? payload.run : current);
+                setRunForRun(activeRunId, current => !current || current.sequence <= payload.sequence ? payload.run : current);
                 if (terminal(payload.run)) {
                     stream.close(); setEventState('idle');
                     void loadHistory().catch(() => undefined);
@@ -392,7 +492,7 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
         };
         stream.onerror = () => setEventState('reconnecting');
         return () => stream.close();
-    }, [activeRunId, connection.id, loadHistory, run?.status]);
+    }, [activeRunId, connection.id, loadHistory, run?.status, setRunForRun]);
 
     useEffect(() => {
         if (!running || eventState === 'live' || !activeRunId) return;
@@ -400,29 +500,45 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
         const timer = window.setInterval(() => {
             void api<Run>(`/runs/${encodeURIComponent(activeRunId)}`).then(next => {
                 if (closed || next.connectionId !== connection.id) return;
-                setRun(current => !current || current.sequence <= next.sequence ? next : current);
+                setRunForRun(activeRunId, current => !current || current.sequence <= next.sequence ? next : current);
                 if (terminal(next)) void loadHistory().catch(() => undefined);
             }).catch(() => undefined);
         }, 1500);
         return () => { closed = true; window.clearInterval(timer); };
-    }, [activeRunId, connection.id, eventState, loadHistory, running]);
+    }, [activeRunId, connection.id, eventState, loadHistory, running, setRunForRun]);
 
     useEffect(() => {
-        if (!script?.id || script.status !== 'running') return;
+        const scriptId = active.scriptId;
+        const draftId = active.id;
+        if (!scriptId) return;
         let closed = false;
-        const timer = window.setInterval(() => {
-            void api<Script>(`/scripts/${encodeURIComponent(script.id)}`).then(next => {
+        let inFlight = false;
+        let finished = false;
+        let timer = 0;
+        const refresh = async () => {
+            if (closed || inFlight || finished) return;
+            inFlight = true;
+            try {
+                const next = await api<Script>(`/scripts/${encodeURIComponent(scriptId)}`);
                 if (closed) return;
-                setScript(next);
+                setScripts(current => ({ ...current, [scriptId]: next }));
                 const latest = [...next.statements].reverse().find(item => item.runId);
                 if (latest?.runId) {
-                    update(active.id, draft => ({ ...draft, activeRunId: latest.runId, runIds: [...new Set([...draft.runIds, latest.runId!])] }));
+                    update(draftId, draft => ({ ...draft, activeRunId: latest.runId, runIds: [...new Set([...draft.runIds, latest.runId!])] }));
                 }
-                if (next.status !== 'running') void loadHistory().catch(() => undefined);
-            }).catch(caught => { if (!closed) setError(message(caught)); });
-        }, 900);
+                if (next.status !== 'running') {
+                    finished = true;
+                    window.clearInterval(timer);
+                    void loadHistory().catch(() => undefined);
+                }
+            } catch (caught) {
+                if (!closed) setError(message(caught));
+            } finally { inFlight = false; }
+        };
+        void refresh();
+        timer = window.setInterval(() => { void refresh(); }, 900);
         return () => { closed = true; window.clearInterval(timer); };
-    }, [active.id, loadHistory, script?.id, script?.status, update]);
+    }, [active.id, active.scriptId, loadHistory, update]);
 
     const perform = async (task: () => Promise<void>, kind: BusyAction = 'save') => {
         if (busy) return;
@@ -433,8 +549,9 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
     };
 
     const addDraft = (draft: Draft) => {
-        if (workspaceRef.current.tabs.length >= MAX_TABS) { setError(`Close a tab before creating another. This workspace supports ${MAX_TABS} open drafts.`); return; }
+        if (workspaceRef.current.tabs.length >= MAX_TABS) { setError(`Close a tab before creating another. This workspace supports ${MAX_TABS} open drafts.`); return false; }
         setWorkspace(current => ({ ...current, tabs: [...current.tabs, draft], activeId: draft.id }));
+        return true;
     };
 
     const execute = (wholeScript = false, kind: 'query' | 'explain' | 'pipeline' = 'query') => perform(async () => {
@@ -451,15 +568,15 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
         };
         if (wholeScript) {
             const created = await post<Script>('/scripts', { ...payload, stopOnError: true });
-            setScript(created);
+            setScripts(current => ({ ...current, [created.id]: created }));
             const first = created.statements.find(item => item.runId);
             if (first?.runId) patch({ activeRunId: first.runId, scriptId: created.id, runIds: [...active.runIds, first.runId] });
             else patch({ scriptId: created.id });
             setView('results');
         } else {
             const created = await post<Run>('/runs', payload);
-            setRun(created);
-            setResultPage(undefined); setSnapshot(undefined); setProfile(undefined); setPipeline(undefined); setPage(0); setView('results');
+            setRunForRun(created.id, created, true);
+            setPage(0); setView('results');
             patch({ activeRunId: created.id, scriptId: undefined, runIds: [...new Set([...active.runIds, created.id])] });
             editor.current?.focus();
         }
@@ -469,9 +586,13 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
     }, wholeScript ? 'script' : 'run');
 
     const cancel = () => perform(async () => {
-        if (script?.status === 'running') { setScript(await post<Script>(`/scripts/${encodeURIComponent(script.id)}/cancel`)); return; }
+        if (script?.status === 'running') {
+            const cancelled = await post<Script>(`/scripts/${encodeURIComponent(script.id)}/cancel`);
+            setScripts(current => ({ ...current, [cancelled.id]: cancelled }));
+            return;
+        }
         if (!run || terminal(run)) return;
-        setRun(await post<Run>(`/runs/${encodeURIComponent(run.id)}/cancel`));
+        setRunForRun(run.id, await post<Run>(`/runs/${encodeURIComponent(run.id)}/cancel`));
         setNotice('Cancellation requested. The server will confirm the final state.');
     }, 'run');
 
@@ -481,37 +602,44 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
         draft.parameters = selected.parameters;
         draft.activeRunId = selected.id;
         draft.runIds = [selected.id];
-        setWorkspace(current => ({ ...current, tabs: [...current.tabs, draft].slice(-MAX_TABS), activeId: draft.id }));
+        if (!addDraft(draft)) return;
         setView('results'); setDrawerOpen(false); setNotice(`Opened retained run ${selected.queryId}. No query was rerun.`);
     };
 
     const saveDraft = async () => perform(async () => {
-        const payload = { name: active.name, sql: active.sql, connectionId: connection.id, baseRevision: active.baseRevision, parameters: active.parameters, chart: active.chart, runId: active.activeRunId, parentDocumentId: active.parentDocumentId, kind: active.kind, metric: active.metric, dependencies: active.dependencies };
-        const saved = await api<QueryDocument>(active.serverId ? `/documents/${encodeURIComponent(active.serverId)}` : '/documents', { method: active.serverId ? 'PUT' : 'POST', body: payload });
-        patch({ serverId: saved.id, baseRevision: saved.revision });
-        setDocuments(current => [saved, ...current.filter(document => document.id !== saved.id)]);
-        setNotice(`Saved ${saved.name} · revision ${saved.revision}`);
+        setSavingDraftIds(current => ({ ...current, [active.id]: true }));
+        try {
+            const payload = { name: active.name, sql: active.sql, connectionId: connection.id, baseRevision: active.baseRevision, parameters: active.parameters, chart: active.chart, runId: active.activeRunId, parentDocumentId: active.parentDocumentId, kind: active.kind, metric: active.metric, dependencies: active.dependencies };
+            const saved = await api<QueryDocument>(active.serverId ? `/documents/${encodeURIComponent(active.serverId)}` : '/documents', { method: active.serverId ? 'PUT' : 'POST', body: payload });
+            patch({ serverId: saved.id, baseRevision: saved.revision });
+            setDocuments(current => [saved, ...current.filter(document => document.id !== saved.id)]);
+            setNotice(`Saved ${saved.name} · revision ${saved.revision}`);
+        } finally { setSavingDraftIds(current => ({ ...current, [active.id]: false })); }
     }, 'save');
 
     const loadSnapshot = async () => {
         if (!activeRunId || snapshot || !run || run.resultState !== 'reopenable') return;
-        const full = await api<Result>(`/runs/${encodeURIComponent(activeRunId)}/snapshot`);
-        setSnapshot(full);
+        const runId = activeRunId;
+        const full = await api<Result>(`/runs/${encodeURIComponent(runId)}/snapshot`);
+        setSnapshotForRun(runId, full);
         const suggestion = recommendChart(full.columns, full.rows);
         if (active.chart.kind === 'table' && suggestion.config.kind !== 'table') patch({ chart: suggestion.config });
     };
 
     const loadProfile = async () => {
         if (!activeRunId) return;
-        const response = await api<QueryProfile>(`/runs/${encodeURIComponent(activeRunId)}/profile`);
-        setProfile(response);
+        const runId = activeRunId;
+        const response = await api<QueryProfile>(`/runs/${encodeURIComponent(runId)}/profile`);
+        setProfileForRun(runId, response);
     };
 
     const loadPipeline = async () => {
         if (!activeRunId) return;
+        const runId = activeRunId;
         if (!profile) await loadProfile();
-        const response = await api<ProfilePipeline>(`/runs/${encodeURIComponent(activeRunId)}/profile/pipeline`);
-        setPipeline(response);
+        if (activeRunIdRef.current !== runId) return;
+        const response = await api<ProfilePipeline>(`/runs/${encodeURIComponent(runId)}/profile/pipeline`);
+        setPipelineForRun(runId, response);
     };
 
     const showInspector = (next: Inspector) => {
@@ -530,6 +658,12 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
     trustActionRef.current = trustConnection;
 
     const sortedHistory = useMemo(() => [...history].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [history]);
+    const savedDocument = documents.find(document => document.id === active.serverId);
+    const saveStatus = draftSaveStatus(active, connection.id, savedDocument, { saving: Boolean(savingDraftIds[active.id]), pending: !documentsLoaded, readError: documentsReadError });
+    const runSourceSql = run && run.sourceFrom !== undefined && run.sourceTo !== undefined && run.sourceTo <= active.sql.length
+        ? active.sql.slice(run.sourceFrom, run.sourceTo)
+        : selectedStatement(active.sql, active.from, active.to)?.sql;
+    const staleResult = Boolean(run && (!runSourceSql || run.connectionId !== connection.id || !matchesDraft(run, runSourceSql, active.parameters)));
     const filteredTables = useMemo(() => {
         const q = search.trim().toLowerCase();
         if (!q) return schema?.tables ?? [];
@@ -542,6 +676,10 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
         else if (next === 'performance') { setInspector('profile'); void perform(loadProfile, 'save'); }
         else { setInspector('assistant'); }
     };
+    const saveStatusLabel = ({
+        local: 'Local draft', checking: 'Checking save…', saving: 'Saving…', saved: `Saved r${active.baseRevision}`,
+        changed: 'Unsaved changes', conflict: 'Newer revision available', deleted: 'Saved file in trash', unavailable: 'Save status unavailable',
+    } as const)[saveStatus.state];
 
     return <div className={cx('workspace-root', experience === 'expert' && 'is-expert')}>
         {error && <div className="toast toast-error animate-enter" role="alert"><span>!</span>{error}<button onClick={() => setError('')} aria-label="Dismiss error"><Icon name="close"/></button></div>}
@@ -567,13 +705,17 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
                         <span className="tab-file-dot"/><span className="document-tab-name">{draft.name}</span>{draft.serverId ? <span className="tab-revision">r{draft.baseRevision}</span> : <span className="tab-unsaved"/>}<button type="button" aria-label={`Close ${draft.name}`} onClick={event => { event.stopPropagation(); setWorkspace(current => closeDraft(current, draft.id)); }}>×</button>
                     </div>)}
                     <button className="new-tab-button" type="button" title="New SQL tab" onClick={() => addDraft(newDraft())}><Icon name="plus"/></button>
+                    {!!workspace.closedTabs?.length && <button className="new-tab-button reopen-tab-button" type="button" aria-label="Reopen closed tab" title="Reopen closed tab" onClick={() => {
+                        if (workspaceRef.current.tabs.length >= MAX_TABS) { setError(`Close a tab before reopening another. This workspace supports ${MAX_TABS} open drafts.`); return; }
+                        setWorkspace(current => reopenDraft(current));
+                    }}>↶</button>}
                     <div className="tabs-spacer"/>
                     {experience === 'expert' && <div className="layout-presets" role="group" aria-label="Workspace layouts">{(['write', 'analyze', 'performance', 'ai'] as const).map(item => <button key={item} type="button" aria-pressed={layout === item} onClick={() => selectedLayout(item)}>{item === 'write' ? 'Write' : item === 'analyze' ? 'Analyze' : item === 'performance' ? 'Performance' : 'AI'}</button>)}</div>}
-                    <span className="draft-status"><span className="status-light is-trusted"/>Local draft</span>
+                    <span className="draft-status" data-save-state={saveStatus.state} title={`${saveStatus.label}. ${saveStatus.detail}`}><span className={cx('status-light', saveStatus.state === 'saved' ? 'is-trusted' : ['changed', 'conflict', 'deleted', 'unavailable'].includes(saveStatus.state) ? 'is-warning' : '')}/>{saveStatusLabel}</span>
                 </div>
 
                 <div className={cx('workspace-content', experience === 'beginner' && 'beginner-workspace-content', experience === 'beginner' && run && 'has-run')}>
-                    {experience === 'beginner' ? <AssistantWorkflow mode="beginner" sql={active.sql} action={assistantAction} onActionChange={value => { setAssistantAction(value); setAssistantContext(undefined); setAssistantProposal(undefined); }} question={assistantQuestion} onQuestionChange={changeAssistantQuestion} context={assistantContext} proposal={assistantProposal} busy={assistantBusy} error={assistantError} trusted={trusted} runId={run?.id} includeResult={includeResult} onIncludeResult={setIncludeResult} onVoiceInput={startVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={() => void prepareAssistantContext('generate', assistantQuestion)} onRequestProposal={() => void requestAssistantProposal()} onDecideProposal={decision => void decideAssistantProposal(decision)} onRunQuery={() => void execute()} runDisabled={!trusted || Boolean(busy)} onSave={() => void saveDraft()} saveDisabled={Boolean(busy)}/> : <section className="editor-surface">
+                    {experience === 'beginner' ? <AssistantWorkflow mode="beginner" sql={active.sql} action={assistantAction} onActionChange={changeAssistantAction} question={assistantQuestion} onQuestionChange={changeAssistantQuestion} context={assistantContext} proposal={assistantProposal} busy={assistantBusy} error={assistantError} trusted={trusted} runId={run?.id} includeResult={includeResult} onIncludeResult={setIncludeResult} onVoiceInput={startVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={() => void prepareAssistantContext('generate', assistantQuestion)} onRequestProposal={() => void requestAssistantProposal()} onDecideProposal={decision => void decideAssistantProposal(decision)} onRunQuery={() => void execute()} runDisabled={!trusted || Boolean(busy)} onSave={() => void saveDraft()} saveDisabled={Boolean(busy)}/> : <section className="editor-surface">
                         <div className="editor-heading">
                             <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">QUERY</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label><span className="edit-indicator" title={active.serverId ? `Saved revision ${active.baseRevision}` : 'Only in this browser'}>{active.serverId ? `REV ${active.baseRevision}` : 'LOCAL'}</span></div>
                             <div className="editor-heading-actions"><Button variant="ghost" className="icon-only" title="Format SQL" onClick={() => patch({ sql: formatSql(active.sql) })}>⌘</Button><Button variant="secondary" aria-label={copy.common.saveRevision} onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/> {copy.common.save}</Button></div>
@@ -598,11 +740,16 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
                                 {run?.resultState === 'reopenable' && <Button variant="ghost" className="toolbar-small" onClick={() => { const link = document.createElement('a'); link.href = `/api/runs/${encodeURIComponent(run.id)}/export?format=csv`; link.download = `${run.queryId}.csv`; link.click(); }}>Export <Icon name="chevron"/></Button>}
                             </div>
                         </div>
+                        {staleResult && <div className="result-provenance" aria-live="polite"><span className="status-light is-warning"/><span><strong>Result from previous execution</strong><small>SQL or bound parameters changed since this run. Rerun to refresh the result.</small></span></div>}
+                        {script && <ScriptResults script={script} runs={history} activeRunId={run?.id} onSelectRun={runId => {
+                            update(active.id, draft => ({ ...draft, activeRunId: runId }));
+                            setPage(0); setView('results');
+                        }} onCancel={() => void cancel()} cancelDisabled={Boolean(busy)}/>}
                         {!run && experience === 'expert' && <EmptyWorkspace onRun={() => editor.current?.focus()} beginner={false}/>}
                         {!run && experience === 'beginner' && <div className="beginner-results-empty"><span className="beginner-results-orb"><Icon name="chart"/></span><span className="eyebrow">YOUR RESULTS</span><strong>They’ll appear here.</strong><p>Create a query with AI, review it, then run it when you’re ready.</p></div>}
-                        {run && view === 'results' && <ResultGrid run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/>}
+                        {run && view === 'results' && <ResultGrid key={run.id} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/>}
                         {run && view === 'chart' && <ChartView result={snapshot} loading={!snapshot && run.resultState === 'reopenable'} chart={active.chart} onChart={chart => patch({ chart })}/>}
-                        {run && view === 'insights' && <InsightsView run={run} profile={profile} onLoad={() => void perform(loadProfile, 'save')} loading={busy === 'save'}/>}
+                        {run && view === 'insights' && <InsightsView run={run} profile={profile} pipeline={pipeline} pipelineAvailable={Boolean(trusted && connection.manifest?.pipeline.available)} onLoad={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} loading={busy === 'save'}/>}
                     </section>}
                 </div>
             </main>
@@ -610,7 +757,7 @@ function Workspace({ connection, connectionLabel, connections, onSelectConnectio
             {experience === 'expert' && <InspectorPane inspector={inspector} setInspector={showInspector} connection={connection} schema={schema} schemaLoading={schemaLoading} schemaError={schemaError} search={search} setSearch={setSearch} tables={filteredTables} history={sortedHistory} documents={documents} run={run} profile={profile} pipeline={pipeline} onRefreshSchema={() => void loadSchema()} onInsert={value => editor.current?.insert(value)} onOpenRun={openRun} onOpenDocument={document => { const draft = newDraft(document.name, document.sql); Object.assign(draft, { serverId: document.id, baseRevision: document.revision, parameters: document.parameters, chart: document.chart, activeRunId: document.runId }); addDraft(draft); }} onLoadProfile={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} connectionId={connection.id} sql={active.sql} trusted={trusted} runId={run?.id} onRefreshDocuments={() => void loadDocuments()} assistantAction={assistantAction} onAssistantAction={value => { setAssistantAction(value); setAssistantContext(undefined); setAssistantProposal(undefined); }} assistantQuestion={assistantQuestion} onAssistantQuestion={changeAssistantQuestion} assistantContext={assistantContext} assistantProposal={assistantProposal} assistantBusy={assistantBusy} assistantError={assistantError} includeResult={includeResult} onIncludeResult={setIncludeResult} onVoiceInput={startVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={() => void prepareAssistantContext()} onRequestProposal={() => void requestAssistantProposal()} onDecideProposal={decision => void decideAssistantProposal(decision)} onRunQuery={() => void execute()} runDisabled={!trusted || Boolean(busy)}/>}
             {experience === 'beginner' && drawerOpen && <><button className="drawer-backdrop" type="button" aria-label="Close panel" onClick={() => setDrawerOpen(false)}/><InspectorPane drawer inspector={inspector} setInspector={showInspector} onClose={() => setDrawerOpen(false)} connection={connection} schema={schema} schemaLoading={schemaLoading} schemaError={schemaError} search={search} setSearch={setSearch} tables={filteredTables} history={sortedHistory} documents={documents} run={run} profile={profile} pipeline={pipeline} onRefreshSchema={() => void loadSchema()} onInsert={value => { editor.current?.insert(value); setDrawerOpen(false); }} onOpenRun={openRun} onOpenDocument={document => { const draft = newDraft(document.name, document.sql); Object.assign(draft, { serverId: document.id, baseRevision: document.revision, parameters: document.parameters, chart: document.chart, activeRunId: document.runId }); addDraft(draft); setDrawerOpen(false); }} onLoadProfile={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} connectionId={connection.id} sql={active.sql} trusted={trusted} runId={run?.id} onRefreshDocuments={() => void loadDocuments()} assistantAction={assistantAction} onAssistantAction={value => { setAssistantAction(value); setAssistantContext(undefined); setAssistantProposal(undefined); }} assistantQuestion={assistantQuestion} onAssistantQuestion={changeAssistantQuestion} assistantContext={assistantContext} assistantProposal={assistantProposal} assistantBusy={assistantBusy} assistantError={assistantError} includeResult={includeResult} onIncludeResult={setIncludeResult} onVoiceInput={startVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={() => void prepareAssistantContext()} onRequestProposal={() => void requestAssistantProposal()} onDecideProposal={decision => void decideAssistantProposal(decision)} onRunQuery={() => void execute()} runDisabled={!trusted || Boolean(busy)}/> </>}
         </div>
-        {run && <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} busy={Boolean(busy)}/>}
+        {run && <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} busy={Boolean(busy)} scriptRunning={script?.status === 'running'}/>}
     </div>;
 }
 
@@ -620,6 +767,27 @@ function RailButton({ icon, label, active, accent, onClick }: { icon: string; la
 
 function EmptyWorkspace({ onRun, beginner }: { onRun: () => void; beginner: boolean }) {
     return <div className="empty-workspace"><div className="empty-graphic"><span className="empty-orbit orbit-one"/><span className="empty-orbit orbit-two"/><span className="empty-core"><Icon name="bolt"/></span><span className="empty-spark spark-one"/><span className="empty-spark spark-two"/></div><span className="eyebrow">YOUR NEXT INSIGHT STARTS HERE</span><h3>Make the data<br/><em>say something.</em></h3><p>{beginner ? 'Run a query to see your data. Results stay in this workspace when you switch modes.' : 'Run the current statement. Your query, run, and evidence stay linked.'}</p><Button variant="primary" onClick={onRun}><Icon name="play"/>Focus SQL editor</Button><span className="empty-shortcut">or press <kbd>⌘ ↵</kbd> to run</span></div>;
+}
+
+function ScriptResults({ script, runs, activeRunId, onSelectRun, onCancel, cancelDisabled }: {
+    script: Script;
+    runs: Run[];
+    activeRunId?: string;
+    onSelectRun: (runId: string) => void;
+    onCancel: () => void;
+    cancelDisabled: boolean;
+}) {
+    const byId = new Map(runs.map(run => [run.id, run]));
+    return <section className="script-results" aria-label="Script statement results">
+        <div className="script-results-heading"><span><span className="eyebrow">SCRIPT EXECUTION</span><strong>{script.statements.length} statements <i>·</i> {script.status}</strong></span>{script.status === 'running' && <Button variant="danger" className="toolbar-small" onClick={onCancel} disabled={cancelDisabled}>Cancel script</Button>}</div>
+        <div className="script-statement-list">{script.statements.map((statement, index) => {
+            const run = statement.runId ? byId.get(statement.runId) : undefined;
+            const details = run?.error ? `${run.error.code}: ${run.error.message}` : run ? `${run.rowCount.toLocaleString()} rows · ${Math.round(run.elapsedMs)} ms` : statement.status === 'pending' ? 'Waiting to run' : 'Not executed';
+            return <button key={`${script.id}-${index}`} type="button" className={cx('script-statement', statement.runId === activeRunId && 'is-active')} aria-label={`Statement ${index + 1}: ${statement.status}`} aria-pressed={statement.runId === activeRunId} title={details} disabled={!statement.runId} onClick={() => statement.runId && onSelectRun(statement.runId)}>
+                <span className="script-statement-index">{String(index + 1).padStart(2, '0')}</span><span className="script-statement-copy"><strong>Statement {index + 1}</strong><code>{statement.sql.replace(/\s+/g, ' ').slice(0, 72)}</code><small>{details}</small></span><span className={cx('script-status', `status-${statement.status}`)}>{statement.status}</span>
+            </button>;
+        })}</div>
+    </section>;
 }
 
 type AssistantWorkflowProps = {
@@ -676,27 +844,70 @@ function AssistantWorkflow({ mode, sql, action, onActionChange, question, onQues
 }
 
 function ResultGrid({ run, page, pageIndex, loading, onPage }: { run: Run; page?: ResultPage; pageIndex: number; loading: boolean; onPage: (page: number) => void }) {
+    const [filter, setFilter] = useState('');
     if (run.resultState === 'expired') return <div className="result-empty-state"><span className="empty-result-icon">⌛</span><strong>Result retention expired</strong><p>The SQL and query ID are still available. Run it again to fetch fresh data.</p></div>;
     if (run.resultState !== 'reopenable') return <div className="result-empty-state"><span className="loading-orbit"/><strong>{terminal(run) ? 'No retained result' : 'Query is running'}</strong><p>{terminal(run) ? 'This run did not produce result rows.' : 'The live execution status appears in the bottom bar.'}</p>{run.error && <div className="callout callout-error mt-4">{run.error.code}: {run.error.message}</div>}</div>;
     if (loading || !page) return <div className="result-loading"><span className="loading-orbit"/><span>Loading retained rows…</span></div>;
+    const searchableRows = page.rows.map(row => row.map(value => displayValue(value).toLocaleLowerCase()).join('\u0001'));
+    const matchingRows = new Set(filterRows(page.rows, filter, searchableRows));
+    const visibleRows = page.rows.flatMap((row, index) => matchingRows.has(row) ? [{ row, index }] : []);
     const pageCount = Math.max(1, Math.ceil(page.totalRows / 200));
-    return <div className="result-grid-wrap animate-enter"><div className="result-summary-row"><span><strong>{page.totalRows.toLocaleString()}</strong> rows <i>·</i> <strong>{page.columns.length}</strong> columns</span><span className="result-completeness"><span className={cx('status-light', page.completeness === 'truncated' ? 'is-warning' : 'is-trusted')}/>{page.completeness === 'truncated' ? 'Retained prefix · truncated' : 'Complete result'}</span><span>Page {pageIndex + 1} of {pageCount}</span></div><div className="data-table-scroll"><table className="data-table" aria-label="Retained query rows"><thead><tr><th className="row-number">#</th>{page.columns.map((column, index) => <th key={`${column.name}-${index}`}><span>{column.name}</span><small>{column.type}</small></th>)}</tr></thead><tbody>{page.rows.map((row, rowIndex) => <tr key={`${page.offset}-${rowIndex}`} style={{ animationDelay: `${Math.min(rowIndex, 12) * 16}ms` }}><td className="row-number">{page.offset + rowIndex + 1}</td>{row.map((value, index) => <td key={index} title={displayValue(value)} className={value === null ? 'cell-null' : ''}>{displayValue(value)}</td>)}</tr>)}</tbody></table>{page.rows.length === 0 && <div className="no-rows">This query returned zero rows.</div>}</div><div className="table-pagination"><span>Showing {page.rows.length.toLocaleString()} of {page.totalRows.toLocaleString()} retained rows</span><div><Button variant="secondary" disabled={pageIndex === 0} onClick={() => onPage(0)}>First</Button><Button variant="secondary" disabled={pageIndex === 0} onClick={() => onPage(pageIndex - 1)}>←</Button><Button variant="secondary" disabled={pageIndex + 1 >= pageCount} onClick={() => onPage(pageIndex + 1)}>→</Button><Button variant="secondary" disabled={pageIndex + 1 >= pageCount} onClick={() => onPage(pageCount - 1)}>Last</Button></div></div></div>;
+    return <div className="result-grid-wrap animate-enter"><div className="result-summary-row"><span><strong>{page.totalRows.toLocaleString()}</strong> rows <i>·</i> <strong>{page.columns.length}</strong> columns</span><span className="result-completeness"><span className={cx('status-light', page.completeness === 'truncated' ? 'is-warning' : 'is-trusted')}/>{page.completeness === 'truncated' ? 'Retained prefix · truncated' : 'Complete result'}</span><label className="result-filter"><span>Find on this page</span><input type="search" aria-label="Filter current page" placeholder="Filter rows" value={filter} onChange={event => setFilter(event.target.value)}/></label>{filter.trim() && <span>{visibleRows.length} matches on this page</span>}<span>Page {pageIndex + 1} of {pageCount}</span></div><div className="data-table-scroll"><table className="data-table" aria-label="Retained query rows"><thead><tr><th className="row-number">#</th>{page.columns.map((column, index) => <th key={`${column.name}-${index}`}><span>{column.name}</span><small>{column.type}</small></th>)}</tr></thead><tbody>{visibleRows.map(({ row, index: rowIndex }) => <tr key={`${page.offset}-${rowIndex}`} style={{ animationDelay: `${Math.min(rowIndex, 12) * 16}ms` }}><td className="row-number">{page.offset + rowIndex + 1}</td>{row.map((value, index) => <td key={index} title={displayValue(value)} className={value === null ? 'cell-null' : ''}>{displayValue(value)}</td>)}</tr>)}</tbody></table>{page.rows.length === 0 ? <div className="no-rows">This query returned zero rows.</div> : visibleRows.length === 0 && <div className="no-rows">No rows match on this page.</div>}</div><div className="table-pagination"><span>Showing {page.rows.length.toLocaleString()} of {page.totalRows.toLocaleString()} retained rows <i>·</i> filter applies to this page only</span><div><Button variant="secondary" disabled={pageIndex === 0} onClick={() => onPage(0)}>First</Button><Button variant="secondary" disabled={pageIndex === 0} onClick={() => onPage(pageIndex - 1)}>←</Button><Button variant="secondary" disabled={pageIndex + 1 >= pageCount} onClick={() => onPage(pageIndex + 1)}>→</Button><Button variant="secondary" disabled={pageIndex + 1 >= pageCount} onClick={() => onPage(pageCount - 1)}>Last</Button></div></div></div>;
 }
 
 function ChartView({ result, loading, chart, onChart }: { result?: Result; loading: boolean; chart: Draft['chart']; onChart: (chart: Draft['chart']) => void }) {
     if (loading || !result) return <div className="result-loading"><span className="loading-orbit"/><span>Preparing a chart from retained rows…</span></div>;
     const suggestion = recommendChart(result.columns, result.rows);
     const xIndex = Math.min(chart.x, Math.max(0, result.columns.length - 1));
-    const yIndex = chart.ys.find(index => index < result.columns.length) ?? suggestion.config.ys[0] ?? 0;
-    const values = result.rows.map(row => chartNumber(row[yIndex])).filter((value): value is number => value !== null);
-    const max = Math.max(...values, 1), min = Math.min(...values, 0), range = max - min || 1;
-    const bars = result.rows.slice(0, 24).map((row, index) => ({ label: displayValue(row[xIndex]), value: chartNumber(row[yIndex]) ?? 0, index }));
-    const points = bars.map((item, index) => `${32 + index * (700 / Math.max(1, bars.length - 1))},${190 - ((item.value - min) / range) * 150}`).join(' ');
-    return <div className="chart-workspace animate-enter"><div className="chart-title-row"><div><span className="eyebrow">VISUAL EXPLORATION</span><h3>{chart.title || result.columns[yIndex]?.name || 'Query result'}</h3><p>{suggestion.reason} Chart uses retained rows only.</p></div><div className="chart-controls"><label>X axis<select value={xIndex} onChange={event => onChart({ ...chart, x: Number(event.target.value) })}>{result.columns.map((column, index) => <option value={index} key={index}>{column.name}</option>)}</select></label><label>Measure<select value={yIndex} onChange={event => onChart({ ...chart, ys: [Number(event.target.value)] })}>{result.columns.map((column, index) => <option value={index} key={index} disabled={!/^(U?Int\d+|Float\d+|Decimal)/.test(column.type)}>{column.name}</option>)}</select></label><label>Type<select value={chart.kind === 'line' ? 'line' : 'bar'} onChange={event => onChart({ ...chart, kind: event.target.value as Draft['chart']['kind'] })}><option value="line">Line</option><option value="bar">Bar</option></select></label></div></div>{!values.length ? <div className="chart-empty">Choose a numeric result column to plot.</div> : <div className="chart-canvas"><div className="chart-axis-labels"><span>{max.toLocaleString()}</span><span>{(min + range / 2).toLocaleString()}</span><span>{min.toLocaleString()}</span></div><svg viewBox="0 0 760 230" role="img" aria-label={`${chart.kind} chart of ${result.columns[yIndex]?.name}`}><defs><linearGradient id="chart-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="var(--accent)" stopOpacity=".35"/><stop offset="100%" stopColor="var(--accent)" stopOpacity="0"/></linearGradient></defs>{[40, 115, 190].map(y => <line key={y} x1="32" x2="732" y1={y} y2={y} className="chart-gridline"/>)}{chart.kind === 'line' ? <><polygon points={`32,190 ${points} ${32 + Math.max(0, bars.length - 1) * (700 / Math.max(1, bars.length - 1))},190`} fill="url(#chart-fill)"/><polyline points={points} className="chart-line"/>{bars.map((point, index) => <circle key={point.index} cx={32 + index * (700 / Math.max(1, bars.length - 1))} cy={190 - ((point.value - min) / range) * 150} r="3.5" className="chart-point"/> )}</> : bars.map((bar, index) => <rect key={bar.index} x={40 + index * (680 / Math.max(1, bars.length))} y={190 - (bar.value / max) * 150} width={Math.max(4, 20 - bars.length / 2)} height={Math.max(1, (bar.value / max) * 150)} rx="3" className="chart-bar" style={{ animationDelay: `${index * 20}ms` }}/>)}</svg><div className="chart-x-labels"><span>{bars[0]?.label}</span><span>{bars[Math.floor(bars.length / 2)]?.label}</span><span>{bars.at(-1)?.label}</span></div></div>}<div className="chart-footer"><span><span className="chart-legend-dot"/>{result.columns[yIndex]?.name}</span><span>{Math.min(result.rows.length, 24)} plotted points <i>·</i> {result.completeness === 'truncated' ? 'truncated result' : 'complete result'}</span></div></div>;
+    const numericIndexes = result.columns.flatMap((column, index) => numericType(column.type) ? [index] : []);
+    const yIndex = chart.ys.find(index => numericIndexes.includes(index)) ?? suggestion.config.ys.find(index => numericIndexes.includes(index)) ?? numericIndexes[0] ?? 0;
+    const points = result.rows.slice(0, 24).map((row, index) => ({ label: displayValue(row[xIndex]), value: chartNumber(row[yIndex]), index }));
+    const values = points.flatMap(point => point.value === null ? [] : [point.value]);
+    const min = Math.min(0, ...values), max = Math.max(0, ...values), range = max - min || 1;
+    const plotTop = 40, plotBottom = 190, zeroY = plotBottom - ((0 - min) / range) * (plotBottom - plotTop);
+    const y = (value: number) => plotBottom - ((value - min) / range) * (plotBottom - plotTop);
+    const x = (index: number) => 32 + index * (700 / Math.max(1, points.length - 1));
+    const segments: typeof points[] = [];
+    let segment: typeof points = [];
+    for (const point of points) {
+        if (point.value === null) {
+            if (segment.length) segments.push(segment);
+            segment = [];
+        } else segment.push(point);
+    }
+    if (segment.length) segments.push(segment);
+    const chartKind = chart.kind === 'line' ? 'line' : 'bar';
+    const barWidth = Math.max(4, Math.min(28, (680 / Math.max(1, points.length)) * .68));
+    return <div className="chart-workspace animate-enter">
+        <div className="chart-title-row"><div><span className="eyebrow">VISUAL EXPLORATION</span><h3>{chart.title || result.columns[yIndex]?.name || 'Query result'}</h3><p>{suggestion.reason} Chart uses retained rows only.</p></div><div className="chart-controls">
+            <label>X axis<select value={xIndex} onChange={event => onChart({ ...chart, x: Number(event.target.value) })}>{result.columns.map((column, index) => <option value={index} key={index}>{column.name}</option>)}</select></label>
+            <label>Measure<select value={yIndex} onChange={event => onChart({ ...chart, ys: [Number(event.target.value)] })}>{result.columns.map((column, index) => <option value={index} key={index} disabled={!numericType(column.type)}>{column.name}</option>)}</select></label>
+            <label>Type<select value={chartKind} onChange={event => onChart({ ...chart, kind: event.target.value as Draft['chart']['kind'] })}><option value="line">Line</option><option value="bar">Bar</option></select></label>
+        </div></div>
+        {!values.length ? <div className="chart-empty">Choose a numeric result column to plot.</div> : <div className="chart-canvas"><div className="chart-axis-labels"><span>{max.toLocaleString()}</span><span>{((min + max) / 2).toLocaleString()}</span><span>{min.toLocaleString()}</span></div>
+            <svg viewBox="0 0 760 230" role="img" aria-label={`${chartKind} chart of ${result.columns[yIndex]?.name}`}>
+                <defs><linearGradient id="chart-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="var(--accent)" stopOpacity=".28"/><stop offset="100%" stopColor="var(--accent)" stopOpacity="0"/></linearGradient></defs>
+                {[40, 115, 190].map(value => <line key={value} x1="32" x2="732" y1={value} y2={value} className="chart-gridline"/>)}
+                <line x1="32" x2="732" y1={zeroY} y2={zeroY} className="chart-zero-line"/>
+                {chartKind === 'line' ? <>
+                    {segments.filter(pointsInSegment => pointsInSegment.length > 1).map((pointsInSegment, index) => <polygon key={`area-${index}`} points={`${x(pointsInSegment[0]!.index)},${zeroY} ${pointsInSegment.map(point => `${x(point.index)},${y(point.value!)}`).join(' ')} ${x(pointsInSegment.at(-1)!.index)},${zeroY}`} fill="url(#chart-fill)"/>)}
+                    {segments.map((pointsInSegment, index) => <polyline key={`line-${index}`} points={pointsInSegment.map(point => `${x(point.index)},${y(point.value!)}`).join(' ')} className="chart-line"/>)}
+                    {points.filter(point => point.value !== null).map(point => <circle key={point.index} cx={x(point.index)} cy={y(point.value!)} r="3.5" className="chart-point"/>)}
+                </> : points.flatMap(point => {
+                    if (point.value === null) return [];
+                    const valueY = y(point.value), top = Math.min(zeroY, valueY), height = Math.max(1, Math.abs(valueY - zeroY));
+                    return [<rect key={point.index} x={x(point.index) - barWidth / 2} y={top} width={barWidth} height={height} rx="3" className="chart-bar" style={{ animationDelay: `${point.index * 20}ms` }}/>];
+                })}
+            </svg><div className="chart-x-labels"><span>{points[0]?.label}</span><span>{points[Math.floor(points.length / 2)]?.label}</span><span>{points.at(-1)?.label}</span></div>
+        </div>}
+        <div className="chart-footer"><span><span className="chart-legend-dot"/>{result.columns[yIndex]?.name}</span><span>{values.length} plotted points <i>·</i> {result.completeness === 'truncated' ? 'truncated result' : 'complete result'}</span></div>
+    </div>;
 }
 
-function InsightsView({ run, profile, onLoad, loading }: { run: Run; profile?: QueryProfile; onLoad: () => void; loading: boolean }) {
+function InsightsView({ run, profile, pipeline, pipelineAvailable, onLoad, onLoadPipeline, loading }: { run: Run; profile?: QueryProfile; pipeline?: ProfilePipeline; pipelineAvailable: boolean; onLoad: () => void; onLoadPipeline: () => void; loading: boolean }) {
     const summary = profile?.summary;
+    const plan = pipeline ?? profile?.pipeline;
+    const hasClickHousePlan = plan?.source === 'explain_pipeline';
     const metrics = [
         { label: 'Execution time', value: `${Math.round(summary?.durationMs ?? run.elapsedMs)} ms`, icon: 'bolt' },
         { label: 'Rows scanned', value: summary?.readRows ? Number(summary.readRows).toLocaleString() : 'Unavailable', icon: 'schema' },
@@ -705,7 +916,7 @@ function InsightsView({ run, profile, onLoad, loading }: { run: Run; profile?: Q
         { label: 'Rows returned', value: run.rowCount.toLocaleString(), icon: 'chart' },
         { label: 'Result size', value: formatBytes(run.bytes), icon: 'documents' },
     ];
-    return <div className="insights-view animate-enter"><div className="insights-heading"><div><span className="eyebrow">EXECUTION INSIGHTS</span><h3>What happened when this ran?</h3><p>Measurements come from this run's execution and ClickHouse query log.</p></div>{!profile && <Button variant="secondary" onClick={onLoad} disabled={loading}>{loading ? 'Loading…' : 'Load execution details'}</Button>}</div><div className="insight-metrics">{metrics.map(metric => <article className="insight-metric" key={metric.label}><span className="insight-icon"><Icon name={metric.icon}/></span><span className="eyebrow">{metric.label}</span><strong>{metric.value}</strong></article>)}</div>{profile?.insights.length ? <div className="insight-list">{profile.insights.map(insight => <article key={insight.id} className={`insight-card severity-${insight.severity}`}><span className="insight-severity">{insight.severity}</span><div><strong>{insight.title}</strong><p>{insight.description}</p></div></article>)}</div> : profile ? <div className="profile-empty">No deterministic issue was identified in the available evidence.</div> : <p className="profile-note">Query log details can take a short time to appear after execution. Values marked unavailable are not inferred.</p>}{profile?.notice && <p className="profile-note">{profile.notice}</p>}</div>;
+    return <div className="insights-view animate-enter"><div className="insights-heading"><div><span className="eyebrow">EXECUTION INSIGHTS</span><h3>What happened when this ran?</h3><p>Measurements come from this run's execution and ClickHouse query log.</p></div>{!profile && <Button variant="secondary" onClick={onLoad} disabled={loading}>{loading ? 'Loading…' : 'Load execution details'}</Button>}</div><div className="insight-metrics">{metrics.map(metric => <article className="insight-metric" key={metric.label}><span className="insight-icon"><Icon name={metric.icon}/></span><span className="eyebrow">{metric.label}</span><strong>{metric.value}</strong></article>)}</div>{profile && <section className="run-analysis" aria-label="Run and query plan comparison"><div className="run-analysis-heading"><div><span className="eyebrow">RUN + EXPLAIN</span><strong>Measured execution, then its plan</strong></div>{pipelineAvailable && <Button variant="secondary" className="toolbar-small" onClick={onLoadPipeline} disabled={loading}>{loading ? 'Loading…' : hasClickHousePlan ? 'Refresh pipeline' : 'Load ClickHouse pipeline'}</Button>}</div><div className="run-analysis-columns"><article><span className="eyebrow">THIS RUN</span><strong>{Math.round(summary?.durationMs ?? run.elapsedMs)} ms</strong><small>{summary?.readRows ? `${Number(summary.readRows).toLocaleString()} rows scanned` : 'Scan count unavailable'} · {summary?.readBytes ? formatBytes(summary.readBytes) : 'bytes unavailable'}</small><code>{run.queryId}</code></article><article><span className="eyebrow">QUERY PLAN</span><strong>{plan?.nodes.length ?? 0} stages</strong><small>{hasClickHousePlan ? 'EXPLAIN PIPELINE · ClickHouse' : 'Estimated from SQL shape'}</small><small>{plan?.nodes.filter(node => node.status === 'measured').length ?? 0} measured · {plan?.nodes.filter(node => node.status === 'estimated').length ?? 0} estimated</small></article></div>{plan && <><div className="run-analysis-stages" aria-label="Pipeline stages">{plan.nodes.slice(0, 8).map((node, index) => <span key={node.id}><i>{String(index + 1).padStart(2, '0')}</i><strong>{node.label}</strong><small>{node.status}</small></span>)}{plan.nodes.length > 8 && <small>+{plan.nodes.length - 8} more stages</small>}</div><p className="profile-note">{plan.notice}</p></>}</section>}{profile?.insights.length ? <div className="insight-list">{profile.insights.map(insight => <article key={insight.id} className={`insight-card severity-${insight.severity}`}><span className="insight-severity">{insight.severity}</span><div><strong>{insight.title}</strong><p>{insight.description}</p></div></article>)}</div> : profile ? <div className="profile-empty">No deterministic issue was identified in the available evidence.</div> : <p className="profile-note">Query log details can take a short time to appear after execution. Values marked unavailable are not inferred.</p>}{profile?.notice && <p className="profile-note">{profile.notice}</p>}</div>;
 }
 
 function InspectorPane({ inspector, setInspector, connection, schema, schemaLoading, schemaError, search, setSearch, tables, history, documents, run, profile, pipeline, onRefreshSchema, onInsert, onOpenRun, onOpenDocument, onLoadProfile, onLoadPipeline, connectionId, sql, trusted, runId, onRefreshDocuments, assistantAction, onAssistantAction, assistantQuestion, onAssistantQuestion, assistantContext, assistantProposal, assistantBusy, assistantError, includeResult, onIncludeResult, onVoiceInput, voiceListening, voiceError, onPreview, onRequestProposal, onDecideProposal, onRunQuery, runDisabled, drawer = false, onClose }: {
@@ -786,9 +997,9 @@ function PipelineView({ run, profile, pipeline, onLoad }: { run?: Run; profile?:
     return <section className="inspector-section"><div className="schema-heading"><span>EXECUTION PIPELINE</span><Button variant="ghost" className="toolbar-small" onClick={onLoad}>Load evidence</Button></div>{pipeline?.notice && <p className="profile-note">{pipeline.notice}</p>}{stages.length ? <div className="pipeline-list">{stages.map((stage, index) => <article className={`pipeline-stage stage-${stage.status}`} key={stage.id}><span className="pipeline-stage-index">{String(index + 1).padStart(2, '0')}</span><span className="pipeline-connector"/><span className="pipeline-stage-body"><strong>{stage.label}</strong><small>{stage.detail ?? stage.kind} · {stage.status}</small><span>{[stage.durationMs === undefined ? '' : `${Math.round(stage.durationMs)} ms`, stage.rows ? `${stage.rows} rows` : '', stage.bytes ? `${stage.bytes} bytes` : ''].filter(Boolean).join(' · ') || 'No stage-level measurements'}</span></span><span className="stage-evidence">{stage.status}</span></article>)}</div> : <div className="inspector-empty"><Icon name="pipeline"/><strong>Pipeline evidence is not loaded</strong><p>Available ClickHouse versions can return an EXPLAIN PIPELINE graph.</p></div>}</section>;
 }
 
-function ExecutionBar({ run, eventState, onCancel, busy }: { run: Run; eventState: string; onCancel: () => void; busy: boolean }) {
+function ExecutionBar({ run, eventState, onCancel, busy, scriptRunning }: { run: Run; eventState: string; onCancel: () => void; busy: boolean; scriptRunning: boolean }) {
     const progress = run.progress;
-    return <footer className={cx('execution-bar', !terminal(run) && 'is-running')}><div className="execution-state"><Status run={run}/><span className="execution-separator"/><strong>{terminal(run) ? `${Math.round(run.elapsedMs)} ms` : `${Math.max(0, Math.round(progress?.elapsedMs ?? run.elapsedMs))} ms`}</strong><span className="execution-link-state"><span className={cx('status-light', eventState === 'live' ? 'is-trusted' : eventState === 'reconnecting' ? 'is-warning' : '')}/>{eventState === 'live' ? 'Live updates' : eventState === 'reconnecting' ? 'Reconnecting' : 'Complete'}</span></div><div className="execution-telemetry"><span><strong>{progress?.readRows ? formatCount(progress.readRows) : '—'}</strong> rows read</span><span><strong>{progress?.readBytes ? formatBytes(progress.readBytes) : '—'}</strong> read</span><span><strong>{progress?.memory ? formatBytes(progress.memory) : '—'}</strong> memory</span>{run.kind !== 'query' && <span className="execution-kind">{run.kind.toUpperCase()}</span>}</div><div className="execution-right"><code title={run.queryId}>{run.queryId}</code>{!terminal(run) && <Button variant="danger" className="cancel-execution" onClick={onCancel} disabled={busy}>Cancel</Button>}</div><span className="execution-progress-line"/></footer>;
+    return <footer className={cx('execution-bar', (!terminal(run) || scriptRunning) && 'is-running')}><div className="execution-state"><Status run={run}/>{scriptRunning && <span className="execution-kind">SCRIPT RUNNING</span>}<span className="execution-separator"/><strong>{terminal(run) ? `${Math.round(run.elapsedMs)} ms` : `${Math.max(0, Math.round(progress?.elapsedMs ?? run.elapsedMs))} ms`}</strong><span className="execution-link-state"><span className={cx('status-light', eventState === 'live' ? 'is-trusted' : eventState === 'reconnecting' ? 'is-warning' : '')}/>{eventState === 'live' ? 'Live updates' : eventState === 'reconnecting' ? 'Reconnecting' : 'Complete'}</span></div><div className="execution-telemetry"><span><strong>{progress?.readRows ? formatCount(progress.readRows) : '—'}</strong> rows read</span><span><strong>{progress?.readBytes ? formatBytes(progress.readBytes) : '—'}</strong> read</span><span><strong>{progress?.memory ? formatBytes(progress.memory) : '—'}</strong> memory</span>{run.kind !== 'query' && <span className="execution-kind">{run.kind.toUpperCase()}</span>}</div><div className="execution-right"><code title={run.queryId}>{run.queryId}</code>{(scriptRunning || !terminal(run)) && <Button variant="danger" className="cancel-execution" onClick={onCancel} disabled={busy}>{scriptRunning ? 'Cancel script' : 'Cancel'}</Button>}</div><span className="execution-progress-line"/></footer>;
 }
 
 function formatBytes(value?: string | number): string {

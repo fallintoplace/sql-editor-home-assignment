@@ -127,6 +127,49 @@ export function selectedStatement(sql: string, from: number, to = from): Stateme
         all.find(s => s.from > from) ?? all.at(-1);
 }
 
+function protectedSqlRanges(sql: string): Array<{ from: number; to: number }> {
+    const ranges: Array<{ from: number; to: number }> = [];
+    for (let i = 0; i < sql.length;) {
+        const from = i, ch = sql[i]!;
+        if (sql.startsWith('--', i) || ch === '#') {
+            const newline = sql.indexOf('\n', i);
+            i = newline < 0 ? sql.length : newline;
+        }
+        else if (sql.startsWith('/*', i)) {
+            i += 2;
+            let depth = 1;
+            while (i < sql.length && depth) {
+                if (sql.startsWith('/*', i)) { depth++; i += 2; }
+                else if (sql.startsWith('*/', i)) { depth--; i += 2; }
+                else i++;
+            }
+        }
+        else if (ch === "'" || ch === '"' || ch === '`') {
+            i++;
+            while (i < sql.length) {
+                if (sql[i] === '\\') { i = Math.min(sql.length, i + 2); continue; }
+                if (sql[i] === ch) {
+                    if (sql[i + 1] === ch) { i += 2; continue; }
+                    i++;
+                    break;
+                }
+                i++;
+            }
+        }
+        else if (ch === '$') {
+            const marker = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.exec(sql.slice(i))?.[0];
+            if (marker) {
+                const end = sql.indexOf(marker, i + marker.length);
+                i = end < 0 ? sql.length : end + marker.length;
+            }
+            else i++;
+        }
+        else { i++; continue; }
+        ranges.push({ from, to: i });
+    }
+    return ranges;
+}
+
 /**
  * A conservative layout helper for the editor. It only changes whitespace and
  * clause boundaries; quoted values and comments are protected byte-for-byte.
@@ -134,59 +177,30 @@ export function selectedStatement(sql: string, from: number, to = from): Stateme
  */
 export function formatSql(sql: string): string {
     const protectedParts: string[] = [];
+    let markerPrefix = '\uE000WB_FMT_';
+    while (sql.includes(markerPrefix)) markerPrefix += '_';
     const protectedText = (value: string) => {
-        const marker = `__WB_FMT_${protectedParts.length}__`;
+        const marker = `${markerPrefix}${protectedParts.length}\uE001`;
         protectedParts.push(value);
         return marker;
     };
     let masked = '';
-    for (let i = 0; i < sql.length;) {
-        const ch = sql[i]!;
-        if (sql.startsWith('--', i) || ch === '#') {
-            const end = sql.indexOf('\n', i);
-            const to = end < 0 ? sql.length : end;
-            masked += protectedText(sql.slice(i, to));
-            i = to;
-            continue;
-        }
-        if (sql.startsWith('/*', i)) {
-            const end = sql.indexOf('*/', i + 2);
-            const to = end < 0 ? sql.length : end + 2;
-            masked += protectedText(sql.slice(i, to));
-            i = to;
-            continue;
-        }
-        if (ch === "'" || ch === '"' || ch === '`') {
-            let to = i + 1;
-            while (to < sql.length) {
-                if (sql[to] === '\\') {
-                    to += 2;
-                    continue;
-                }
-                if (sql[to] === ch) {
-                    if (sql[to + 1] === ch) {
-                        to += 2;
-                        continue;
-                    }
-                    to++;
-                    break;
-                }
-                to++;
-            }
-            masked += protectedText(sql.slice(i, to));
-            i = to;
-            continue;
-        }
-        masked += ch;
-        i++;
+    let from = 0;
+    for (const range of protectedSqlRanges(sql)) {
+        masked += sql.slice(from, range.from);
+        masked += protectedText(sql.slice(range.from, range.to));
+        from = range.to;
     }
-    masked = masked.replace(/[ \t\r\n]+/g, ' ').trim();
+    masked += sql.slice(from);
+    masked = masked.replace(/[ \t\r]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n+/g, '\n').trim();
     masked = masked.replace(/\s*;\s*/g, ';\n');
     masked = masked.replace(/\s+(FROM|PREWHERE|WHERE|GROUP BY|HAVING|ORDER BY|LIMIT|OFFSET|UNION ALL|UNION DISTINCT|SETTINGS|FORMAT)\b/gi, (_match, keyword: string) => `\n${keyword.toUpperCase()}`);
     masked = masked.replace(/\s+(LEFT|RIGHT|FULL|INNER|CROSS)?\s*JOIN\b/gi, (_match, side: string | undefined) => `\n${side ? `${side.toUpperCase()} ` : ''}JOIN`);
     masked = masked.replace(/\s+(AND|OR)\s+/gi, (_match, keyword: string) => `\n  ${keyword.toUpperCase()} `);
     masked = masked.split('\n').map(line => line.trim()).filter(Boolean).join('\n');
-    return masked.replace(/__WB_FMT_(\d+)__/g, (_match, index: string) => protectedParts[Number(index)] ?? '');
+    for (let index = 0; index < protectedParts.length; index++)
+        masked = masked.replaceAll(`${markerPrefix}${index}\uE001`, protectedParts[index]!);
+    return masked;
 }
 export function quoteIdentifier(name: string): string {
     return '`' + name.replace(/\\/g, '\\\\').replace(/`/g, '\\`') + '`';

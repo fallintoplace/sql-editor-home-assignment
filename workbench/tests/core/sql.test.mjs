@@ -37,6 +37,18 @@ test('SQL formatter preserves literals and comments while laying out clauses', (
     assert.ok(formatted.includes("'x;y'"));
     assert.match(formatted, /\nFROM events\nWHERE/);
 });
+test('SQL formatter protects nested comments and heredocs byte-for-byte', () => {
+    const nested = '/* outer  from /* inner  where */ order by */';
+    const heredoc = '$tag$ keep  from  where\n and order by $tag$';
+    const formatted = formatSql(`select ${nested} value from events where note = ${heredoc} and id = 1`);
+    assert.ok(formatted.includes(nested));
+    assert.ok(formatted.includes(heredoc));
+    assert.match(formatted, /\nFROM events\nWHERE/);
+});
+test('SQL formatter keeps a line break after inline comments', () => {
+    const formatted = formatSql('select a -- keep this line\n, b from events');
+    assert.ok(formatted.includes('-- keep this line\n,'));
+});
 test('Hard limits cannot be raised', () => assert.throws(() => limits({ rows: 1e8 })));
 test('Unknown limit cannot exploit prototype', () => assert.throws(() => limits(JSON.parse('{"__proto__":1}'))));
 test('Unsafe JSON integers reject rather than lose precision', () => assert.throws(() => validateJson(JSON.parse('{"id":18446744073709551615}'))));

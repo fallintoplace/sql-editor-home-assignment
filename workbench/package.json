@@ -16,6 +16,7 @@
     "test:core": "tsc -p tsconfig.core.json && node --test tests/core/*.test.mjs",
     "test:integration": "tsx --env-file-if-exists=.env --test tests/integration/*.test.ts",
     "test:e2e": "playwright test",
+    "test:e2e:critical": "playwright test tests/e2e/interview-critical.spec.ts",
     "check": "npm run typecheck && npm test && npm run build",
     "eval": "tsx --env-file-if-exists=.env scripts/eval.ts",
     "eval:assistant": "tsx --env-file-if-exists=.env scripts/eval-assistant.ts",

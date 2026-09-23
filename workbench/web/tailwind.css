@@ -9,38 +9,6 @@
 
 :root {
     color-scheme: dark;
-    --page: #101412;
-    --page-raised: #151a17;
-    --panel: #171d19;
-    --panel-raised: #1d251f;
-    --panel-hover: #222b24;
-    --line: #2a342d;
-    --line-bright: #39463d;
-    --text: #eef4ee;
-    --text-soft: #c1ccc3;
-    --muted: #89978d;
-    --accent: #e5c95e;
-    --accent-strong: #f4d968;
-    --accent-action: #e5c95e;
-    --accent-ink: #29240f;
-    --green: #80db9a;
-    --amber: #efbd65;
-    --red: #ff8078;
-    --violet: #c3a0ff;
-    --editor-selection: #d2b75655;
-    --shadow: 0 22px 70px #0007;
-    --radius: 14px;
-    font-family: var(--font-sans);
-    background: var(--page);
-    color: var(--text);
-    font-synthesis: none;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-}
-
-:root[data-theme="click-dark"] {
-    color-scheme: dark;
     --page: #101010;
     --page-raised: #151515;
     --panel: #1a1a1a;
@@ -61,6 +29,14 @@
     --violet: #c7d64a;
     --editor-selection: #eaff0045;
     --shadow: 0 24px 76px #000a;
+    --radius: 14px;
+    font-family: var(--font-sans);
+    background: var(--page);
+    color: var(--text);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 :root[data-theme="click-light"] {

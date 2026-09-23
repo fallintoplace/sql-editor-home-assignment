@@ -42,7 +42,7 @@ schema cap. Alias hints are best-effort, not a full SQL name resolver.
 ## Checks
 
 ```sh
-cd workbench
+cd clickstudio
 npm run test:core
 npm run typecheck
 npm run test:e2e -- tests/e2e/editor-tools.spec.ts

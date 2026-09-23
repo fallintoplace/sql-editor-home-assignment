@@ -1,91 +1,62 @@
 # ClickStudio
 
-A local-first ClickHouse SQL workbench built for the frontend assignment. The UI uses
-React, Tailwind CSS, and CodeMirror; the server owns connections, execution limits,
-retained results, and query evidence.
+A local-first ClickHouse SQL editor built with React, Tailwind CSS, and CodeMirror. ClickStudio runs queries through a bounded server API and keeps result evidence tied to each execution.
 
-## Try the demo
+## Try the sample workspace
 
-Requires **Node.js 22.12+** and npm. The demo is deterministic and does not send SQL
-to ClickHouse or evaluate the SQL text.
+Requires **Node.js 22.12+** and npm. The sample mode uses deterministic fixtures; it does not send SQL to ClickHouse or interpret query text.
 
 ```sh
-cd workbench
-npm ci
+npm run setup
+cd clickstudio
 DEMO_MODE=true npm run dev
 ```
 
-Open `http://localhost:5173` and choose **Start exploring** for the sample connection.
+Open `http://localhost:5173` and choose **Start exploring**.
 
-## Run against local ClickHouse
+## Run with local ClickHouse
 
-Docker Compose starts the ClickHouse 24.6 compatibility fixture used by this repo.
+Docker Compose starts the ClickHouse 24.6 compatibility fixture used by this project.
 
 ```sh
-cd workbench
-npm ci
+npm run setup
+cd clickstudio
 npm run init:env
 docker compose up -d --wait clickhouse
 npm run db:setup
 npm run dev
 ```
 
-Open `http://localhost:5173`, sign in with `WORKBENCH_TOKEN` from `workbench/.env`,
-then test and explicitly trust the local connection. Keep `.env` private; database
-and optional model-provider credentials stay on the server.
+Open `http://localhost:5173`, sign in with `CLICKSTUDIO_TOKEN` from `clickstudio/.env`, then test and trust the local connection. Keep `.env` private. Database and optional model-provider credentials stay on the server.
 
-## What works
+## What it includes
 
-- Run a SQL statement and inspect typed, paginated retained results.
-- Validate and format SQL locally with ClickHouse's native WASM parser when the pinned upstream artifact is available; the editor falls back cleanly when it is not.
-- Chart retained data, including nullable and negative numeric values.
-- Run SQL scripts and inspect each statement's status and result independently.
-- Import CSV, JSON, or NDJSON files with a preview, explicit target allowlist, schema-checked column mapping, and row-count confirmation. Ambiguous writes stay blocked until they are reconciled.
-- Track execution progress, cancel work, and reopen prior query evidence.
-- See when an edited query no longer matches the displayed result.
-- Explore schema, save local drafts, and review execution details.
-- Preview AI context and review a SQL proposal before applying it. AI never runs SQL automatically.
+- Run SQL and inspect typed, paginated results.
+- Format and validate ClickHouse SQL in the editor.
+- Run scripts and inspect each statement separately.
+- Inspect schema and ClickHouse table metadata.
+- Import CSV, JSON, or NDJSON through preview, mapping, and explicit row-count confirmation.
+- Track execution progress, cancel queries, and reopen retained evidence.
+- Save query documents, build charts, and inspect execution plans.
+- Review assistant context and SQL proposals before applying them. The assistant never runs SQL automatically.
 
-Demo results are fixtures, not live ClickHouse measurements. Real connections require
-explicit review and read-only trust before query execution.
+Sample results are fixtures, not live ClickHouse measurements. Real connections require explicit review and trust before query execution.
 
 ## Checks
 
 ```sh
-cd workbench
+cd clickstudio
 npm test
 npm run typecheck
 npm run build
-npm run test:e2e:critical
+npm run test:e2e:core
 ```
 
-The focused Playwright suite uses the fixture driver and runs in GitHub Actions.
-For live ClickHouse integration checks, start the local database above, then run:
+The focused browser suite uses the fixture driver. For live ClickHouse checks, start the database above, then run:
 
 ```sh
 CLICKHOUSE_INTEGRATION=1 npm run test:integration
 npm run eval
 ```
 
-## Assignment
-
-The original task asks for a React SQL editor with query results, charts, SQL script
-execution, and optional file import. ClickStudio implements all four in the UI.
-Server APIs and import safeguards are documented in [the workbench guide](docs/WORKBENCH.md).
-
-## Original assignment
-
-Given the current project, lets elaborate a mini sql web editor in React. When opening the `/` the react application
-should render and display a sql editor where we can write our queries.
-
-Implement the following features
-
-- Run a query and display the query results in the UI
-- Run a query and display a chart with the results of that query
-- Support sql script running and display results
-
-Bonus:
-
-- Insert data from a file
-
-We have our [UI component library](https://click-ui.vercel.app) if you want some help with the components design that can give you some leverage and accelerate speed of development, but you are free to use whatever you would prefer.
+See [the ClickStudio guide](docs/CLICKSTUDIO.md) for setup, security boundaries, and API behavior.

@@ -1,0 +1,144 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import type { AddressInfo } from 'node:net';
+import { randomUUID } from 'node:crypto';
+import { createApp } from '../../server/app.js';
+import { loadConfig } from '../../server/config.js';
+import { MemoryStore } from '../../core/store.js';
+import { DemoDriver } from '../../server/demo.js';
+import type { VoiceService } from '../../server/voice.js';
+import type { ImportJob } from '../../core/imports.js';
+import type { QueryDocument, Run, Published } from '../../shared/types.js';
+async function start(token?: string, voice?: VoiceService, parserWasm?: () => Promise<Uint8Array>) {
+    const config = loadConfig({ DEMO_MODE: 'true', CLICKSTUDIO_TOKEN: token });
+    const service = createApp(config, { store: new MemoryStore(), driver: new DemoDriver(), voice, parserWasm });
+    const server = service.app.listen(0, '127.0.0.1');
+    await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
+    config.port = (server.address() as AddressInfo).port;
+    config.origin = `http://127.0.0.1:${config.port}`;
+    const call = (path: string, body?: unknown, headers: Record<string, string> = {}, method = body === undefined ? 'GET' : 'POST') => fetch(config.origin + '/api' + path, { method, headers: { 'content-type': 'application/json', 'x-clickstudio-intent': '1', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
+    return { ...service, call, origin: config.origin, stop: async () => { await service.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); } };
+}
+const owner = { id: 'local-owner', role: 'owner' } as const;
+test('Voice sessions require trust and keep the provider behind the server', async (t) => {
+    const calls: unknown[] = [];
+    const s = await start(undefined, { available: true, model: 'test-voice', createSession: async input => { calls.push(input); return { sdp: 'answer-sdp', model: 'test-voice' }; } });
+    t.after(() => s.stop());
+    assert.equal((await s.call('/voice/status')).status, 200);
+    assert.equal((await s.call('/voice/session', { connectionId: 'demo', sdp: 'offer-sdp', context: 'SELECT 1' })).status, 403);
+    await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' });
+    const response = await s.call('/voice/session', { connectionId: 'demo', sdp: 'offer-sdp', context: 'SELECT 1' });
+    assert.equal(response.status, 201);
+    assert.deepEqual(await response.json(), { sdp: 'answer-sdp', model: 'test-voice' });
+    assert.equal((calls[0] as { safetyIdentifier: string }).safetyIdentifier.length, 64);
+});
+test('HTTP query flow requires explicit trust and is idempotent', async (t) => {
+    const s = await start();
+    t.after(() => s.stop());
+    const input = { clientRequestId: randomUUID(), connectionId: 'demo', sql: 'SELECT 1' };
+    assert.equal((await s.call('/runs', input)).status, 403);
+    assert.equal((await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' })).status, 200);
+    const a = await s.call('/runs', input);
+    assert.equal(a.status, 202);
+    const run = await a.json() as Run;
+    const duplicate = await (await s.call('/runs', input)).json() as Run;
+    assert.equal(duplicate.id, run.id);
+    await s.runs.wait(owner, run.id);
+    const page = await s.call(`/runs/${run.id}/result?offset=0&count=2`);
+    assert.equal(page.status, 200);
+    assert.equal((await page.json()).rows.length, 2);
+    const event = await s.call(`/runs/${run.id}/events`);
+    const text = await event.text();
+    assert.match(text, /data: /);
+    assert.match(text, /succeeded/);
+});
+test('Native ClickHouse parser bytes are served same-origin behind the session boundary', async (t) => {
+    const fixture = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+    const s = await start(undefined, undefined, async () => fixture);
+    t.after(() => s.stop());
+    const response = await s.call('/editor/clickhouse-parser.wasm');
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /^application\/wasm/);
+    assert.match(response.headers.get('cache-control') ?? '', /private/);
+    assert.match(response.headers.get('content-security-policy') ?? '', /script-src 'self' 'wasm-unsafe-eval'/);
+    assert.deepEqual(new Uint8Array(await response.arrayBuffer()), fixture);
+});
+test('Assistant evaluation report is available without a provider and keeps SQL out of the summary', async (t) => {
+    const s = await start();
+    t.after(() => s.stop());
+    const response = await s.call('/assistant/evaluation');
+    assert.equal(response.status, 200);
+    const report = await response.json() as { total: number; benchmark: { total: number; passed: number; score: number; mode: string }; latest: unknown[] };
+    assert.equal(report.total, 0);
+    assert.deepEqual(report.benchmark, { total: 5, passed: 5, score: 100, mode: 'static' });
+    assert.deepEqual(report.latest, []);
+});
+test('Cookie login and request intent are enforced', async (t) => {
+    const token = 'owner-token-'.repeat(4), s = await start(token);
+    t.after(() => s.stop());
+    assert.equal((await s.call('/connections')).status, 401);
+    assert.equal((await s.call('/session', { token }, { 'x-clickstudio-intent': '' })).status, 403);
+    assert.equal((await s.call('/session', { token: 'wrong' })).status, 401);
+    const login = await s.call('/session', { token });
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
+    assert.match(cookie, /^clickstudio_session=/);
+    assert.equal((await s.call('/connections', undefined, { cookie })).status, 200);
+    assert.equal((await s.call('/session', {}, { cookie }, 'DELETE')).status, 200);
+    assert.equal((await s.call('/connections', undefined, { cookie })).status, 401);
+});
+test('Workspace bootstrap and actions work when browser origin differs from configuration', async (t) => {
+    const s = await start();
+    t.after(() => s.stop());
+    const headers = { host: 'clickstudio.invalid', origin: 'https://clickstudio.invalid' };
+    assert.equal((await s.call('/session', undefined, headers)).status, 200);
+    assert.equal((await s.call('/connections', undefined, headers)).status, 200);
+    assert.equal((await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' }, headers)).status, 200);
+});
+test('Sharing exposes an immutable snapshot, not an execution credential', async (t) => {
+    const s = await start();
+    t.after(() => s.stop());
+    await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' });
+    const run = await (await s.call('/runs', { clientRequestId: randomUUID(), connectionId: 'demo', sql: 'SELECT 1' })).json() as Run;
+    await s.runs.wait(owner, run.id);
+    const doc = await (await s.call('/documents', { name: 'Evidence.sql', connectionId: 'demo', sql: 'SELECT 1', runId: run.id })).json() as QueryDocument;
+    const pub = await (await s.call(`/documents/${doc.id}/publish`, { revision: 1 })).json() as Published;
+    assert.equal((await s.call(`/published/${pub.id}/share`, {})).status, 400);
+    const share = await (await s.call(`/published/${pub.id}/share`, { acknowledgeShare: true })).json();
+    await s.call(`/documents/${doc.id}`, { ...doc, baseRevision: 1, sql: 'SELECT 2' }, {}, 'PUT');
+    const snapshot = await (await s.call(`/shared/${share.token}`)).json() as Published;
+    assert.equal(snapshot.document.sql, 'SELECT 1');
+    assert.equal((await s.call('/runs', { clientRequestId: randomUUID(), connectionId: 'unrecognized', sql: 'SELECT 1' })).status, 404);
+});
+test('Invalid workspace import is rejected without partially saving documents', async (t) => {
+    const s = await start();
+    t.after(() => s.stop());
+    const input = { format: 'clickstudio-workspace', version: 1, documents: [{ name: 'ok.sql', connectionId: 'demo', sql: 'SELECT 1' }, { name: 'bad.sql', connectionId: 'demo', sql: 7 }] };
+    assert.equal((await s.call('/workspace/import', input)).status, 400);
+    assert.deepEqual(await (await s.call('/documents')).json(), []);
+});
+test('Recoverable import endpoints expose only owned unresolved jobs and keep ambiguous writes blocked', async (t) => {
+    const s = await start();
+    t.after(() => s.stop());
+    const makeJob = (id: string, jobOwner: string, reviewedAt?: string): ImportJob => ({ id, owner: jobOwner, inputId: `input-${id}`, connectionId: 'demo', table: 'demo.events', queryId: `query-${id}`, rows: 2, createdAt: '2026-09-23T00:00:00.000Z', status: 'unknown', reconciliationRequired: true, reviewedAt });
+    s.store.put('imports', 'open-job', makeJob('open-job', owner.id));
+    s.store.put('imports', 'other-owner-job', makeJob('other-owner-job', 'other-owner'));
+    s.store.put('imports', 'reviewed-job', makeJob('reviewed-job', owner.id, '2026-09-23T00:01:00.000Z'));
+
+    const listed = await s.call('/imports?connectionId=demo&recoverable=true');
+    assert.equal(listed.status, 200);
+    assert.deepEqual((await listed.json() as ImportJob[]).map(job => job.id), ['open-job']);
+    assert.equal((await s.call('/imports?recoverable=false')).status, 400);
+    assert.equal((await s.call('/imports/other-owner-job')).status, 404);
+
+    await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' });
+    const reconciled = await s.call('/imports/open-job/reconcile', {});
+    assert.equal(reconciled.status, 200);
+    assert.equal((await reconciled.json() as ImportJob).status, 'unknown');
+    assert.equal((await s.call('/imports/open-job/review', { inspected: false, noActiveInsert: false })).status, 400);
+    assert.equal((await s.call('/imports/open-job/review', { inspected: true, noActiveInsert: false })).status, 400);
+    const review = await s.call('/imports/open-job/review', { inspected: true, noActiveInsert: true });
+    assert.equal(review.status, 200);
+    assert.ok((await review.json() as ImportJob).reviewedAt);
+    assert.deepEqual(await (await s.call('/imports?connectionId=demo&recoverable=true')).json(), []);
+});

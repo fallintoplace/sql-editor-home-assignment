@@ -1,32 +1,16 @@
 {
-  "name": "clickhouse-express-demo",
+  "name": "clickstudio",
   "version": "1.0.0",
-  "main": "dist/index.js",
+  "private": true,
   "scripts": {
-    "setup": "npm --prefix workbench install",
-    "dev": "npm --prefix workbench run dev",
-    "start": "npm --prefix workbench start",
-    "start:production": "npm --prefix workbench run start:production",
-    "build": "npm --prefix workbench run build",
-    "typecheck": "npm --prefix workbench run typecheck",
-    "test": "npm --prefix workbench test",
-    "test:integration": "npm --prefix workbench run test:integration",
-    "test:e2e": "npm --prefix workbench run test:e2e"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
-  "dependencies": {
-    "@clickhouse/client": "^1.3.0",
-    "body-parser": "^1.20.2",
-    "express": "^4.19.2"
-  },
-  "devDependencies": {
-    "@types/express": "^4.17.21",
-    "@types/node": "^16.18.101",
-    "tslint": "^6.1.3",
-    "typescript": "^4.9.5",
-    "tsx": "4.16.2"
+    "setup": "npm --prefix clickstudio ci",
+    "dev": "npm --prefix clickstudio run dev",
+    "start": "npm --prefix clickstudio start",
+    "start:production": "npm --prefix clickstudio run start:production",
+    "build": "npm --prefix clickstudio run build",
+    "typecheck": "npm --prefix clickstudio run typecheck",
+    "test": "npm --prefix clickstudio test",
+    "test:integration": "npm --prefix clickstudio run test:integration",
+    "test:e2e": "npm --prefix clickstudio run test:e2e"
   }
 }

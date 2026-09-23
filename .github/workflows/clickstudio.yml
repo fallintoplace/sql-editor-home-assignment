@@ -1,0 +1,66 @@
+name: ClickStudio validation
+on:
+  push:
+    paths: ["clickstudio/**", "package.json", "src/index.ts", ".github/workflows/clickstudio.yml"]
+  pull_request:
+    paths: ["clickstudio/**", "package.json", "src/index.ts", ".github/workflows/clickstudio.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: clickstudio
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: clickstudio/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Core and workspace regressions plus dependency-aware build
+        id: build
+        run: npm test && npm run build
+      - name: Local-only credentials and ClickHouse 24.6
+        id: database
+        run: npm run init:env && docker compose up -d --wait clickhouse && npm run db:setup
+      - name: HTTP integration and LIVE ClickHouse fixture checks
+        run: CLICKHOUSE_INTEGRATION=1 npm run test:integration
+      - name: Deterministic SQL evaluations
+        run: npm run eval
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+      - name: Core browser flows (fixture driver)
+        run: npm run test:e2e:core
+      - name: Preserve browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clickstudio-browser-diagnostics
+          path: |
+            clickstudio/playwright-report
+            clickstudio/test-results
+          if-no-files-found: ignore
+      - name: Preserve UX screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clickstudio-ux-screenshots
+          path: clickstudio/test-results/**/clickstudio-*.png
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Preserve generated dependency lock for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clickstudio-dependency-lock
+          path: clickstudio/package-lock.json
+          if-no-files-found: ignore
+      - name: Stop local services
+        if: ${{ always() && steps.database.outcome != 'skipped' }}
+        run: docker compose down -v

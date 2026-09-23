@@ -491,6 +491,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         local: 'Local draft', checking: 'Checking save…', saving: 'Saving…', saved: `Saved r${active.baseRevision}`,
         changed: 'Unsaved changes', conflict: 'Newer revision available', deleted: 'Saved file in trash', unavailable: 'Save status unavailable',
     } as const)[saveStatus.state];
+    const visibleResultsView = experience === 'beginner' && view === 'insights' ? 'results' : view;
     const openDocument = (document: QueryDocument) => {
         addDraft(draftFromDocument(document));
     };
@@ -536,7 +537,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         onVoiceInput: startVoiceInput,
         voiceListening,
         voiceError,
-        onPreview: () => void prepareAssistantContext(),
+        onPreview: () => void prepareAssistantContext(experience === 'beginner' ? 'generate' : undefined),
         onRequestProposal: () => void requestAssistantProposal(),
         onDecideProposal: (decision: 'accepted' | 'rejected') => void decideAssistantProposal(decision),
         onRunQuery: () => void execute(),
@@ -544,7 +545,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         expert: experience === 'expert',
     } satisfies InspectorPaneProps;
 
-    return <div className={cx('workspace-root', experience === 'expert' && 'is-expert')}>
+    return <div className={cx('workspace-root', experience === 'expert' && 'is-expert', experience === 'beginner' && 'is-beginner')}>
         {error && <div className="toast toast-error animate-enter" role="alert"><span>!</span>{error}<button onClick={() => setError('')} aria-label="Dismiss error"><Icon name="close"/></button></div>}
         {notice && <div className="toast toast-success animate-enter" role="status"><span>✓</span>{notice}<button onClick={() => setNotice('')} aria-label="Dismiss message"><Icon name="close"/></button></div>}
         {storageError && <div className="toast toast-error" role="alert">Local draft storage could not save changes: {storageError}</div>}
@@ -552,14 +553,15 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         <div className="workspace-layout">
             <aside className="icon-rail" aria-label="Workspace tools">
                 <span className="rail-separator"/>
-                <RailButton icon="schema" label={copy.common.schema} active={inspector === 'schema' && drawerOpen} onClick={() => showInspector('schema')}/>
-                <RailButton icon="history" label={copy.common.history} active={inspector === 'history' && drawerOpen} onClick={() => showInspector('history')}/>
-                <RailButton icon="documents" label="Documents" active={inspector === 'documents' && drawerOpen} onClick={() => showInspector('documents')}/>
+                <RailButton icon="schema" label={experience === 'beginner' ? 'Tables' : copy.common.schema} active={inspector === 'schema' && drawerOpen} onClick={() => showInspector('schema')}/>
+                {experience === 'expert' && <>
+                    <RailButton icon="history" label={copy.common.history} active={inspector === 'history' && drawerOpen} onClick={() => showInspector('history')}/>
+                    <RailButton icon="documents" label="Documents" active={inspector === 'documents' && drawerOpen} onClick={() => showInspector('documents')}/>
+                </>}
                 <span className="rail-spacer"/>
-                <RailButton icon="assistant" label={copy.common.assistant} accent active={experience === 'expert' && inspector === 'assistant'} onClick={() => experience === 'beginner' ? document.getElementById('beginner-query-prompt')?.focus() : showInspector('assistant')}/>
+                {experience === 'expert' && <RailButton icon="assistant" label={copy.common.assistant} accent active={inspector === 'assistant'} onClick={() => showInspector('assistant')}/>}
                 {experience === 'expert' && <><RailButton icon="details" label="Run details" active={inspector === 'details'} onClick={() => showInspector('details')}/><RailButton icon="pipeline" label="Pipeline" active={inspector === 'pipeline'} onClick={() => showInspector('pipeline')}/></>}
-                <span className="rail-separator"/>
-                <button className="rail-icon-button rail-icon-muted" type="button" title="Export local drafts" onClick={() => download('clickstudio-local-drafts.json', workspace)}><Icon name="settings"/></button>
+                {experience === 'expert' && <><span className="rail-separator"/><button className="rail-icon-button rail-icon-muted" type="button" title="Export local drafts" onClick={() => download('clickstudio-local-drafts.json', workspace)}><Icon name="settings"/></button></>}
             </aside>
 
             {experience === 'expert' && <InspectorPane {...inspectorProps}/>}
@@ -602,15 +604,15 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                 </div>
 
                 <div id="sql-document-panel" role="tabpanel" aria-labelledby={`document-tab-${active.id}`} tabIndex={0} className={cx('workspace-content', experience === 'beginner' && 'beginner-workspace-content', run && 'has-run')}>
-                    {experience === 'beginner' ? <AssistantWorkflow mode="beginner" sql={active.sql} action={assistantAction} onActionChange={changeAssistantAction} question={assistantQuestion} onQuestionChange={changeAssistantQuestion} context={assistantContext} proposal={assistantProposal} busy={assistantBusy} error={assistantError} trusted={trusted} runId={run?.id} includeResult={includeResult} onIncludeResult={setIncludeResult} onVoiceInput={startVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={() => void prepareAssistantContext('generate', assistantQuestion)} onRequestProposal={() => void requestAssistantProposal()} onDecideProposal={decision => void decideAssistantProposal(decision)} onRunQuery={() => void execute()} runDisabled={!trusted || Boolean(busy)} onSave={() => void saveDraft()} saveDisabled={Boolean(busy)}/> : <section className="editor-surface">
+                    <section className="editor-surface">
                         <div className="editor-heading">
                             <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">QUERY</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label><span className="edit-indicator" title={active.serverId ? `Saved revision ${active.baseRevision}` : 'Only in this browser'}>{active.serverId ? `REV ${active.baseRevision}` : 'LOCAL'}</span></div>
-                            <div className="editor-heading-actions">{nativeParserStatus === 'unavailable' && <><span className="toolbar-small" role="status" title="Formatting remains available while the native parser is unavailable.">Parser unavailable</span><Button variant="ghost" className="toolbar-small" onClick={() => editor.current?.retryNativeParser()}>Retry parser</Button></>}<Button variant="ghost" className="toolbar-small" title={nativeParserStatus === 'ready' ? 'Format with the native ClickHouse parser' : 'Format SQL'} onClick={() => void formatActiveSql()}>Format</Button></div>
+                            <div className="editor-heading-actions">{experience === 'expert' && <>{nativeParserStatus === 'unavailable' && <><span className="toolbar-small" role="status" title="Formatting remains available while the native parser is unavailable.">Parser unavailable</span><Button variant="ghost" className="toolbar-small" onClick={() => editor.current?.retryNativeParser()}>Retry parser</Button></>}<Button variant="ghost" className="toolbar-small" title={nativeParserStatus === 'ready' ? 'Format with the native ClickHouse parser' : 'Format SQL'} onClick={() => void formatActiveSql()}>Format</Button></>}</div>
                         </div>
                         <div className="editor-toolbar">
-                            <div className="editor-mode-label"><span className="editor-language-dot"/>ClickHouse SQL<span className="toolbar-divider"/><span>{statementCount === undefined ? 'Incomplete SQL' : `${statementCount} statement${statementCount === 1 ? '' : 's'}`}</span>{nativeParserStatus === 'ready' && <><span className="toolbar-divider"/><span title="Syntax checks and formatting run locally in a Web Worker using ClickHouse's native parser.">Native parser</span></>}</div>
+                            <div className="editor-mode-label"><span className="editor-language-dot"/>ClickHouse SQL<span className="toolbar-divider"/><span>{statementCount === undefined ? 'Incomplete SQL' : `${statementCount} statement${statementCount === 1 ? '' : 's'}`}</span>{experience === 'expert' && nativeParserStatus === 'ready' && <><span className="toolbar-divider"/><span title="Syntax checks and formatting run locally in a Web Worker using ClickHouse's native parser.">Native parser</span></>}</div>
                             <div className="editor-actions">
-                                {experience === 'expert' && <>
+                                {experience === 'expert' ? <>
                                     <Button variant="ghost" className="sql-ai-button" aria-pressed={inspector === 'assistant'} onClick={() => showInspector('assistant')}><Icon name="assistant"/>SQL AI</Button>
                                     <Button variant="secondary" className="save-revision-button" aria-label={copy.common.saveRevision} onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/>{copy.common.save}</Button>
                                     <RunActionMenu runLabel={copy.common.runStatement} running={busy === 'run' || busy === 'script'} disabled={!trusted || Boolean(busy)} onRun={() => void execute()} actions={[
@@ -618,19 +620,24 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                         { label: 'EXPLAIN', disabled: !trusted || Boolean(busy) || !connection.manifest?.explain.available, title: connection.manifest?.explain.reason, onSelect: () => void execute(false, 'explain') },
                                         { label: 'EXPLAIN PIPELINE', disabled: !trusted || Boolean(busy) || !connection.manifest?.pipeline.available, title: connection.manifest?.pipeline.reason, onSelect: () => void execute(false, 'pipeline') },
                                     ]}/>
+                                </> : <>
+                                    <Button variant="ghost" className="sql-ai-button" aria-label="Ask AI" onClick={() => showInspector('assistant')}><Icon name="assistant"/>Ask AI</Button>
+                                    <Button variant="secondary" className="save-revision-button" aria-label="Save query" onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/>Save</Button>
+                                    <Button variant="primary" className="run-query-button" aria-label="Run query" onClick={() => void execute()} disabled={!trusted || Boolean(busy)}><Icon name="play"/>{busy === 'run' ? 'Running…' : 'Run'}<kbd>⌘ ↵</kbd></Button>
                                 </>}
                             </div>
                         </div>
+                        {experience === 'beginner' && !trusted && <div className="beginner-connection-notice" role="status"><span>{demoMode ? 'Start the sample workspace to run this query.' : 'Review this connection before running SQL.'}</span><Button variant="secondary" className="toolbar-small" onClick={() => void trustActionRef.current()}>{demoMode ? 'Start exploring' : 'Review connection'}</Button></div>}
                         <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} parserStatus={nativeParserStatus} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus}/></div>
                         {parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => patch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
-                        <div className="editor-footer"><span><span className="key-hint">⌘↵</span> Run current statement <span className="footer-dot">·</span> <span className="key-hint">⌘⇧↵</span> Run script</span><span>{active.sql.length.toLocaleString()} characters <span className="footer-dot">·</span> {active.sql.split('\n').length} lines</span></div>
-                    </section>}
+                        <div className="editor-footer"><span><span className="key-hint">⌘↵</span> {experience === 'beginner' ? 'Run query' : <>Run current statement <span className="footer-dot">·</span> <span className="key-hint">⌘⇧↵</span> Run script</>}</span>{experience === 'expert' && <span>{active.sql.length.toLocaleString()} characters <span className="footer-dot">·</span> {active.sql.split('\n').length} lines</span>}</div>
+                    </section>
 
                     {run && <section className={cx('results-surface', experience === 'expert' && 'results-expert')} aria-label="Query results">
                         <div className="results-header">
                             <div className="results-title"><span className="results-mark"><Icon name="chart"/></span><div><span className="eyebrow">WORKSPACE OUTPUT</span><h2>{copy.common.results}</h2></div>{run && <Status run={run}/>}</div>
                             <div className="results-actions">
-                                <div className="results-tabs" role="tablist" aria-label="Result views">{(['results', 'chart', 'insights'] as const).map(tab => <button key={tab} role="tab" aria-selected={view === tab} type="button" onClick={() => { setView(tab); if (tab === 'chart') void perform(loadSnapshot, 'save'); if (tab === 'insights') void perform(loadProfile, 'save'); }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : copy.common.insights}{tab === 'chart' && snapshot && <span className="suggested-dot"/>}</button>)}</div>
+                                <div className="results-tabs" role="tablist" aria-label="Result views">{(experience === 'beginner' ? ['results', 'chart'] as const : ['results', 'chart', 'insights'] as const).map(tab => <button key={tab} role="tab" aria-selected={visibleResultsView === tab} type="button" onClick={() => { setView(tab); if (tab === 'chart') void perform(loadSnapshot, 'save'); if (tab === 'insights') void perform(loadProfile, 'save'); }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : copy.common.insights}{tab === 'chart' && snapshot && <span className="suggested-dot"/>}</button>)}</div>
                                 {run?.resultState === 'reopenable' && <Button variant="ghost" className="toolbar-small" onClick={() => { const link = document.createElement('a'); link.href = `/api/runs/${encodeURIComponent(run.id)}/export?format=csv`; link.download = `${run.queryId}.csv`; link.click(); }}>Export <Icon name="chevron"/></Button>}
                             </div>
                         </div>
@@ -640,9 +647,9 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             update(active.id, draft => ({ ...draft, activeRunId: runId }));
                             setPage(0); setView('results');
                         }} onCancel={() => void cancel()} cancelDisabled={cancelling}/>}
-                        {run && view === 'results' && <ResultGrid key={run.id} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/>}
-                        {run && view === 'chart' && <ChartView result={snapshot} loading={!snapshot && run.resultState === 'reopenable'} chart={active.chart} onChart={chart => patch({ chart })}/>}
-                        {run && view === 'insights' && <InsightsView run={run} profile={profile} pipeline={pipeline} pipelineAvailable={Boolean(trusted && connection.manifest?.pipeline.available)} onLoad={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} loading={busy === 'save'}/>}
+                        {run && visibleResultsView === 'results' && <ResultGrid key={run.id} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/>}
+                        {run && visibleResultsView === 'chart' && <ChartView result={snapshot} loading={!snapshot && run.resultState === 'reopenable'} chart={active.chart} onChart={chart => patch({ chart })}/>}
+                        {run && visibleResultsView === 'insights' && <InsightsView run={run} profile={profile} pipeline={pipeline} pipelineAvailable={Boolean(trusted && connection.manifest?.pipeline.available)} onLoad={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} loading={busy === 'save'}/>}
                     </section>}
                 </div>
             </main>

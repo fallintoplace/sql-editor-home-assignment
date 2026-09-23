@@ -372,9 +372,10 @@ test('A late AI context preview cannot attach to an edited question', async ({ p
     });
     await trust(page);
     await page.getByText('Beginner', { exact: true }).click();
+    await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
     const question = page.getByRole('textbox', { name: 'Describe your data question', exact: true });
     await question.fill('Show the old question');
-    await page.getByRole('button', { name: 'Create query', exact: true }).click();
+    await page.getByRole('button', { name: 'Review context', exact: true }).click();
     await received;
     await question.fill('Show a different question');
     release();

@@ -6,9 +6,45 @@ const generatedSql = 'SELECT day, events FROM demo.events ORDER BY day';
 async function beginInBeginnerMode(page: Page) {
     await page.addInitScript(() => localStorage.setItem('cathedral:experience', 'beginner'));
     await page.goto('/');
-    await expect(page.getByRole('textbox', { name: 'Describe your data question', exact: true })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'SQL editor', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Ask AI', exact: true })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Describe your data question', exact: true })).toHaveCount(0);
     await trustCurrentConnection(page);
 }
+
+test('Beginner opens on SQL and can run a query without opening AI', async ({ page }) => {
+    let contextRequests = 0;
+    page.on('request', request => {
+        if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/assistant/context') contextRequests++;
+    });
+    await page.addInitScript(() => localStorage.setItem('cathedral:experience', 'beginner'));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+
+    const editor = page.getByRole('textbox', { name: 'SQL editor', exact: true });
+    await expect(editor).toBeVisible();
+    await expect(editor).toContainText('SELECT');
+    await expect(page.getByRole('button', { name: 'Ask AI', exact: true })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Describe your data question', exact: true })).toHaveCount(0);
+
+    const runQuery = page.getByRole('button', { name: 'Run query', exact: true });
+    if (await runQuery.isDisabled()) {
+        await page.getByRole('button', { name: 'Start exploring', exact: true }).click();
+        await expect(runQuery).toBeEnabled();
+    }
+    await runQuery.click();
+    const results = page.getByRole('region', { name: 'Query results', exact: true });
+    await expect(results.getByRole('table', { name: 'Retained query rows', exact: true })).toBeVisible();
+    expect(contextRequests).toBe(0);
+    await expect(results.getByRole('tab', { name: 'Insights', exact: true })).toHaveCount(0);
+
+    const queryId = await page.locator('.execution-bar code').innerText();
+    await page.getByText('Expert', { exact: true }).click();
+    await expect(page.locator('.cm-content')).toContainText('SELECT');
+    await expect(page.locator('.execution-bar code')).toHaveText(queryId);
+    await page.getByText('Beginner', { exact: true }).click();
+    await expect(page.locator('.execution-bar code')).toHaveText(queryId);
+});
 
 test('Beginner AI proposal becomes the same query and run in Expert mode', async ({ page }) => {
     const contexts: Record<string, unknown>[] = [];
@@ -39,11 +75,12 @@ test('Beginner AI proposal becomes the same query and run in Expert mode', async
     });
 
     await beginInBeginnerMode(page);
-    await page.getByRole('button', { name: 'Save draft', exact: true }).click();
+    await page.getByRole('button', { name: 'Save query', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'revision 1' })).toBeVisible();
+    await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
     const prompt = page.getByRole('textbox', { name: 'Describe your data question', exact: true });
     await prompt.fill('Show event counts by day');
-    await page.getByRole('button', { name: 'Create query', exact: true }).click();
+    await page.getByRole('button', { name: 'Review context', exact: true }).click();
     await expect(page.getByText(/Schema: demo\.events/)).toBeVisible();
     expect(contexts).toHaveLength(1);
     expect(contexts[0]).toMatchObject({ action: 'generate', question: 'Show event counts by day', connectionId: 'demo' });
@@ -62,15 +99,17 @@ test('Beginner AI proposal becomes the same query and run in Expert mode', async
     const queryId = await page.locator('.execution-bar code').innerText();
     await results.getByRole('tab', { name: 'Chart', exact: true }).click();
     await expect(results.locator('.chart-canvas svg[role="img"]')).toBeVisible();
+    await expect(results.getByRole('tab', { name: 'Insights', exact: true })).toHaveCount(0);
+    await page.getByText('Expert', { exact: true }).click();
     await results.getByRole('tab', { name: 'Insights', exact: true }).click();
     const loadDetails = results.getByRole('button', { name: 'Load execution details', exact: true });
     if (await loadDetails.count()) await loadDetails.click();
     await expect(results.getByText('Execution time', { exact: true })).toBeVisible();
 
-    await page.getByText('Expert', { exact: true }).click();
     await expect(page.locator('.cm-content')).toContainText(generatedSql);
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
     await page.getByText('Beginner', { exact: true }).click();
+    await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
     await expect(prompt).toHaveValue('Show event counts by day');
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
 });
@@ -155,6 +194,7 @@ test('Beginner voice dictation fills the question without sending it automatical
     });
 
     await beginInBeginnerMode(page);
+    await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
     const prompt = page.getByRole('textbox', { name: 'Describe your data question', exact: true });
     await page.getByRole('button', { name: 'Dictate question', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toBeVisible();

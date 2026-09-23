@@ -6,7 +6,7 @@ import { recommendChart } from '../shared/results';
 import { matchesDraft } from '../shared/evidence';
 import { formatSql, parameterNames, selectedStatement, splitSql } from '../shared/sql';
 import { api, download, isFrontendDemoPreview, message, post } from './api';
-import { DEMO_PREVIEW_RUN_ID, DEMO_PREVIEW_SQL, DEMO_PREVIEW_STARTER_DOCUMENT_ID } from './demo-preview';
+import { DEMO_PREVIEW_INITIAL_STARTERS, DEMO_PREVIEW_RUN_ID, DEMO_PREVIEW_SQL, DEMO_PREVIEW_STARTER_DOCUMENT_ID, demoPreviewStarterRunId } from './demo-preview';
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { ImportWizard } from './components/ImportWizard';
 import { AssistantWorkflow } from './components/AssistantWorkflow';
@@ -34,6 +34,13 @@ function safeStatementCount(sql: string) {
 function assistantContextKey(connectionId: string, draftId: string, sql: string, parameters: Record<string, string>, runId: string | undefined, includeResult: boolean, action: AssistantAction, question: string) {
     return JSON.stringify({ connectionId, draftId, sql, parameters: Object.entries(parameters).sort(([left], [right]) => left.localeCompare(right)), runId, includeResult, action, question });
 }
+function previewStarterDraft(starter: typeof DEMO_PREVIEW_INITIAL_STARTERS[number]): Draft {
+    const runId = demoPreviewStarterRunId(starter.id);
+    return {
+        ...newDraft(starter.name, starter.sql), serverId: starter.id, baseRevision: 1,
+        chart: { ...starter.chart, ys: [...starter.chart.ys] }, runIds: [runId], activeRunId: runId,
+    };
+}
 
 type WorkspaceProps = {
     connection: Connected;
@@ -57,21 +64,22 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         const activeId = recovered.tabs.find(tab => tab.id === recovered.activeId)?.id ?? recovered.tabs[0]!.id;
         const active = recovered.tabs.find(tab => tab.id === activeId)!;
         const isStarterDraft = active.name === 'Getting started.sql' &&
-            (active.sql.trim() === SAMPLE_SQL.trim() || active.sql.trim() === DEMO_PREVIEW_SQL.trim());
-        const canUseStarterRun = !active.activeRunId || active.activeRunId === DEMO_PREVIEW_RUN_ID;
-        if (!isStarterDraft || !canUseStarterRun) return recovered;
+            (active.sql.trim() === SAMPLE_SQL.trim() || active.sql.trim() === DEMO_PREVIEW_SQL.trim()) &&
+            (!active.serverId || active.serverId === DEMO_PREVIEW_STARTER_DOCUMENT_ID);
+        if (!isStarterDraft || recovered.tabs.length !== 1 || recovered.closedTabs?.length) return recovered;
+        const gettingStarted = DEMO_PREVIEW_INITIAL_STARTERS[0]!;
+        const runId = demoPreviewStarterRunId(gettingStarted.id);
         return {
             ...recovered,
-            tabs: recovered.tabs.map(tab => tab.id === activeId
-                ? {
-                    ...tab, sql: DEMO_PREVIEW_SQL,
-                    serverId: tab.serverId ?? DEMO_PREVIEW_STARTER_DOCUMENT_ID,
-                    baseRevision: tab.baseRevision ?? 1,
-                    chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Daily activity' },
-                    activeRunId: DEMO_PREVIEW_RUN_ID,
-                    runIds: [...new Set([...tab.runIds, DEMO_PREVIEW_RUN_ID])],
-                }
-                : tab),
+            tabs: [
+                {
+                    ...active, sql: DEMO_PREVIEW_SQL,
+                    serverId: DEMO_PREVIEW_STARTER_DOCUMENT_ID, baseRevision: 1,
+                    chart: { ...gettingStarted.chart, ys: [...gettingStarted.chart.ys] },
+                    activeRunId: runId, runIds: [...new Set([...active.runIds, runId])],
+                },
+                ...DEMO_PREVIEW_INITIAL_STARTERS.slice(1).map(previewStarterDraft),
+            ],
         };
     });
     const workspaceRef = useRef(workspace);

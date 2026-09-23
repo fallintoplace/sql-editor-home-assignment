@@ -12,9 +12,9 @@ WHERE event_time >= now() - INTERVAL 30 DAY
 GROUP BY day
 ORDER BY day`;
 
-type StarterQuery = { id: string; name: string; sql: string; chart: ChartConfig };
-const starterQueries: StarterQuery[] = [
-    { id: DEMO_PREVIEW_STARTER_DOCUMENT_ID, name: 'Getting started.sql', sql: DEMO_PREVIEW_SQL, chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Daily activity' } },
+export type DemoPreviewStarter = { id: string; name: string; sql: string; chart: ChartConfig; initial?: boolean };
+export const DEMO_PREVIEW_STARTERS: DemoPreviewStarter[] = [
+    { id: DEMO_PREVIEW_STARTER_DOCUMENT_ID, name: 'Getting started.sql', sql: DEMO_PREVIEW_SQL, chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Daily activity' }, initial: true },
     { id: 'preview-starter-top-countries', name: 'Top countries.sql', sql: `SELECT
     country,
     count() AS events,
@@ -24,7 +24,7 @@ FROM events
 WHERE event_time >= now() - INTERVAL 7 DAY
 GROUP BY country
 ORDER BY events DESC
-LIMIT 10`, chart: { kind: 'bar', x: 0, ys: [1], title: 'Events by country' } },
+LIMIT 10`, chart: { kind: 'bar', x: 0, ys: [1], title: 'Events by country' }, initial: true },
     { id: 'preview-starter-revenue-channel', name: 'Revenue by channel.sql', sql: `SELECT
     channel,
     countIf(order_status = 'completed') AS orders,
@@ -33,7 +33,7 @@ LIMIT 10`, chart: { kind: 'bar', x: 0, ys: [1], title: 'Events by country' } },
 FROM orders
 WHERE order_time >= now() - INTERVAL 30 DAY
 GROUP BY channel
-ORDER BY revenue DESC`, chart: { kind: 'bar', x: 0, ys: [2], title: 'Revenue by channel' } },
+ORDER BY revenue DESC`, chart: { kind: 'bar', x: 0, ys: [2], title: 'Revenue by channel' }, initial: true },
     { id: 'preview-starter-latency', name: 'Request latency.sql', sql: `SELECT
     page_path,
     count() AS requests,
@@ -88,6 +88,11 @@ WHERE day >= today() - 30
 GROUP BY day
 ORDER BY day`, chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Daily rollup' } },
 ];
+export const DEMO_PREVIEW_INITIAL_STARTERS = DEMO_PREVIEW_STARTERS.filter(starter => starter.initial);
+
+export function demoPreviewStarterRunId(id: string) {
+    return id === DEMO_PREVIEW_STARTER_DOCUMENT_ID ? DEMO_PREVIEW_RUN_ID : `preview-run-${id}`;
+}
 
 type RequestOptions = { method?: string; body?: unknown; signal?: AbortSignal };
 
@@ -298,9 +303,9 @@ export class DemoPreviewApi {
     constructor() {
         this.restore();
         if (!this.runs.has(DEMO_PREVIEW_RUN_ID)) this.addRun(DEMO_PREVIEW_RUN_ID, DEMO_PREVIEW_SQL, 'query', {});
-        for (const starter of starterQueries) {
+        for (const starter of DEMO_PREVIEW_STARTERS) {
             if (this.documents.has(starter.id)) continue;
-            const runId = starter.id === DEMO_PREVIEW_STARTER_DOCUMENT_ID ? DEMO_PREVIEW_RUN_ID : `preview-run-${starter.id}`;
+            const runId = demoPreviewStarterRunId(starter.id);
             const run = this.runs.get(runId) ?? this.addRun(runId, starter.sql, 'query', {});
             const timestamp = now();
             this.documents.set(starter.id, {

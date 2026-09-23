@@ -12,6 +12,11 @@ test('Public profiles omit read and write passwords', () => { const c = loadConf
 test('Configured secrets are redacted before diagnostic truncation', () => { const c = loadConfig({ CLICKHOUSE_PASSWORD: 'private-password' }); const result = redactor(c)('x'.repeat(2995) + 'private-password'); assert.ok(!result.includes('private')); assert.ok(result.length <= 3000); });
 test('Import allowlists reject expressions and wildcard targets', () => { for (const target of ['default.*', 'url(http://other)', 'default.table;DROP'])
     assert.throws(() => loadConfig({ CLICKHOUSE_WRITER_USER: 'writer', CLICKHOUSE_IMPORT_TABLES: target }), { code: 'IMPORT_TABLES' }); });
+test('Import targets must belong to their connection profile database', () => {
+    const config = loadConfig({ CLICKHOUSE_DATABASE: 'analytics', CLICKHOUSE_WRITER_USER: 'writer', CLICKHOUSE_IMPORT_TABLES: 'analytics.events,analytics.sessions' });
+    assert.deepEqual(config.profiles[0].writer.tables, ['analytics.events', 'analytics.sessions']);
+    assert.throws(() => loadConfig({ CLICKHOUSE_DATABASE: 'analytics', CLICKHOUSE_WRITER_USER: 'writer', CLICKHOUSE_IMPORT_TABLES: 'analytics.events,default.archive' }), { code: 'IMPORT_TABLES' });
+});
 test('Null child filters use IS NULL semantics rather than a printable value', () => { const child = insertChildFilter('SELECT NULL AS value', 'value', null); assert.ok(child.sql.includes('isNull(`value`)')); assert.deepEqual(child.parameters, {}); });
 test('Child filters do not overwrite an existing query parameter', () => { const child = insertChildFilter('SELECT {wb_filter:String} AS value', 'value', 'next'); assert.deepEqual(child.parameters, { wb_filter_child: 'next' }); assert.ok(child.sql.includes('{wb_filter_child:String}')); });
 test('Demo publications remain labeled fixtures outside the workspace', async () => {

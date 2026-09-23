@@ -56,7 +56,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         if (v.writer !== undefined) {
             const w = record(v.writer);
             requireThat(Array.isArray(w.tables) && w.tables.length > 0 && w.tables.length <= 50 && w.tables.every(t => typeof t === 'string' && /^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/.test(t)), 400, 'IMPORT_TABLES', 'Import targets must be explicit database.table names');
-            profile.writer = { username: text(w.username, 'writer username', 128), password: getSecret(w.passwordEnv), tables: w.tables as string[] };
+            const tables = w.tables as string[];
+            requireThat(tables.every(table => table.slice(0, table.indexOf('.')) === profile.database), 400, 'IMPORT_TABLES', 'Import targets must use the connection profile database');
+            profile.writer = { username: text(w.username, 'writer username', 128), password: getSecret(w.passwordEnv), tables };
         }
         return profile;
     });

@@ -6,7 +6,7 @@ import { recommendChart } from '../shared/results';
 import { matchesDraft } from '../shared/evidence';
 import { formatSql, parameterNames, selectedStatement, splitSql } from '../shared/sql';
 import { api, download, isFrontendDemoPreview, message, post } from './api';
-import { DEMO_PREVIEW_RUN_ID } from './demo-preview';
+import { DEMO_PREVIEW_RUN_ID, DEMO_PREVIEW_SQL, DEMO_PREVIEW_STARTER_DOCUMENT_ID } from './demo-preview';
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { ImportWizard } from './components/ImportWizard';
 import { AssistantWorkflow } from './components/AssistantWorkflow';
@@ -14,7 +14,7 @@ import { ChartView, InsightsView, ResultGrid } from './components/ResultViews';
 import { InspectorPane, type InspectorPaneProps } from './components/InspectorPane';
 import { Button, cx, Icon, Status, terminal } from './components/ui';
 import { ExecutionBar, RailButton, RunActionMenu, ScriptResults } from './components/WorkspaceChrome';
-import { checkpoint, closeDraft, draftFromDocument, MAX_TABS, newDraft, recover, reopenDraft, type Draft, type WorkspaceState } from './workspace-state';
+import { checkpoint, closeDraft, draftFromDocument, MAX_TABS, newDraft, recover, reopenDraft, SAMPLE_SQL, type Draft, type WorkspaceState } from './workspace-state';
 import { draftSaveStatus, rememberRunIds } from '../shared/workspace-view';
 import type { NativeParseSnapshot, NativeParserStatus } from '../shared/native-parser';
 import { useWorkspacePersistence } from './useWorkspacePersistence';
@@ -53,12 +53,24 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const key = stateKey(connection.id);
     const [workspace, setWorkspace] = useState<WorkspaceState>(() => {
         const recovered = recover(key);
-        if (!isFrontendDemoPreview || recovered.tabs.some(tab => tab.activeRunId)) return recovered;
+        if (!isFrontendDemoPreview) return recovered;
         const activeId = recovered.tabs.find(tab => tab.id === recovered.activeId)?.id ?? recovered.tabs[0]!.id;
+        const active = recovered.tabs.find(tab => tab.id === activeId)!;
+        const isStarterDraft = active.name === 'Getting started.sql' &&
+            (active.sql.trim() === SAMPLE_SQL.trim() || active.sql.trim() === DEMO_PREVIEW_SQL.trim());
+        const canUseStarterRun = !active.activeRunId || active.activeRunId === DEMO_PREVIEW_RUN_ID;
+        if (!isStarterDraft || !canUseStarterRun) return recovered;
         return {
             ...recovered,
             tabs: recovered.tabs.map(tab => tab.id === activeId
-                ? { ...tab, activeRunId: DEMO_PREVIEW_RUN_ID, runIds: [...new Set([...tab.runIds, DEMO_PREVIEW_RUN_ID])] }
+                ? {
+                    ...tab, sql: DEMO_PREVIEW_SQL,
+                    serverId: tab.serverId ?? DEMO_PREVIEW_STARTER_DOCUMENT_ID,
+                    baseRevision: tab.baseRevision ?? 1,
+                    chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Daily activity' },
+                    activeRunId: DEMO_PREVIEW_RUN_ID,
+                    runIds: [...new Set([...tab.runIds, DEMO_PREVIEW_RUN_ID])],
+                }
                 : tab),
         };
     });

@@ -13,7 +13,7 @@ import { InspectorPane, type InspectorPaneProps } from './components/InspectorPa
 import { Button, cx, Icon, Status, terminal } from './components/ui';
 import { EmptyWorkspace, ExecutionBar, RailButton, ScriptResults } from './components/WorkspaceChrome';
 import { checkpoint, closeDraft, draftFromDocument, MAX_TABS, newDraft, recover, reopenDraft, type Draft, type WorkspaceState } from './workspace-state';
-import { draftSaveStatus } from '../shared/workbench-view';
+import { draftSaveStatus, rememberRunIds } from '../shared/workbench-view';
 import type { NativeParserStatus } from '../shared/native-parser';
 import { useWorkspacePersistence } from './useWorkspacePersistence';
 import { useRunEvidence } from './useRunEvidence';
@@ -103,6 +103,9 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const assistantRequestRef = useRef(0);
     const currentConnection = connections.find(item => item.id === connection.id) ?? connection;
     const trusted = currentConnection.trusted;
+    const trustedRef = useRef(trusted);
+    trustedRef.current = trusted;
+    const schemaRequestRef = useRef(0);
 
     useEffect(() => () => recognitionRef.current?.abort(), []);
     useEffect(() => { setDrawerOpen(false); }, [experience]);
@@ -249,18 +252,38 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         } finally { setDocumentsLoaded(true); }
     }, [connection.id]);
     const loadSchema = useCallback(async () => {
-        if (!trusted) { setSchema(undefined); return; }
+        const requestId = ++schemaRequestRef.current;
+        if (!trustedRef.current) {
+            setSchema(undefined);
+            setSchemaError('');
+            setSchemaLoading(false);
+            return;
+        }
         setSchemaLoading(true); setSchemaError('');
-        try { setSchema(await api<Schema>(`/connections/${encodeURIComponent(connection.id)}/schema`)); }
-        catch (caught) { setSchemaError(message(caught)); }
-        finally { setSchemaLoading(false); }
-    }, [connection.id, trusted]);
+        try {
+            const next = await api<Schema>(`/connections/${encodeURIComponent(connection.id)}/schema`);
+            if (schemaRequestRef.current === requestId && trustedRef.current)
+                setSchema(next);
+        } catch (caught) {
+            if (schemaRequestRef.current === requestId && trustedRef.current)
+                setSchemaError(message(caught));
+        } finally {
+            if (schemaRequestRef.current === requestId)
+                setSchemaLoading(false);
+        }
+    }, [connection.id]);
 
     useEffect(() => {
         void Promise.all([loadHistory(), loadDocuments()]).catch(caught => setError(message(caught)));
         if (trusted) void loadSchema();
+        else {
+            schemaRequestRef.current++;
+            setSchema(undefined);
+            setSchemaError('');
+            setSchemaLoading(false);
+        }
         const interval = window.setInterval(() => { void loadHistory().catch(() => undefined); }, 15000);
-        return () => window.clearInterval(interval);
+        return () => { window.clearInterval(interval); schemaRequestRef.current++; };
     }, [loadDocuments, loadHistory, loadSchema, trusted]);
 
     const { run, setRunForRun, page, setPage, resultPage, snapshot, setSnapshotForRun, profile, setProfileForRun, pipeline, setPipelineForRun, eventState } = useRunEvidence({
@@ -309,7 +332,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             scriptFollowRef.current = { scriptId: created.id, enabled: true };
             setScripts(current => ({ ...current, [created.id]: created }));
             const first = created.statements.find(item => item.runId);
-            if (first?.runId) patch({ activeRunId: first.runId, scriptId: created.id, runIds: [...active.runIds, first.runId] });
+            if (first?.runId) patch({ activeRunId: first.runId, scriptId: created.id, runIds: rememberRunIds(active.runIds, [first.runId]) });
             else patch({ scriptId: created.id });
             setView('results');
         } else {
@@ -527,7 +550,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                 <Button variant="primary" className="run-query-button" aria-label={copy.common.runStatement} onClick={() => void execute()} disabled={!trusted || Boolean(busy)}><Icon name="play"/>{busy === 'run' ? 'Running…' : copy.common.run}<kbd>⌘ ↵</kbd></Button>
                             </div>
                         </div>
-                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={schema} dark={dark} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus}/></div>
+                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus}/></div>
                         {parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => patch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
                         <div className="editor-footer"><span><span className="key-hint">⌘↵</span> Run current statement <span className="footer-dot">·</span> <span className="key-hint">⌘⇧↵</span> Run script</span><span>{active.sql.length.toLocaleString()} characters <span className="footer-dot">·</span> {active.sql.split('\n').length} lines</span></div>
                     </section>}

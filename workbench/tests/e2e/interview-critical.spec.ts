@@ -310,6 +310,54 @@ test('Scripts show each statement outcome and open that statement’s retained r
     await expect(page.locator('.cm-content')).toContainText('SELECT 1; SELECT fixture_error; SELECT 3;');
 });
 
+test('Script polling persists every statement run ID, including fast intermediate results', async ({ page }) => {
+    await trust(page);
+    const sql = 'SELECT 1; SELECT 2; SELECT 3;';
+    await replaceSql(page, sql);
+    const created = {
+        id: 'script-fast', owner: 'local-owner', connectionId: 'demo', sql, createdAt: '2026-09-23T00:00:00.000Z',
+        status: 'running', stopOnError: true, cancelled: false,
+        statements: [
+            { sql: 'SELECT 1', from: 0, to: 8, runId: 'run-a', status: 'succeeded' },
+            { sql: 'SELECT 2', from: 10, to: 18, status: 'pending' },
+            { sql: 'SELECT 3', from: 20, to: 28, status: 'pending' },
+        ],
+    };
+    const completed = {
+        ...created,
+        status: 'succeeded',
+        statements: [
+            { sql: 'SELECT 1', from: 0, to: 8, runId: 'run-a', status: 'succeeded' },
+            { sql: 'SELECT 2', from: 10, to: 18, runId: 'run-b', status: 'succeeded' },
+            { sql: 'SELECT 3', from: 20, to: 28, runId: 'run-c', status: 'succeeded' },
+        ],
+    };
+    await page.route('**/api/scripts', route => route.fulfill({ status: 202, json: created }));
+    await page.route('**/api/scripts/script-fast', route => route.fulfill({ json: completed }));
+    await page.getByRole('button', { name: 'Run script', exact: true }).click();
+
+    const results = page.getByRole('region', { name: 'Query results', exact: true });
+    await expect(results.getByRole('button', { name: 'Statement 3: succeeded', exact: true })).toBeVisible();
+    const runIds = async () => page.evaluate(() => {
+        const value = localStorage.getItem('clickstudio:workspace:demo:v1');
+        if (!value) return [];
+        const workspace = JSON.parse(value) as { tabs: { id: string; runIds: string[]; activeRunId?: string }[]; activeId: string };
+        return workspace.tabs.find(tab => tab.id === workspace.activeId)?.runIds ?? [];
+    });
+    await expect.poll(runIds).toEqual(['run-a', 'run-b', 'run-c']);
+    await expect.poll(async () => page.evaluate(() => {
+        const workspace = JSON.parse(localStorage.getItem('clickstudio:workspace:demo:v1') ?? 'null');
+        return workspace?.tabs.find((tab: { id: string }) => tab.id === workspace.activeId)?.activeRunId;
+    })).toBe('run-c');
+
+    await page.reload();
+    await expect.poll(runIds).toEqual(['run-a', 'run-b', 'run-c']);
+    await expect.poll(async () => page.evaluate(() => {
+        const workspace = JSON.parse(localStorage.getItem('clickstudio:workspace:demo:v1') ?? 'null');
+        return workspace?.tabs.find((tab: { id: string }) => tab.id === workspace.activeId)?.activeRunId;
+    })).toBe('run-c');
+});
+
 test('Selecting an earlier script statement stops automatic following while later work runs', async ({ page }) => {
     await trust(page);
     await replaceSql(page, 'SELECT 1; SELECT fixture_slow;');

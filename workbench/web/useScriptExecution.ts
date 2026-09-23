@@ -1,5 +1,6 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react';
 import type { Script } from '../shared/types';
+import { rememberRunIds } from '../shared/workbench-view';
 import { api, message } from './api';
 import type { Draft } from './workspace-state';
 
@@ -27,12 +28,13 @@ export function useScriptExecution({ scriptId, draftId, updateDraft, setScripts,
                 const next = await api<Script>(`/scripts/${encodeURIComponent(scriptId)}`);
                 if (closed) return;
                 setScripts(current => ({ ...current, [scriptId]: next }));
+                const incomingRunIds = next.statements.flatMap(statement => statement.runId ? [statement.runId] : []);
                 const latest = [...next.statements].reverse().find(item => item.runId);
-                if (latest?.runId) {
+                if (incomingRunIds.length) {
                     updateDraft(draftId, draft => ({
                         ...draft,
-                        ...(followRef.current?.scriptId === scriptId && followRef.current.enabled ? { activeRunId: latest.runId } : {}),
-                        runIds: [...new Set([...draft.runIds, latest.runId!])],
+                        ...(latest?.runId && followRef.current?.scriptId === scriptId && followRef.current.enabled ? { activeRunId: latest.runId } : {}),
+                        runIds: rememberRunIds(draft.runIds, incomingRunIds),
                     }));
                 }
                 if (next.status !== 'running') {

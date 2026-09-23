@@ -350,6 +350,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         const runId = activeRunId;
         const full = await api<Result>(`/runs/${encodeURIComponent(runId)}/snapshot`);
         setSnapshotForRun(runId, full);
+        if (activeRunIdRef.current !== runId || workspaceRef.current.activeId !== active.id) return;
         const suggestion = recommendChart(full.columns, full.rows);
         if (active.chart.kind === 'table' && suggestion.config.kind !== 'table') patch({ chart: suggestion.config });
     };

@@ -206,6 +206,51 @@ test('Single-row numeric results render as a number and expose only supported ch
     await expect(results.getByLabel('Type').locator('option')).toHaveText(['Number', 'Line', 'Bar']);
 });
 
+test('A delayed chart snapshot cannot update the draft after selecting another script result', async ({ page }) => {
+    let releaseSnapshot!: () => void;
+    const snapshotGate = new Promise<void>(resolve => { releaseSnapshot = resolve; });
+    let notifySnapshotStarted!: () => void;
+    const snapshotStarted = new Promise<void>(resolve => { notifySnapshotStarted = resolve; });
+    let notifySnapshotFinished!: () => void;
+    const snapshotFinished = new Promise<void>(resolve => { notifySnapshotFinished = resolve; });
+    let savePayload: Record<string, unknown> | undefined;
+    await page.route('**/api/runs/*/snapshot', async route => {
+        const response = await route.fetch();
+        const result = await response.json();
+        notifySnapshotStarted();
+        await snapshotGate;
+        await route.fulfill({ response, json: { ...result, columns: [{ name: 'value', type: 'UInt64' }], rows: [['42']], completeness: 'complete' } });
+        notifySnapshotFinished();
+    });
+    await page.route(url => url.pathname === '/api/documents', async route => {
+        if (route.request().method() !== 'POST') return route.continue();
+        savePayload = route.request().postDataJSON() as Record<string, unknown>;
+        await route.continue();
+    });
+    try {
+        await trust(page);
+        await replaceSql(page, 'SELECT 1; SELECT 2;');
+        await page.getByRole('button', { name: 'Run script', exact: true }).click();
+        const results = page.getByRole('region', { name: 'Query results', exact: true });
+        const first = results.getByRole('button', { name: 'Statement 1: succeeded', exact: true });
+        const second = results.getByRole('button', { name: 'Statement 2: succeeded', exact: true });
+        await expect(first).toBeVisible();
+        await expect(second).toBeVisible();
+        await first.click();
+        await results.getByRole('tab', { name: 'Chart', exact: true }).click();
+        await snapshotStarted;
+        await second.click();
+        await expect(second).toHaveAttribute('aria-pressed', 'true');
+        releaseSnapshot();
+        await snapshotFinished;
+        await page.getByRole('button', { name: 'Save revision', exact: true }).click();
+        await expect.poll(() => savePayload).toBeDefined();
+        expect((savePayload?.chart as { kind: string }).kind).toBe('table');
+    } finally {
+        releaseSnapshot();
+    }
+});
+
 test('Refreshing run history replaces the visible list with the latest response', async ({ page }) => {
     let refreshed = false;
     const run = {

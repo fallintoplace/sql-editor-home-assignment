@@ -80,6 +80,13 @@
 .topbar .navbar-mode-option > label::before { width: 7px; height: 7px; flex: none; content: ""; }
 .topbar .navbar-mode-option.is-beginner > label::before { border-radius: 50%; background: var(--green); box-shadow: 0 0 10px color-mix(in srgb, var(--green) 65%, transparent); }
 .topbar .navbar-mode-option.is-expert > label::before { border-radius: 1px; background: var(--accent); transform: rotate(45deg); }
+.topbar .parser-mode-option.is-wasm > label::before { border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 55%, transparent); }
+.topbar .parser-mode-option.is-basic > label::before { border-radius: 50%; background: var(--muted); }
+
+@media (max-width: 1120px) {
+    .topbar { gap: 12px; padding-inline: 14px; }
+    .topbar .mode-caption { display: none; }
+}
 
 @layer base {
     * { box-sizing: border-box; }
@@ -460,6 +467,7 @@
     .parser-status-card > div { display: grid; min-width: 0; flex: 1; gap: 3px; }
     .parser-status-card strong { color: var(--text-soft); font-size: 10px; }
     .parser-status-card small, .parser-duration { color: var(--muted); font-size: 8px; }
+    .parser-status-disabled .status-light { background: var(--muted); box-shadow: none; }
     .parser-statement-card { display: grid; align-content: start; gap: 10px; min-width: 0; padding: 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); }
     .parser-statement-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 7px; font-weight: 750; letter-spacing: .12em; }
     .parser-validity { display: inline-flex; align-items: center; gap: 7px; letter-spacing: .02em; text-transform: none; }

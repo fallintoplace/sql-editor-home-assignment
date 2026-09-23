@@ -8,6 +8,8 @@ import clickhouseLogomarkDark from './assets/clickhouse-logomark-dark.svg';
 import clickhouseLogomarkLight from './assets/clickhouse-logomark-light.svg';
 import type { Connected, Session } from './workspace-types';
 
+type ParserMode = 'wasm' | 'basic';
+
 const connectionLabel = (connection: Connected, demo: boolean) => demo && connection.dataSource === 'fixture' ? connection.id === 'demo' ? 'Sample data' : 'Another sample' : connection.name;
 const pref = <T extends string>(key: string, values: readonly T[], fallback: T): T => {
     try {
@@ -20,6 +22,7 @@ function App() {
     const [locale, setLocale] = useState<Locale>(() => pref('clickstudio:locale', ['en', 'de', 'es', 'nl', 'zh', 'ru'] as const, 'en'));
     const [theme, setTheme] = useState<Theme>(() => pref('clickstudio:theme', ['click-dark', 'click-light'] as const, 'click-dark'));
     const [experience, setExperience] = useState<ExperienceLevel>(() => pref('clickstudio:experience', ['beginner', 'expert'] as const, 'beginner'));
+    const [parserMode, setParserMode] = useState<ParserMode>(() => pref('clickstudio:parser-mode', ['wasm', 'basic'] as const, 'wasm'));
     const [session, setSession] = useState<Session>();
     const [connections, setConnections] = useState<Connected[]>([]);
     const [connectionId, setConnectionId] = useState(() => new URLSearchParams(location.search).get('connection') ?? '');
@@ -50,8 +53,9 @@ function App() {
             localStorage.setItem('clickstudio:theme', theme);
             localStorage.setItem('clickstudio:locale', locale);
             localStorage.setItem('clickstudio:experience', experience);
+            localStorage.setItem('clickstudio:parser-mode', parserMode);
         } catch { }
-    }, [dark, experience, locale, theme]);
+    }, [dark, experience, locale, parserMode, theme]);
 
     const loadSession = useCallback(async () => {
         const next = await api<Session>('/session');
@@ -134,13 +138,22 @@ function App() {
                     <RadioGroup.Item value="expert" className={`navbar-mode-option is-expert ${experience === 'expert' ? 'is-active' : ''}`} label={copy.app.expert}/>
                 </RadioGroup>
             </div>
+            <div className="experience-switch parser-switch">
+                <span className="mode-caption">PARSER</span>
+                <RadioGroup className="navbar-mode-control" value={parserMode} onValueChange={value => {
+                    if (value === 'wasm' || value === 'basic') setParserMode(value);
+                }} aria-label="Parser mode" inline orientation="horizontal" dir="end">
+                    <RadioGroup.Item value="wasm" className={`navbar-mode-option parser-mode-option is-wasm ${parserMode === 'wasm' ? 'is-active' : ''}`} label="WASM"/>
+                    <RadioGroup.Item value="basic" className={`navbar-mode-option parser-mode-option is-basic ${parserMode === 'basic' ? 'is-active' : ''}`} label="Basic"/>
+                </RadioGroup>
+            </div>
             <div className="topbar-divider topbar-divider-short"/>
             <div className="topbar-preferences">
                 <SelectControl label={copy.app.language} value={locale} options={localeOptions} onChange={setLocale}/>
                 <SelectControl label={copy.app.theme} value={theme} options={themeOptions} onChange={setTheme}/>
             </div>
         </header>
-        {connection ? <Workspace key={connection.id} connection={connection} connectionLabel={connectionLabel(connection, session.demo)} connections={connections} onSelectConnection={selectConnection} onRefreshConnections={async () => { const latest = await api<Connected[]>('/connections'); setConnections(latest); }} trustActionRef={trustActionRef} testConnectionActionRef={testConnectionActionRef} demoMode={session.demo} experience={experience} dark={dark} copy={copy} locale={locale}/> : <div className="empty-connection"><Icon name="schema"/><h1>{copy.app.name}</h1><p>No connection profiles are configured for this workspace.</p></div>}
+        {connection ? <Workspace key={connection.id} connection={connection} connectionLabel={connectionLabel(connection, session.demo)} connections={connections} onSelectConnection={selectConnection} onRefreshConnections={async () => { const latest = await api<Connected[]>('/connections'); setConnections(latest); }} trustActionRef={trustActionRef} testConnectionActionRef={testConnectionActionRef} demoMode={session.demo} experience={experience} nativeParserEnabled={parserMode === 'wasm'} dark={dark} copy={copy} locale={locale}/> : <div className="empty-connection"><Icon name="schema"/><h1>{copy.app.name}</h1><p>No connection profiles are configured for this workspace.</p></div>}
     </div>;
 }
 

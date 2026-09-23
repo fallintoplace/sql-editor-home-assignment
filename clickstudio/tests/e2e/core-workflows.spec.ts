@@ -92,7 +92,9 @@ test('Native parser can be retried after a temporary worker failure', async ({ p
     const retry = page.getByRole('button', { name: 'Retry parser', exact: true });
     await expect(retry).toBeVisible();
     await retry.click();
-    await expect(page.getByText('Native parser', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'ClickHouse parser', exact: true }).click();
+    await expect(page.getByText('Ready · local WebAssembly', { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => Number((window as any).__parserParseCount ?? 0))).toBeGreaterThan(0);
 });
 
@@ -162,7 +164,9 @@ test('Failed async formatting does not overwrite edits typed while it was pendin
     await page.addInitScript(parserWorkerStub('ready'));
     await trust(page);
     await replaceSql(page, 'select old_value from old_table');
-    await expect(page.getByText('Native parser', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'ClickHouse parser', exact: true }).click();
+    await expect(page.getByText('Ready · local WebAssembly', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Format', exact: true }).click();
     await expect.poll(() => page.evaluate(() => Boolean((window as any).__pendingParserFormat))).toBe(true);
     await replaceSql(page, 'select new_value from new_table');

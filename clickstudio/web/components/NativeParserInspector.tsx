@@ -3,6 +3,7 @@ import { nativeHighlightRanges } from '../../shared/native-parser';
 import { Button, cx, Icon } from './ui';
 
 type Props = {
+    enabled: boolean;
     status: NativeParserStatus;
     snapshot?: NativeParseSnapshot;
     onRetry: () => void;
@@ -10,19 +11,20 @@ type Props = {
 
 const MAX_AST_PREVIEW_LENGTH = 100_000;
 
-export function NativeParserInspector({ status, snapshot, onRetry }: Props) {
+export function NativeParserInspector({ enabled, status, snapshot, onRetry }: Props) {
     return <section className="inspector-section parser-inspector" aria-label="ClickHouse parser details">
-        <div className={cx('parser-status-card', `parser-status-${status}`)}>
-            <span className={cx('status-light', status === 'ready' ? 'is-trusted' : status === 'unavailable' ? 'is-warning' : 'is-running')}/>
-            <div><strong>ClickHouse native parser</strong><small>{status === 'ready' ? 'Ready · local WebAssembly' : status === 'loading' ? 'Loading parser…' : 'Unavailable'}</small></div>
-            {snapshot && <span className="parser-duration">{snapshot.elapsedMs.toFixed(1)} ms</span>}
-            {status === 'unavailable' && <Button variant="ghost" className="toolbar-small" onClick={onRetry}>Retry</Button>}
+        <div className={cx('parser-status-card', `parser-status-${enabled ? status : 'disabled'}`)}>
+            <span className={cx('status-light', !enabled ? '' : status === 'ready' ? 'is-trusted' : status === 'unavailable' ? 'is-warning' : 'is-running')}/>
+            <div><strong>{enabled ? 'ClickHouse native parser' : 'Basic highlighting'}</strong><small>{enabled ? status === 'ready' ? 'Ready · local WebAssembly' : status === 'loading' ? 'Loading parser…' : 'Unavailable' : 'WASM parser off'}</small></div>
+            {enabled && snapshot && <span className="parser-duration">{snapshot.elapsedMs.toFixed(1)} ms</span>}
+            {enabled && status === 'unavailable' && <Button variant="ghost" className="toolbar-small" onClick={onRetry}>Retry</Button>}
         </div>
 
-        {status === 'loading' && <div className="inspector-empty"><span className="loading-orbit"/><strong>Loading parser</strong><p>SQL stays available while the native parser starts.</p></div>}
-        {status === 'unavailable' && <div className="inspector-empty"><Icon name="parser"/><strong>Parser unavailable</strong><p>The SQL editor stays available when parser loading fails. Retry here to check the parser artifact again.</p></div>}
-        {status === 'ready' && !snapshot && <div className="inspector-empty"><Icon name="parser"/><strong>Waiting for SQL</strong><p>Native parse results appear here after the current SQL is checked.</p></div>}
-        {status === 'ready' && snapshot?.statements.map((statement, index) => {
+        {!enabled && <div className="inspector-empty"><Icon name="parser"/><strong>Basic mode active</strong><p>ClickHouse SQL highlighting stays on. Diagnostics and AST details are off; Format uses the basic formatter.</p></div>}
+        {enabled && status === 'loading' && <div className="inspector-empty"><span className="loading-orbit"/><strong>Loading parser</strong><p>SQL stays available while the native parser starts.</p></div>}
+        {enabled && status === 'unavailable' && <div className="inspector-empty"><Icon name="parser"/><strong>Parser unavailable</strong><p>The SQL editor stays available when parser loading fails. Retry here to check the parser artifact again.</p></div>}
+        {enabled && status === 'ready' && !snapshot && <div className="inspector-empty"><Icon name="parser"/><strong>Waiting for SQL</strong><p>Native parse results appear here after the current SQL is checked.</p></div>}
+        {enabled && status === 'ready' && snapshot?.statements.map((statement, index) => {
             const { result } = statement;
             const astType = typeof result.ast === 'object' && result.ast !== null && !Array.isArray(result.ast)
                 && typeof (result.ast as { type?: unknown }).type === 'string'

@@ -52,12 +52,13 @@ type WorkspaceProps = {
     testConnectionActionRef: { current: () => Promise<void> };
     demoMode: boolean;
     experience: ExperienceLevel;
+    nativeParserEnabled: boolean;
     dark: boolean;
     copy: Copy;
     locale: Locale;
 };
 
-export function Workspace({ connection, connectionLabel, connections, onSelectConnection, onRefreshConnections, trustActionRef, testConnectionActionRef, demoMode, experience, dark, copy, locale }: WorkspaceProps) {
+export function Workspace({ connection, connectionLabel, connections, onSelectConnection, onRefreshConnections, trustActionRef, testConnectionActionRef, demoMode, experience, nativeParserEnabled, dark, copy, locale }: WorkspaceProps) {
     const key = stateKey(connection.id);
     const [workspace, setWorkspace] = useState<WorkspaceState>(() => {
         const recovered = recover(key);
@@ -281,14 +282,14 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         const applyFallback = () => setWorkspace(current => current.activeId !== draftId ? current : ({ ...current,
             tabs: current.tabs.map(draft => draft.id === draftId && draft.sql === sourceSql ? { ...draft, sql: formatSql(sourceSql) } : draft),
         }));
-        if (nativeParserStatus !== 'ready') {
+        if (!nativeParserEnabled || nativeParserStatus !== 'ready') {
             applyFallback();
             return;
         }
         const result = await editor.current?.formatNative();
         if (result === 'unavailable' || result === 'fallback')
             applyFallback();
-    }, [active.id, active.sql, nativeParserStatus]);
+    }, [active.id, active.sql, nativeParserEnabled, nativeParserStatus]);
 
     const loadHistory = useCallback(async () => {
         const requestId = ++historyRequestRef.current;
@@ -580,6 +581,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         assistantProposal,
         assistantBusy,
         assistantError,
+        nativeParserEnabled,
         nativeParserStatus,
         nativeParseSnapshot,
         onRetryParser: () => editor.current?.retryNativeParser(),
@@ -661,10 +663,10 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     <section className="editor-surface">
                         <div className="editor-heading">
                             <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">QUERY</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label><span className="edit-indicator" title={active.serverId ? `Saved revision ${active.baseRevision}` : 'Only in this browser'}>{active.serverId ? `REV ${active.baseRevision}` : 'LOCAL'}</span></div>
-                            <div className="editor-heading-actions">{experience === 'expert' && <>{nativeParserStatus === 'unavailable' && <><span className="toolbar-small" role="status" title="Formatting remains available while the native parser is unavailable.">Parser unavailable</span><Button variant="ghost" className="toolbar-small" onClick={() => editor.current?.retryNativeParser()}>Retry parser</Button></>}<Button variant="ghost" className="toolbar-small" title={nativeParserStatus === 'ready' ? 'Format with the native ClickHouse parser' : 'Format SQL'} onClick={() => void formatActiveSql()}>Format</Button></>}</div>
+                            <div className="editor-heading-actions">{experience === 'expert' && <>{nativeParserEnabled && nativeParserStatus === 'unavailable' && <><span className="toolbar-small" role="status" title="Formatting remains available while the native parser is unavailable.">Parser unavailable</span><Button variant="ghost" className="toolbar-small" onClick={() => editor.current?.retryNativeParser()}>Retry parser</Button></>}<Button variant="ghost" className="toolbar-small" title={nativeParserEnabled && nativeParserStatus === 'ready' ? 'Format with the native ClickHouse parser' : 'Format SQL'} onClick={() => void formatActiveSql()}>Format</Button></>}</div>
                         </div>
                         <div className="editor-toolbar">
-                            <div className="editor-mode-label"><span className="editor-language-dot"/>ClickHouse SQL<span className="toolbar-divider"/><span>{statementCount === undefined ? 'Incomplete SQL' : `${statementCount} statement${statementCount === 1 ? '' : 's'}`}</span>{experience === 'expert' && nativeParserStatus === 'ready' && <><span className="toolbar-divider"/><span title="Syntax checks and formatting run locally in a Web Worker using ClickHouse's native parser.">Native parser</span></>}</div>
+                            <div className="editor-mode-label"><span className="editor-language-dot"/>ClickHouse SQL<span className="toolbar-divider"/><span>{statementCount === undefined ? 'Incomplete SQL' : `${statementCount} statement${statementCount === 1 ? '' : 's'}`}</span></div>
                             <div className="editor-actions">
                                 {experience === 'expert' ? <>
                                     <Button variant="ghost" className="sql-ai-button" aria-pressed={inspector === 'assistant'} onClick={() => showInspector('assistant')}><Icon name="assistant"/>SQL AI</Button>
@@ -682,7 +684,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             </div>
                         </div>
                         {experience === 'beginner' && (!trusted || (!demoMode && !connection.manifest)) && <div className="beginner-connection-notice" role="status"><span>{demoMode ? 'Start the sample workspace to run this query.' : !connection.manifest ? trusted ? 'Retest this connection to refresh its feature checks.' : 'Test this connection to discover its ClickHouse features.' : 'Trust this connection to run SQL.'}</span><Button variant="secondary" className="toolbar-small" onClick={() => void (!demoMode && !connection.manifest ? testConnectionActionRef.current() : trustActionRef.current())}>{demoMode ? 'Start exploring' : !connection.manifest ? trusted ? 'Retest connection' : 'Test connection' : 'Trust connection'}</Button></div>}
-                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} parserStatus={nativeParserStatus} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus} onNativeParseSnapshot={snapshot => setNativeParseSnapshot(snapshot)}/></div>
+                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} nativeParserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus} onNativeParseSnapshot={snapshot => setNativeParseSnapshot(snapshot)}/></div>
                         {parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => patch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
                         {experience === 'expert' && <div className="editor-footer"><span>{active.sql.length.toLocaleString()} characters <span className="footer-dot">·</span> {active.sql.split('\n').length} lines</span></div>}
                     </section>

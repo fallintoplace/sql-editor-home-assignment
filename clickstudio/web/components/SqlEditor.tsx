@@ -134,6 +134,7 @@ interface Props {
     to: number;
     schema?: Schema;
     dark: boolean;
+    nativeParserEnabled: boolean;
     parserStatus: NativeParserStatus;
     error?: ApiError;
     onChange: (value: string) => void;
@@ -170,14 +171,18 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
                 } })] }) }); view.current = editor; return () => { editor.destroy(); view.current = undefined; }; }, []);
     useEffect(() => { const v = view.current; if (v && v.state.doc.toString() !== props.value)
         v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: props.value }, selection: { anchor: Math.min(props.from, props.value.length), head: Math.min(props.to, props.value.length) } }); }, [props.value]);
-    useEffect(() => clickHouseNativeParser.subscribe(status => current.current.onNativeParserStatus?.(status)), []);
+    useEffect(() => {
+        if (!props.nativeParserEnabled)
+            return;
+        return clickHouseNativeParser.subscribe(status => current.current.onNativeParserStatus?.(status));
+    }, [props.nativeParserEnabled]);
     useEffect(() => {
         const editor = view.current, revision = ++validationRevision.current;
         nativeDiagnostics.current = [];
         applyDiagnostics();
         editor?.dispatch({ effects: setNativeDecorations.of(Decoration.none) });
         current.current.onNativeParseSnapshot?.(undefined);
-        if (!editor || props.parserStatus !== 'ready')
+        if (!editor || !props.nativeParserEnabled || props.parserStatus !== 'ready')
             return;
         const source = editor.state.doc.toString();
         const outline = editor.state.field(sqlStatementOutline);
@@ -217,7 +222,7 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
             validationRevision.current++;
             window.clearTimeout(timer);
         };
-    }, [props.parserStatus, props.value, applyDiagnostics]);
+    }, [props.nativeParserEnabled, props.parserStatus, props.value, applyDiagnostics]);
     useEffect(() => { const v = view.current; if (!v)
         return; const from = Math.min(props.from, v.state.doc.length), to = Math.min(props.to, v.state.doc.length); if (v.state.selection.main.from !== from || v.state.selection.main.to !== to)
         v.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true }); }, [props.from, props.to]);

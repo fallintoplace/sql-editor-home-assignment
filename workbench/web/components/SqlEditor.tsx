@@ -4,11 +4,15 @@ import { EditorView, hoverTooltip, keymap, lineNumbers, highlightActiveLine, dra
 import { defaultKeymap, history, historyKeymap, indentWithTab, indentSelection } from '@codemirror/commands';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { bracketMatching, foldGutter, foldKeymap, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
-import { autocompletion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
+import { autocompletion, ifNotIn, nextSnippetField, prevSnippetField, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import { sql, SQLDialect } from '@codemirror/lang-sql';
 import { setDiagnostics } from '@codemirror/lint';
 import type { ApiError, Schema } from '../../shared/types';
-const clickhouse = SQLDialect.define({ keywords: 'SELECT WITH FROM WHERE PREWHERE GROUP BY HAVING ORDER LIMIT OFFSET AS AND OR NOT NULL JOIN LEFT RIGHT INNER FULL CROSS ARRAY JOIN UNION ALL DISTINCT EXPLAIN SETTINGS SAMPLE FINAL FORMAT INTO CASE WHEN THEN ELSE END ON USING ASC DESC', types: 'String UInt8 UInt16 UInt32 UInt64 UInt128 UInt256 Int8 Int16 Int32 Int64 Int128 Int256 Float32 Float64 Date Date32 DateTime DateTime64 Nullable Array Tuple Map Decimal LowCardinality UUID JSON', builtin: 'count sum avg min max uniq uniqExact quantile median toDate toDateTime toStartOfDay toStartOfHour now today numbers arrayJoin arrayMap arrayFilter multiIf ifNull coalesce', doubleQuotedStrings: false, hashComments: true });
+import { quoteIdentifier } from '../../shared/sql';
+import { activeStatementIndex, CLICKHOUSE_KEYWORDS, completionTarget, matchingNames, tableAliases as aliasesFor } from '../../shared/editor-tools';
+import { clickhouseSnippetCompletions, sqlEditorTools, sqlStatementOutline } from './editor-tools';
+const keywordCompletions = [...new Set(CLICKHOUSE_KEYWORDS.split(' '))].map(label => ({ label, type: 'keyword' }));
+const clickhouse = SQLDialect.define({ keywords: CLICKHOUSE_KEYWORDS, types: 'String UInt8 UInt16 UInt32 UInt64 UInt128 UInt256 Int8 Int16 Int32 Int64 Int128 Int256 Float32 Float64 Date Date32 DateTime DateTime64 Nullable Array Tuple Map Decimal LowCardinality UUID JSON', builtin: 'count sum avg min max uniq uniqExact quantile median toDate toDateTime toStartOfDay toStartOfHour now today numbers arrayJoin arrayMap arrayFilter multiIf ifNull coalesce', doubleQuotedStrings: false, hashComments: true });
 const clickhouseFunctions = [
     ['count', 'Aggregate count of rows'], ['sum', 'Aggregate numeric values'], ['avg', 'Average numeric values'], ['uniqExact', 'Exact distinct count'],
     ['quantile', 'Approximate quantile aggregate'], ['median', 'Median aggregate'], ['toDate', 'Convert a value to Date'], ['toDateTime', 'Convert a value to DateTime'],
@@ -16,20 +20,7 @@ const clickhouseFunctions = [
     ['today', 'Current server Date'], ['numbers', 'Generate a sequence of numbers'], ['arrayJoin', 'Expand an array into rows'], ['arrayMap', 'Map a lambda over an array'],
     ['arrayFilter', 'Filter an array with a lambda'], ['multiIf', 'Multi-branch conditional'], ['ifNull', 'Replace NULL with a fallback'], ['coalesce', 'Return the first non-NULL value'],
 ] as const;
-const reservedAliasWords = new Set(['select', 'from', 'where', 'prewhere', 'group', 'by', 'having', 'order', 'limit', 'offset', 'join', 'left', 'right', 'inner', 'full', 'cross', 'on', 'using', 'union', 'settings', 'format']);
 const unquote = (value: string) => value.replace(/^`|`$/g, '').replace(/^"|"$/g, '');
-function aliasesFor(sql: string) {
-    const aliases = new Map<string, string>();
-    const pattern = /\b(?:FROM|JOIN)\s+([`"A-Za-z_][`"A-Za-z0-9_.]*)(?:\s+(?:AS\s+)?([A-Za-z_][A-Za-z0-9_$]*))?/gi;
-    for (const match of sql.matchAll(pattern)) {
-        const table = unquote(match[1] ?? ''), alias = match[2]?.toLowerCase();
-        if (alias && !reservedAliasWords.has(alias))
-            aliases.set(alias, table);
-        aliases.set(table.toLowerCase(), table);
-        aliases.set(table.split('.').at(-1)!.toLowerCase(), table);
-    }
-    return aliases;
-}
 type SchemaIndex = {
     columns: Schema['columns'];
     columnsByTable: Map<string, Schema['columns']>;
@@ -55,18 +46,31 @@ function indexSchema(schema: Schema | undefined): SchemaIndex {
     return { columns, columnsByTable, tables: schema?.tables ?? [], tablesByName, codeMirror };
 }
 function indexedTable(index: SchemaIndex, name: string) {
-    return index.tablesByName.get(unquote(name).toLowerCase());
+    return index.tablesByName.get(name.toLowerCase());
 }
-function completionSource(context: CompletionContext, index: SchemaIndex, sqlText: string): CompletionResult | null {
-    const word = context.matchBefore(/[A-Za-z_][A-Za-z0-9_$]*(?:\.[A-Za-z_][A-Za-z0-9_$]*)?$/);
-    if (!word && !context.explicit)
-        return null;
-    const token = word?.text ?? '', dot = token.lastIndexOf('.'), qualifier = dot >= 0 ? token.slice(0, dot) : '';
-    const aliases = aliasesFor(sqlText), tableName = qualifier ? aliases.get(unquote(qualifier).toLowerCase()) ?? qualifier : undefined, table = tableName ? indexedTable(index, tableName) : undefined;
-    const columns = (table ? index.columnsByTable.get(tableKey(table.database, table.name)) ?? [] : index.columns).slice(0, 300).map(column => ({ label: qualifier ? `${qualifier}.${column.name}` : column.name, type: 'variable', detail: `${column.type} · ${column.database}.${column.table}` }));
-    const tables = qualifier ? [] : index.tables.slice(0, 300).map(t => ({ label: `${t.database}.${t.name}`, type: 'class', detail: t.engine }));
+function completionSource(context: CompletionContext, index: SchemaIndex): CompletionResult | null {
+    const line = context.state.doc.lineAt(context.pos);
+    const target = completionTarget(context.state.sliceDoc(line.from, context.pos), context.explicit);
+    if (!target) return null;
+    const { qualifier, prefix } = target;
+    const statements = context.state.field(sqlStatementOutline).statements;
+    const statement = statements[activeStatementIndex(statements, context.pos)];
+    const aliases = aliasesFor(statement?.sql ?? '');
+    const tableName = qualifier ? aliases.get(unquote(qualifier).toLowerCase()) ?? qualifier : undefined;
+    const table = tableName ? indexedTable(index, tableName) : undefined;
+    const candidates = table ? index.columnsByTable.get(tableKey(table.database, table.name)) ?? [] : qualifier ? [] : index.columns;
+    const columns = matchingNames(candidates, column => column.name, prefix).map(column => ({
+        label: column.name, apply: quoteIdentifier(column.name), type: 'variable', detail: `${column.type} · ${column.database}.${column.table}`,
+    }));
+    const tableCandidates = qualifier ? table ? [] : index.tables.filter(item => item.database.toLowerCase() === qualifier.toLowerCase()) : index.tables;
+    const tables = matchingNames(tableCandidates, item => qualifier ? item.name : `${item.database}.${item.name}`, prefix).map(item => ({
+        label: qualifier ? item.name : `${item.database}.${item.name}`,
+        apply: qualifier ? quoteIdentifier(item.name) : `${quoteIdentifier(item.database)}.${quoteIdentifier(item.name)}`,
+        type: 'class', detail: item.engine,
+    }));
     const functions = qualifier ? [] : clickhouseFunctions.map(([label, detail]) => ({ label, type: 'function', detail }));
-    return { from: word?.from ?? context.pos, options: [...functions, ...tables, ...columns], validFor: /^[A-Za-z_][A-Za-z0-9_$]*(?:\.[A-Za-z_][A-Za-z0-9_$]*)?$/ };
+    // Prefix-capped schema options must be recomputed as the user types, not cached with validFor.
+    return { from: line.from + target.from, options: [...functions, ...(qualifier ? [] : keywordCompletions), ...tables, ...columns, ...(qualifier ? [] : clickhouseSnippetCompletions)] };
 }
 function hoverInfo(index: SchemaIndex, sqlText: string, label: string) {
     const functionInfo = clickhouseFunctions.find(([name]) => name.toLowerCase() === label.toLowerCase());
@@ -108,9 +112,9 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
     const languageExtension = () => sql({ dialect: clickhouse, schema: schemaIndex.codeMirror });
     const themeExtension = () => EditorView.theme({ '&': { height: '100%', backgroundColor: 'var(--panel)', color: 'var(--text)' }, '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace', fontSize: '13px' }, '.cm-gutters': { backgroundColor: 'var(--panel)', color: 'var(--muted)', border: 'none' }, '.cm-content': { minHeight: '220px' }, '.cm-cursor': { borderLeftColor: 'var(--text)' }, '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: 'var(--editor-selection)' } }, { dark: current.current.dark });
     useEffect(() => { if (!element.current)
-        return; const p = current.current; const editor = new EditorView({ parent: element.current, state: EditorState.create({ doc: p.value, selection: { anchor: Math.min(p.from, p.value.length), head: Math.min(p.to, p.value.length) }, extensions: [lineNumbers(), history(), drawSelection(), highlightActiveLine(), rectangularSelection(), bracketMatching(), foldGutter(), highlightSelectionMatches(), syntaxHighlighting(defaultHighlightStyle), autocompletion({ override: [context => completionSource(context, schemaIndexRef.current, current.current.value)] }), hoverTooltip((view, pos) => { const word = view.state.wordAt(pos); if (!word)
+        return; const p = current.current; const editor = new EditorView({ parent: element.current, state: EditorState.create({ doc: p.value, selection: { anchor: Math.min(p.from, p.value.length), head: Math.min(p.to, p.value.length) }, extensions: [sqlEditorTools(), lineNumbers(), history(), drawSelection(), highlightActiveLine(), rectangularSelection(), bracketMatching(), foldGutter(), highlightSelectionMatches(), syntaxHighlighting(defaultHighlightStyle), autocompletion({ override: [ifNotIn(['QuotedIdentifier', 'String', 'LineComment', 'BlockComment'], context => completionSource(context, schemaIndexRef.current))] }), hoverTooltip((view, pos) => { const word = view.state.wordAt(pos); if (!word)
                 return null; const label = view.state.sliceDoc(word.from, word.to), info = hoverInfo(schemaIndexRef.current, current.current.value, label); if (!info)
-                return null; return { pos: word.from, end: word.to, above: true, create: () => { const dom = document.createElement('div'); dom.className = 'sql-hover'; dom.textContent = info; return { dom }; } }; }), language.current.of(languageExtension()), theme.current.of(themeExtension()), EditorState.allowMultipleSelections.of(true), EditorView.contentAttributes.of({ 'aria-label': 'SQL editor', 'spellcheck': 'false' }), keymap.of([{ key: 'Mod-Enter', run: () => { current.current.onRun(false); return true; } }, { key: 'Mod-Shift-Enter', run: () => { current.current.onRun(true); return true; } }, ...defaultKeymap, ...historyKeymap, ...searchKeymap, ...foldKeymap, indentWithTab]), EditorView.updateListener.of(update => { if (update.docChanged)
+                return null; return { pos: word.from, end: word.to, above: true, create: () => { const dom = document.createElement('div'); dom.className = 'sql-hover'; dom.textContent = info; return { dom }; } }; }), language.current.of(languageExtension()), theme.current.of(themeExtension()), EditorState.allowMultipleSelections.of(true), EditorView.contentAttributes.of({ 'aria-label': 'SQL editor', 'spellcheck': 'false' }), keymap.of([{ key: 'Tab', run: nextSnippetField, shift: prevSnippetField }, { key: 'Mod-Enter', run: () => { current.current.onRun(false); return true; } }, { key: 'Mod-Shift-Enter', run: () => { current.current.onRun(true); return true; } }, ...defaultKeymap, ...historyKeymap, ...searchKeymap, ...foldKeymap, indentWithTab]), EditorView.updateListener.of(update => { if (update.docChanged)
                     current.current.onChange(update.state.doc.toString()); if (update.selectionSet) {
                     const s = update.state.selection.main;
                     current.current.onSelection(s.from, s.to);

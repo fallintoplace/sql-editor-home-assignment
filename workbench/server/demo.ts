@@ -8,7 +8,28 @@ export class DemoDriver {
         throw new AppError(404, 'CONNECTION_NOT_FOUND', 'Fixture connection not found'); const yes = { available: true }; return { dataSource: 'fixture', id, name: id === 'demo' ? 'Demo fixtures (not live data)' : 'Second isolated fixture', host: 'fixture://local', database: 'demo', username: 'fixture-reader', readonly: true, limits: { ...DEFAULT_LIMITS }, manifest: { version: 1, serverVersion: 'fixture—not a ClickHouse server', testedAt: new Date().toISOString(), schema: yes, progress: yes, cancellation: yes, explain: yes, pipeline: yes, queryLog: yes, documentation: { available: false, reason: 'Fixture mode' }, import: { available: false, reason: 'Fixture mode never writes data' }, scripts: yes, parameters: yes } }; }
     connections(p: Principal) { return ['demo', 'demo-second'].map(id => this.connection(p, id)); }
     async test(id: string) { return this.connection({ id: 'local-owner', role: 'owner' }, id); }
-    async schema(id: string): Promise<Schema> { this.connection({ id: 'local-owner', role: 'owner' }, id); return { connectionId: id, fetchedAt: new Date().toISOString(), tables: [{ database: 'demo', name: 'events', engine: 'Fixture' }], columns: [{ database: 'demo', table: 'events', name: 'day', type: 'Date', comment: 'Fixture day', defaultKind: '' }, { database: 'demo', table: 'events', name: 'events', type: 'UInt64', comment: 'Fixture count', defaultKind: '' }], truncated: false, warnings: ['These are deterministic fixtures, not live database results.'] }; }
+    async schema(id: string): Promise<Schema> {
+        this.connection({ id: 'local-owner', role: 'owner' }, id);
+        return {
+            connectionId: id,
+            fetchedAt: new Date().toISOString(),
+            tables: [
+                { database: 'demo', name: 'events', engine: 'MergeTree', orderBy: '(tenant_id, day)', primaryKey: 'tenant_id, day', partitionKey: 'toYYYYMM(day)', samplingKey: 'tenant_id', ttlConfigured: true, rowEstimate: '2840000000', sizeBytes: '442381631488', uncompressedBytes: '1724663015424', parts: '58', activeParts: '52', skipIndexTypes: ['bloom_filter', 'minmax'], projections: [{ name: 'by_tenant_day', type: 'Normal', sortingKey: 'tenant_id, day' }, { name: 'daily_revenue', type: 'Aggregate', sortingKey: 'day' }], skipIndexes: [{ name: 'tenant_bloom', type: 'bloom_filter', expression: 'tenant_id', granularity: '4' }, { name: 'event_type_minmax', type: 'minmax', expression: 'event_type', granularity: '1' }] },
+                { database: 'demo', name: 'daily_rollup', engine: 'MaterializedView', materializedViewTarget: 'demo.daily_metrics', rowEstimate: null, sizeBytes: null, uncompressedBytes: null, parts: null, activeParts: null, projections: [], skipIndexes: [] },
+            ],
+            columns: [
+                { database: 'demo', table: 'events', name: 'tenant_id', type: 'UInt64', comment: 'Fixture tenant identifier', defaultKind: '' },
+                { database: 'demo', table: 'events', name: 'day', type: 'DateTime', comment: 'Fixture event timestamp', defaultKind: '' },
+                { database: 'demo', table: 'events', name: 'event_type', type: 'LowCardinality(String)', comment: 'Fixture event category', defaultKind: '' },
+                { database: 'demo', table: 'events', name: 'revenue', type: 'Decimal(18, 2)', comment: 'Fixture revenue', defaultKind: '' },
+                { database: 'demo', table: 'daily_rollup', name: 'day', type: 'Date', comment: 'Fixture date bucket', defaultKind: '' },
+                { database: 'demo', table: 'daily_rollup', name: 'events', type: 'UInt64', comment: 'Fixture daily count', defaultKind: '' },
+            ],
+            dictionaries: [{ database: 'demo', name: 'campaign_lookup', status: 'LOADED', type: 'Hashed', keyColumns: 'campaign_id UInt64', attributeColumns: 'campaign_name String, channel String', elementCount: '18240', memoryBytes: '5242880', lastSuccessfulUpdate: '2026-09-23 08:15:00' }],
+            truncated: false,
+            warnings: ['These are deterministic fixtures, not live database results.'],
+        };
+    }
     async execute(run: Run, signal: AbortSignal, progress: (p: Progress) => void) {
         if (/fixture_error/i.test(run.sql))
             throw new AppError(400, 'FIXTURE_ERROR', 'Deliberate fixture error; the draft is preserved');

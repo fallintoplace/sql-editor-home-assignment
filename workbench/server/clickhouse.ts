@@ -1,6 +1,7 @@
 import { createClient, type ClickHouseClient } from '@clickhouse/client';
 import { randomUUID } from 'node:crypto';
 import type { Connection, Json, Manifest, Principal, Progress, Run, Schema } from '../shared/types.js';
+import { enrichSchemaTables, type SchemaTableMetadata, type SchemaTableSkipIndex } from '../shared/schema.js';
 import { AppError, requireThat } from '../core/errors.js';
 import { collectCompactStream } from '../core/compact-stream.js';
 import type { QueryDriver } from '../core/runs.js';
@@ -79,7 +80,16 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
         return this.connection({ id: 'local-owner', role: 'owner' }, id);
     }
     async schema(id: string): Promise<Schema> {
-        const [columns, tables] = await Promise.all([
+        const database = this.profile(id).database;
+        const optionalRows = async <T>(label: string, sql: string): Promise<{ rows?: T[]; warning?: string }> => {
+            try {
+                return { rows: await this.rows<T>(id, sql, { database }) };
+            }
+            catch {
+                return { warning: `${label} metadata is unavailable to this reader or ClickHouse version.` };
+            }
+        };
+        const [columns, tables, tableDetails, projections, skipIndexes, dictionaries] = await Promise.all([
             this.rows<{
                 database: string;
                 table: string;
@@ -87,16 +97,114 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
                 type: string;
                 default_kind: string;
                 comment: string;
-            }>(id, 'SELECT database, table, name, type, default_kind, comment FROM system.columns WHERE database = {database:String} ORDER BY table, position LIMIT 5001', { database: this.profile(id).database }),
+            }>(id, 'SELECT database, table, name, type, default_kind, comment FROM system.columns WHERE database = {database:String} ORDER BY table, position LIMIT 5001', { database }),
             this.rows<{
                 database: string;
                 name: string;
                 engine: string;
-            }>(id, 'SELECT database, name, engine FROM system.tables WHERE database = {database:String} ORDER BY name LIMIT 1001', { database: this.profile(id).database }),
+            }>(id, 'SELECT database, name, engine FROM system.tables WHERE database = {database:String} ORDER BY name LIMIT 1001', { database }),
+            optionalRows<{
+                database: string;
+                name: string;
+                order_by: string;
+                primary_key: string;
+                partition_key: string;
+                sampling_key: string;
+                row_estimate: string;
+                size_bytes: string;
+                uncompressed_bytes: string;
+                parts: string;
+                active_parts: string;
+                ttl_configured: number;
+                materialized_view_target: string;
+                skip_index_types: string[];
+            }>('Table keys, storage, and view', `SELECT database, name, sorting_key AS order_by, primary_key, partition_key, sampling_key,
+                ifNull(toString(total_rows), '') AS row_estimate, ifNull(toString(total_bytes), '') AS size_bytes,
+                ifNull(toString(total_bytes_uncompressed), '') AS uncompressed_bytes, ifNull(toString(parts), '') AS parts, ifNull(toString(active_parts), '') AS active_parts,
+                match(create_table_query, '(?i)(^|[^A-Za-z0-9_])TTL([^A-Za-z0-9_]|$)') > 0 AS ttl_configured,
+                if(target_database = '', '', concat(target_database, '.', target_table)) AS materialized_view_target,
+                skipping_indices_types AS skip_index_types
+                FROM system.tables WHERE database = {database:String} ORDER BY name LIMIT 1001`),
+            optionalRows<{
+                database: string;
+                table: string;
+                name: string;
+                type: string;
+                sortingKey: string;
+            }>('Projection', `SELECT database, table, name, type, arrayStringConcat(sorting_key, ', ') AS sortingKey
+                FROM system.projections WHERE database = {database:String} ORDER BY table, name LIMIT 5001`),
+            optionalRows<SchemaTableSkipIndex>('Skip-index', `SELECT database, table, name, type, expr AS expression, toString(granularity) AS granularity
+                FROM system.data_skipping_indices WHERE database = {database:String} ORDER BY table, name LIMIT 5001`),
+            optionalRows<{
+                database: string;
+                name: string;
+                status: string;
+                type: string;
+                key_columns: string;
+                attribute_columns: string;
+                element_count: string;
+                memory_bytes: string;
+                last_successful_update: string;
+            }>('Dictionary', `SELECT database, name, status, type, arrayStringConcat(key.names, ', ') AS key_columns,
+                arrayStringConcat(attribute.names, ', ') AS attribute_columns, toString(element_count) AS element_count,
+                toString(bytes_allocated) AS memory_bytes, toString(last_successful_update_time) AS last_successful_update
+                FROM system.dictionaries WHERE database = {database:String} OR database = '' ORDER BY database, name LIMIT 1001`),
         ]);
-        const truncated = columns.length > 5000 || tables.length > 1000;
-        return { connectionId: id, fetchedAt: new Date().toISOString(), tables: tables.slice(0, 1000), columns: columns.slice(0, 5000).map(c => ({ database: c.database, table: c.table, name: c.name, type: c.type, defaultKind: c.default_kind, comment: c.comment })), truncated,
-            warnings: [`Schema is scoped to ${this.profile(id).database}. Configure another profile for another database.`, ...(truncated ? ['Schema preview truncated.'] : [])] };
+        const tableTruncated = columns.length > 5000 || tables.length > 1000;
+        const metadataWarnings = [tableDetails.warning, projections.warning, skipIndexes.warning, dictionaries.warning].filter((warning): warning is string => Boolean(warning));
+        if ((tableDetails.rows?.length ?? 0) > 1000)
+            metadataWarnings.push('Table metadata preview truncated.');
+        if ((projections.rows?.length ?? 0) > 5000)
+            metadataWarnings.push('Projection metadata preview truncated.');
+        if ((skipIndexes.rows?.length ?? 0) > 5000)
+            metadataWarnings.push('Skip-index metadata preview truncated.');
+        if ((dictionaries.rows?.length ?? 0) > 1000)
+            metadataWarnings.push('Dictionary metadata preview truncated.');
+        const tableMetadata: SchemaTableMetadata[] | undefined = tableDetails.rows?.slice(0, 1000).map(row => ({
+            database: row.database,
+            name: row.name,
+            orderBy: row.order_by,
+            primaryKey: row.primary_key,
+            partitionKey: row.partition_key,
+            samplingKey: row.sampling_key,
+            rowEstimate: row.row_estimate || null,
+            sizeBytes: row.size_bytes || null,
+            uncompressedBytes: row.uncompressed_bytes || null,
+            parts: row.parts || null,
+            activeParts: row.active_parts || null,
+            ttlConfigured: row.ttl_configured > 0,
+            materializedViewTarget: row.materialized_view_target || undefined,
+            skipIndexTypes: row.skip_index_types,
+        }));
+        const projectionMetadata = projections.rows?.slice(0, 5000).map(row => ({
+            database: row.database,
+            table: row.table,
+            name: row.name,
+            type: row.type,
+            sortingKey: row.sortingKey,
+        }));
+        const indexMetadata = skipIndexes.rows?.slice(0, 5000);
+        const tableRows = tables.slice(0, 1000);
+        const enrichedTables = enrichSchemaTables(tableRows, {
+            tables: tableMetadata,
+            projections: projectionMetadata,
+            skipIndexes: indexMetadata,
+        });
+        const dictionaryRows = dictionaries.rows?.slice(0, 1000).map(row => ({
+            database: row.database,
+            name: row.name,
+            status: row.status,
+            type: row.type,
+            keyColumns: row.key_columns,
+            attributeColumns: row.attribute_columns,
+            elementCount: row.element_count,
+            memoryBytes: row.memory_bytes,
+            lastSuccessfulUpdate: row.last_successful_update,
+        }));
+        const truncated = tableTruncated;
+        return { connectionId: id, fetchedAt: new Date().toISOString(), tables: enrichedTables, columns: columns.slice(0, 5000).map(c => ({ database: c.database, table: c.table, name: c.name, type: c.type, defaultKind: c.default_kind, comment: c.comment })),
+            dictionaries: dictionaryRows, metadataWarnings: metadataWarnings.length ? metadataWarnings : undefined, truncated,
+            warnings: [`Schema is scoped to ${database}. Configure another profile for another database.`, ...(truncated ? ['Schema preview truncated.'] : [])] };
     }
     async execute(run: Run, signal: AbortSignal, progress: (p: Progress) => void) {
         let timer: ReturnType<typeof setInterval> | undefined, polling = false;

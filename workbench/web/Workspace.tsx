@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AssistantAction, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Result, Run, Schema, Script } from '../shared/types';
+import type { AssistantAction, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Result, Run, Schema, SchemaTable, Script } from '../shared/types';
 import { DEFAULT_LIMITS } from '../shared/types';
 import { recommendChart } from '../shared/results';
 import { matchesDraft } from '../shared/evidence';
@@ -28,6 +28,16 @@ function safeSelectedStatement(sql: string, from: number, to: number) {
 }
 function safeStatementCount(sql: string) {
     try { return splitSql(sql).length; } catch { return undefined; }
+}
+function schemaTableSearchText(table: SchemaTable) {
+    return [
+        table.database, table.name, table.engine, table.orderBy, table.primaryKey, table.partitionKey, table.samplingKey,
+        table.materializedViewTarget, table.rowEstimate, table.sizeBytes, table.uncompressedBytes,
+        table.parts, table.activeParts, table.ttlConfigured === undefined ? '' : table.ttlConfigured ? 'ttl configured' : 'no ttl',
+        table.skipIndexTypes?.join(' '),
+        ...(table.projections ?? []).flatMap(projection => [projection.name, projection.type, projection.sortingKey]),
+        ...(table.skipIndexes ?? []).flatMap(index => [index.name, index.type, index.expression, index.granularity]),
+    ].filter(Boolean).join(' ').toLowerCase();
 }
 function assistantContextKey(connectionId: string, draftId: string, sql: string, parameters: Record<string, string>, runId: string | undefined, includeResult: boolean, action: AssistantAction, question: string) {
     return JSON.stringify({ connectionId, draftId, sql, parameters: Object.entries(parameters).sort(([left], [right]) => left.localeCompare(right)), runId, includeResult, action, question });
@@ -442,7 +452,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const filteredTables = useMemo(() => {
         const q = search.trim().toLowerCase();
         if (!q) return schema?.tables ?? [];
-        return (schema?.tables ?? []).filter(table => `${table.database}.${table.name} ${table.engine}`.toLowerCase().includes(q) || schema?.columns.some(column => column.database === table.database && column.table === table.name && `${column.name} ${column.type}`.toLowerCase().includes(q)));
+        return (schema?.tables ?? []).filter(table => schemaTableSearchText(table).includes(q) || schema?.columns.some(column => column.database === table.database && column.table === table.name && `${column.name} ${column.type}`.toLowerCase().includes(q)));
     }, [schema, search]);
     const saveStatusLabel = ({
         local: 'Local draft', checking: 'Checking save…', saving: 'Saving…', saved: `Saved r${active.baseRevision}`,

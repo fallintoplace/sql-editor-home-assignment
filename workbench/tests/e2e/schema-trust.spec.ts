@@ -3,8 +3,9 @@ import { test, expect, type Page, type Route } from '@playwright/test';
 const schema = {
     connectionId: 'live',
     fetchedAt: '2026-09-23T00:00:00.000Z',
-    tables: [{ database: 'analytics', name: 'events', engine: 'MergeTree' }],
+    tables: [{ database: 'analytics', name: 'events', engine: 'MergeTree', orderBy: '(tenant_id, day)', primaryKey: 'tenant_id, day', partitionKey: 'toYYYYMM(day)', samplingKey: 'tenant_id', ttlConfigured: true, rowEstimate: '1200000', sizeBytes: '1610612736', uncompressedBytes: '4294967296', parts: '20', activeParts: '18', projections: [{ name: 'by_day', type: 'Normal', sortingKey: 'day' }], skipIndexes: [{ name: 'tenant_bloom', type: 'bloom_filter', expression: 'tenant_id', granularity: '4' }] }],
     columns: [{ database: 'analytics', table: 'events', name: 'day', type: 'Date', defaultKind: '', comment: 'Event date' }],
+    dictionaries: [{ database: 'analytics', name: 'campaign_lookup', status: 'LOADED', type: 'Hashed', keyColumns: 'campaign_id UInt64', attributeColumns: 'campaign_name String', elementCount: '18240', memoryBytes: '5242880', lastSuccessfulUpdate: '2026-09-23 08:15:00' }],
     warnings: [],
     truncated: false,
 };
@@ -83,6 +84,35 @@ test('Revoking trust removes loaded schema from editor completion and hover', as
     await replaceSql(page, 'SELECT day FROM events');
     await hoverToken(page, 'day');
     await expect(page.locator('.sql-hover')).toHaveCount(0);
+});
+
+test('Schema inspector shows ClickHouse keys, storage, indexes, and dictionaries', async ({ page }) => {
+    await mockLiveWorkspace(page, route => route.fulfill({ json: schema }));
+    const table = page.locator('.schema-table').filter({ hasText: 'events' });
+    await expect(table).toBeVisible();
+    await table.locator('summary').click();
+
+    await expect(table).toContainText('MergeTree');
+    await expect(table).toContainText('ORDER BY');
+    await expect(table).toContainText('(tenant_id, day)');
+    await expect(table).toContainText('PRIMARY KEY');
+    await expect(table).toContainText('PARTITION BY');
+    await expect(table).toContainText('SAMPLE BY');
+    await expect(table).toContainText('Configured');
+    await expect(table).toContainText('1.2M rows');
+    await expect(table).toContainText('1.5 GiB');
+    await expect(table).toContainText('18 active');
+    await expect(table).toContainText('by_day');
+    await expect(table).toContainText('tenant_bloom');
+    await expect(page.getByText('campaign_lookup', { exact: true })).toBeVisible();
+    await expect(page.getByText('18.2K entries')).toBeVisible();
+
+    const search = page.getByRole('textbox', { name: 'Search schema' });
+    await search.fill('tenant_bloom');
+    await expect(page.locator('.schema-table')).toHaveCount(1);
+    await search.fill('campaign_lookup');
+    await expect(page.locator('.schema-table')).toHaveCount(0);
+    await expect(page.getByText('campaign_lookup', { exact: true })).toBeVisible();
 });
 
 test('A schema response arriving after trust is revoked cannot restore editor metadata', async ({ page }) => {

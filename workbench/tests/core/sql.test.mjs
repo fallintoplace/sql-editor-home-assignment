@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { splitSql, selectedStatement, parameterNames, quoteIdentifier, insertChildFilter, formatSql } from '../../.core-build/shared/sql.js';
+import { splitSql, selectedStatement, parameterNames, quoteIdentifier, insertChildFilter, formatSql, hasSqlComments } from '../../.core-build/shared/sql.js';
 import { guardSql } from '../../.core-build/core/guards.js';
 import { limits, runRequest, validateJson } from '../../.core-build/core/validation.js';
 const cases = [
@@ -30,6 +30,12 @@ for (const sql of ['DELETE FROM t', 'SELECT 1; DROP TABLE t', 'SELECT 1 SETTINGS
     test(`Read-only guard rejects ${sql}`, () => assert.throws(() => guardSql(sql)));
 test('Missing named parameter is explicit', () => assert.throws(() => guardSql('SELECT {n:UInt64}'), { code: 'MISSING_PARAMETER' }));
 test('Child filter is bound, not interpolated', () => { const f = insertChildFilter('SELECT x FROM t', 'x', "x' OR 1=1"); assert.ok(!f.sql.includes("OR 1=1")); assert.equal(f.parameters.wb_filter, "x' OR 1=1"); });
+test('SQL comment detection ignores comment markers inside quoted values', () => {
+    assert.equal(hasSqlComments("SELECT '-- text', '/* text */', '# text'"), false);
+    assert.equal(hasSqlComments('SELECT 1 -- note'), true);
+    assert.equal(hasSqlComments('SELECT 1 /* note */'), true);
+    assert.equal(hasSqlComments('SELECT 1 # note'), true);
+});
 test('SQL formatter preserves literals and comments while laying out clauses', () => {
     const formatted = formatSql("select 'a  from  b' as value -- keep  spaces\nfrom events where value = 'x;y' and id = 1;");
     assert.ok(formatted.includes("'a  from  b'"));

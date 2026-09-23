@@ -3,7 +3,7 @@ import { trust, trustCurrentConnection } from './helpers.js';
 
 const generatedSql = 'SELECT day, events FROM demo.events ORDER BY day';
 
-async function beginInBeginnerMode(page: Page) {
+async function beginInCompactMode(page: Page) {
     await page.addInitScript(() => localStorage.setItem('clickstudio:experience', 'beginner'));
     await page.goto('/');
     await expect(page.getByRole('textbox', { name: 'SQL editor', exact: true })).toBeVisible();
@@ -12,7 +12,7 @@ async function beginInBeginnerMode(page: Page) {
     await trustCurrentConnection(page);
 }
 
-test('Beginner opens on SQL and can run a query without opening AI', async ({ page }) => {
+test('Compact opens on SQL and can run a query without opening AI', async ({ page }) => {
     let contextRequests = 0;
     page.on('request', request => {
         if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/assistant/context') contextRequests++;
@@ -40,14 +40,14 @@ test('Beginner opens on SQL and can run a query without opening AI', async ({ pa
     await expect(results.getByRole('tab', { name: 'Insights', exact: true })).toHaveCount(0);
 
     const queryId = await page.locator('.execution-bar code').innerText();
-    await page.getByText('Expert', { exact: true }).click();
+    await page.getByText('Advanced', { exact: true }).click();
     await expect(page.locator('.cm-content')).toContainText('SELECT');
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
-    await page.getByText('Beginner', { exact: true }).click();
+    await page.getByText('Compact', { exact: true }).click();
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
 });
 
-test('Beginner AI proposal becomes the same query and run in Expert mode', async ({ page }) => {
+test('Compact AI proposal becomes the same query and run in Advanced mode', async ({ page }) => {
     const contexts: Record<string, unknown>[] = [];
     const proposals: Record<string, unknown>[] = [];
     let proposalBaseSql = '';
@@ -75,7 +75,7 @@ test('Beginner AI proposal becomes the same query and run in Expert mode', async
         } });
     });
 
-    await beginInBeginnerMode(page);
+    await beginInCompactMode(page);
     await page.getByRole('button', { name: 'Save query', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'revision 1' })).toBeVisible();
     await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
@@ -101,7 +101,7 @@ test('Beginner AI proposal becomes the same query and run in Expert mode', async
     await results.getByRole('tab', { name: 'Chart', exact: true }).click();
     await expect(results.locator('.chart-canvas svg[role="img"]')).toBeVisible();
     await expect(results.getByRole('tab', { name: 'Insights', exact: true })).toHaveCount(0);
-    await page.getByText('Expert', { exact: true }).click();
+    await page.getByText('Advanced', { exact: true }).click();
     await results.getByRole('tab', { name: 'Insights', exact: true }).click();
     const loadDetails = results.getByRole('button', { name: 'Load execution details', exact: true });
     if (await loadDetails.count()) await loadDetails.click();
@@ -109,13 +109,13 @@ test('Beginner AI proposal becomes the same query and run in Expert mode', async
 
     await expect(page.locator('.cm-content')).toContainText(generatedSql);
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
-    await page.getByText('Beginner', { exact: true }).click();
+    await page.getByText('Compact', { exact: true }).click();
     await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
     await expect(prompt).toHaveValue('Show event counts by day');
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
 });
 
-test('Expert editor, insights, pipeline and AI copilot stay read-only until a user runs SQL', async ({ page }) => {
+test('Advanced editor, insights, pipeline and AI copilot stay read-only until a user runs SQL', async ({ page }) => {
     const runRequests: unknown[] = [];
     const contexts: Record<string, unknown>[] = [];
     let activeRunId = '';
@@ -175,7 +175,7 @@ test('Expert editor, insights, pipeline and AI copilot stay read-only until a us
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
 });
 
-test('Beginner voice dictation fills the question without sending it automatically', async ({ page }) => {
+test('Compact voice dictation fills the question without sending it automatically', async ({ page }) => {
     await page.addInitScript(() => {
         class MockRecognition {
             continuous = false;
@@ -194,7 +194,7 @@ test('Beginner voice dictation fills the question without sending it automatical
         if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/assistant/context') contextRequests++;
     });
 
-    await beginInBeginnerMode(page);
+    await beginInCompactMode(page);
     await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
     const prompt = page.getByRole('textbox', { name: 'Describe your data question', exact: true });
     await page.getByRole('button', { name: 'Dictate question', exact: true }).click();

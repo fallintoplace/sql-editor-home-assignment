@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { trust } from './helpers.js';
 
-test('Expert mode gives the editor the full work area before the first run', async ({ page }) => {
+test('Advanced mode gives the editor the full work area before the first run', async ({ page }) => {
     await trust(page);
 
     const content = page.locator('.workspace-content');
@@ -31,7 +31,7 @@ test('Run script and explain actions stay visible beside the primary Run button'
     await expect(runScript).toBeFocused();
 });
 
-test('Expert panels stay reachable through SQL AI and More', async ({ page }) => {
+test('Advanced panels stay reachable through SQL AI and More', async ({ page }) => {
     await trust(page);
     await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Run history', exact: true }).click();

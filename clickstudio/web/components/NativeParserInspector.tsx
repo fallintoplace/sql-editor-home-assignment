@@ -15,12 +15,12 @@ export function NativeParserInspector({ enabled, status, snapshot, onRetry }: Pr
     return <section className="inspector-section parser-inspector" aria-label="ClickHouse parser details">
         <div className={cx('parser-status-card', `parser-status-${enabled ? status : 'disabled'}`)}>
             <span className={cx('status-light', !enabled ? '' : status === 'ready' ? 'is-trusted' : status === 'unavailable' ? 'is-warning' : 'is-running')}/>
-            <div><strong>{enabled ? 'ClickHouse native parser' : 'Basic highlighting'}</strong><small>{enabled ? status === 'ready' ? 'Ready · local WebAssembly' : status === 'loading' ? 'Loading parser…' : 'Unavailable' : 'WASM parser off'}</small></div>
+            <div><strong>{enabled ? 'ClickHouse native parser' : 'CodeMirror SQL highlighting'}</strong><small>{enabled ? status === 'ready' ? 'Ready · local WebAssembly' : status === 'loading' ? 'Loading parser…' : 'Unavailable' : 'WASM parser off'}</small></div>
             {enabled && snapshot && <span className="parser-duration">{snapshot.elapsedMs.toFixed(1)} ms</span>}
             {enabled && status === 'unavailable' && <Button variant="ghost" className="toolbar-small" onClick={onRetry}>Retry</Button>}
         </div>
 
-        {!enabled && <div className="inspector-empty"><Icon name="parser"/><strong>Basic mode active</strong><p>ClickHouse SQL highlighting stays on. Diagnostics and AST details are off; Format uses the basic formatter.</p></div>}
+        {!enabled && <div className="inspector-empty"><Icon name="parser"/><strong>CodeMirror mode active</strong><p>CodeMirror provides SQL highlighting. ClickHouse-specific diagnostics and AST details are off; Format uses the fallback formatter.</p></div>}
         {enabled && status === 'loading' && <div className="inspector-empty"><span className="loading-orbit"/><strong>Loading parser</strong><p>SQL stays available while the native parser starts.</p></div>}
         {enabled && status === 'unavailable' && <div className="inspector-empty"><Icon name="parser"/><strong>Parser unavailable</strong><p>The SQL editor stays available when parser loading fails. Retry here to check the parser artifact again.</p></div>}
         {enabled && status === 'ready' && !snapshot && <div className="inspector-empty"><Icon name="parser"/><strong>Waiting for SQL</strong><p>Native parse results appear here after the current SQL is checked.</p></div>}

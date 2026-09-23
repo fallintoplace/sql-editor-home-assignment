@@ -77,9 +77,9 @@ test('Run evidence stays with its draft through tab and mode switches', async ({
     await page.getByRole('tab').filter({ hasText: 'Getting started.sql' }).click();
     await expect(results.getByRole('table', { name: 'Retained query rows' })).toBeVisible();
     await expect(page.locator('.execution-bar code')).toHaveText(firstQueryId);
-    await page.getByText('Beginner', { exact: true }).click();
+    await page.getByText('Compact', { exact: true }).click();
     await expect(page.locator('.execution-bar code')).toHaveText(firstQueryId);
-    await page.getByText('Expert', { exact: true }).click();
+    await page.getByText('Advanced', { exact: true }).click();
     await expect(page.locator('.execution-bar code')).toHaveText(firstQueryId);
     await expect(page.getByRole('group', { name: 'Workspace layouts' })).toHaveCount(0);
     await expect(page.getByRole('navigation', { name: 'Workspace browser' })).toBeVisible();
@@ -98,7 +98,7 @@ test('Native parser can be retried after a temporary worker failure', async ({ p
     await expect.poll(() => page.evaluate(() => Number((window as any).__parserParseCount ?? 0))).toBeGreaterThan(0);
 });
 
-test('Expert parser inspector shows native AST, UTF-8 semantic highlights, and expected tokens', async ({ page }) => {
+test('Advanced parser inspector shows native AST, UTF-8 semantic highlights, and expected tokens', async ({ page }) => {
     const sql = "SELECT '🙂', uniqExact(user_id) FROM events";
     const functionPrefix = "SELECT '🙂', ";
     const parserResponse = {
@@ -440,7 +440,7 @@ test('A late AI context preview cannot attach to an edited question', async ({ p
         await route.fulfill({ status: 201, json: { id: 'old-context', summary: ['Context for the old question'] } });
     });
     await trust(page);
-    await page.getByText('Beginner', { exact: true }).click();
+    await page.getByText('Compact', { exact: true }).click();
     await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
     const question = page.getByRole('textbox', { name: 'Describe your data question', exact: true });
     await question.fill('Show the old question');

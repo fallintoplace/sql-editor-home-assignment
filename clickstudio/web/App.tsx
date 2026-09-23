@@ -144,7 +144,7 @@ function App() {
                     if (value === 'wasm' || value === 'basic') setParserMode(value);
                 }} aria-label="Parser mode" inline orientation="horizontal" dir="end">
                     <RadioGroup.Item value="wasm" className={`navbar-mode-option parser-mode-option is-wasm ${parserMode === 'wasm' ? 'is-active' : ''}`} label="WASM"/>
-                    <RadioGroup.Item value="basic" className={`navbar-mode-option parser-mode-option is-basic ${parserMode === 'basic' ? 'is-active' : ''}`} label="Basic"/>
+                    <RadioGroup.Item value="basic" className={`navbar-mode-option parser-mode-option is-basic ${parserMode === 'basic' ? 'is-active' : ''}`} label="CodeMirror"/>
                 </RadioGroup>
             </div>
             <div className="topbar-divider topbar-divider-short"/>

@@ -23,6 +23,36 @@ import { OpenAIDriver } from './openai.js';
 import { OpenAIVoiceService, safetyIdentifier, type VoiceService } from './voice.js';
 import { telemetry, recordRun } from './telemetry.js';
 type Driver = QueryDriver & ImportDriver & Pick<ClickHouseDriver, 'connection' | 'connections' | 'test' | 'targets' | 'profileEvidence' | 'profilePipeline' | 'close'>;
+const CLICKHOUSE_WASM_PARSER_PR = 118591;
+const CLICKHOUSE_WASM_PARSER_SHA = '68085149131ee43144b975f7c0ec01137208fb8a';
+const CLICKHOUSE_WASM_PARSER_URL = `https://clickhouse-builds.s3.amazonaws.com/PRs/${CLICKHOUSE_WASM_PARSER_PR}/${CLICKHOUSE_WASM_PARSER_SHA}/build_wasm_parser/parser.wasm`;
+const MAX_WASM_PARSER_BYTES = 64 * 1024 * 1024;
+let parserWasmCache: Promise<Uint8Array> | undefined;
+async function fetchClickHouseParserWasm(): Promise<Uint8Array> {
+    let response: globalThis.Response;
+    try {
+        response = await fetch(CLICKHOUSE_WASM_PARSER_URL, { signal: AbortSignal.timeout(5000) });
+    } catch {
+        throw new AppError(503, 'PARSER_UNAVAILABLE', 'ClickHouse native parser artifact is unavailable');
+    }
+    if (!response.ok)
+        throw new AppError(503, 'PARSER_UNAVAILABLE', 'ClickHouse native parser artifact is unavailable');
+    const declared = Number(response.headers.get('content-length'));
+    if (Number.isFinite(declared) && declared > MAX_WASM_PARSER_BYTES)
+        throw new AppError(503, 'PARSER_UNAVAILABLE', 'ClickHouse native parser artifact is unexpectedly large');
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const magic = Buffer.from(bytes.subarray(0, 4));
+    if (bytes.length < 8 || bytes.length > MAX_WASM_PARSER_BYTES || !magic.equals(Buffer.from([0x00, 0x61, 0x73, 0x6d])))
+        throw new AppError(503, 'PARSER_UNAVAILABLE', 'ClickHouse native parser artifact is invalid');
+    return bytes;
+}
+function cachedClickHouseParserWasm(): Promise<Uint8Array> {
+    parserWasmCache ??= fetchClickHouseParserWasm().catch(error => {
+        parserWasmCache = undefined;
+        throw error;
+    });
+    return parserWasmCache;
+}
 function mappingFields(value: unknown) { const fields = record(value, 'mapping'); requireThat(Object.keys(fields).length <= 200, 400, 'IMPORT_MAPPING', 'Too many mapping fields'); return Object.fromEntries(Object.entries(fields).map(([key, value]) => [text(key, 'source column', 256), text(value, 'destination column', 256)])); }
 const body = (req: Request) => record(req.body), id = (req: Request, name = 'id') => identifier(req.params[name], name);
 function boolean(v: unknown, name: string) { requireThat(typeof v === 'boolean', 400, 'INVALID_REQUEST', `${name} must be a boolean`); return v; }
@@ -33,13 +63,14 @@ export function createApp(config: Config, overrides: {
     driver?: Driver;
     assistant?: AssistantDriver;
     voice?: VoiceService;
+    parserWasm?: () => Promise<Uint8Array>;
 } = {}) {
     const app = express(), store = overrides.store ?? new FileStore(config.dataDir), driver: Driver = overrides.driver ?? (config.demo ? new DemoDriver() : new ClickHouseDriver(config));
     const runs = new RunService(store, driver, (p, c) => driver.connection(p, c)), artifacts = new ArtifactService(store, runs, (p, c) => driver.connection(p, c));
     const authorized = (p: Principal, c: string) => { driver.connection(p, c); return runs.isTrusted(p, c); };
     const ai = new AssistantService(store, overrides.assistant ?? new OpenAIDriver(config.demo ? undefined : config.openaiKey, config.openaiModel), authorized);
     const voice = overrides.voice ?? new OpenAIVoiceService(config.demo ? undefined : config.openaiKey, config.openaiRealtimeModel);
-    const imports = new ImportService(store, driver, authorized), monitors = new MonitorService(store, runs, artifacts), sessions = new SessionService(config.token), redact = redactor(config);
+    const imports = new ImportService(store, driver, authorized), monitors = new MonitorService(store, runs, artifacts), sessions = new SessionService(config.token), redact = redactor(config), parserWasm = overrides.parserWasm ?? cachedClickHouseParserWasm;
     const secretFree = (value: unknown) => !configuredSecrets(config).some(secret => JSON.stringify(value).includes(secret));
     const safeExport = (value: unknown) => requireThat(secretFree(value), 400, 'SECRET_IN_EXPORT', 'This data contains a configured secret and cannot be exported or shared');
     // No CORS and no trust-proxy shortcut. A reverse proxy must preserve the configured Host and Origin.
@@ -77,6 +108,16 @@ export function createApp(config: Config, overrides: {
     app.get('/api/shared/:token', (req, res) => res.json(artifacts.resolveShare(text(req.params.token, 'share token', 100))));
     app.use('/api', (req, res, next) => { const p = sessions.principal(req.get('cookie')); if (!p)
         return res.status(401).json({ error: { code: 'LOGIN_REQUIRED', message: 'Sign in to this workspace' } }); res.locals.principal = p; next(); });
+    app.get('/api/editor/clickhouse-parser.wasm', async (_req, res, next) => {
+        try {
+            const bytes = await parserWasm();
+            res.setHeader('Content-Type', 'application/wasm');
+            res.setHeader('Cache-Control', 'private, max-age=3600');
+            res.send(Buffer.from(bytes));
+        } catch (error) {
+            next(error);
+        }
+    });
     app.get('/api/connections', (_req, res) => { const p = principal(res); res.json(driver.connections(p).map(c => ({ ...c, trusted: runs.isTrusted(p, c.id) }))); });
     app.post('/api/connections/:id/test', async (req, res) => { canWrite(principal(res)); res.json(await driver.test(id(req))); });
     app.post('/api/connections/:id/trust', (req, res) => { const p = principal(res), v = body(req), connectionId = id(req); requireThat(v.confirmation === connectionId, 400, 'TRUST_CONFIRMATION', 'Confirm the selected connection ID'); runs.trust(p, connectionId, boolean(v.trusted, 'trusted')); res.json({ trusted: runs.isTrusted(p, connectionId) }); });

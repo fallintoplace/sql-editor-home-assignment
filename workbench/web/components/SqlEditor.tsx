@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, hoverTooltip, keymap, lineNumbers, highlightActiveLine, drawSelection, rectangularSelection } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab, indentSelection } from '@codemirror/commands';
@@ -8,9 +8,11 @@ import { autocompletion, ifNotIn, nextSnippetField, prevSnippetField, type Compl
 import { sql, SQLDialect } from '@codemirror/lang-sql';
 import { setDiagnostics } from '@codemirror/lint';
 import type { ApiError, Schema } from '../../shared/types';
+import { nativeDiagnosticForStatement, type NativeDiagnostic, type NativeParserStatus } from '../../shared/native-parser';
 import { quoteIdentifier } from '../../shared/sql';
 import { activeStatementIndex, CLICKHOUSE_KEYWORDS, completionTarget, matchingNames, tableAliases as aliasesFor } from '../../shared/editor-tools';
 import { clickhouseSnippetCompletions, sqlEditorTools, sqlStatementOutline } from './editor-tools';
+import { clickHouseNativeParser } from '../clickhouse-native-parser';
 const keywordCompletions = [...new Set(CLICKHOUSE_KEYWORDS.split(' '))].map(label => ({ label, type: 'keyword' }));
 const clickhouse = SQLDialect.define({ keywords: CLICKHOUSE_KEYWORDS, types: 'String UInt8 UInt16 UInt32 UInt64 UInt128 UInt256 Int8 Int16 Int32 Int64 Int128 Int256 Float32 Float64 Date Date32 DateTime DateTime64 Nullable Array Tuple Map Decimal LowCardinality UUID JSON', builtin: 'count sum avg min max uniq uniqExact quantile median toDate toDateTime toStartOfDay toStartOfHour now today numbers arrayJoin arrayMap arrayFilter multiIf ifNull coalesce', doubleQuotedStrings: false, hashComments: true });
 const clickhouseFunctions = [
@@ -88,6 +90,7 @@ export interface EditorHandle {
     insert: (text: string) => void;
     focus: () => void;
     indent: () => void;
+    formatNative: () => Promise<'formatted' | 'unavailable' | 'rejected'>;
     selection: () => {
         from: number;
         to: number;
@@ -103,12 +106,24 @@ interface Props {
     onChange: (value: string) => void;
     onSelection: (from: number, to: number) => void;
     onRun: (script: boolean) => void;
+    onNativeParserStatus?: (status: NativeParserStatus) => void;
 }
 export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(props, ref) {
     const element = useRef<HTMLDivElement>(null), view = useRef<EditorView | undefined>(undefined), current = useRef(props), language = useRef(new Compartment()), theme = useRef(new Compartment());
+    const nativeDiagnostics = useRef<NativeDiagnostic[]>([]), validationRevision = useRef(0);
     current.current = props;
     const schemaIndex = useMemo(() => indexSchema(props.schema), [props.schema]), schemaIndexRef = useRef(schemaIndex);
     schemaIndexRef.current = schemaIndex;
+    const applyDiagnostics = useCallback(() => {
+        const editor = view.current;
+        if (!editor)
+            return;
+        const diagnostics = nativeDiagnostics.current.map(item => ({ ...item, severity: 'error' as const, source: 'ClickHouse native parser' }));
+        const position = current.current.error?.position;
+        if (position !== undefined)
+            diagnostics.push({ from: Math.min(position, editor.state.doc.length), to: Math.min(position + 1, editor.state.doc.length), severity: 'error', message: current.current.error!.message, source: 'ClickHouse server' });
+        editor.dispatch(setDiagnostics(editor.state, diagnostics));
+    }, []);
     const languageExtension = () => sql({ dialect: clickhouse, schema: schemaIndex.codeMirror });
     const themeExtension = () => EditorView.theme({ '&': { height: '100%', backgroundColor: 'var(--panel)', color: 'var(--text)' }, '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace', fontSize: '13px' }, '.cm-gutters': { backgroundColor: 'var(--panel)', color: 'var(--muted)', border: 'none' }, '.cm-content': { minHeight: '220px' }, '.cm-cursor': { borderLeftColor: 'var(--text)' }, '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: 'var(--editor-selection)' } }, { dark: current.current.dark });
     useEffect(() => { if (!element.current)
@@ -121,17 +136,85 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
                 } })] }) }); view.current = editor; return () => { editor.destroy(); view.current = undefined; }; }, []);
     useEffect(() => { const v = view.current; if (v && v.state.doc.toString() !== props.value)
         v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: props.value }, selection: { anchor: Math.min(props.from, props.value.length), head: Math.min(props.to, props.value.length) } }); }, [props.value]);
+    useEffect(() => clickHouseNativeParser.subscribe(status => current.current.onNativeParserStatus?.(status)), []);
+    useEffect(() => {
+        const editor = view.current, revision = ++validationRevision.current;
+        nativeDiagnostics.current = [];
+        applyDiagnostics();
+        if (!editor)
+            return;
+        const outline = editor.state.field(sqlStatementOutline);
+        if (outline.error || !outline.statements.length)
+            return;
+        const statements = outline.statements.map(statement => ({ from: statement.from, sql: statement.sql }));
+        const timer = window.setTimeout(() => {
+            void clickHouseNativeParser.parseMany(statements.map(statement => statement.sql)).then(results => {
+                if (revision !== validationRevision.current)
+                    return;
+                nativeDiagnostics.current = results.flatMap((result, index) => {
+                    const error = result.error, statement = statements[index];
+                    return error && statement ? [nativeDiagnosticForStatement(statement.sql, statement.from, error)] : [];
+                });
+                applyDiagnostics();
+            }).catch(() => {
+                if (revision !== validationRevision.current)
+                    return;
+                nativeDiagnostics.current = [];
+                applyDiagnostics();
+            });
+        }, 250);
+        return () => window.clearTimeout(timer);
+    }, [props.value, applyDiagnostics]);
     useEffect(() => { const v = view.current; if (!v)
         return; const from = Math.min(props.from, v.state.doc.length), to = Math.min(props.to, v.state.doc.length); if (v.state.selection.main.from !== from || v.state.selection.main.to !== to)
         v.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true }); }, [props.from, props.to]);
     useEffect(() => { view.current?.dispatch({ effects: language.current.reconfigure(languageExtension()) }); }, [schemaIndex]);
     useEffect(() => { view.current?.dispatch({ effects: theme.current.reconfigure(themeExtension()) }); }, [props.dark]);
-    useEffect(() => { const v = view.current; if (!v)
-        return; const position = props.error?.position; v.dispatch(setDiagnostics(v.state, position === undefined ? [] : [{ from: Math.min(position, v.state.doc.length), to: Math.min(position + 1, v.state.doc.length), severity: 'error', message: props.error!.message }])); }, [props.error]);
-    useImperativeHandle(ref, () => ({ insert: text => { const v = view.current; if (v) {
+    useEffect(() => applyDiagnostics(), [props.error, applyDiagnostics]);
+    useImperativeHandle(ref, () => ({
+        insert: text => { const v = view.current; if (v) {
             v.dispatch(v.state.replaceSelection(text));
             v.focus();
-        } }, focus: () => view.current?.focus(), indent: () => { if (view.current)
-            indentSelection(view.current); }, selection: () => { const s = view.current?.state.selection.main; return { from: s?.from ?? 0, to: s?.to ?? 0 }; } }), []);
+        } },
+        focus: () => view.current?.focus(),
+        indent: () => { if (view.current)
+            indentSelection(view.current); },
+        formatNative: async () => {
+            const editor = view.current;
+            if (!editor)
+                return 'rejected';
+            const outline = editor.state.field(sqlStatementOutline);
+            if (outline.error || !outline.statements.length)
+                return 'rejected';
+            const before = editor.state.doc.toString(), statements = outline.statements;
+            try {
+                const results = await clickHouseNativeParser.formatMany(statements.map(statement => statement.sql));
+                if (view.current !== editor || editor.state.doc.toString() !== before)
+                    return 'rejected';
+                const invalid: NativeDiagnostic[] = [];
+                results.forEach((result, index) => {
+                    const error = result.error, statement = statements[index];
+                    if (error && statement)
+                        invalid.push(nativeDiagnosticForStatement(statement.sql, statement.from, error));
+                });
+                if (invalid.length) {
+                    nativeDiagnostics.current = invalid;
+                    applyDiagnostics();
+                    return 'rejected';
+                }
+                const changes = statements.flatMap((statement, index) => {
+                    const formatted = results[index]?.sql;
+                    return formatted !== undefined && formatted !== statement.sql ? [{ from: statement.from, to: statement.to, insert: formatted }] : [];
+                });
+                if (changes.length)
+                    editor.dispatch({ changes });
+                editor.focus();
+                return 'formatted';
+            } catch {
+                return 'unavailable';
+            }
+        },
+        selection: () => { const s = view.current?.state.selection.main; return { from: s?.from ?? 0, to: s?.to ?? 0 }; },
+    }), [applyDiagnostics]);
     return <div className="sql-editor" ref={element}/>;
 });

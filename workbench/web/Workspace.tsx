@@ -14,6 +14,7 @@ import { Button, cx, Icon, Status, terminal } from './components/ui';
 import { EmptyWorkspace, ExecutionBar, RailButton, ScriptResults } from './components/WorkspaceChrome';
 import { checkpoint, closeDraft, draftFromDocument, MAX_TABS, newDraft, recover, reopenDraft, type Draft, type WorkspaceState } from './workspace-state';
 import { draftSaveStatus } from '../shared/workbench-view';
+import type { NativeParserStatus } from '../shared/native-parser';
 import { useWorkspacePersistence } from './useWorkspacePersistence';
 import { useRunEvidence } from './useRunEvidence';
 import { useScriptExecution } from './useScriptExecution';
@@ -56,6 +57,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const activeRunIdRef = useRef(activeRunId);
     activeRunIdRef.current = activeRunId;
     const editor = useRef<EditorHandle>(null);
+    const [nativeParserStatus, setNativeParserStatus] = useState<NativeParserStatus>('loading');
     const [schema, setSchema] = useState<Schema>();
     const [schemaLoading, setSchemaLoading] = useState(false);
     const [schemaError, setSchemaError] = useState('');
@@ -224,6 +226,15 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         setWorkspace(current => ({ ...current, tabs: current.tabs.map(draft => draft.id === id ? change(draft) : draft) }));
     }, []);
     const patch = useCallback((values: Partial<Draft>) => update(active.id, draft => ({ ...draft, ...values })), [active.id, update]);
+    const formatActiveSql = useCallback(async () => {
+        if (nativeParserStatus !== 'ready') {
+            patch({ sql: formatSql(active.sql) });
+            return;
+        }
+        const result = await editor.current?.formatNative();
+        if (result === 'unavailable')
+            patch({ sql: formatSql(active.sql) });
+    }, [active.sql, nativeParserStatus, patch]);
 
     const loadHistory = useCallback(async () => {
         setHistory(await api<Run[]>(`/runs?connectionId=${encodeURIComponent(connection.id)}`));
@@ -507,16 +518,16 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     {experience === 'beginner' ? <AssistantWorkflow mode="beginner" sql={active.sql} action={assistantAction} onActionChange={changeAssistantAction} question={assistantQuestion} onQuestionChange={changeAssistantQuestion} context={assistantContext} proposal={assistantProposal} busy={assistantBusy} error={assistantError} trusted={trusted} runId={run?.id} includeResult={includeResult} onIncludeResult={setIncludeResult} onVoiceInput={startVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={() => void prepareAssistantContext('generate', assistantQuestion)} onRequestProposal={() => void requestAssistantProposal()} onDecideProposal={decision => void decideAssistantProposal(decision)} onRunQuery={() => void execute()} runDisabled={!trusted || Boolean(busy)} onSave={() => void saveDraft()} saveDisabled={Boolean(busy)}/> : <section className="editor-surface">
                         <div className="editor-heading">
                             <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">QUERY</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label><span className="edit-indicator" title={active.serverId ? `Saved revision ${active.baseRevision}` : 'Only in this browser'}>{active.serverId ? `REV ${active.baseRevision}` : 'LOCAL'}</span></div>
-                            <div className="editor-heading-actions"><Button variant="ghost" className="icon-only" title="Format SQL" onClick={() => patch({ sql: formatSql(active.sql) })}>⌘</Button><Button variant="secondary" aria-label={copy.common.saveRevision} onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/> {copy.common.save}</Button></div>
+                            <div className="editor-heading-actions"><Button variant="ghost" className="toolbar-small" title={nativeParserStatus === 'ready' ? 'Format with the native ClickHouse parser' : 'Format SQL'} onClick={() => void formatActiveSql()}>Format</Button><Button variant="secondary" aria-label={copy.common.saveRevision} onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/> {copy.common.save}</Button></div>
                         </div>
                         <div className="editor-toolbar">
-                            <div className="editor-mode-label"><span className="editor-language-dot"/>ClickHouse SQL<span className="toolbar-divider"/><span>{statementCount === undefined ? 'Incomplete SQL' : `${statementCount} statement${statementCount === 1 ? '' : 's'}`}</span></div>
+                            <div className="editor-mode-label"><span className="editor-language-dot"/>ClickHouse SQL<span className="toolbar-divider"/><span>{statementCount === undefined ? 'Incomplete SQL' : `${statementCount} statement${statementCount === 1 ? '' : 's'}`}</span>{nativeParserStatus === 'ready' && <><span className="toolbar-divider"/><span title="Syntax checks and formatting run locally in a Web Worker using ClickHouse's native parser.">Native parser</span></>}</div>
                             <div className="editor-actions">
                                 {experience === 'expert' && <><Button variant="ghost" className="toolbar-small" onClick={() => void execute(false, 'explain')} disabled={!trusted || Boolean(busy) || !connection.manifest?.explain.available} title={connection.manifest?.explain.reason}>EXPLAIN</Button><Button variant="ghost" className="toolbar-small" onClick={() => void execute(false, 'pipeline')} disabled={!trusted || Boolean(busy) || !connection.manifest?.pipeline.available} title={connection.manifest?.pipeline.reason}>PIPELINE</Button><Button variant="ghost" className="toolbar-small" onClick={() => void execute(true)} disabled={!trusted || Boolean(busy) || !connection.manifest?.scripts.available} title={connection.manifest?.scripts.reason}>Run script</Button></>}
                                 <Button variant="primary" className="run-query-button" aria-label={copy.common.runStatement} onClick={() => void execute()} disabled={!trusted || Boolean(busy)}><Icon name="play"/>{busy === 'run' ? 'Running…' : copy.common.run}<kbd>⌘ ↵</kbd></Button>
                             </div>
                         </div>
-                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={schema} dark={dark} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)}/></div>
+                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={schema} dark={dark} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus}/></div>
                         {parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => patch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
                         <div className="editor-footer"><span><span className="key-hint">⌘↵</span> Run current statement <span className="footer-dot">·</span> <span className="key-hint">⌘⇧↵</span> Run script</span><span>{active.sql.length.toLocaleString()} characters <span className="footer-dot">·</span> {active.sql.split('\n').length} lines</span></div>
                     </section>}

@@ -37,6 +37,7 @@ and optional model-provider credentials stay on the server.
 ## What works
 
 - Run a SQL statement and inspect typed, paginated retained results.
+- Validate and format SQL locally with ClickHouse's native WASM parser when the pinned upstream artifact is available; the editor falls back cleanly when it is not.
 - Chart retained data, including nullable and negative numeric values.
 - Run SQL scripts and inspect each statement's status and result independently.
 - Track execution progress, cancel work, and reopen prior query evidence.

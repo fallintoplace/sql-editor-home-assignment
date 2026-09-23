@@ -8,9 +8,9 @@ import { MemoryStore } from '../../core/store.js';
 import { DemoDriver } from '../../server/demo.js';
 import type { VoiceService } from '../../server/voice.js';
 import type { QueryDocument, Run, Published } from '../../shared/types.js';
-async function start(token?: string, voice?: VoiceService) {
+async function start(token?: string, voice?: VoiceService, parserWasm?: () => Promise<Uint8Array>) {
     const config = loadConfig({ DEMO_MODE: 'true', WORKBENCH_TOKEN: token });
-    const service = createApp(config, { store: new MemoryStore(), driver: new DemoDriver(), voice });
+    const service = createApp(config, { store: new MemoryStore(), driver: new DemoDriver(), voice, parserWasm });
     const server = service.app.listen(0, '127.0.0.1');
     await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
     config.port = (server.address() as AddressInfo).port;
@@ -50,6 +50,16 @@ test('HTTP query flow requires explicit trust and is idempotent', async (t) => {
     const text = await event.text();
     assert.match(text, /data: /);
     assert.match(text, /succeeded/);
+});
+test('Native ClickHouse parser bytes are served same-origin behind the session boundary', async (t) => {
+    const fixture = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+    const s = await start(undefined, undefined, async () => fixture);
+    t.after(() => s.stop());
+    const response = await s.call('/editor/clickhouse-parser.wasm');
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('content-type') ?? '', /^application\/wasm/);
+    assert.match(response.headers.get('cache-control') ?? '', /private/);
+    assert.deepEqual(new Uint8Array(await response.arrayBuffer()), fixture);
 });
 test('Assistant evaluation report is available without a provider and keeps SQL out of the summary', async (t) => {
     const s = await start();

@@ -184,7 +184,8 @@ export function createApp(config: Config, overrides: {
         requireThat(authorized(p, run.connectionId), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before inspecting live pipeline evidence');
         const connection = driver.connection(p, run.connectionId);
         requireThat(Boolean(connection.manifest?.pipeline.available), 409, 'CAPABILITY_UNAVAILABLE', 'EXPLAIN PIPELINE is unavailable on this connection');
-        const evidence = await driver.profileEvidence(run);
+        const queryLogAvailable = Boolean(connection.manifest?.queryLog.available);
+        const evidence = queryLogAvailable ? await driver.profileEvidence(run).catch(() => []) : [];
         const pipelineEvidence = await driver.profilePipeline(run);
         let traceUrl: string | undefined;
         if (config.traceUrl && run.traceId) {
@@ -192,7 +193,9 @@ export function createApp(config: Config, overrides: {
             if (['http:', 'https:'].includes(url.protocol))
                 traceUrl = url.toString();
         }
-        const profile = buildQueryProfile(run, evidence, { queryLogAvailable: true, pipelineAvailable: true, pipelineEvidence, traceUrl, notice: 'Query-log rows may arrive after a server flush interval. This is server evidence, not an operator-level performance model.' });
+        const profile = buildQueryProfile(run, evidence, { queryLogAvailable, pipelineAvailable: true, pipelineEvidence, traceUrl, notice: queryLogAvailable
+            ? 'Query-log rows may arrive after a server flush interval. This is server evidence, not an operator-level performance model.'
+            : 'Query-log access is unavailable. The graph uses ClickHouse pipeline evidence and retained run metrics.' });
         res.json(profile.pipeline);
     });
     app.post('/api/scripts', (req, res) => { const v = body(req); res.status(202).json(runs.submitScript(principal(res), v, v.stopOnError === undefined ? true : boolean(v.stopOnError, 'stopOnError'))); });

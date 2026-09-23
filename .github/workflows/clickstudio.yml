@@ -35,8 +35,8 @@ jobs:
         run: npm run eval
       - name: Install browser
         run: npx playwright install --with-deps chromium
-      - name: Core browser flows (fixture driver)
-        run: npm run test:e2e:core
+      - name: Browser suite (fixture driver)
+        run: npm run test:e2e
       - name: Preserve browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v4

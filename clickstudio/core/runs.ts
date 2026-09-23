@@ -29,6 +29,8 @@ interface Receipt {
     at: string;
 }
 const terminalStates = new Set(['succeeded', 'truncated', 'failed', 'cancelled', 'timed_out', 'interrupted']);
+export const DEFAULT_SCRIPT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+export const DEFAULT_RECEIPT_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 export function terminal(run: Pick<Run, 'status'>) { return terminalStates.has(run.status); }
 export class RunService {
     private readonly listeners = new Map<string, Set<(event: RunEvent) => void>>();
@@ -40,6 +42,8 @@ export class RunService {
         concurrency?: number;
         retentionMs?: number;
         snapshotBytes?: number;
+        scriptRetentionMs?: number;
+        receiptRetentionMs?: number;
     } = {}) {
         // An interrupted query is never automatically replayed after a process restart.
         for (const run of store.list<Run>('runs'))
@@ -128,7 +132,10 @@ export class RunService {
         }
         requireThat(this.queue.length + this.active < 50, 429, 'RUN_QUEUE_FULL', 'There are too many pending runs');
         requireThat(this.store.count('runs') < 1000, 507, 'HISTORY_FULL', 'Run history is full. Export and delete older runs.');
-        requireThat(this.store.count('receipts') < 10000, 507, 'RECEIPT_CAPACITY', 'Idempotency storage needs operator maintenance');
+        if (this.store.count('receipts') >= 10000) {
+            this.sweep();
+            requireThat(this.store.count('receipts') < 10000, 507, 'RECEIPT_CAPACITY', 'Idempotency storage needs operator maintenance');
+        }
         const id = randomUUID();
         const run: Run = {
             id, queryId: `clickstudio-${randomUUID()}`, owner: principal.id, dataSource: conn.dataSource ?? 'clickhouse',
@@ -343,15 +350,20 @@ export class RunService {
             const saved = this.store.get<Run>('runs', id);
             run.warnings = [...new Set([...run.warnings, ...(saved?.warnings ?? [])])];
             this.emit(run);
-            this.sweep();
+            this.sweepResultSnapshots();
         }
     }
     sweep(now = Date.now()) {
+        this.sweepResultSnapshots(now);
+        this.sweepRetainedHistory(now);
+    }
+    private sweepResultSnapshots(now = Date.now()) {
+        const runs = this.store.list<Run>('runs');
         const retained: {
             run: Run;
             bytes: number;
         }[] = [];
-        for (const run of this.store.list<Run>('runs')) {
+        for (const run of runs) {
             if (run.resultState !== 'reopenable')
                 continue;
             if (!run.resultExpiresAt || Date.parse(run.resultExpiresAt) <= now) {
@@ -372,9 +384,34 @@ export class RunService {
             total -= bytes;
         }
     }
+    private sweepRetainedHistory(now: number) {
+        const scriptCutoff = now - (this.options.scriptRetentionMs ?? DEFAULT_SCRIPT_RETENTION_MS);
+        const expiredScriptIds = new Set<string>();
+        for (const script of this.store.list<Script>('scripts')) {
+            if (script.status === 'running' || Date.parse(script.createdAt) > scriptCutoff)
+                continue;
+            this.store.delete('scripts', script.id);
+            expiredScriptIds.add(script.id);
+        }
+        const liveResourceIds = new Set([
+            ...this.store.list<Run>('runs').map(run => run.id),
+            ...this.store.list<Script>('scripts').map(script => script.id),
+        ]);
+        const receiptCutoff = now - (this.options.receiptRetentionMs ?? DEFAULT_RECEIPT_RETENTION_MS);
+        for (const key of this.store.keys('receipts')) {
+            const receipt = this.store.get<Receipt>('receipts', key);
+            if (!receipt)
+                continue;
+            if (receipt.kind === 'script' && expiredScriptIds.has(receipt.resourceId)) {
+                this.store.delete('receipts', key);
+                continue;
+            }
+            if (!liveResourceIds.has(receipt.resourceId) && Date.parse(receipt.at) <= receiptCutoff)
+                this.store.delete('receipts', key);
+        }
+    }
     submitScript(principal: Principal, input: unknown, stopOnError = true): Script {
         requireThat(!this.closed, 503, 'SHUTTING_DOWN', 'The server is shutting down');
-        requireThat(this.store.count('scripts') < 200, 507, 'SCRIPT_CAPACITY', 'Script history needs operator maintenance');
         const request = runRequest(input), statements = splitSql(request.sql);
         requireThat(statements.length > 0 && statements.length <= 50, 400, 'SCRIPT_SIZE', 'A script must contain 1–50 statements');
         requireThat(!request.kind || request.kind === 'query', 400, 'SCRIPT_KIND', 'Explain one statement at a time');
@@ -383,6 +420,10 @@ export class RunService {
         const payload = { request, stopOnError }, old = this.receipt(principal, request.clientRequestId, payload, 'script');
         if (old)
             return this.getScript(principal, old.resourceId);
+        if (this.store.count('scripts') >= 200) {
+            this.sweep();
+            requireThat(this.store.count('scripts') < 200, 507, 'SCRIPT_CAPACITY', 'Script history needs operator maintenance');
+        }
         requireThat(this.store.list<Script>('scripts').filter(s => s.status === 'running').length < 4, 429, 'SCRIPT_LIMIT', 'At most four scripts can be active');
         const id = randomUUID();
         const script: Script = { id, owner: principal.id, connectionId: request.connectionId, sql: request.sql,

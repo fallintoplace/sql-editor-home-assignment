@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { AssistantAction, ClickHouseSystemTableDocumentation, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Run, Schema, SchemaDictionary, SchemaTable } from '../../shared/types';
+import type { AssistantAction, ClickHouseSystemTableDocumentation, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Run, Schema, SchemaColumn, SchemaDictionary, SchemaTable } from '../../shared/types';
+import { schemaTableKey } from '../../shared/schema-browser';
 import { quoteIdentifier } from '../../shared/sql';
 import { AssistantWorkflow } from './AssistantWorkflow';
 import { Button, cx, formatBytes, formatCount, Icon, inspectorLabel, Status } from './ui';
@@ -16,7 +17,8 @@ export type InspectorPaneProps = {
     schemaError: string;
     search: string;
     setSearch: (search: string) => void;
-    tables: Schema['tables'];
+    tables: readonly SchemaTable[];
+    columnsByTable: ReadonlyMap<string, readonly SchemaColumn[]>;
     history: Run[];
     documents: QueryDocument[];
     run?: Run;
@@ -68,7 +70,7 @@ const inspectorTabs = [
     { id: 'assistant', icon: 'assistant' },
 ] as const satisfies readonly { id: Inspector; icon: IconName }[];
 
-export function InspectorPane({ inspector, setInspector, connection, schema, schemaLoading, schemaError, search, setSearch, tables, history, documents, run, profile, pipeline, onRefreshSchema, onRefreshHistory, onInsert, onOpenImport, onOpenRun, onOpenDocument, onLoadProfile, onLoadPipeline, onOpenGraph, connectionId, sql, trusted, runId, onRefreshDocuments, assistantAction, onAssistantAction, assistantQuestion, onAssistantQuestion, assistantContext, assistantProposal, assistantBusy, assistantError, includeResult, onIncludeResult, onVoiceInput, voiceListening, voiceError, onPreview, onRequestProposal, onDecideProposal, onRunQuery, runDisabled, expert = false, drawer = false, onClose }: InspectorPaneProps) {
+export function InspectorPane({ inspector, setInspector, connection, schema, schemaLoading, schemaError, search, setSearch, tables, columnsByTable, history, documents, run, profile, pipeline, onRefreshSchema, onRefreshHistory, onInsert, onOpenImport, onOpenRun, onOpenDocument, onLoadProfile, onLoadPipeline, onOpenGraph, connectionId, sql, trusted, runId, onRefreshDocuments, assistantAction, onAssistantAction, assistantQuestion, onAssistantQuestion, assistantContext, assistantProposal, assistantBusy, assistantError, includeResult, onIncludeResult, onVoiceInput, voiceListening, voiceError, onPreview, onRequestProposal, onDecideProposal, onRunQuery, runDisabled, expert = false, drawer = false, onClose }: InspectorPaneProps) {
     const visibleDocuments = documents.filter(document => document.connectionId === connectionId && !document.deletedAt);
     const closeButton = drawer && <Button variant="ghost" className="icon-only" aria-label="Close inspector" onClick={onClose}><Icon name="close"/></Button>;
     const title = expert && inspector === 'schema' ? 'Tables' : expert && inspector === 'documents' ? 'Queries' : inspectorLabel(inspector);
@@ -91,15 +93,20 @@ export function InspectorPane({ inspector, setInspector, connection, schema, sch
                 {schema?.metadataWarnings?.map(warning => <div className="schema-metadata-warning" key={warning}>{warning}</div>)}
                 {!trusted && <div className="inspector-empty"><Icon name="lock"/><strong>Schema is private</strong><p>Trust the connection to inspect tables and columns.</p></div>}
                 {schemaLoading && <div className="inspector-empty"><span className="loading-orbit"/><p>Reading ClickHouse schema…</p></div>}
-                {trusted && schema && tables.map(table => <details className="schema-table" key={`${table.database}.${table.name}`} open={Boolean(search)}>
-                    <summary><span className="table-glyph">▦</span><span className="schema-table-name"><strong>{table.name}</strong><small>{table.database} · {table.engine}</small><small className="schema-table-stats">{tableSummary(table)}</small></span><Icon name="chevron" className="schema-chevron"/></summary>
-                    <div className="schema-table-content">
-                        <button type="button" className="insert-table-button" onClick={() => onInsert(`${quoteIdentifier(table.database)}.${quoteIdentifier(table.name)}`)}>Insert table name <span>↵</span></button>
-                        <TableMetadata table={table}/>
-                        <div className="schema-columns">{schema.columns.filter(column => column.database === table.database && column.table === table.name && (!search || `${column.name} ${column.type}`.toLowerCase().includes(search.toLowerCase()))).map(column => <button type="button" className="schema-column" key={column.name} title={column.comment || column.type} onClick={() => onInsert(quoteIdentifier(column.name))}><span className="column-type-dot"/><span>{column.name}</span><code>{column.type}</code></button>)}</div>
-                        {table.database === 'system' && schema.systemTableDocumentationNames?.includes(table.name) && connection.dataSource !== 'fixture' && connection.trusted && connection.manifest?.documentation.available !== false && <SystemTableDocumentation key={connection.id} connectionId={connection.id} name={table.name} serverVersion={connection.manifest?.serverVersion ?? 'current server'}/>}
-                    </div>
-                </details>)}
+                {trusted && schema && tables.map(table => {
+                    const query = search.trim().toLowerCase();
+                    const columns = (columnsByTable.get(schemaTableKey(table.database, table.name)) ?? [])
+                        .filter(column => !query || `${column.name} ${column.type}`.toLowerCase().includes(query));
+                    return <details className="schema-table" key={`${table.database}.${table.name}`} open={Boolean(search)}>
+                        <summary><span className="table-glyph">▦</span><span className="schema-table-name"><strong>{table.name}</strong><small>{table.database} · {table.engine}</small><small className="schema-table-stats">{tableSummary(table)}</small></span><Icon name="chevron" className="schema-chevron"/></summary>
+                        <div className="schema-table-content">
+                            <button type="button" className="insert-table-button" onClick={() => onInsert(`${quoteIdentifier(table.database)}.${quoteIdentifier(table.name)}`)}>Insert table name <span>↵</span></button>
+                            <TableMetadata table={table}/>
+                            <div className="schema-columns">{columns.map(column => <button type="button" className="schema-column" key={column.name} title={column.comment || column.type} onClick={() => onInsert(quoteIdentifier(column.name))}><span className="column-type-dot"/><span>{column.name}</span><code>{column.type}</code></button>)}</div>
+                            {table.database === 'system' && schema.systemTableDocumentationNames?.includes(table.name) && connection.dataSource !== 'fixture' && connection.trusted && connection.manifest?.documentation.available !== false && <SystemTableDocumentation key={connection.id} connectionId={connection.id} name={table.name} serverVersion={connection.manifest?.serverVersion ?? 'current server'}/>}
+                        </div>
+                    </details>;
+                })}
                 {trusted && schema?.dictionaries !== undefined && <DictionaryList dictionaries={schema.dictionaries} search={search}/>}
                 {trusted && schema && !tables.length && !schema.dictionaries?.some(dictionary => !search || `${dictionary.database} ${dictionary.name} ${dictionary.type} ${dictionary.status} ${dictionary.keyColumns} ${dictionary.attributeColumns}`.toLowerCase().includes(search.toLowerCase())) && <div className="inspector-empty">No tables or dictionaries match this search.</div>}
             </section>}

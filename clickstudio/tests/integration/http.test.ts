@@ -9,9 +9,9 @@ import { DemoDriver } from '../../server/demo.js';
 import type { VoiceService } from '../../server/voice.js';
 import type { ImportJob } from '../../core/imports.js';
 import type { QueryDocument, Run, Published } from '../../shared/types.js';
-async function start(token?: string, voice?: VoiceService, parserWasm?: () => Promise<Uint8Array>) {
+async function start(token?: string, voice?: VoiceService, parserWasm?: () => Promise<Uint8Array>, driver = new DemoDriver()) {
     const config = loadConfig({ DEMO_MODE: 'true', CLICKSTUDIO_TOKEN: token });
-    const service = createApp(config, { store: new MemoryStore(), driver: new DemoDriver(), voice, parserWasm });
+    const service = createApp(config, { store: new MemoryStore(), driver, voice, parserWasm });
     const server = service.app.listen(0, '127.0.0.1');
     await new Promise<void>((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
     config.port = (server.address() as AddressInfo).port;
@@ -20,6 +20,17 @@ async function start(token?: string, voice?: VoiceService, parserWasm?: () => Pr
     return { ...service, call, origin: config.origin, stop: async () => { await service.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); } };
 }
 const owner = { id: 'local-owner', role: 'owner' } as const;
+class NoQueryLogDemoDriver extends DemoDriver {
+    evidenceCalls = 0;
+    override connection(principal: Parameters<DemoDriver['connection']>[0], id: string) {
+        const connection = super.connection(principal, id);
+        return { ...connection, manifest: { ...connection.manifest!, queryLog: { available: false, reason: 'Disabled for this test' } } };
+    }
+    override async profileEvidence(_run: Run) {
+        this.evidenceCalls++;
+        throw new Error('Query-log evidence must not be required for pipeline inspection');
+    }
+}
 test('Voice sessions require trust and keep the provider behind the server', async (t) => {
     const calls: unknown[] = [];
     const s = await start(undefined, { available: true, model: 'test-voice', createSession: async input => { calls.push(input); return { sdp: 'answer-sdp', model: 'test-voice' }; } });
@@ -51,6 +62,18 @@ test('HTTP query flow requires explicit trust and is idempotent', async (t) => {
     const text = await event.text();
     assert.match(text, /data: /);
     assert.match(text, /succeeded/);
+});
+test('Pipeline inspection works when query-log evidence is unavailable', async (t) => {
+    const driver = new NoQueryLogDemoDriver(), s = await start(undefined, undefined, undefined, driver);
+    t.after(() => s.stop());
+    await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' });
+    const run = await (await s.call('/runs', { clientRequestId: randomUUID(), connectionId: 'demo', sql: 'SELECT number FROM numbers(4)' })).json() as Run;
+    await s.runs.wait(owner, run.id);
+    const response = await s.call(`/runs/${run.id}/profile/pipeline`);
+    assert.equal(response.status, 200);
+    const pipeline = await response.json();
+    assert.equal(pipeline.source, 'explain_pipeline');
+    assert.equal(driver.evidenceCalls, 0);
 });
 test('Native ClickHouse parser bytes are served same-origin behind the session boundary', async (t) => {
     const fixture = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);

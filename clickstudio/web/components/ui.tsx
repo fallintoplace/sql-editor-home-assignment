@@ -13,6 +13,7 @@ const iconPaths = {
     chart: <><path d="M4 19V5m0 14h17"/><path d="m7 15 4-4 3 2 6-7"/></>,
     details: <><path d="M4 19V5m0 14h16"/><path d="m7 15 3-4 3 2 5-7"/><circle cx="18" cy="6" r="1"/></>,
     pipeline: <><rect x="3" y="4" width="6" height="5" rx="1"/><rect x="15" y="15" width="6" height="5" rx="1"/><rect x="15" y="4" width="6" height="5" rx="1"/><path d="M9 6.5h3a3 3 0 0 1 3 3V15"/></>,
+    parser: <><path d="m8 5-5 7 5 7m8-14 5 7-5 7m-1-16-4 18"/></>,
     documents: <><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7m-7 4h7"/></>,
     search: <><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></>,
     settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-1.6 2.77-.08-.02a1.7 1.7 0 0 0-1.8.72l-.04.07h-3.2l-.03-.08a1.7 1.7 0 0 0-1.54-1.1 1.7 1.7 0 0 0-1.45.75l-.04.07-2.77-1.6.02-.08a1.7 1.7 0 0 0-.72-1.8l-.07-.04v-3.2l.08-.03a1.7 1.7 0 0 0 1.1-1.54 1.7 1.7 0 0 0-.75-1.45l-.07-.04 1.6-2.77.08.02a1.7 1.7 0 0 0 1.8-.72l.04-.07h3.2l.03.08a1.7 1.7 0 0 0 1.54 1.1 1.7 1.7 0 0 0 1.45-.75l.04-.07 2.77 1.6-.02.08a1.7 1.7 0 0 0 .72 1.8l.07.04v3.2l-.08.03a1.7 1.7 0 0 0-.66.74Z"/></>,
@@ -72,4 +73,4 @@ export function formatCount(value: string | number): string {
     return Number.isFinite(number) ? new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(number) : String(value);
 }
 
-export function inspectorLabel(value: Inspector): string { return ({ schema: 'Schema explorer', history: 'Run history', documents: 'Documents', details: 'Run details', profile: 'Query profile', pipeline: 'Pipeline', assistant: 'AI copilot' })[value]; }
+export function inspectorLabel(value: Inspector): string { return ({ schema: 'Schema explorer', history: 'Run history', documents: 'Documents', details: 'Run details', profile: 'Query profile', pipeline: 'Pipeline', parser: 'ClickHouse parser', assistant: 'AI copilot' })[value]; }

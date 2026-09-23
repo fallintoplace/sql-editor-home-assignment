@@ -23,10 +23,11 @@ async function runQuery(page: Page) {
     return results;
 }
 
-function parserWorkerStub(initialStatus: 'ready' | 'unavailable') {
+function parserWorkerStub(initialStatus: 'ready' | 'unavailable', initialResult: unknown = {}) {
     return `(() => {
         const NativeWorker = window.Worker;
         let attempts = 0;
+        window.__nativeParserResult = ${JSON.stringify(initialResult)};
         class FakeParserWorker extends EventTarget {
             constructor() {
                 super();
@@ -37,7 +38,9 @@ function parserWorkerStub(initialStatus: 'ready' | 'unavailable') {
             postMessage(request) {
                 if (request.kind === 'parseMany') {
                     window.__parserParseCount = (window.__parserParseCount || 0) + 1;
-                    queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', { data: { id: request.id, ok: true, results: request.sql.map(() => ({})) } })));
+                    const reply = { id: request.id, ok: true, results: request.sql.map(() => window.__nativeParserResult) };
+                    if (window.__delayNativeParser) window.__resolveDelayedNativeParse = () => this.dispatchEvent(new MessageEvent('message', { data: reply }));
+                    else queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', { data: reply })));
                 }
                 else window.__pendingParserFormat = request.id;
             }
@@ -91,6 +94,68 @@ test('Native parser can be retried after a temporary worker failure', async ({ p
     await retry.click();
     await expect(page.getByText('Native parser', { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => Number((window as any).__parserParseCount ?? 0))).toBeGreaterThan(0);
+});
+
+test('Expert parser inspector shows native AST, UTF-8 semantic highlights, and expected tokens', async ({ page }) => {
+    const sql = "SELECT '🙂', uniqExact(user_id) FROM events";
+    const functionPrefix = "SELECT '🙂', ";
+    const parserResponse = {
+        ast: { type: 'SelectWithUnionQuery', children: [{ type: 'SelectQuery' }] },
+        highlights: [
+            { begin: new TextEncoder().encode(functionPrefix).length, end: new TextEncoder().encode(functionPrefix + 'uniqExact').length, type: 'function' },
+            { begin: new TextEncoder().encode(functionPrefix + 'uniqExact(').length, end: new TextEncoder().encode(functionPrefix + 'uniqExact(user_id').length, type: 'identifier' },
+        ],
+    };
+    await page.addInitScript(parserWorkerStub('ready', parserResponse));
+    await page.goto('/');
+    await replaceSql(page, sql);
+    await expect(page.locator('.cm-native-function')).toHaveText('uniqExact');
+
+    await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'ClickHouse parser', exact: true }).click();
+    await expect(page.getByText('SelectWithUnionQuery', { exact: true })).toBeVisible();
+    await page.getByText('View native AST', { exact: true }).click();
+    await expect(page.getByText(/"type": "SelectWithUnionQuery"/)).toBeVisible();
+
+    const invalidSql = 'SELECT 1 +';
+    await page.evaluate(() => {
+        (window as any).__nativeParserResult = {
+            error: { message: 'Syntax error', begin: 10, end: 10, expected: ['FROM', 'WHERE', 'GROUP BY'] },
+        };
+    });
+    await replaceSql(page, invalidSql);
+    await expect(page.getByText('Syntax error', { exact: true })).toBeVisible();
+    await expect(page.getByText('GROUP BY', { exact: true })).toBeVisible();
+});
+
+test('A delayed native parse cannot replace parser details for newer SQL', async ({ page }) => {
+    const oldSql = 'SELECT old_fn()';
+    const newSql = 'SELECT new_fn()';
+    const oldResult = { ast: { type: 'OldStatement' }, highlights: [{ begin: 7, end: 13, type: 'function' }] };
+    const newResult = { ast: { type: 'NewStatement' }, highlights: [{ begin: 7, end: 13, type: 'function' }] };
+    await page.addInitScript(parserWorkerStub('ready', oldResult));
+    await page.goto('/');
+    await expect.poll(() => page.evaluate(() => Number((window as any).__parserParseCount ?? 0))).toBeGreaterThan(0);
+
+    await page.evaluate(() => { (window as any).__delayNativeParser = true; });
+    await replaceSql(page, oldSql);
+    await expect.poll(() => page.evaluate(() => Boolean((window as any).__resolveDelayedNativeParse))).toBe(true);
+    await page.evaluate(() => {
+        (window as any).__nativeParserResult = {
+            ast: { type: 'NewStatement' },
+            highlights: [{ begin: 7, end: 13, type: 'function' }],
+        };
+        (window as any).__delayNativeParser = false;
+    });
+    await replaceSql(page, newSql);
+    await expect(page.locator('.cm-native-function')).toHaveText('new_fn');
+    await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'ClickHouse parser', exact: true }).click();
+    await expect(page.getByText('NewStatement', { exact: true })).toBeVisible();
+
+    await page.evaluate(() => (window as any).__resolveDelayedNativeParse());
+    await expect(page.getByText('NewStatement', { exact: true })).toBeVisible();
+    await expect(page.getByText('OldStatement', { exact: true })).toHaveCount(0);
 });
 
 test('Failed async formatting does not overwrite edits typed while it was pending', async ({ page }) => {

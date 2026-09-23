@@ -238,6 +238,10 @@
     .sql-editor .cm-editor { background: transparent; color: var(--text); }
     .sql-editor .cm-scroller { overflow: auto; }
     .sql-editor .cm-content:focus-visible { outline: none; }
+    .sql-editor .cm-native-function { color: var(--accent) !important; font-weight: 650; }
+    .sql-editor .cm-native-alias { color: var(--green) !important; font-weight: 560; }
+    .sql-editor .cm-native-substitution { color: var(--violet) !important; font-weight: 600; }
+    .sql-editor .cm-native-string-escape, .sql-editor .cm-native-string-metacharacter { color: var(--amber) !important; font-weight: 650; }
     .sql-editor .cm-gutters { min-width: 43px; padding-right: 6px; border-right: 1px solid color-mix(in srgb, var(--line) 75%, transparent); background: color-mix(in srgb, var(--panel-raised) 62%, transparent); }
     .sql-editor .cm-lineNumbers .cm-gutterElement { padding: 0 8px 0 4px; }
     .sql-editor .cm-activeLine { background: color-mix(in srgb, var(--accent) 3%, transparent); }
@@ -462,6 +466,35 @@
     .inspector-tabs.is-browser-tabs .inspector-more-menu button svg { width: 14px; height: 14px; }
     .inspector-content { min-height: 0; flex: 1; overflow: auto; background: color-mix(in srgb, var(--page) 70%, transparent); }
     .inspector-section { display: grid; align-content: start; gap: 10px; padding: 14px; }
+    .parser-inspector { align-content: start; }
+    .parser-status-card { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-raised); }
+    .parser-status-card > div { display: grid; min-width: 0; flex: 1; gap: 3px; }
+    .parser-status-card strong { color: var(--text-soft); font-size: 10px; }
+    .parser-status-card small, .parser-duration { color: var(--muted); font-size: 8px; }
+    .parser-statement-card { display: grid; align-content: start; gap: 10px; min-width: 0; padding: 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); }
+    .parser-statement-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 7px; font-weight: 750; letter-spacing: .12em; }
+    .parser-validity { display: inline-flex; align-items: center; gap: 7px; letter-spacing: .02em; text-transform: none; }
+    .parser-validity.is-valid { color: var(--green); }
+    .parser-validity.is-invalid { color: var(--red); }
+    .parser-validity .status-light { width: 6px; height: 6px; background: var(--green); }
+    .parser-validity.is-invalid .status-light { background: var(--red); box-shadow: 0 0 0 3px color-mix(in srgb, var(--red) 12%, transparent); }
+    .parser-facts { display: grid; gap: 7px; margin: 0; }
+    .parser-facts > div { display: flex; justify-content: space-between; gap: 12px; }
+    .parser-facts dt, .parser-facts dd { margin: 0; font-size: 8px; }
+    .parser-facts dt { color: var(--muted); }
+    .parser-facts dd { overflow-wrap: anywhere; color: var(--text-soft); font-family: var(--font-mono); text-align: right; }
+    .parser-functions, .parser-expected { display: grid; gap: 6px; }
+    .parser-functions > span, .parser-expected > span { color: var(--muted); font-size: 7px; font-weight: 750; letter-spacing: .12em; }
+    .parser-functions > div, .parser-expected > div { display: flex; flex-wrap: wrap; gap: 5px; }
+    .parser-functions code, .parser-expected code { padding: 4px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--page-raised); color: var(--accent); font-family: var(--font-mono); font-size: 8px; }
+    .parser-functions small, .parser-expected small { align-self: center; color: var(--muted); font-size: 8px; }
+    .parser-error { display: grid; gap: 10px; color: var(--red); font-size: 9px; line-height: 1.6; overflow-wrap: anywhere; }
+    .parser-error strong { font-weight: 600; }
+    .parser-ast { min-width: 0; border-top: 1px solid var(--line); }
+    .parser-ast summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 0 3px; color: var(--text-soft); font-size: 9px; cursor: pointer; }
+    .parser-ast summary code { color: var(--muted); font-size: 7px; }
+    .parser-ast pre { max-height: 420px; overflow: auto; margin: 8px 0 0; padding: 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--page); color: var(--text-soft); font-family: var(--font-mono); font-size: 8px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .parser-ast > small { color: var(--muted); font-size: 7px; }
     .inspector-section:has(> .inspector-empty) { display: flex; height: 100%; flex-direction: column; }
     .inspector-section > .inspector-empty { position: relative; isolation: isolate; width: 100%; min-height: 220px; flex: 0 0 auto; overflow: hidden; gap: 12px; margin-block: auto; padding: 25px 20px; border: 1px solid var(--line-bright); border-radius: 14px; background: radial-gradient(ellipse at 90% 0, color-mix(in srgb, var(--accent) 9%, transparent), transparent 58%), linear-gradient(150deg, var(--panel), var(--panel-raised)); box-shadow: 0 12px 28px #18211d10, inset 0 1px #ffffffb0; }
     .inspector-section > .inspector-empty::before { position: absolute; z-index: -1; right: -46px; bottom: -70px; width: 180px; height: 180px; border: 1px solid color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 50%; content: ""; box-shadow: 0 0 0 18px color-mix(in srgb, var(--accent) 2%, transparent), 0 0 0 38px color-mix(in srgb, var(--accent) 2%, transparent); }

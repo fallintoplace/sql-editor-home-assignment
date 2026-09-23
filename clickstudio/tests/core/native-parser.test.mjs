@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nativeDiagnosticForStatement, sourcePositionFromUtf8ByteOffset, utf8ByteOffsetToUtf16Index } from '../../.core-build/shared/native-parser.js';
+import { nativeDiagnosticForStatement, nativeHighlightRanges, parseNativeParseResult, sourcePositionFromUtf8ByteOffset, utf8ByteOffsetToUtf16Index } from '../../.core-build/shared/native-parser.js';
 
 const bytes = value => new TextEncoder().encode(value).length;
 
@@ -51,4 +51,48 @@ test('line and byte-column fallback maps parser positions without corrupting Uni
         column: bytes(linePrefix) + 1,
     });
     assert.equal(diagnostic.from, 'SELECT 1\n'.length + linePrefix.length);
+});
+
+test('native parse envelopes retain ClickHouse highlights, AST, and expected tokens', () => {
+    const parsed = parseNativeParseResult({
+        ast: { type: 'SelectWithUnionQuery', children: [] },
+        highlights: [{ begin: 0, end: 6, type: 'keyword' }, { begin: 7, end: 8, type: 'number' }],
+    });
+    assert.deepEqual(parsed, {
+        ast: { type: 'SelectWithUnionQuery', children: [] },
+        highlights: [{ begin: 0, end: 6, type: 'keyword' }, { begin: 7, end: 8, type: 'number' }],
+    });
+    assert.deepEqual(parseNativeParseResult({ error: { message: 'Syntax error', expected: ['FROM', 'WHERE'] } }), {
+        error: { message: 'Syntax error', expected: ['FROM', 'WHERE'] },
+    });
+});
+
+test('native parse envelopes reject invalid errors and discard malformed highlight ranges', () => {
+    assert.throws(() => parseNativeParseResult(null), /invalid response/);
+    assert.throws(() => parseNativeParseResult({ error: 'broken' }), /invalid diagnostics/);
+    assert.deepEqual(parseNativeParseResult({ highlights: [
+        { begin: 0, end: 3, type: 'function' },
+        { begin: 3, end: 3, type: 'alias' },
+        { begin: -1, end: 4, type: 'keyword' },
+        { begin: 0, end: 2, type: 'not-a-native-token' },
+    ] }).highlights, [{ begin: 0, end: 3, type: 'function' }]);
+});
+
+test('native semantic highlights map UTF-8 ranges to statement-relative UTF-16 positions', () => {
+    const sql = "SELECT '🙂', uniqExact(user_id)";
+    const prefix = "SELECT '🙂', ";
+    assert.deepEqual(nativeHighlightRanges(sql, 25, [
+        { begin: bytes(prefix), end: bytes(prefix + 'uniqExact'), type: 'function' },
+        { begin: bytes(prefix + 'uniqExact('), end: bytes(prefix + 'uniqExact(user_id'), type: 'identifier' },
+        { begin: bytes(sql) + 1, end: bytes(sql) + 2, type: 'string' },
+    ]), [
+        { from: 25 + prefix.length, to: 25 + prefix.length + 'uniqExact'.length, type: 'function' },
+        { from: 25 + prefix.length + 'uniqExact('.length, to: 25 + prefix.length + 'uniqExact(user_id'.length, type: 'identifier' },
+    ]);
+});
+
+test('native diagnostics show a bounded expected-token hint', () => {
+    const expected = ['FROM', 'WHERE', 'GROUP BY', 'HAVING', 'ORDER BY', 'LIMIT', 'SETTINGS', 'FORMAT', 'UNION', 'INTO'];
+    const diagnostic = nativeDiagnosticForStatement('SELECT 1', 0, { message: 'Syntax error', expected });
+    assert.equal(diagnostic.message, 'Syntax error\nExpected: FROM · WHERE · GROUP BY · HAVING · ORDER BY · LIMIT · SETTINGS · FORMAT · …');
 });

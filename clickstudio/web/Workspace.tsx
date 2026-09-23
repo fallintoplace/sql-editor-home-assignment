@@ -15,7 +15,7 @@ import { Button, cx, Icon, Status, terminal } from './components/ui';
 import { ExecutionBar, RailButton, RunActionMenu, ScriptResults } from './components/WorkspaceChrome';
 import { checkpoint, closeDraft, draftFromDocument, MAX_TABS, newDraft, recover, reopenDraft, type Draft, type WorkspaceState } from './workspace-state';
 import { draftSaveStatus, rememberRunIds } from '../shared/workspace-view';
-import type { NativeParserStatus } from '../shared/native-parser';
+import type { NativeParseSnapshot, NativeParserStatus } from '../shared/native-parser';
 import { useWorkspacePersistence } from './useWorkspacePersistence';
 import { useRunEvidence } from './useRunEvidence';
 import { useScriptExecution } from './useScriptExecution';
@@ -59,6 +59,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     activeRunIdRef.current = activeRunId;
     const editor = useRef<EditorHandle>(null);
     const [nativeParserStatus, setNativeParserStatus] = useState<NativeParserStatus>('loading');
+    const [nativeParseSnapshot, setNativeParseSnapshot] = useState<NativeParseSnapshot>();
     const [schema, setSchema] = useState<Schema>();
     const [schemaLoading, setSchemaLoading] = useState(false);
     const [schemaError, setSchemaError] = useState('');
@@ -520,6 +521,9 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         assistantProposal,
         assistantBusy,
         assistantError,
+        nativeParserStatus,
+        nativeParseSnapshot,
+        onRetryParser: () => editor.current?.retryNativeParser(),
         includeResult,
         onIncludeResult: setIncludeResult,
         onVoiceInput: startVoiceInput,
@@ -549,6 +553,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                 <span className="rail-spacer"/>
                 {experience === 'expert' && <RailButton icon="assistant" label={copy.common.assistant} accent active={inspector === 'assistant'} onClick={() => showInspector('assistant')}/>}
                 {experience === 'expert' && <><RailButton icon="details" label="Run details" active={inspector === 'details'} onClick={() => showInspector('details')}/><RailButton icon="pipeline" label="Pipeline" active={inspector === 'pipeline'} onClick={() => showInspector('pipeline')}/></>}
+                {experience === 'expert' && <RailButton icon="parser" label="Parser" active={inspector === 'parser'} onClick={() => showInspector('parser')}/>}
                 {experience === 'expert' && <><span className="rail-separator"/><button className="rail-icon-button rail-icon-muted" type="button" title="Export local drafts" onClick={() => download('clickstudio-local-drafts.json', workspace)}><Icon name="settings"/></button></>}
             </aside>
 
@@ -616,7 +621,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             </div>
                         </div>
                         {experience === 'beginner' && !trusted && <div className="beginner-connection-notice" role="status"><span>{demoMode ? 'Start the sample workspace to run this query.' : 'Review this connection before running SQL.'}</span><Button variant="secondary" className="toolbar-small" onClick={() => void trustActionRef.current()}>{demoMode ? 'Start exploring' : 'Review connection'}</Button></div>}
-                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} parserStatus={nativeParserStatus} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus}/></div>
+                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} parserStatus={nativeParserStatus} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus} onNativeParseSnapshot={snapshot => setNativeParseSnapshot(snapshot)}/></div>
                         {parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => patch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
                         <div className="editor-footer"><span><span className="key-hint">⌘↵</span> {experience === 'beginner' ? 'Run query' : <>Run current statement <span className="footer-dot">·</span> <span className="key-hint">⌘⇧↵</span> Run script</>}</span>{experience === 'expert' && <span>{active.sql.length.toLocaleString()} characters <span className="footer-dot">·</span> {active.sql.split('\n').length} lines</span>}</div>
                     </section>

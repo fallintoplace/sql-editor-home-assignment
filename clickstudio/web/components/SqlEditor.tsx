@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
-import { EditorState, Compartment } from '@codemirror/state';
-import { EditorView, hoverTooltip, keymap, lineNumbers, highlightActiveLine, drawSelection, rectangularSelection } from '@codemirror/view';
+import { EditorState, Compartment, StateEffect, StateField } from '@codemirror/state';
+import { Decoration, EditorView, hoverTooltip, keymap, lineNumbers, highlightActiveLine, drawSelection, rectangularSelection, type DecorationSet } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab, indentSelection } from '@codemirror/commands';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
 import { bracketMatching, foldGutter, foldKeymap, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
@@ -8,7 +8,7 @@ import { autocompletion, ifNotIn, nextSnippetField, prevSnippetField, type Compl
 import { sql, SQLDialect } from '@codemirror/lang-sql';
 import { setDiagnostics } from '@codemirror/lint';
 import type { ApiError, Schema } from '../../shared/types';
-import { nativeDiagnosticForStatement, type NativeDiagnostic, type NativeParserStatus } from '../../shared/native-parser';
+import { nativeDiagnosticForStatement, nativeHighlightRanges, type NativeDiagnostic, type NativeHighlightType, type NativeParseSnapshot, type NativeParseStatement, type NativeParserStatus } from '../../shared/native-parser';
 import { hasSqlComments, quoteIdentifier } from '../../shared/sql';
 import { activeStatementIndex, CLICKHOUSE_KEYWORDS, completionTarget, matchingNames, tableAliases as aliasesFor } from '../../shared/editor-tools';
 import { clickhouseSnippetCompletions, sqlEditorTools, sqlStatementOutline } from './editor-tools';
@@ -22,6 +22,37 @@ const clickhouseFunctions = [
     ['today', 'Current server Date'], ['numbers', 'Generate a sequence of numbers'], ['arrayJoin', 'Expand an array into rows'], ['arrayMap', 'Map a lambda over an array'],
     ['arrayFilter', 'Filter an array with a lambda'], ['multiIf', 'Multi-branch conditional'], ['ifNull', 'Replace NULL with a fallback'], ['coalesce', 'Return the first non-NULL value'],
 ] as const;
+const setNativeDecorations = StateEffect.define<DecorationSet>();
+const nativeDecorations = StateField.define<DecorationSet>({
+    create: () => Decoration.none,
+    update: (value, transaction) => {
+        if (transaction.docChanged)
+            value = Decoration.none;
+        for (const effect of transaction.effects) {
+            if (effect.is(setNativeDecorations))
+                value = effect.value;
+        }
+        return value;
+    },
+    provide: field => EditorView.decorations.from(field),
+});
+const nativeDecorationClasses: Partial<Record<NativeHighlightType, string>> = {
+    function: 'cm-native-function',
+    alias: 'cm-native-alias',
+    substitution: 'cm-native-substitution',
+    string_escape: 'cm-native-string-escape',
+    string_metacharacter: 'cm-native-string-metacharacter',
+};
+
+function decorationsForNativeResults(statements: readonly NativeParseStatement[]): DecorationSet {
+    const ranges = statements.flatMap(statement => nativeHighlightRanges(statement.sql, statement.from, statement.result.highlights))
+        .flatMap(range => nativeDecorationClasses[range.type]
+            ? [{ from: range.from, to: range.to, className: nativeDecorationClasses[range.type]! }]
+            : [])
+        .sort((left, right) => left.from - right.from || left.to - right.to);
+    return Decoration.set(ranges.map(range => Decoration.mark({ class: range.className }).range(range.from, range.to)), true);
+}
+
 const unquote = (value: string) => value.replace(/^`|`$/g, '').replace(/^"|"$/g, '');
 type SchemaIndex = {
     columns: Schema['columns'];
@@ -109,6 +140,7 @@ interface Props {
     onSelection: (from: number, to: number) => void;
     onRun: (script: boolean) => void;
     onNativeParserStatus?: (status: NativeParserStatus) => void;
+    onNativeParseSnapshot?: (snapshot?: NativeParseSnapshot) => void;
 }
 export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(props, ref) {
     const element = useRef<HTMLDivElement>(null), view = useRef<EditorView | undefined>(undefined), current = useRef(props), language = useRef(new Compartment()), theme = useRef(new Compartment());
@@ -129,7 +161,7 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
     const languageExtension = () => sql({ dialect: clickhouse, schema: schemaIndex.codeMirror });
     const themeExtension = () => EditorView.theme({ '&': { height: '100%', backgroundColor: 'var(--panel)', color: 'var(--text)' }, '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace', fontSize: '13px' }, '.cm-gutters': { backgroundColor: 'var(--panel)', color: 'var(--muted)', border: 'none' }, '.cm-content': { minHeight: '220px' }, '.cm-cursor': { borderLeftColor: 'var(--text)' }, '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: 'var(--editor-selection)' } }, { dark: current.current.dark });
     useEffect(() => { if (!element.current)
-        return; const p = current.current; const editor = new EditorView({ parent: element.current, state: EditorState.create({ doc: p.value, selection: { anchor: Math.min(p.from, p.value.length), head: Math.min(p.to, p.value.length) }, extensions: [sqlEditorTools(), lineNumbers(), history(), drawSelection(), highlightActiveLine(), rectangularSelection(), bracketMatching(), foldGutter(), highlightSelectionMatches(), syntaxHighlighting(defaultHighlightStyle), autocompletion({ override: [ifNotIn(['QuotedIdentifier', 'String', 'LineComment', 'BlockComment'], context => completionSource(context, schemaIndexRef.current))] }), hoverTooltip((view, pos) => { const word = view.state.wordAt(pos); if (!word)
+        return; const p = current.current; const editor = new EditorView({ parent: element.current, state: EditorState.create({ doc: p.value, selection: { anchor: Math.min(p.from, p.value.length), head: Math.min(p.to, p.value.length) }, extensions: [sqlEditorTools(), nativeDecorations, lineNumbers(), history(), drawSelection(), highlightActiveLine(), rectangularSelection(), bracketMatching(), foldGutter(), highlightSelectionMatches(), syntaxHighlighting(defaultHighlightStyle), autocompletion({ override: [ifNotIn(['QuotedIdentifier', 'String', 'LineComment', 'BlockComment'], context => completionSource(context, schemaIndexRef.current))] }), hoverTooltip((view, pos) => { const word = view.state.wordAt(pos); if (!word)
                 return null; const label = view.state.sliceDoc(word.from, word.to), info = hoverInfo(schemaIndexRef.current, current.current.value, label); if (!info)
                 return null; return { pos: word.from, end: word.to, above: true, create: () => { const dom = document.createElement('div'); dom.className = 'sql-hover'; dom.textContent = info; return { dom }; } }; }), language.current.of(languageExtension()), theme.current.of(themeExtension()), EditorState.allowMultipleSelections.of(true), EditorView.contentAttributes.of({ 'aria-label': 'SQL editor', 'spellcheck': 'false' }), keymap.of([{ key: 'Tab', run: nextSnippetField, shift: prevSnippetField }, { key: 'Mod-Enter', run: () => { current.current.onRun(false); return true; } }, { key: 'Mod-Shift-Enter', run: () => { current.current.onRun(true); return true; } }, ...defaultKeymap, ...historyKeymap, ...searchKeymap, ...foldKeymap, indentWithTab]), EditorView.updateListener.of(update => { if (update.docChanged)
                     current.current.onChange(update.state.doc.toString()); if (update.selectionSet) {
@@ -143,29 +175,48 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
         const editor = view.current, revision = ++validationRevision.current;
         nativeDiagnostics.current = [];
         applyDiagnostics();
+        editor?.dispatch({ effects: setNativeDecorations.of(Decoration.none) });
+        current.current.onNativeParseSnapshot?.(undefined);
         if (!editor || props.parserStatus !== 'ready')
             return;
+        const source = editor.state.doc.toString();
         const outline = editor.state.field(sqlStatementOutline);
         if (outline.error || !outline.statements.length)
             return;
-        const statements = outline.statements.map(statement => ({ from: statement.from, sql: statement.sql }));
+        const statements = outline.statements.map(statement => ({ from: statement.from, to: statement.to, sql: statement.sql }));
         const timer = window.setTimeout(() => {
+            const startedAt = performance.now();
             void clickHouseNativeParser.parseMany(statements.map(statement => statement.sql)).then(results => {
-                if (revision !== validationRevision.current)
+                if (revision !== validationRevision.current || editor.state.doc.toString() !== source)
                     return;
+                const parsedStatements: NativeParseStatement[] = statements.map((statement, index) => ({
+                    ...statement,
+                    result: results[index] ?? {},
+                }));
+                const snapshot: NativeParseSnapshot = {
+                    statements: parsedStatements,
+                    elapsedMs: Math.round((performance.now() - startedAt) * 10) / 10,
+                };
                 nativeDiagnostics.current = results.flatMap((result, index) => {
                     const error = result.error, statement = statements[index];
                     return error && statement ? [nativeDiagnosticForStatement(statement.sql, statement.from, error)] : [];
                 });
+                editor.dispatch({ effects: setNativeDecorations.of(decorationsForNativeResults(parsedStatements)) });
+                current.current.onNativeParseSnapshot?.(snapshot);
                 applyDiagnostics();
             }).catch(() => {
-                if (revision !== validationRevision.current)
+                if (revision !== validationRevision.current || editor.state.doc.toString() !== source)
                     return;
                 nativeDiagnostics.current = [];
+                editor.dispatch({ effects: setNativeDecorations.of(Decoration.none) });
+                current.current.onNativeParseSnapshot?.(undefined);
                 applyDiagnostics();
             });
         }, 250);
-        return () => window.clearTimeout(timer);
+        return () => {
+            validationRevision.current++;
+            window.clearTimeout(timer);
+        };
     }, [props.parserStatus, props.value, applyDiagnostics]);
     useEffect(() => { const v = view.current; if (!v)
         return; const from = Math.min(props.from, v.state.doc.length), to = Math.min(props.to, v.state.doc.length); if (v.state.selection.main.from !== from || v.state.selection.main.to !== to)

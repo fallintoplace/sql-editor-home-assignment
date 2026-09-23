@@ -1,4 +1,4 @@
-import type { NativeFormatResult, NativeParseError, NativeParseResult } from '../shared/native-parser';
+import { parseNativeParseResult, type NativeFormatResult, type NativeParseResult } from '../shared/native-parser';
 
 type ParserExports = {
     memory: WebAssembly.Memory;
@@ -122,11 +122,16 @@ function createParser(exports: ParserExports) {
     return {
         parse(sql: string): NativeParseResult {
             const result = call(exports.ch_parse, sql);
+            let envelope: unknown;
             try {
-                const envelope = JSON.parse(result.out) as { error?: NativeParseError };
-                return envelope.error ? { error: envelope.error } : {};
-            } catch {
-                return { error: { message: result.out || 'ClickHouse parser returned invalid diagnostics' } };
+                envelope = JSON.parse(result.out) as unknown;
+            } catch (error) {
+                return { error: { message: result.out || message(error) || 'ClickHouse parser returned invalid diagnostics' } };
+            }
+            try {
+                return parseNativeParseResult(envelope);
+            } catch (error) {
+                return { error: { message: message(error) || 'ClickHouse parser returned invalid diagnostics' } };
             }
         },
         format(sql: string): NativeFormatResult {

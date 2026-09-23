@@ -7,6 +7,7 @@ import { collectCompactStream } from '../core/compact-stream.js';
 import type { QueryDriver } from '../core/runs.js';
 import type { ImportDriver } from '../core/imports.js';
 import { splitSql } from '../shared/sql.js';
+import { sourcePositionFromUtf8ByteOffset } from '../shared/native-parser.js';
 import { quotedTable } from '../core/imports.js';
 import { publicProfile, redactor, type Config, type Profile } from './config.js';
 /** All database addresses and credentials are operator-owned; the API accepts only profile IDs. */
@@ -240,7 +241,7 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
             const failure = this.safeError(error);
             if (failure.position !== undefined && run.sourceFrom !== undefined && run.sourceTo !== undefined) {
                 const prefix = run.kind === 'explain' ? 'EXPLAIN indexes = 1\n'.length : run.kind === 'pipeline' ? 'EXPLAIN PIPELINE\n'.length : 0;
-                const position = Math.max(run.sourceFrom, Math.min(run.sourceTo, run.sourceFrom + failure.position - prefix));
+                const position = sourcePositionFromUtf8ByteOffset(statement, failure.position, run.sourceFrom, run.sourceTo, prefix);
                 throw new AppError(failure.status, failure.code, failure.message, failure.remediation, position);
             }
             throw failure;

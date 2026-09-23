@@ -24,9 +24,21 @@ test('Current statement and selected range', () => {
 test('Typed parameters ignore comments and literals', () => assert.deepEqual(parameterNames("SELECT {a:Nullable(UInt64)}, '{b:String}' -- {c:Int32}"), [{ name: 'a', type: 'Nullable(UInt64)' }]));
 test('Inconsistent parameter types reject', () => assert.throws(() => parameterNames('SELECT {a:Int32}, {a:String}')));
 test('Identifier quoting cannot end the identifier', () => assert.equal(quoteIdentifier('a`b'), '`a\\`b`'));
-for (const sql of ['SELECT 1', 'SELECT * FROM system.tables', "SELECT 'DROP'", 'WITH 1 AS n SELECT n', 'EXPLAIN SELECT 1'])
+for (const sql of [
+    'SELECT 1', 'SELECT * FROM system.tables', "SELECT 'DROP'", 'WITH 1 AS n SELECT n', 'EXPLAIN SELECT 1',
+    'SHOW CREATE TABLE events', 'SHOW CREATE DATABASE analytics', 'SHOW CREATE VIEW recent_events',
+    'SHOW CREATE DICTIONARY event_types', 'SHOW CREATE USER analyst', 'SHOW CREATE ROLE reader',
+    'SHOW CREATE ROW POLICY tenant_policy ON events', 'SHOW CREATE QUOTA analyst_quota',
+    'SHOW CREATE SETTINGS PROFILE analyst_profile', 'SHOW SETTINGS', "SHOW SETTINGS LIKE 'max_threads'",
+    "SHOW CHANGED SETTINGS ILIKE '%memory%'",
+])
     test(`Read-only accepts ${sql}`, () => assert.doesNotThrow(() => guardSql(sql)));
-for (const sql of ['DELETE FROM t', 'SELECT 1; DROP TABLE t', 'SELECT 1 SETTINGS readonly=0', "SELECT * FROM url('http://example.invalid')", 'SELECT 1 FORMAT CSV'])
+for (const sql of [
+    'DELETE FROM t', 'SELECT 1; DROP TABLE t', 'SELECT 1 SETTINGS readonly=0',
+    "SELECT * FROM url('http://example.invalid')", 'SELECT 1 FORMAT CSV',
+    'SHOW CREATE TABLE events SETTINGS readonly=0', 'SHOW CREATE TABLE events FORMAT CSV',
+    'SHOW SETTINGS FORMAT CSV',
+])
     test(`Read-only guard rejects ${sql}`, () => assert.throws(() => guardSql(sql)));
 test('Missing named parameter is explicit', () => assert.throws(() => guardSql('SELECT {n:UInt64}'), { code: 'MISSING_PARAMETER' }));
 test('Child filter is bound, not interpolated', () => { const f = insertChildFilter('SELECT x FROM t', 'x', "x' OR 1=1"); assert.ok(!f.sql.includes("OR 1=1")); assert.equal(f.parameters.wb_filter, "x' OR 1=1"); });

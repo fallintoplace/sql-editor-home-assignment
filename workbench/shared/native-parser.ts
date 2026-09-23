@@ -40,6 +40,11 @@ export function utf8ByteOffsetToUtf16Index(value: string, byteOffset: number): n
     return Math.min(index, value.length);
 }
 
+export function sourcePositionFromUtf8ByteOffset(value: string, byteOffset: number, sourceFrom: number, sourceTo: number, prefixBytes = 0): number {
+    const localPosition = utf8ByteOffsetToUtf16Index(value, byteOffset - prefixBytes);
+    return Math.max(sourceFrom, Math.min(sourceTo, sourceFrom + localPosition));
+}
+
 function offsetFromLineColumn(value: string, line: number | undefined, column: number | undefined): number {
     if (line === undefined || column === undefined || line < 1 || column < 1)
         return 0;

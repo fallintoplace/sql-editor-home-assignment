@@ -15,13 +15,24 @@ export function guardSql(sql: string, parameters: Record<string, string> = {}): 
         const statements = splitSql(sql);
         requireThat(statements.length === 1, 400, 'SINGLE_STATEMENT', 'Run one statement, or use Run script');
         const tokens = lexSql(statements[0]!.sql);
-        const first = tokens.find(t => t.kind === 'word')?.text.toUpperCase();
+        const words = tokens.filter(t => t.kind === 'word');
+        const first = words[0]?.text.toUpperCase();
+        const showCreate = first === 'SHOW' && words[1]?.text.toUpperCase() === 'CREATE';
+        let showSettings = first === 'SHOW' && words[1]?.text.toUpperCase() === 'SETTINGS' ? words[1] : undefined;
+        if (first === 'SHOW' && words[1]?.text.toUpperCase() === 'CHANGED' && words[2]?.text.toUpperCase() === 'SETTINGS')
+            showSettings = words[2];
+        if (showCreate && words[2]?.text.toUpperCase() === 'SETTINGS' && words[3]?.text.toUpperCase() === 'PROFILE')
+            showSettings = words[2];
         requireThat(first && ['SELECT', 'WITH', 'SHOW', 'DESCRIBE', 'DESC', 'EXPLAIN'].includes(first), 403, 'READ_ONLY_SQL', 'Only read-only SQL is enabled', 'Use the separately authorized import flow for data insertion.');
         for (let i = 0; i < tokens.length; i++) {
             const token = tokens[i]!;
             if (token.kind !== 'word')
                 continue;
             const upper = token.text.toUpperCase();
+            if (upper === 'CREATE' && showCreate && token === words[1])
+                continue;
+            if (upper === 'SETTINGS' && token === showSettings)
+                continue;
             // `system.tables` is a qualified identifier, not a SYSTEM command.
             if (upper === 'SYSTEM' && tokens[i + 1]?.text === '.')
                 continue;

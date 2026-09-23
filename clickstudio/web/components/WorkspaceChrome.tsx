@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { Run, Script } from '../../shared/types';
 import { Button, cx, formatBytes, formatCount, Icon, Status, terminal } from './ui';
 import type { IconName } from './ui';
@@ -12,55 +11,16 @@ export type RunAction = {
     onSelect: () => void;
 };
 
-export function RunActionMenu({ runLabel, running, disabled, onRun, actions }: {
+export function RunActionGroup({ runLabel, running, disabled, onRun, actions }: {
     runLabel: string;
     running: boolean;
     disabled: boolean;
     onRun: () => void;
     actions: RunAction[];
 }) {
-    const [open, setOpen] = useState(false);
-    const root = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null), menu = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (!open) return;
-        const closeOutside = (event: PointerEvent) => {
-            if (!root.current?.contains(event.target as Node)) setOpen(false);
-        };
-        const closeOnEscape = (event: globalThis.KeyboardEvent) => {
-            if (event.key !== 'Escape') return;
-            event.preventDefault();
-            setOpen(false);
-            trigger.current?.focus();
-        };
-        const frame = window.requestAnimationFrame(() => menu.current?.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')?.focus());
-        document.addEventListener('pointerdown', closeOutside);
-        document.addEventListener('keydown', closeOnEscape);
-        return () => {
-            window.cancelAnimationFrame(frame);
-            document.removeEventListener('pointerdown', closeOutside);
-            document.removeEventListener('keydown', closeOnEscape);
-        };
-    }, [open]);
-
-    const moveMenuFocus = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-        const items = Array.from(menu.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? []);
-        if (!items.length) return;
-        const current = items.indexOf(document.activeElement as HTMLButtonElement);
-        const next = event.key === 'ArrowDown' ? (current + 1) % items.length
-            : event.key === 'ArrowUp' ? (current - 1 + items.length) % items.length
-                : event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : undefined;
-        if (next === undefined) return;
-        event.preventDefault();
-        items[next]?.focus();
-    };
-
-    return <div className="run-action-menu" ref={root}>
+    return <div className="run-action-group" role="group" aria-label="Run actions">
         <Button variant="primary" className="run-query-button" aria-label={runLabel} onClick={onRun} disabled={disabled}><Icon name="play"/>{running ? 'Running…' : 'Run'}<kbd>⌘ ↵</kbd></Button>
-        <button ref={trigger} className="run-action-trigger" type="button" aria-label="More run options" aria-haspopup="menu" aria-expanded={open} disabled={disabled} onClick={() => setOpen(value => !value)}><Icon name="chevron"/></button>
-        {open && <div className="run-action-popover" role="menu" aria-label="Run options" ref={menu} onKeyDown={moveMenuFocus}>
-            {actions.map(action => <button key={action.label} type="button" role="menuitem" className="run-action-item" disabled={action.disabled} title={action.title} onClick={() => { setOpen(false); action.onSelect(); }}><span>{action.label}</span>{action.shortcut && <kbd>{action.shortcut}</kbd>}</button>)}
-        </div>}
+        {actions.map(action => <Button key={action.label} variant="secondary" className="run-option-button" disabled={action.disabled} title={action.title} onClick={action.onSelect}>{action.label}{action.shortcut && <kbd>{action.shortcut}</kbd>}</Button>)}
     </div>;
 }
 

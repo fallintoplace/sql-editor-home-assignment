@@ -193,9 +193,10 @@
     .document-name input:focus { outline: 0; }
     .edit-indicator { padding: 4px 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font-family: var(--font-mono); font-size: 8px; }
     .editor-heading-actions { gap: 6px; }
-    .editor-toolbar { display: flex; min-height: 45px; flex: none; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 13px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel-raised) 82%, var(--page)); }
+    .editor-toolbar { display: flex; min-height: 45px; flex: none; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 13px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel-raised) 82%, var(--page)); }
     .editor-mode-label, .editor-actions { display: flex; align-items: center; gap: 9px; }
     .editor-mode-label { color: var(--text-soft); font-size: 10px; }
+    .editor-actions { min-width: 0; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; }
     .editor-language-dot { width: 6px; height: 6px; border-radius: 50%; background: #80a9db; box-shadow: 0 0 8px #80a9db66; }
     .toolbar-divider { width: 1px; height: 13px; background: var(--line-bright); }
     .button-base { display: inline-flex; min-height: 31px; flex: none; align-items: center; justify-content: center; gap: 7px; padding: 0 11px; border: 1px solid transparent; border-radius: 8px; font-size: 10px; font-weight: 620; line-height: 1; white-space: nowrap; cursor: pointer; transition: transform .18s ease, border-color .18s ease, background .18s ease, color .18s ease, box-shadow .18s ease; }
@@ -218,17 +219,10 @@
     .editor-heading-actions > [role="status"] { display: inline-flex; align-items: center; gap: 6px; border: 1px solid color-mix(in srgb, var(--amber) 38%, var(--line)); border-radius: 999px; background: color-mix(in srgb, var(--amber) 9%, var(--panel)); color: color-mix(in srgb, var(--amber) 82%, var(--text)); }
     .editor-heading-actions > [role="status"]::before { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--amber); content: ""; }
     .run-query-button { min-height: 34px; padding: 0 13px; font-size: 11px; }
-    .run-action-menu { position: relative; display: inline-flex; flex: none; overflow: visible; border-radius: 8px; box-shadow: 0 5px 15px color-mix(in srgb, var(--accent-action) 18%, transparent); }
-    .run-action-menu .run-query-button { min-width: 98px; border-radius: 8px 0 0 8px; box-shadow: none; }
-    .run-action-trigger { display: grid; width: 30px; min-height: 34px; flex: none; place-items: center; border: 1px solid color-mix(in srgb, var(--accent-action) 72%, white 4%); border-left-color: color-mix(in srgb, var(--accent-ink) 20%, transparent); border-radius: 0 8px 8px 0; background: linear-gradient(140deg, var(--accent-strong), var(--accent-action)); color: var(--accent-ink); cursor: pointer; }
-    .run-action-trigger:hover:not(:disabled) { filter: brightness(1.05); }
-    .run-action-trigger:disabled { cursor: not-allowed; opacity: .48; }
-    .run-action-trigger svg { width: 14px; height: 14px; }
-    .run-action-popover { position: absolute; z-index: 50; top: calc(100% + 7px); right: 0; display: grid; width: 220px; gap: 2px; padding: 5px; border: 1px solid var(--line-bright); border-radius: 10px; background: var(--panel-raised); box-shadow: var(--shadow); }
-    .run-action-item { display: flex; min-height: 34px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: var(--text-soft); font-size: 10px; text-align: left; cursor: pointer; }
-    .run-action-item:hover:not(:disabled) { background: var(--panel-hover); color: var(--text); }
-    .run-action-item:disabled { color: var(--muted); cursor: not-allowed; opacity: .5; }
-    .run-action-item kbd { padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); font-family: var(--font-mono); font-size: 8px; }
+    .run-action-group { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 5px; }
+    .run-action-group .run-query-button { min-width: 98px; }
+    .run-option-button { min-height: 34px; padding: 0 9px; font-size: 9px; letter-spacing: .02em; }
+    .run-option-button kbd { padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); font-family: var(--font-mono); font-size: 7px; }
     .sql-ai-button { color: var(--violet); }
     .sql-ai-button[aria-pressed="true"] { border-color: color-mix(in srgb, var(--violet) 25%, transparent); background: color-mix(in srgb, var(--violet) 8%, transparent); }
     .save-revision-button { min-height: 34px; }
@@ -838,8 +832,10 @@
     .sql-ai-button, .save-revision-button { width: 31px; min-width: 31px; padding: 0; font-size: 0; }
     .sql-ai-button svg, .save-revision-button svg { width: 15px; height: 15px; }
     .workspace-root.is-beginner .sql-ai-button, .workspace-root.is-beginner .save-revision-button { width: auto; min-width: 0; padding: 0 8px; font-size: 8px; }
-    .run-action-menu .run-query-button { min-width: 70px; padding: 0 8px; }
-    .run-action-trigger { width: 25px; }
+    .run-action-group { gap: 4px; }
+    .run-action-group .run-query-button { min-width: 70px; padding: 0 8px; }
+    .run-option-button { min-height: 30px; padding: 0 7px; font-size: 8px; }
+    .run-option-button kbd { display: none; }
     .parameters-row { align-items: stretch; gap: 7px; padding: 8px; }
     .parameters-label { min-width: 100%; }
     .parameter-field { min-width: calc(50% - 5px); flex: 1; }

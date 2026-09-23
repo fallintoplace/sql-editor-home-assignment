@@ -103,9 +103,15 @@ export interface Schema {
     columns: SchemaColumn[];
     tables: SchemaTable[];
     dictionaries?: SchemaDictionary[];
+    systemTableDocumentationNames?: string[];
     warnings: string[];
     metadataWarnings?: string[];
     truncated: boolean;
+}
+export interface ClickHouseSystemTableDocumentation {
+    name: string;
+    description: string;
+    serverVersion: string;
 }
 export interface Principal {
     id: string;

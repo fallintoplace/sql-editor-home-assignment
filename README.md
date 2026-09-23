@@ -27,14 +27,14 @@ npm run db:setup
 npm run dev
 ```
 
-Open `http://localhost:5173`, sign in with `CLICKSTUDIO_TOKEN` from `clickstudio/.env`, then test and trust the local connection. Keep `.env` private. Database and optional model-provider credentials stay on the server.
+Open `http://localhost:5173`, sign in with `CLICKSTUDIO_TOKEN` from `clickstudio/.env`, then review and trust the local connection. Keep `.env` private. Database and optional model-provider credentials stay on the server.
 
 ## What it includes
 
 - Run SQL and inspect typed, paginated results.
 - Format and validate ClickHouse SQL in the editor.
 - Run scripts and inspect each statement separately.
-- Inspect schema and ClickHouse table metadata.
+- Inspect the selected database and ClickHouse system tables, including native system-table docs from the connected server.
 - Import CSV, JSON, or NDJSON through preview, mapping, and explicit row-count confirmation.
 - Track execution progress, cancel queries, and reopen retained evidence.
 - Save query documents, build charts, and inspect execution plans.

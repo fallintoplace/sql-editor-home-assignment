@@ -1,6 +1,6 @@
 import { createClient, type ClickHouseClient } from '@clickhouse/client';
 import { randomUUID } from 'node:crypto';
-import type { Connection, Json, Manifest, Principal, Progress, Run, Schema } from '../shared/types.js';
+import type { ClickHouseSystemTableDocumentation, Connection, Json, Manifest, Principal, Progress, Run, Schema } from '../shared/types.js';
 import { enrichSchemaTables, type SchemaTableMetadata, type SchemaTableSkipIndex } from '../shared/schema.js';
 import { AppError, requireThat } from '../core/errors.js';
 import { collectCompactStream } from '../core/compact-stream.js';
@@ -63,7 +63,7 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
         } };
         const [schema, progress, queryLog, documentation, explain, pipeline] = await Promise.all([
             probe('SELECT name FROM system.columns LIMIT 1'), probe('SELECT query_id FROM system.processes LIMIT 0'), probe('SELECT query_id FROM system.query_log LIMIT 0'),
-            probe('SELECT name FROM system.documentation LIMIT 0'), probe('EXPLAIN SELECT 1'), probe('EXPLAIN PIPELINE graph = 1, compact = 0 SELECT 1'),
+            probe("SELECT name, description FROM system.documentation WHERE type = 'System Table' LIMIT 0"), probe('EXPLAIN SELECT 1'), probe('EXPLAIN PIPELINE graph = 1, compact = 0 SELECT 1'),
         ]);
         // KILL of a random, nonexistent own query checks cancellation permission without touching a real query.
         let cancellation: Manifest['cancellation'];
@@ -82,15 +82,15 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
     }
     async schema(id: string): Promise<Schema> {
         const database = this.profile(id).database;
-        const optionalRows = async <T>(label: string, sql: string): Promise<{ rows?: T[]; warning?: string }> => {
+        const optionalRows = async <T>(label: string, sql: string, parameters: Record<string, string> = { database }): Promise<{ rows?: T[]; warning?: string }> => {
             try {
-                return { rows: await this.rows<T>(id, sql, { database }) };
+                return { rows: await this.rows<T>(id, sql, parameters) };
             }
             catch {
                 return { warning: `${label} metadata is unavailable to this reader or ClickHouse version.` };
             }
         };
-        const [columns, tables, tableDetails, projections, skipIndexes, dictionaries] = await Promise.all([
+        const [columns, tables, systemColumns, systemTables, documentationNames, tableDetails, projections, skipIndexes, dictionaries] = await Promise.all([
             this.rows<{
                 database: string;
                 table: string;
@@ -104,6 +104,21 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
                 name: string;
                 engine: string;
             }>(id, 'SELECT database, name, engine FROM system.tables WHERE database = {database:String} ORDER BY name LIMIT 1001', { database }),
+            database === 'system' ? Promise.resolve({ rows: [] as Array<{ database: string; table: string; name: string; type: string; default_kind: string; comment: string }>, warning: undefined as string | undefined }) : optionalRows<{
+                database: string;
+                table: string;
+                name: string;
+                type: string;
+                default_kind: string;
+                comment: string;
+            }>('System table columns', 'SELECT database, table, name, type, default_kind, comment FROM system.columns WHERE database = {database:String} ORDER BY table, position LIMIT 5001', { database: 'system' }),
+            database === 'system' ? Promise.resolve({ rows: [] as Array<{ database: string; name: string; engine: string }>, warning: undefined as string | undefined }) : optionalRows<{
+                database: string;
+                name: string;
+                engine: string;
+            }>('System tables', 'SELECT database, name, engine FROM system.tables WHERE database = {database:String} ORDER BY name LIMIT 1001', { database: 'system' }),
+            this.manifests.get(id)?.documentation.available === false ? Promise.resolve({ rows: [] as Array<{ name: string }>, warning: undefined as string | undefined }) : optionalRows<{ name: string }>(
+                'System table documentation', "SELECT name FROM system.documentation WHERE type = 'System Table' AND notEmpty(description) ORDER BY name LIMIT 1001", {}),
             optionalRows<{
                 database: string;
                 name: string;
@@ -151,8 +166,9 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
                 toString(bytes_allocated) AS memory_bytes, toString(last_successful_update_time) AS last_successful_update
                 FROM system.dictionaries WHERE database = {database:String} OR database = '' ORDER BY database, name LIMIT 1001`),
         ]);
-        const tableTruncated = columns.length > 5000 || tables.length > 1000;
-        const metadataWarnings = [tableDetails.warning, projections.warning, skipIndexes.warning, dictionaries.warning].filter((warning): warning is string => Boolean(warning));
+        const allColumns = [...columns, ...(systemColumns.rows ?? [])], allTables = [...tables, ...(systemTables.rows ?? [])];
+        const tableTruncated = allColumns.length > 10000 || allTables.length > 2000 || columns.length > 5000 || tables.length > 1000 || (systemColumns.rows?.length ?? 0) > 5000 || (systemTables.rows?.length ?? 0) > 1000;
+        const metadataWarnings = [systemColumns.warning, systemTables.warning, documentationNames.warning, tableDetails.warning, projections.warning, skipIndexes.warning, dictionaries.warning].filter((warning): warning is string => Boolean(warning));
         if ((tableDetails.rows?.length ?? 0) > 1000)
             metadataWarnings.push('Table metadata preview truncated.');
         if ((projections.rows?.length ?? 0) > 5000)
@@ -161,6 +177,8 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
             metadataWarnings.push('Skip-index metadata preview truncated.');
         if ((dictionaries.rows?.length ?? 0) > 1000)
             metadataWarnings.push('Dictionary metadata preview truncated.');
+        if ((documentationNames.rows?.length ?? 0) > 1000)
+            metadataWarnings.push('System table documentation names truncated.');
         const tableMetadata: SchemaTableMetadata[] | undefined = tableDetails.rows?.slice(0, 1000).map(row => ({
             database: row.database,
             name: row.name,
@@ -185,7 +203,7 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
             sortingKey: row.sortingKey,
         }));
         const indexMetadata = skipIndexes.rows?.slice(0, 5000);
-        const tableRows = tables.slice(0, 1000);
+        const tableRows = allTables.slice(0, 2000);
         const enrichedTables = enrichSchemaTables(tableRows, {
             tables: tableMetadata,
             projections: projectionMetadata,
@@ -203,9 +221,17 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
             lastSuccessfulUpdate: row.last_successful_update,
         }));
         const truncated = tableTruncated;
-        return { connectionId: id, fetchedAt: new Date().toISOString(), tables: enrichedTables, columns: columns.slice(0, 5000).map(c => ({ database: c.database, table: c.table, name: c.name, type: c.type, defaultKind: c.default_kind, comment: c.comment })),
-            dictionaries: dictionaryRows, metadataWarnings: metadataWarnings.length ? metadataWarnings : undefined, truncated,
-            warnings: [`Schema is scoped to ${database}. Configure another profile for another database.`, ...(truncated ? ['Schema preview truncated.'] : [])] };
+        return { connectionId: id, fetchedAt: new Date().toISOString(), tables: enrichedTables, columns: allColumns.slice(0, 10000).map(c => ({ database: c.database, table: c.table, name: c.name, type: c.type, defaultKind: c.default_kind, comment: c.comment })),
+            dictionaries: dictionaryRows, systemTableDocumentationNames: documentationNames.rows?.slice(0, 1000).map(row => row.name), metadataWarnings: metadataWarnings.length ? metadataWarnings : undefined, truncated,
+            warnings: [database === 'system' ? 'Schema is scoped to the ClickHouse system database.' : `Schema includes ${database} and ClickHouse system tables. Configure another profile for another database.`, ...(truncated ? ['Schema preview truncated.'] : [])] };
+    }
+    async systemTableDocumentation(id: string, name: string): Promise<ClickHouseSystemTableDocumentation | undefined> {
+        const row = (await this.rows<{ name: string; description: string }>(id,
+            "SELECT name, description FROM system.documentation WHERE type = 'System Table' AND name = {name:String} LIMIT 1", { name }))[0];
+        if (!row)
+            return undefined;
+        const serverVersion = this.manifests.get(id)?.serverVersion ?? (await this.rows<{ version: string }>(id, 'SELECT version() AS version').catch(() => []))[0]?.version ?? 'unknown';
+        return { ...row, serverVersion };
     }
     async execute(run: Run, signal: AbortSignal, progress: (p: Progress) => void) {
         let timer: ReturnType<typeof setInterval> | undefined, polling = false;

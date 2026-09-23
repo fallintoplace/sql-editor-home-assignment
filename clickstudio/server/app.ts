@@ -22,7 +22,7 @@ import { DemoDriver } from './demo.js';
 import { OpenAIDriver } from './openai.js';
 import { OpenAIVoiceService, safetyIdentifier, type VoiceService } from './voice.js';
 import { telemetry, recordRun } from './telemetry.js';
-type Driver = QueryDriver & ImportDriver & Pick<ClickHouseDriver, 'connection' | 'connections' | 'test' | 'targets' | 'profileEvidence' | 'profilePipeline' | 'close'>;
+type Driver = QueryDriver & ImportDriver & Pick<ClickHouseDriver, 'connection' | 'connections' | 'test' | 'targets' | 'profileEvidence' | 'profilePipeline' | 'systemTableDocumentation' | 'close'>;
 const CLICKHOUSE_WASM_PARSER_PR = 118591;
 const CLICKHOUSE_WASM_PARSER_SHA = '68085149131ee43144b975f7c0ec01137208fb8a';
 const CLICKHOUSE_WASM_PARSER_URL = `https://clickhouse-builds.s3.amazonaws.com/PRs/${CLICKHOUSE_WASM_PARSER_PR}/${CLICKHOUSE_WASM_PARSER_SHA}/build_wasm_parser/parser.wasm`;
@@ -115,6 +115,17 @@ export function createApp(config: Config, overrides: {
     app.post('/api/connections/:id/test', async (req, res) => { canWrite(principal(res)); res.json(await driver.test(id(req))); });
     app.post('/api/connections/:id/trust', (req, res) => { const p = principal(res), v = body(req), connectionId = id(req); requireThat(v.confirmation === connectionId, 400, 'TRUST_CONFIRMATION', 'Confirm the selected connection ID'); runs.trust(p, connectionId, boolean(v.trusted, 'trusted')); res.json({ trusted: runs.isTrusted(p, connectionId) }); });
     app.get('/api/connections/:id/schema', async (req, res) => { const p = principal(res), c = id(req); requireThat(authorized(p, c), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before inspecting its schema'); res.json(await driver.schema(c)); });
+    app.get('/api/connections/:id/documentation', async (req, res) => {
+        const p = principal(res), connectionId = id(req);
+        requireThat(authorized(p, connectionId), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before inspecting its documentation');
+        const name = text(req.query.name, 'name', 128);
+        requireThat(/^[A-Za-z_][A-Za-z0-9_]*$/.test(name), 400, 'INVALID_REQUEST', 'name must be a system table name');
+        const capability = driver.connection(p, connectionId).manifest?.documentation;
+        requireThat(capability?.available !== false, 409, 'CAPABILITY_UNAVAILABLE', capability?.reason ?? 'System documentation is unavailable for this connection');
+        const documentation = await driver.systemTableDocumentation(connectionId, name);
+        requireThat(documentation, 404, 'DOCUMENTATION_NOT_FOUND', `No ClickHouse documentation is available for system.${name}`);
+        res.json(documentation);
+    });
     app.get('/api/connections/:id/import-targets', (req, res) => { driver.connection(principal(res), id(req)); res.json(driver.targets(id(req))); });
     app.get('/api/runs', (req, res) => res.json(runs.list(principal(res), typeof req.query.connectionId === 'string' ? req.query.connectionId : undefined, typeof req.query.documentId === 'string' ? req.query.documentId : undefined)));
     app.post('/api/runs', (req, res) => { const run = runs.submit(principal(res), req.body); if (!run.traceId && res.locals.traceId) {

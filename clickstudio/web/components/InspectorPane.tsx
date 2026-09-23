@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
-import type { AssistantAction, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Run, Schema, SchemaDictionary, SchemaTable } from '../../shared/types';
+import type { AssistantAction, ClickHouseSystemTableDocumentation, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Run, Schema, SchemaDictionary, SchemaTable } from '../../shared/types';
 import { quoteIdentifier } from '../../shared/sql';
 import { AssistantWorkflow } from './AssistantWorkflow';
 import { Button, cx, formatBytes, formatCount, Icon, inspectorLabel, Status } from './ui';
 import type { IconName } from './ui';
 import type { AssistantContext, Connected, Inspector } from '../workspace-types';
+import { api, message } from '../api';
 
 export type InspectorPaneProps = {
     inspector: Inspector;
@@ -96,6 +97,7 @@ export function InspectorPane({ inspector, setInspector, connection, schema, sch
                         <button type="button" className="insert-table-button" onClick={() => onInsert(`${quoteIdentifier(table.database)}.${quoteIdentifier(table.name)}`)}>Insert table name <span>↵</span></button>
                         <TableMetadata table={table}/>
                         <div className="schema-columns">{schema.columns.filter(column => column.database === table.database && column.table === table.name && (!search || `${column.name} ${column.type}`.toLowerCase().includes(search.toLowerCase()))).map(column => <button type="button" className="schema-column" key={column.name} title={column.comment || column.type} onClick={() => onInsert(quoteIdentifier(column.name))}><span className="column-type-dot"/><span>{column.name}</span><code>{column.type}</code></button>)}</div>
+                        {table.database === 'system' && schema.systemTableDocumentationNames?.includes(table.name) && connection.dataSource !== 'fixture' && connection.trusted && connection.manifest?.documentation.available !== false && <SystemTableDocumentation key={connection.id} connectionId={connection.id} name={table.name} serverVersion={connection.manifest?.serverVersion ?? 'current server'}/>}
                     </div>
                 </details>)}
                 {trusted && schema?.dictionaries !== undefined && <DictionaryList dictionaries={schema.dictionaries} search={search}/>}
@@ -119,7 +121,45 @@ function tableSummary(table: SchemaTable): string {
         table.projections === undefined ? undefined : `${table.projections.length} projections`,
         table.skipIndexes === undefined ? undefined : `${table.skipIndexes.length} skip indexes`,
     ].filter((value): value is string => Boolean(value));
-    return values.join(' · ') || 'ClickHouse metadata unavailable';
+    return values.join(' · ') || (table.database === 'system' ? 'ClickHouse system table' : 'ClickHouse metadata unavailable');
+}
+
+function SystemTableDocumentation({ connectionId, name, serverVersion }: { connectionId: string; name: string; serverVersion: string }) {
+    const [open, setOpen] = useState(false);
+    const [documentation, setDocumentation] = useState<ClickHouseSystemTableDocumentation>();
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const request = useRef<AbortController | undefined>(undefined);
+
+    useEffect(() => () => request.current?.abort(), []);
+
+    const toggle = async () => {
+        if (open) { setOpen(false); return; }
+        setOpen(true);
+        if (documentation || loading) return;
+        const controller = new AbortController();
+        request.current = controller;
+        setLoading(true);
+        setError('');
+        try {
+            const result = await api<ClickHouseSystemTableDocumentation>(`/connections/${encodeURIComponent(connectionId)}/documentation?name=${encodeURIComponent(name)}`, { signal: controller.signal });
+            if (!controller.signal.aborted) setDocumentation(result);
+        } catch (caught) {
+            if (!controller.signal.aborted) setError(message(caught));
+        } finally {
+            if (!controller.signal.aborted) setLoading(false);
+        }
+    };
+
+    return <div className="grid gap-2">
+        <Button variant="secondary" className="w-full justify-start" aria-expanded={open} onClick={() => void toggle()}>{open ? 'Hide ClickHouse documentation' : 'Read ClickHouse documentation'}</Button>
+        {open && <article aria-label={`ClickHouse documentation for ${name}`} className="grid gap-2 rounded-lg border border-[var(--line)] bg-[var(--page-raised)] p-2.5">
+            <div className="flex items-center justify-between gap-2 text-[7px] font-bold tracking-[.1em] text-[var(--muted)]"><span>SERVER DOCUMENTATION</span><span>ClickHouse {documentation?.serverVersion ?? serverVersion}</span></div>
+            {loading && <p className="text-[9px] text-[var(--muted)]">Loading documentation…</p>}
+            {error && <p role="alert" className="text-[9px] text-[var(--amber)]">{error}</p>}
+            {documentation && <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-sans text-[9px] leading-relaxed text-[var(--text-soft)]">{documentation.description}</pre>}
+        </article>}
+    </div>;
 }
 
 function TableMetadata({ table }: { table: SchemaTable }) {

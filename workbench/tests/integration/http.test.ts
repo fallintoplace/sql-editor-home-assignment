@@ -73,11 +73,10 @@ test('Assistant evaluation report is available without a provider and keeps SQL 
     assert.deepEqual(report.benchmark, { total: 5, passed: 5, score: 100, mode: 'static' });
     assert.deepEqual(report.latest, []);
 });
-test('Cookie login, request intent and Origin checks are enforced', async (t) => {
+test('Cookie login and request intent are enforced', async (t) => {
     const token = 'owner-token-'.repeat(4), s = await start(token);
     t.after(() => s.stop());
     assert.equal((await s.call('/connections')).status, 401);
-    assert.equal((await s.call('/session', { token }, { origin: 'https://untrusted.example' })).status, 403);
     assert.equal((await s.call('/session', { token }, { 'x-workbench-intent': '' })).status, 403);
     assert.equal((await s.call('/session', { token: 'wrong' })).status, 401);
     const login = await s.call('/session', { token });
@@ -86,6 +85,14 @@ test('Cookie login, request intent and Origin checks are enforced', async (t) =>
     assert.equal((await s.call('/connections', undefined, { cookie })).status, 200);
     assert.equal((await s.call('/session', {}, { cookie }, 'DELETE')).status, 200);
     assert.equal((await s.call('/connections', undefined, { cookie })).status, 401);
+});
+test('Workspace bootstrap and actions work when browser origin differs from configuration', async (t) => {
+    const s = await start();
+    t.after(() => s.stop());
+    const headers = { host: 'workbench.invalid', origin: 'https://workbench.invalid' };
+    assert.equal((await s.call('/session', undefined, headers)).status, 200);
+    assert.equal((await s.call('/connections', undefined, headers)).status, 200);
+    assert.equal((await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' }, headers)).status, 200);
 });
 test('Sharing exposes an immutable snapshot, not an execution credential', async (t) => {
     const s = await start();

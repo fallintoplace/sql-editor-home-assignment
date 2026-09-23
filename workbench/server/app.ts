@@ -73,7 +73,6 @@ export function createApp(config: Config, overrides: {
     const imports = new ImportService(store, driver, authorized), monitors = new MonitorService(store, runs, artifacts), sessions = new SessionService(config.token), redact = redactor(config), parserWasm = overrides.parserWasm ?? cachedClickHouseParserWasm;
     const secretFree = (value: unknown) => !configuredSecrets(config).some(secret => JSON.stringify(value).includes(secret));
     const safeExport = (value: unknown) => requireThat(secretFree(value), 400, 'SECRET_IN_EXPORT', 'This data contains a configured secret and cannot be exported or shared');
-    // No CORS and no trust-proxy shortcut. A reverse proxy must preserve the configured Host and Origin.
     app.disable('x-powered-by');
     app.set('trust proxy', false);
     app.use((req, res, next) => {
@@ -84,17 +83,11 @@ export function createApp(config: Config, overrides: {
         res.setHeader('X-Frame-Options', 'DENY');
         res.setHeader('Permissions-Policy', 'camera=(), microphone=(self), geolocation=()');
         res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws://localhost:5173 ws://127.0.0.1:5173; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
-        const allowedHosts = new Set([new URL(config.origin).host, `localhost:${config.port}`, `127.0.0.1:${config.port}`]);
-        if (!allowedHosts.has(req.get('host') ?? ''))
-            return res.status(403).json({ error: { code: 'HOST_NOT_ALLOWED', message: 'Use the configured application origin' } });
         if (req.path.startsWith('/api')) {
             res.setHeader('Cache-Control', 'no-store');
             if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
                 if (req.get('x-workbench-intent') !== '1')
                     return res.status(403).json({ error: { code: 'REQUEST_INTENT', message: 'The workspace action header is required' } });
-                const origin = req.get('origin');
-                if (origin && origin !== config.origin)
-                    return res.status(403).json({ error: { code: 'ORIGIN_NOT_ALLOWED', message: 'The request origin is not allowed' } });
             }
         }
         next();

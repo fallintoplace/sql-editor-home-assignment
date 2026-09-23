@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, message, post } from './api';
 import { Button, cx, Icon, SelectControl } from './components/ui';
 import { Workspace } from './Workspace';
-import { getCopy, localeOptions, themeAppearance, themeOptions, type ExperienceLevel, type Locale, type Theme } from './i18n';
+import { experienceOptions, getCopy, localeOptions, themeAppearance, themeOptions, type ExperienceLevel, type Locale, type Theme } from './i18n';
 import { RadioGroup } from '@clickhouse/click-ui/RadioGroup';
 import clickhouseLogomarkDark from './assets/clickhouse-logomark-dark.svg';
 import clickhouseLogomarkLight from './assets/clickhouse-logomark-light.svg';
@@ -12,7 +12,7 @@ const connectionLabel = (connection: Connected, demo: boolean) => demo && connec
 const pref = <T extends string>(key: string, values: readonly T[], fallback: T): T => {
     try {
         const value = localStorage.getItem(key);
-        return values.includes(value as T) ? value as T : fallback;
+        return values.find(candidate => candidate === value) ?? fallback;
     } catch { return fallback; }
 };
 
@@ -120,15 +120,18 @@ function App() {
             <div className="topbar-spacer"/>
             <div className="experience-switch">
                 <span className="mode-caption">WORKSPACE</span>
-                <RadioGroup className="navbar-mode-control" value={experience} onValueChange={value => setExperience(value as ExperienceLevel)} aria-label="Workspace mode" inline orientation="horizontal" dir="end">
+                <RadioGroup className="navbar-mode-control" value={experience} onValueChange={value => {
+                    const selected = experienceOptions(copy).find(option => option.value === value);
+                    if (selected) setExperience(selected.value);
+                }} aria-label="Workspace mode" inline orientation="horizontal" dir="end">
                     <RadioGroup.Item value="beginner" className={`navbar-mode-option is-beginner ${experience === 'beginner' ? 'is-active' : ''}`} label={copy.app.beginner}/>
                     <RadioGroup.Item value="expert" className={`navbar-mode-option is-expert ${experience === 'expert' ? 'is-active' : ''}`} label={copy.app.expert}/>
                 </RadioGroup>
             </div>
             <div className="topbar-divider topbar-divider-short"/>
             <div className="topbar-preferences">
-                <SelectControl label={copy.app.language} value={locale} options={localeOptions} onChange={value => setLocale(value as Locale)}/>
-                <SelectControl label={copy.app.theme} value={theme} options={themeOptions} onChange={value => setTheme(value as Theme)}/>
+                <SelectControl label={copy.app.language} value={locale} options={localeOptions} onChange={setLocale}/>
+                <SelectControl label={copy.app.theme} value={theme} options={themeOptions} onChange={setTheme}/>
             </div>
         </header>
         {connection ? <Workspace key={connection.id} connection={connection} connectionLabel={connectionLabel(connection, session.demo)} connections={connections} onSelectConnection={selectConnection} onRefreshConnections={async () => { const latest = await api<Connected[]>('/connections'); setConnections(latest); }} trustActionRef={trustActionRef} demoMode={session.demo} experience={experience} dark={dark} copy={copy} locale={locale}/> : <div className="empty-connection"><Icon name="schema"/><h1>{copy.app.name}</h1><p>No connection profiles are configured for this workspace.</p></div>}

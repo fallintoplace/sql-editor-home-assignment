@@ -4,7 +4,9 @@ export type Connected = Connection & { trusted: boolean };
 export type Session = { principal: Principal | null; requiresLogin: boolean; demo: boolean };
 export type Inspector = 'schema' | 'history' | 'documents' | 'details' | 'profile' | 'pipeline' | 'assistant';
 export type ResultsView = 'results' | 'chart' | 'insights';
-export type BusyAction = 'run' | 'script' | 'save' | 'ai' | '';
+export type BusyAction = 'run' | 'script' | 'save' | '';
+export type RunEventState = 'idle' | 'live' | 'reconnecting';
+export type SelectOption<Value extends string> = { value: Value; label: string };
 export type AssistantContext = { id: string; summary: string[]; key: string };
 
 export type SpeechRecognitionLike = {
@@ -18,4 +20,11 @@ export type SpeechRecognitionLike = {
     stop: () => void;
     abort: () => void;
 };
-export type SpeechWindow = Window & { SpeechRecognition?: new () => SpeechRecognitionLike; webkitSpeechRecognition?: new () => SpeechRecognitionLike };
+export type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
+
+declare global {
+    interface Window {
+        SpeechRecognition?: SpeechRecognitionConstructor;
+        webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    }
+}

@@ -4,6 +4,12 @@ import { api, message, post, RequestError } from '../api';
 
 type ImportFormat = 'csv' | 'json' | 'ndjson';
 type Step = 'file' | 'mapping' | 'review' | 'status';
+const importSteps = [
+    { id: 'file', label: 'File' },
+    { id: 'mapping', label: 'Map' },
+    { id: 'review', label: 'Review' },
+    { id: 'status', label: 'Import' },
+] as const satisfies readonly { id: Step; label: string }[];
 type ImportPreview = {
     id: string;
     name: string;
@@ -30,6 +36,22 @@ type ImportJob = {
 };
 type PendingImport = { id: string; table: string; rows: number; name: string };
 type BusyAction = '' | 'setup' | 'preview' | 'mapping' | 'commit' | 'recover';
+type ImportWizardProps = {
+    open: boolean;
+    connectionId: string;
+    trusted: boolean;
+    demoMode: boolean;
+    onClose: () => void;
+    onImported: () => void;
+};
+
+function isPendingImport(value: unknown): value is PendingImport {
+    return typeof value === 'object' && value !== null && !Array.isArray(value) &&
+        'id' in value && typeof value.id === 'string' && value.id.length > 0 &&
+        'table' in value && typeof value.table === 'string' && value.table.length > 0 &&
+        'rows' in value && typeof value.rows === 'number' && Number.isSafeInteger(value.rows) && value.rows >= 0 &&
+        'name' in value && typeof value.name === 'string';
+}
 
 const MAX_FILE_BYTES = 2_000_000;
 const importStateKey = (connectionId: string) => `clickstudio:import:${connectionId}:v1`;
@@ -58,14 +80,7 @@ function initialFields(sourceColumns: string[], destinations: SchemaColumn[]): R
     return Object.fromEntries(sourceColumns.map(column => [column, writableNames.has(column) ? column : '']));
 }
 
-export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, onImported }: {
-    open: boolean;
-    connectionId: string;
-    trusted: boolean;
-    demoMode: boolean;
-    onClose: () => void;
-    onImported: () => void;
-}) {
+export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, onImported }: ImportWizardProps) {
     const dialogRef = useRef<HTMLDialogElement>(null);
     const onImportedRef = useRef(onImported);
     const reportedJobRef = useRef<string | undefined>(undefined);
@@ -136,20 +151,24 @@ export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, o
         let stored: PendingImport | undefined;
         try {
             const value = localStorage.getItem(key);
-            if (value) stored = JSON.parse(value) as PendingImport;
+            if (value) {
+                const parsed: unknown = JSON.parse(value);
+                if (isPendingImport(parsed)) stored = parsed;
+            }
         } catch { }
 
-        if (stored?.id && stored.table && Number.isFinite(stored.rows)) {
-            setPendingImport(stored);
+        const recovery = stored;
+        if (recovery) {
+            setPendingImport(recovery);
             setStep('status');
             setBusy('recover');
-            void api<ImportJob>(`/imports/${encodeURIComponent(stored.id)}`, { signal: controller.signal }).then(next => {
+            void api<ImportJob>(`/imports/${encodeURIComponent(recovery.id)}`, { signal: controller.signal }).then(next => {
                 if (!current) return;
                 setJob(next);
                 if (next.status === 'succeeded') reportImported(next.id);
             }).catch(() => {
                 if (!current) return;
-                setJob({ id: stored!.id, table: stored!.table, rows: stored!.rows, status: 'unknown', error: 'The previous import status could not be confirmed. Inspect the destination before retrying.' });
+                setJob({ id: recovery.id, table: recovery.table, rows: recovery.rows, status: 'unknown', error: 'The previous import status could not be confirmed. Inspect the destination before retrying.' });
             }).finally(() => { if (current) setBusy(''); });
             return () => { current = false; controller.abort(); };
         }
@@ -365,10 +384,9 @@ export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, o
             </header>
 
             <nav aria-label="Import steps" className="grid grid-cols-4 border-b border-[var(--line)] bg-[var(--page)] px-3 py-2 sm:px-7">
-                {(['file', 'mapping', 'review', 'status'] as Step[]).map((item, index) => {
-                    const labels = ['File', 'Map', 'Review', 'Import'];
-                    const currentIndex = (['file', 'mapping', 'review', 'status'] as Step[]).indexOf(step);
-                    return <div key={item} aria-current={step === item ? 'step' : undefined} className={`flex items-center gap-2 px-2 py-1 text-[10px] font-medium sm:text-xs ${step === item ? 'text-[var(--accent)]' : currentIndex > index ? 'text-[var(--text-soft)]' : 'text-[var(--muted)]'}`}><span className={`grid size-5 place-items-center rounded-full border text-[9px] ${step === item ? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]' : currentIndex > index ? 'border-[var(--line-bright)] bg-[var(--panel-raised)]' : 'border-[var(--line)]'}`}>{index + 1}</span>{labels[index]}</div>;
+                {importSteps.map((item, index) => {
+                    const currentIndex = importSteps.findIndex(candidate => candidate.id === step);
+                    return <div key={item.id} aria-current={step === item.id ? 'step' : undefined} className={`flex items-center gap-2 px-2 py-1 text-[10px] font-medium sm:text-xs ${step === item.id ? 'text-[var(--accent)]' : currentIndex > index ? 'text-[var(--text-soft)]' : 'text-[var(--muted)]'}`}><span className={`grid size-5 place-items-center rounded-full border text-[9px] ${step === item.id ? 'border-[var(--accent)] bg-[var(--accent)] text-[var(--accent-ink)]' : currentIndex > index ? 'border-[var(--line-bright)] bg-[var(--panel-raised)]' : 'border-[var(--line)]'}`}>{index + 1}</span>{item.label}</div>;
                 })}
             </nav>
 

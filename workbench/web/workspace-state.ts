@@ -47,7 +47,8 @@ const strings = (value: unknown): string[] => Array.isArray(value) ? value.filte
 const position = (value: unknown, length: number) => typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(length, Math.trunc(value))) : 0;
 const index = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 const revision = (value: unknown) => index(value) && value > 0 ? value : undefined;
-const chartKinds: ChartConfig['kind'][] = ['table', 'number', 'line', 'bar'];
+const chartKinds = ['table', 'number', 'line', 'bar'] as const satisfies readonly ChartConfig['kind'][];
+const isChartKind = (value: unknown): value is ChartConfig['kind'] => chartKinds.some(kind => kind === value);
 
 /** Browser storage is untrusted input; preserve SQL while repairing optional metadata. */
 export function recoverDraft(value: unknown): Draft | undefined {
@@ -62,7 +63,7 @@ export function recoverDraft(value: unknown): Draft | undefined {
         serverId: id(value.serverId), baseRevision: revision(value.baseRevision),
         parameters: record(value.parameters) ? Object.fromEntries(Object.entries(value.parameters).filter((entry): entry is [string, string] => typeof entry[1] === 'string')) : {},
         chart: {
-            kind: chartKinds.includes(chart.kind as ChartConfig['kind']) ? chart.kind as ChartConfig['kind'] : 'table',
+            kind: isChartKind(chart.kind) ? chart.kind : 'table',
             x: index(chart.x) ? chart.x : 0,
             ys: Array.isArray(chart.ys) ? chart.ys.filter(index) : [], title: text(chart.title, 'Query result'),
         },

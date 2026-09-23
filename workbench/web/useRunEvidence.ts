@@ -3,6 +3,7 @@ import type { ProfilePipeline, QueryProfile, Result, ResultPage, Run, RunEvent }
 import { api, message } from './api';
 import { terminal } from './components/ui';
 import { useScopedValue } from './useScopedValue';
+import type { RunEventState } from './workspace-types';
 
 export function useRunEvidence({ activeRunId, connectionId, loadHistory, setError }: {
     activeRunId?: string;
@@ -16,7 +17,7 @@ export function useRunEvidence({ activeRunId, connectionId, loadHistory, setErro
     const [profile, setProfileForRun] = useScopedValue<QueryProfile>(activeRunId);
     const [pipeline, setPipelineForRun] = useScopedValue<ProfilePipeline>(activeRunId);
     const [page, setPage] = useState(0);
-    const [eventState, setEventState] = useState<'idle' | 'live' | 'reconnecting'>('idle');
+    const [eventState, setEventState] = useState<RunEventState>('idle');
     const resultPage = resultPageState?.page === page ? resultPageState.value : undefined;
     const running = Boolean(run && !terminal(run));
 

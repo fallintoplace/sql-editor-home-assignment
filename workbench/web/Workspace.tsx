@@ -9,7 +9,7 @@ import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { ImportWizard } from './components/ImportWizard';
 import { AssistantWorkflow } from './components/AssistantWorkflow';
 import { ChartView, InsightsView, ResultGrid } from './components/ResultViews';
-import { InspectorPane } from './components/InspectorPane';
+import { InspectorPane, type InspectorPaneProps } from './components/InspectorPane';
 import { Button, cx, Icon, Status, terminal } from './components/ui';
 import { EmptyWorkspace, ExecutionBar, RailButton, ScriptResults } from './components/WorkspaceChrome';
 import { checkpoint, closeDraft, MAX_TABS, newDraft, recover, reopenDraft, type Draft, type WorkspaceState } from './workspace-state';
@@ -19,7 +19,7 @@ import { useRunEvidence } from './useRunEvidence';
 import { useScriptExecution } from './useScriptExecution';
 import { useScopedValue } from './useScopedValue';
 import type { Copy, ExperienceLevel, Locale } from './i18n';
-import type { AssistantContext, BusyAction, Connected, Inspector, ResultsView, SpeechRecognitionLike, SpeechWindow } from './workspace-types';
+import type { AssistantContext, BusyAction, Connected, Inspector, ResultsView, SpeechRecognitionLike } from './workspace-types';
 
 const stateKey = (connectionId: string) => `clickstudio:workspace:${connectionId}:v1`;
 function safeSelectedStatement(sql: string, from: number, to: number) {
@@ -32,7 +32,7 @@ function assistantContextKey(connectionId: string, draftId: string, sql: string,
     return JSON.stringify({ connectionId, draftId, sql, parameters: Object.entries(parameters).sort(([left], [right]) => left.localeCompare(right)), runId, includeResult, action, question });
 }
 
-export function Workspace({ connection, connectionLabel, connections, onSelectConnection, onRefreshConnections, trustActionRef, demoMode, experience, dark, copy, locale }: {
+type WorkspaceProps = {
     connection: Connected;
     connectionLabel: string;
     connections: Connected[];
@@ -44,7 +44,9 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     dark: boolean;
     copy: Copy;
     locale: Locale;
-}) {
+};
+
+export function Workspace({ connection, connectionLabel, connections, onSelectConnection, onRefreshConnections, trustActionRef, demoMode, experience, dark, copy, locale }: WorkspaceProps) {
     const key = stateKey(connection.id);
     const [workspace, setWorkspace] = useState<WorkspaceState>(() => recover(key));
     const workspaceRef = useRef(workspace);
@@ -105,7 +107,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
 
     const startVoiceInput = () => {
         if (voiceListening) { recognitionRef.current?.stop(); return; }
-        const SpeechRecognition = (window as SpeechWindow).SpeechRecognition ?? (window as SpeechWindow).webkitSpeechRecognition;
+        const SpeechRecognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
         if (!SpeechRecognition) { setVoiceError('Voice input is not available in this browser. You can type your question instead.'); return; }
         setVoiceError('');
         promptBeforeVoiceRef.current = assistantQuestion.trimEnd();
@@ -451,7 +453,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         onDecideProposal: (decision: 'accepted' | 'rejected') => void decideAssistantProposal(decision),
         onRunQuery: () => void execute(),
         runDisabled: !trusted || Boolean(busy),
-    };
+    } satisfies InspectorPaneProps;
 
     return <div className={cx('workspace-root', experience === 'expert' && 'is-expert')}>
         {error && <div className="toast toast-error animate-enter" role="alert"><span>!</span>{error}<button onClick={() => setError('')} aria-label="Dismiss error"><Icon name="close"/></button></div>}

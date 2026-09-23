@@ -1,6 +1,15 @@
 import type { AssistantAction, Proposal } from '../../shared/types';
 import { Button, cx, Icon } from './ui';
-import type { AssistantContext, SpeechWindow } from '../workspace-types';
+import type { AssistantContext } from '../workspace-types';
+
+const assistantActionOptions = [
+    { value: 'generate', label: 'Write a query' },
+    { value: 'explain', label: 'Explain this SQL' },
+    { value: 'repair', label: 'Fix a query error' },
+    { value: 'review', label: 'Review SQL' },
+    { value: 'performance', label: 'Analyze performance' },
+    { value: 'result', label: 'Explain the result' },
+] as const satisfies readonly { value: AssistantAction; label: string }[];
 
 export type AssistantWorkflowProps = {
     mode: 'beginner' | 'expert';
@@ -40,7 +49,7 @@ function AssistantOutput({ mode, sql, context, proposal, busy, error, onRequestP
 
 export function AssistantWorkflow({ mode, sql, action, onActionChange, question, onQuestionChange, context, proposal, busy, error, trusted, runId, includeResult, onIncludeResult, onVoiceInput, voiceListening, voiceError, onPreview, onRequestProposal, onDecideProposal, onRunQuery, runDisabled, onSave, saveDisabled = false }: AssistantWorkflowProps) {
     const beginner = mode === 'beginner';
-    const speechAvailable = Boolean((window as SpeechWindow).SpeechRecognition ?? (window as SpeechWindow).webkitSpeechRecognition);
+    const speechAvailable = Boolean(window.SpeechRecognition ?? window.webkitSpeechRecognition);
     const output = <AssistantOutput mode={mode} sql={sql} context={context} proposal={proposal} busy={busy} error={error} onRequestProposal={onRequestProposal} onDecideProposal={onDecideProposal} onRunQuery={onRunQuery} runDisabled={runDisabled}/>;
     if (beginner) return <section className="beginner-ai-surface animate-enter" aria-label="Ask AI to write a query">
         <header className="beginner-ai-toolbar"><div className="beginner-ai-product"><span className="beginner-ai-mark"><Icon name="assistant"/></span><div><span className="eyebrow">NATURAL LANGUAGE SQL</span><strong>Ask in plain language</strong></div></div><div className="beginner-ai-toolbar-actions">{onSave && <Button variant="secondary" onClick={onSave} disabled={saveDisabled}>Save draft</Button>}</div></header>
@@ -52,5 +61,5 @@ export function AssistantWorkflow({ mode, sql, action, onActionChange, question,
             {(context || proposal || error) && <div className="beginner-ai-output">{output}</div>}
         </div>
     </section>;
-    return <section className="assistant-panel"><div className="assistant-safety"><span className="assistant-glyph"><Icon name="assistant"/></span><div><strong>AI, with you in control.</strong><p>Review context, request a proposal, then decide whether to apply it. Nothing executes automatically.</p></div></div><label className="field-label">ACTION<select className="field-input" value={action} onChange={event => onActionChange(event.target.value as AssistantAction)}><option value="generate">Write a query</option><option value="explain">Explain this SQL</option><option value="repair">Fix a query error</option><option value="review">Review SQL</option><option value="performance">Analyze performance</option><option value="result">Explain the result</option></select></label><label className="field-label">WHAT WOULD YOU LIKE TO KNOW?<textarea className="field-textarea" value={question} onChange={event => onQuestionChange(event.target.value)} placeholder="Describe the question, error, or improvement you want…" rows={4}/></label><label className="include-result"><input type="checkbox" checked={includeResult} onChange={event => onIncludeResult(event.target.checked)} disabled={!runId}/><span><strong>Include selected retained result</strong><small>Rows may contain sensitive data. Inspect before sharing.</small></span></label>{voiceError && <div className="callout callout-error" role="alert">{voiceError}</div>}<div className="assistant-actions"><Button variant="secondary" className="w-full" disabled={!trusted || busy} onClick={onPreview}>{busy && !context ? 'Preparing context…' : context ? 'Refresh context preview' : 'Preview what will be shared'}</Button>{output}</div></section>;
+    return <section className="assistant-panel"><div className="assistant-safety"><span className="assistant-glyph"><Icon name="assistant"/></span><div><strong>AI, with you in control.</strong><p>Review context, request a proposal, then decide whether to apply it. Nothing executes automatically.</p></div></div><label className="field-label">ACTION<select className="field-input" value={action} onChange={event => { const option = assistantActionOptions.find(candidate => candidate.value === event.target.value); if (option) onActionChange(option.value); }}>{assistantActionOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label className="field-label">WHAT WOULD YOU LIKE TO KNOW?<textarea className="field-textarea" value={question} onChange={event => onQuestionChange(event.target.value)} placeholder="Describe the question, error, or improvement you want…" rows={4}/></label><label className="include-result"><input type="checkbox" checked={includeResult} onChange={event => onIncludeResult(event.target.checked)} disabled={!runId}/><span><strong>Include selected retained result</strong><small>Rows may contain sensitive data. Inspect before sharing.</small></span></label>{voiceError && <div className="callout callout-error" role="alert">{voiceError}</div>}<div className="assistant-actions"><Button variant="secondary" className="w-full" disabled={!trusted || busy} onClick={onPreview}>{busy && !context ? 'Preparing context…' : context ? 'Refresh context preview' : 'Preview what will be shared'}</Button>{output}</div></section>;
 }

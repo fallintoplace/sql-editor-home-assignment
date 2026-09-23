@@ -1,3 +1,5 @@
+import type { SelectOption } from './workspace-types';
+
 export type Locale = 'en' | 'de' | 'es' | 'nl' | 'zh' | 'ru';
 export type Theme = 'monokai' | 'catppuccin-latte' | 'click-dark' | 'click-light';
 export type ExperienceLevel = 'beginner' | 'expert';
@@ -79,26 +81,26 @@ const translations: Record<Exclude<Locale, 'en'>, Partial<Copy['app'] & Copy['co
     ru: { language: 'Язык', theme: 'Тема', beginner: 'Начальный', expert: 'Эксперт', run: 'Запустить', runStatement: 'Выполнить запрос', cancel: 'Отмена', save: 'Сохранить', saveRevision: 'Сохранить ревизию', schema: 'Схема', history: 'Запуски', assistant: 'ИИ', results: 'Результаты', chart: 'График', insights: 'Инсайты', open: 'Открыть рабочую область', opening: 'Открытие рабочей области…' },
 };
 
-export const localeOptions: Array<{ value: Locale; label: string }> = [
+export const localeOptions = [
     { value: 'en', label: 'English' },
     { value: 'de', label: 'Deutsch' },
     { value: 'es', label: 'Español' },
     { value: 'nl', label: 'Nederlands' },
     { value: 'zh', label: '中文' },
     { value: 'ru', label: 'Русский' },
-];
+] as const satisfies readonly SelectOption<Locale>[];
 
-export const themeOptions: Array<{ value: Theme; label: string }> = [
+export const themeOptions = [
     { value: 'monokai', label: 'Monokai' },
     { value: 'catppuccin-latte', label: 'Catppuccin Latte' },
     { value: 'click-dark', label: 'ClickDark' },
     { value: 'click-light', label: 'ClickLight' },
-];
+] as const satisfies readonly SelectOption<Theme>[];
 
-export const experienceOptions = (copy: Copy): Array<{ value: ExperienceLevel; label: string }> => [
+export const experienceOptions = (copy: Copy) => [
     { value: 'beginner', label: copy.app.beginner },
     { value: 'expert', label: copy.app.expert },
-];
+] as const satisfies readonly SelectOption<ExperienceLevel>[];
 
 export function getCopy(locale: Locale): Copy {
     if (locale === 'en') return english;

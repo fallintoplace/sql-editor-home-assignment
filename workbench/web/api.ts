@@ -1,19 +1,36 @@
 import type { ApiError } from '../shared/types';
+
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+export type ApiOptions = {
+    method?: HttpMethod;
+    body?: unknown;
+    signal?: AbortSignal;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isApiError(value: unknown): value is ApiError {
+    return isRecord(value) && typeof value.code === 'string' && typeof value.message === 'string' &&
+        (value.remediation === undefined || typeof value.remediation === 'string') &&
+        (value.position === undefined || typeof value.position === 'number');
+}
+
 export class RequestError extends Error {
     constructor(public readonly status: number, public readonly detail: ApiError) { super(detail.message); }
 }
-export async function api<T>(path: string, options: {
-    method?: string;
-    body?: unknown;
-    signal?: AbortSignal;
-} = {}): Promise<T> {
+
+export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
     const response = await fetch(`/api${path}`, { method: options.method ?? 'GET', credentials: 'same-origin', signal: options.signal,
         headers: { 'X-Workbench-Intent': '1', ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }) }, body: options.body === undefined ? undefined : JSON.stringify(options.body) });
-    const content = await response.json().catch(() => null) as {
-        error?: ApiError;
-    } | null;
-    if (!response.ok)
-        throw new RequestError(response.status, content?.error ?? { code: 'NETWORK_RESPONSE', message: `The server returned HTTP ${response.status}` });
+    const content: unknown = await response.json().catch(() => null);
+    if (!response.ok) {
+        const detail = isRecord(content) && isApiError(content.error) ? content.error : {
+            code: 'NETWORK_RESPONSE', message: `The server returned HTTP ${response.status}`,
+        };
+        throw new RequestError(response.status, detail);
+    }
     return content as T;
 }
 export const post = <T,>(path: string, body: unknown = {}) => api<T>(path, { method: 'POST', body });

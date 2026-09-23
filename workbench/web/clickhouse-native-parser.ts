@@ -44,7 +44,7 @@ class ClickHouseNativeParser {
         });
         worker.addEventListener('message', event => {
             const data = event.data as WorkerReply | WorkerStatus;
-            if ('kind' in data && data.kind === 'status') {
+            if (!('id' in data)) {
                 this.setStatus(data.status, data.reason);
                 return;
             }

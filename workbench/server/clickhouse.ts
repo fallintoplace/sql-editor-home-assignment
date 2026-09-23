@@ -173,5 +173,19 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
             throw this.safeError(error);
         }
     }
+    async inspectInsert(id: string, queryId: string): Promise<'running' | 'succeeded' | 'unknown'> {
+        const [active, events] = await Promise.all([
+            this.rows<{ query_id: string }>(id, 'SELECT query_id FROM system.processes WHERE query_id = {id:String} LIMIT 1', { id: queryId }).catch(() => []),
+            this.rows<{ type: string; exception_code: string }>(id,
+                "SELECT type, toString(exception_code) AS exception_code FROM system.query_log WHERE query_id = {id:String} AND type IN ('QueryFinish', 'ExceptionWhileProcessing', 'ExceptionBeforeStart') ORDER BY event_time DESC LIMIT 1",
+                { id: queryId }).catch(() => []),
+        ]);
+        if (active.length)
+            return 'running';
+        const latest = events[0];
+        if (latest?.type === 'QueryFinish' && latest.exception_code === '0')
+            return 'succeeded';
+        return 'unknown';
+    }
     async close() { await Promise.all([...this.readers.values(), ...this.writers.values()].map(c => c.close())); }
 }

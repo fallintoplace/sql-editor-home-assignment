@@ -29,13 +29,18 @@ type ImportMapping = {
 };
 type ImportJob = {
     id: string;
+    connectionId?: string;
     table: string;
+    queryId?: string;
     rows: number;
+    createdAt?: string;
     status: 'running' | 'succeeded' | 'unknown';
     error?: string;
+    reconciliationRequired?: boolean;
+    reviewedAt?: string;
 };
 type PendingImport = { id: string; table: string; rows: number; name: string };
-type BusyAction = '' | 'setup' | 'preview' | 'mapping' | 'commit' | 'recover';
+type BusyAction = '' | 'setup' | 'preview' | 'mapping' | 'commit' | 'recover' | 'reconcile' | 'review';
 type ImportWizardProps = {
     open: boolean;
     connectionId: string;
@@ -80,6 +85,13 @@ function initialFields(sourceColumns: string[], destinations: SchemaColumn[]): R
     return Object.fromEntries(sourceColumns.map(column => [column, writableNames.has(column) ? column : '']));
 }
 
+function loadImportSetup(connectionId: string, signal?: AbortSignal) {
+    return Promise.all([
+        api<string[]>(`/connections/${encodeURIComponent(connectionId)}/import-targets`, signal ? { signal } : {}),
+        api<Schema>(`/connections/${encodeURIComponent(connectionId)}/schema`, signal ? { signal } : {}),
+    ]);
+}
+
 export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, onImported }: ImportWizardProps) {
     const dialogRef = useRef<HTMLDialogElement>(null);
     const onImportedRef = useRef(onImported);
@@ -96,7 +108,10 @@ export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, o
     const [fields, setFields] = useState<Record<string, string>>({});
     const [mapping, setMapping] = useState<ImportMapping>();
     const [job, setJob] = useState<ImportJob>();
+    const [recoverableJobs, setRecoverableJobs] = useState<ImportJob[]>([]);
     const [pendingImport, setPendingImport] = useState<PendingImport>();
+    const [recoveryState, setRecoveryState] = useState<'checking' | 'ready' | 'failed'>('checking');
+    const [recoveryAttempt, setRecoveryAttempt] = useState(0);
     const [busy, setBusy] = useState<BusyAction>('');
     const [error, setError] = useState('');
     const [confirmation, setConfirmation] = useState('');
@@ -131,18 +146,22 @@ export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, o
         setFields({});
         setMapping(undefined);
         setJob(undefined);
+        setRecoverableJobs([]);
         setPendingImport(undefined);
         setBusy('');
         setError('');
         setConfirmation('');
         setImportUnavailable('');
+        setRecoveryState('checking');
         reportedJobRef.current = undefined;
 
         if (demoMode) {
+            setRecoveryState('ready');
             setImportUnavailable('File imports are disabled in sample data. This workspace never writes to a database.');
             return () => { current = false; controller.abort(); };
         }
         if (!trusted) {
+            setRecoveryState('ready');
             setImportUnavailable('Trust this connection before importing data.');
             return () => { current = false; controller.abort(); };
         }
@@ -157,39 +176,47 @@ export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, o
             }
         } catch { }
 
-        const recovery = stored;
-        if (recovery) {
-            setPendingImport(recovery);
-            setStep('status');
-            setBusy('recover');
-            void api<ImportJob>(`/imports/${encodeURIComponent(recovery.id)}`, { signal: controller.signal }).then(next => {
-                if (!current) return;
-                setJob(next);
-                if (next.status === 'succeeded') reportImported(next.id);
-            }).catch(() => {
-                if (!current) return;
-                setJob({ id: recovery.id, table: recovery.table, rows: recovery.rows, status: 'unknown', error: 'The previous import status could not be confirmed. Inspect the destination before retrying.' });
-            }).finally(() => { if (current) setBusy(''); });
-            return () => { current = false; controller.abort(); };
-        }
-
-        setBusy('setup');
-        void Promise.all([
-            api<string[]>(`/connections/${encodeURIComponent(connectionId)}/import-targets`, { signal: controller.signal }),
-            api<Schema>(`/connections/${encodeURIComponent(connectionId)}/schema`, { signal: controller.signal }),
-        ]).then(([nextTargets, nextSchema]) => {
+        setBusy('recover');
+        void api<ImportJob[]>(`/imports?connectionId=${encodeURIComponent(connectionId)}&recoverable=true`, { signal: controller.signal }).then(async jobs => {
             if (!current) return;
-            setTargets(nextTargets);
-            setSchema(nextSchema);
-            const first = nextTargets.find(table => nextSchema.tables.some(item => `${item.database}.${item.name}` === table)) ?? '';
-            setTarget(first);
-            if (!first) setImportUnavailable('No import targets are configured for this connection. Ask the workspace owner to allow a destination table.');
+            setRecoverableJobs(jobs);
+            const recovered = jobs.find(item => item.id === stored?.id) ?? jobs[0];
+            if (recovered) {
+                const pending = stored?.id === recovered.id ? stored : { id: recovered.id, table: recovered.table, rows: recovered.rows, name: 'Previous import' };
+                setPendingImport(pending);
+                setJob(recovered);
+                setStep('status');
+                try { localStorage.setItem(key, JSON.stringify(pending)); } catch { }
+                setRecoveryState('ready');
+                setBusy('');
+                return;
+            }
+            if (stored) {
+                try { localStorage.removeItem(key); } catch { }
+            }
+            setPendingImport(undefined);
+            setStep('file');
+            setBusy('setup');
+            try {
+                const [nextTargets, nextSchema] = await loadImportSetup(connectionId, controller.signal);
+                if (!current) return;
+                setTargets(nextTargets);
+                setSchema(nextSchema);
+                const first = nextTargets.find(table => nextSchema.tables.some(item => `${item.database}.${item.name}` === table)) ?? '';
+                setTarget(first);
+                if (!first) setImportUnavailable('No import targets are configured for this connection. Ask the workspace owner to allow a destination table.');
+            } catch (caught) {
+                if (current) setError(message(caught));
+            }
+            if (current) setRecoveryState('ready');
         }).catch(caught => {
-            if (current) setError(message(caught));
+            if (!current) return;
+            setRecoveryState('failed');
+            setError(`Could not check for unresolved imports: ${message(caught)}`);
         }).finally(() => { if (current) setBusy(''); });
 
         return () => { current = false; controller.abort(); };
-    }, [open, connectionId, trusted, demoMode]);
+    }, [open, connectionId, trusted, demoMode, recoveryAttempt]);
 
     useEffect(() => {
         if (!open || step !== 'status' || job?.status !== 'running') return;
@@ -199,23 +226,38 @@ export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, o
             if (polling) return;
             polling = true;
             try {
-                const next = await api<ImportJob>(`/imports/${encodeURIComponent(job.id)}`);
+                const next = job.reconciliationRequired
+                    ? await post<ImportJob>(`/imports/${encodeURIComponent(job.id)}/reconcile`)
+                    : await api<ImportJob>(`/imports/${encodeURIComponent(job.id)}`);
                 if (!current) return;
                 setJob(next);
+                setRecoverableJobs(items => next.status === 'succeeded' || next.reviewedAt
+                    ? items.filter(item => item.id !== next.id)
+                    : items.map(item => item.id === next.id ? next : item));
                 setBusy('');
                 if (next.status === 'succeeded') reportImported(next.id);
             } catch (caught) {
                 if (current) setError(`Could not refresh import status: ${message(caught)}`);
             } finally { polling = false; }
         };
-        const timer = window.setInterval(() => void poll(), 900);
+        const timer = window.setInterval(() => void poll(), job.reconciliationRequired ? 1500 : 900);
         return () => { current = false; window.clearInterval(timer); };
-    }, [open, step, job?.id, job?.status]);
+    }, [open, step, job?.id, job?.status, job?.reconciliationRequired]);
 
     function reportImported(id: string) {
         if (reportedJobRef.current === id) return;
         reportedJobRef.current = id;
         onImportedRef.current();
+    }
+
+    function rememberJob(next: ImportJob) {
+        setJob(next);
+        setRecoverableJobs(current => next.status === 'succeeded' || next.reviewedAt
+            ? current.filter(item => item.id !== next.id)
+            : current.some(item => item.id === next.id)
+                ? current.map(item => item.id === next.id ? next : item)
+                : [next, ...current]);
+        if (next.status === 'succeeded') reportImported(next.id);
     }
 
     function savePendingImport(value: PendingImport) {
@@ -233,7 +275,7 @@ export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, o
         if (preview?.id) {
             void api(`/imports/${encodeURIComponent(preview.id)}`, { method: 'DELETE' }).catch(() => undefined);
         }
-        clearPendingImport();
+        if (recoveryState === 'ready' && (job?.status !== 'unknown' || job.reviewedAt)) clearPendingImport();
         onClose();
     }
 
@@ -310,8 +352,7 @@ export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, o
         setError('');
         try {
             const next = await post<ImportJob>(`/imports/${encodeURIComponent(mapping.id)}/commit`, { confirmation });
-            setJob(next);
-            if (next.status === 'succeeded') reportImported(next.id);
+            rememberJob(next);
         } catch (caught) {
             if (caught instanceof RequestError && caught.detail.code === 'SCHEMA_CHANGED') {
                 setJob(undefined);
@@ -336,6 +377,28 @@ export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, o
                 }
                 return;
             }
+            if (caught instanceof RequestError && caught.detail.code === 'IMPORT_UNRESOLVED') {
+                setBusy('recover');
+                try {
+                    const jobs = await api<ImportJob[]>(`/imports?connectionId=${encodeURIComponent(connectionId)}&recoverable=true`);
+                    setRecoverableJobs(jobs);
+                    const unresolved = jobs[0];
+                    if (unresolved) {
+                        const pending = { id: unresolved.id, table: unresolved.table, rows: unresolved.rows, name: 'Previous import' };
+                        setJob(unresolved);
+                        setPendingImport(pending);
+                        setStep('status');
+                        try { localStorage.setItem(importStateKey(connectionId), JSON.stringify(pending)); } catch { }
+                    } else {
+                        setStep('review');
+                        setError(message(caught));
+                    }
+                } catch (recoveryError) {
+                    setRecoveryState('failed');
+                    setError(`Could not check for unresolved imports: ${message(recoveryError)}`);
+                }
+                return;
+            }
             if (caught instanceof RequestError && caught.status < 500) {
                 setJob(undefined);
                 clearPendingImport();
@@ -346,23 +409,58 @@ export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, o
             setError('The response was interrupted. Checking the saved import status…');
             try {
                 const next = await api<ImportJob>(`/imports/${encodeURIComponent(mapping.id)}`);
-                setJob(next);
-                if (next.status === 'succeeded') reportImported(next.id);
+                rememberJob(next);
             } catch {
-                setJob({ id: mapping.id, table: mapping.table, rows: mapping.rowCount, status: 'unknown', error: 'The server could not confirm this insert. Inspect the destination before retrying.' });
+                rememberJob({ id: mapping.id, table: mapping.table, rows: mapping.rowCount, status: 'unknown', reconciliationRequired: true, error: 'The server could not confirm this insert. Check for the saved import job before starting another write.' });
             }
         } finally { setBusy(''); }
     }
 
-    async function refreshJob() {
+    async function reconcileJob() {
         if (!job || busy) return;
-        setBusy('recover');
+        setBusy('reconcile');
         setError('');
         try {
-            const next = await api<ImportJob>(`/imports/${encodeURIComponent(job.id)}`);
-            setJob(next);
-            if (next.status === 'succeeded') reportImported(next.id);
-        } catch (caught) { setError(`Could not refresh import status: ${message(caught)}`); }
+            const next = await post<ImportJob>(`/imports/${encodeURIComponent(job.id)}/reconcile`);
+            rememberJob(next);
+        } catch (caught) { setError(`Could not check ClickHouse import status: ${message(caught)}`); }
+        finally { setBusy(''); }
+    }
+
+    async function reviewUnknownImport() {
+        if (!job || job.status !== 'unknown' || busy) return;
+        setBusy('review');
+        setError('');
+        try {
+            const next = await post<ImportJob>(`/imports/${encodeURIComponent(job.id)}/review`, { inspected: true, noActiveInsert: true });
+            if (!next.reviewedAt) {
+                rememberJob(next);
+                return;
+            }
+            const remaining = recoverableJobs.filter(item => item.id !== next.id);
+            setRecoverableJobs(remaining);
+            clearPendingImport();
+            setError('');
+            if (remaining.length) {
+                const following = remaining[0]!;
+                setJob(following);
+                setPendingImport({ id: following.id, table: following.table, rows: following.rows, name: 'Previous import' });
+                try { localStorage.setItem(importStateKey(connectionId), JSON.stringify({ id: following.id, table: following.table, rows: following.rows, name: 'Previous import' })); } catch { }
+            } else {
+                setJob(undefined);
+                setStep('file');
+                setBusy('setup');
+                try {
+                    const [nextTargets, nextSchema] = await loadImportSetup(connectionId);
+                    setTargets(nextTargets);
+                    setSchema(nextSchema);
+                    const first = nextTargets.find(table => nextSchema.tables.some(item => `${item.database}.${item.name}` === table)) ?? '';
+                    setTarget(first);
+                    setImportUnavailable(first ? '' : 'No import targets are configured for this connection. Ask the workspace owner to allow a destination table.');
+                } catch (caught) { setError(message(caught)); }
+                finally { setBusy(''); }
+            }
+        } catch (caught) { setError(`Could not record the import review: ${message(caught)}`); }
         finally { setBusy(''); }
     }
 
@@ -391,11 +489,13 @@ export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, o
             </nav>
 
             <main className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">
-                {importUnavailable && <div role="status" className="rounded-xl border border-[var(--line)] bg-[var(--page)] p-4 text-sm text-[var(--text-soft)]">{importUnavailable}</div>}
-                {busy === 'setup' && <div role="status" className="rounded-xl border border-[var(--line)] bg-[var(--page)] p-4 text-sm text-[var(--text-soft)]">Loading destination tables…</div>}
-                {busy === 'recover' && step === 'status' && <div role="status" className="mb-4 rounded-xl border border-[var(--line)] bg-[var(--page)] p-3 text-xs text-[var(--text-soft)]">Checking the saved import status…</div>}
+                {recoveryState === 'checking' && <div role="status" className="rounded-xl border border-[var(--line)] bg-[var(--page)] p-4 text-sm text-[var(--text-soft)]">Checking for imports that need review before allowing another write…</div>}
+                {recoveryState === 'failed' && <div role="alert" className="rounded-xl border border-[var(--red)]/30 bg-[var(--red)]/5 p-4 text-sm text-[var(--red)]"><p>{error || 'Previous import status could not be checked. Review it before starting another write.'}</p><button type="button" onClick={() => { setError(''); setRecoveryAttempt(value => value + 1); }} className="mt-3 rounded-lg border border-current px-3 py-2 text-xs font-semibold">Retry recovery check</button></div>}
+                {recoveryState === 'ready' && importUnavailable && <div role="status" className="rounded-xl border border-[var(--line)] bg-[var(--page)] p-4 text-sm text-[var(--text-soft)]">{importUnavailable}</div>}
+                {recoveryState === 'ready' && busy === 'setup' && <div role="status" className="rounded-xl border border-[var(--line)] bg-[var(--page)] p-4 text-sm text-[var(--text-soft)]">Loading destination tables…</div>}
+                {recoveryState === 'ready' && busy === 'recover' && step === 'status' && <div role="status" className="mb-4 rounded-xl border border-[var(--line)] bg-[var(--page)] p-3 text-xs text-[var(--text-soft)]">Checking the saved import status…</div>}
 
-                {!importUnavailable && step === 'file' && <section aria-label="Choose and preview a file" className="space-y-4">
+                {recoveryState === 'ready' && !importUnavailable && step === 'file' && <section aria-label="Choose and preview a file" className="space-y-4">
                     {!preview ? <>
                         <label className="block rounded-xl border border-dashed border-[var(--line-bright)] bg-[var(--page)] p-5 transition hover:border-[var(--accent)] sm:p-7">
                             <span className="block text-sm font-semibold">Choose a data file</span>
@@ -413,7 +513,7 @@ export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, o
                     {preview && availableTargets.length === 0 && <div role="status" className="rounded-lg border border-[var(--line)] p-3 text-xs text-[var(--muted)]">No configured import destination is available for this connection.</div>}
                 </section>}
 
-                {!importUnavailable && step === 'mapping' && preview && <section aria-label="Map source columns" className="space-y-4">
+                {recoveryState === 'ready' && !importUnavailable && step === 'mapping' && preview && <section aria-label="Map source columns" className="space-y-4">
                     <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
                         <label className="grid gap-1.5 text-xs font-medium text-[var(--text-soft)]">Destination table
                             <select aria-label="Import target table" value={target} onChange={event => changeTarget(event.target.value)} className="min-h-10 rounded-lg border border-[var(--line)] bg-[var(--page)] px-3 text-xs text-[var(--text)]">
@@ -436,7 +536,7 @@ export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, o
                     {!destinationColumns.length && <p role="alert" className="text-xs text-[var(--red)]">The selected table has no writable columns in the loaded schema.</p>}
                 </section>}
 
-                {!importUnavailable && step === 'review' && mapping && preview && <section aria-label="Review import" className="space-y-4">
+                {recoveryState === 'ready' && !importUnavailable && step === 'review' && mapping && preview && <section aria-label="Review import" className="space-y-4">
                     <div className="rounded-xl border border-[var(--accent)]/30 bg-[var(--accent)]/5 p-4 sm:p-5">
                         <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">Ready to insert</span>
                         <h3 className="mt-1 text-base font-semibold">{mapping.rowCount.toLocaleString()} rows into <code className="rounded bg-[var(--page)] px-1.5 py-1 font-mono text-sm">{mapping.table}</code></h3>
@@ -451,28 +551,29 @@ export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, o
                     </label>
                 </section>}
 
-                {!importUnavailable && step === 'status' && <section aria-label="Import status" className="space-y-4">
+                {recoveryState === 'ready' && !importUnavailable && step === 'status' && <section aria-label="Import status" className="space-y-4">
                     <div className={`rounded-xl border p-5 ${job?.status === 'succeeded' ? 'border-[var(--green)]/30 bg-[var(--green)]/5' : job?.status === 'unknown' ? 'border-[var(--amber)]/35 bg-[var(--amber)]/5' : 'border-[var(--line)] bg-[var(--page)]'}`}>
                         <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--muted)]">{job?.status === 'succeeded' ? 'Import complete' : job?.status === 'unknown' ? 'Import needs review' : 'Import running'}</span>
                         <h3 role="status" className="mt-1 text-base font-semibold">{job?.status === 'succeeded' ? `Inserted ${(job.rows ?? pendingImport?.rows ?? 0).toLocaleString()} rows into ${job.table ?? pendingImport?.table}` : job?.status === 'unknown' ? 'The insert outcome is not confirmed.' : `Inserting ${(job?.rows ?? pendingImport?.rows ?? 0).toLocaleString()} rows…`}</h3>
-                        {job?.status === 'unknown' ? <p className="mt-2 text-xs leading-relaxed text-[var(--text-soft)]">{job.error ?? 'Inspect the destination table before retrying. The insert may have partially completed.'}</p> : job?.status === 'running' ? <p className="mt-2 text-xs text-[var(--muted)]">Keep this panel open while the server finishes. Imports cannot be cancelled once started.</p> : job?.status === 'succeeded' ? <p className="mt-2 text-xs text-[var(--text-soft)]">The schema has been refreshed for this connection.</p> : <p className="mt-2 text-xs text-[var(--muted)]">Checking the saved import job…</p>}
+                        {job?.status === 'unknown' ? <p className="mt-2 text-xs leading-relaxed text-[var(--text-soft)]">{job.error ?? 'The insert may have partially completed. Check ClickHouse status, then inspect the destination before starting another write.'} To clear the write block, inspect the destination and confirm no insert is still active. This does not mark the import successful or retry it.</p> : job?.status === 'running' ? <p className="mt-2 text-xs text-[var(--muted)]">{job.reconciliationRequired ? 'ClickHouse still reports this insert as active. Status checks will continue.' : 'Keep this panel open while the server finishes. Imports cannot be cancelled once started.'} A second write to this table is blocked until this import is resolved.</p> : job?.status === 'succeeded' ? <p className="mt-2 text-xs text-[var(--text-soft)]">The schema has been refreshed for this connection.</p> : <p className="mt-2 text-xs text-[var(--muted)]">Checking the saved import job…</p>}
                     </div>
-                    {job?.status === 'unknown' && <button type="button" onClick={() => void refreshJob()} disabled={Boolean(busy)} className="rounded-lg border border-[var(--line)] px-3 py-2 text-xs text-[var(--text-soft)] hover:bg-[var(--panel-hover)] disabled:opacity-50">{busy ? 'Checking…' : 'Check status again'}</button>}
+                    {recoverableJobs.length > 1 && <p className="text-xs text-[var(--muted)]">{recoverableJobs.length - 1} more import{recoverableJobs.length === 2 ? '' : 's'} need attention. They will be shown after this one.</p>}
+                    {job?.status === 'unknown' && <div className="flex flex-wrap gap-2"><button type="button" onClick={() => void reconcileJob()} disabled={Boolean(busy)} className="rounded-lg border border-[var(--line)] px-3 py-2 text-xs text-[var(--text-soft)] hover:bg-[var(--panel-hover)] disabled:opacity-50">{busy === 'reconcile' ? 'Checking ClickHouse…' : 'Check ClickHouse status'}</button><button type="button" onClick={() => void reviewUnknownImport()} disabled={Boolean(busy)} className="rounded-lg border border-[var(--amber)]/40 px-3 py-2 text-xs text-[var(--text-soft)] hover:bg-[var(--panel-hover)] disabled:opacity-50">{busy === 'review' ? 'Recording review…' : 'I inspected the destination; no insert is active'}</button></div>}
                 </section>}
 
-                {error && <p role="alert" className="mt-4 rounded-lg border border-[var(--red)]/30 bg-[var(--red)]/5 px-3 py-2.5 text-xs leading-relaxed text-[var(--red)]">{error}</p>}
+                {error && recoveryState !== 'failed' && <p role="alert" className="mt-4 rounded-lg border border-[var(--red)]/30 bg-[var(--red)]/5 px-3 py-2.5 text-xs leading-relaxed text-[var(--red)]">{error}</p>}
             </main>
 
             <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] bg-[var(--page)] px-5 py-3 sm:px-7">
                 <span className="text-[10px] text-[var(--muted)]">{step === 'file' ? 'Up to 2 MB · maximum 10,000 rows' : step === 'mapping' ? `${Object.keys(selectedFields).length} columns mapped` : step === 'review' ? 'Review before writing' : 'Server-owned import status'}</span>
                 <div className="flex items-center gap-2">
-                    {step === 'mapping' && <button type="button" onClick={() => { setStep('file'); setError(''); }} disabled={Boolean(busy)} className="rounded-lg border border-[var(--line)] px-3 py-2 text-xs text-[var(--text-soft)] hover:bg-[var(--panel-hover)] disabled:opacity-50">Back</button>}
-                    {step === 'review' && <button type="button" onClick={() => { setStep('mapping'); setError(''); }} disabled={Boolean(busy)} className="rounded-lg border border-[var(--line)] px-3 py-2 text-xs text-[var(--text-soft)] hover:bg-[var(--panel-hover)] disabled:opacity-50">Back</button>}
-                    {!importUnavailable && step === 'file' && !preview && <button type="button" onClick={() => void previewFile()} disabled={!file || !format || file.size > MAX_FILE_BYTES || Boolean(busy) || availableTargets.length === 0} className="rounded-lg bg-[var(--accent-action)] px-4 py-2 text-xs font-semibold text-[var(--accent-ink)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40">{busy === 'preview' ? 'Reading file…' : 'Preview file'}</button>}
-                    {!importUnavailable && step === 'file' && preview && <button type="button" onClick={startMapping} disabled={availableTargets.length === 0} className="rounded-lg bg-[var(--accent-action)] px-4 py-2 text-xs font-semibold text-[var(--accent-ink)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40">Map columns</button>}
-                    {!importUnavailable && step === 'mapping' && <button type="button" onClick={() => void previewMapping()} disabled={!target || !destinationNames.length || duplicateDestinations || !destinationColumns.length || Boolean(busy)} className="rounded-lg bg-[var(--accent-action)] px-4 py-2 text-xs font-semibold text-[var(--accent-ink)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40">{busy === 'mapping' ? 'Checking mapping…' : 'Review import'}</button>}
-                    {!importUnavailable && step === 'review' && <button type="button" onClick={() => void commitImport()} disabled={confirmation !== confirmationPhrase || Boolean(busy)} className="rounded-lg bg-[var(--accent-action)] px-4 py-2 text-xs font-semibold text-[var(--accent-ink)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40">{busy === 'commit' ? 'Starting…' : 'Import rows'}</button>}
-                    {!importUnavailable && step === 'status' && job?.status !== 'running' && <button type="button" onClick={() => void closeWizard()} disabled={Boolean(busy)} className="rounded-lg bg-[var(--accent-action)] px-4 py-2 text-xs font-semibold text-[var(--accent-ink)] transition hover:brightness-105 disabled:opacity-40">Done</button>}
+                    {recoveryState === 'ready' && step === 'mapping' && <button type="button" onClick={() => { setStep('file'); setError(''); }} disabled={Boolean(busy)} className="rounded-lg border border-[var(--line)] px-3 py-2 text-xs text-[var(--text-soft)] hover:bg-[var(--panel-hover)] disabled:opacity-50">Back</button>}
+                    {recoveryState === 'ready' && step === 'review' && <button type="button" onClick={() => { setStep('mapping'); setError(''); }} disabled={Boolean(busy)} className="rounded-lg border border-[var(--line)] px-3 py-2 text-xs text-[var(--text-soft)] hover:bg-[var(--panel-hover)] disabled:opacity-50">Back</button>}
+                    {recoveryState === 'ready' && !importUnavailable && step === 'file' && !preview && <button type="button" onClick={() => void previewFile()} disabled={!file || !format || file.size > MAX_FILE_BYTES || Boolean(busy) || availableTargets.length === 0} className="rounded-lg bg-[var(--accent-action)] px-4 py-2 text-xs font-semibold text-[var(--accent-ink)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40">{busy === 'preview' ? 'Reading file…' : 'Preview file'}</button>}
+                    {recoveryState === 'ready' && !importUnavailable && step === 'file' && preview && <button type="button" onClick={startMapping} disabled={availableTargets.length === 0} className="rounded-lg bg-[var(--accent-action)] px-4 py-2 text-xs font-semibold text-[var(--accent-ink)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40">Map columns</button>}
+                    {recoveryState === 'ready' && !importUnavailable && step === 'mapping' && <button type="button" onClick={() => void previewMapping()} disabled={!target || !destinationNames.length || duplicateDestinations || !destinationColumns.length || Boolean(busy)} className="rounded-lg bg-[var(--accent-action)] px-4 py-2 text-xs font-semibold text-[var(--accent-ink)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40">{busy === 'mapping' ? 'Checking mapping…' : 'Review import'}</button>}
+                    {recoveryState === 'ready' && !importUnavailable && step === 'review' && <button type="button" onClick={() => void commitImport()} disabled={confirmation !== confirmationPhrase || Boolean(busy)} className="rounded-lg bg-[var(--accent-action)] px-4 py-2 text-xs font-semibold text-[var(--accent-ink)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40">{busy === 'commit' ? 'Starting…' : 'Import rows'}</button>}
+                    {recoveryState === 'ready' && step === 'status' && job?.status !== 'running' && <button type="button" onClick={() => void closeWizard()} disabled={Boolean(busy)} className="rounded-lg bg-[var(--accent-action)] px-4 py-2 text-xs font-semibold text-[var(--accent-ink)] transition hover:brightness-105 disabled:opacity-40">Done</button>}
                 </div>
             </footer>
         </div>

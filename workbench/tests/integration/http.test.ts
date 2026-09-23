@@ -7,6 +7,7 @@ import { loadConfig } from '../../server/config.js';
 import { MemoryStore } from '../../core/store.js';
 import { DemoDriver } from '../../server/demo.js';
 import type { VoiceService } from '../../server/voice.js';
+import type { ImportJob } from '../../core/imports.js';
 import type { QueryDocument, Run, Published } from '../../shared/types.js';
 async function start(token?: string, voice?: VoiceService, parserWasm?: () => Promise<Uint8Array>) {
     const config = loadConfig({ DEMO_MODE: 'true', WORKBENCH_TOKEN: token });
@@ -107,4 +108,29 @@ test('Invalid workspace import is rejected without partially saving documents', 
     const input = { format: 'cathedral-workspace', version: 1, documents: [{ name: 'ok.sql', connectionId: 'demo', sql: 'SELECT 1' }, { name: 'bad.sql', connectionId: 'demo', sql: 7 }] };
     assert.equal((await s.call('/workspace/import', input)).status, 400);
     assert.deepEqual(await (await s.call('/documents')).json(), []);
+});
+test('Recoverable import endpoints expose only owned unresolved jobs and keep ambiguous writes blocked', async (t) => {
+    const s = await start();
+    t.after(() => s.stop());
+    const makeJob = (id: string, jobOwner: string, reviewedAt?: string): ImportJob => ({ id, owner: jobOwner, inputId: `input-${id}`, connectionId: 'demo', table: 'demo.events', queryId: `query-${id}`, rows: 2, createdAt: '2026-09-23T00:00:00.000Z', status: 'unknown', reconciliationRequired: true, reviewedAt });
+    s.store.put('imports', 'open-job', makeJob('open-job', owner.id));
+    s.store.put('imports', 'other-owner-job', makeJob('other-owner-job', 'other-owner'));
+    s.store.put('imports', 'reviewed-job', makeJob('reviewed-job', owner.id, '2026-09-23T00:01:00.000Z'));
+
+    const listed = await s.call('/imports?connectionId=demo&recoverable=true');
+    assert.equal(listed.status, 200);
+    assert.deepEqual((await listed.json() as ImportJob[]).map(job => job.id), ['open-job']);
+    assert.equal((await s.call('/imports?recoverable=false')).status, 400);
+    assert.equal((await s.call('/imports/other-owner-job')).status, 404);
+
+    await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' });
+    const reconciled = await s.call('/imports/open-job/reconcile', {});
+    assert.equal(reconciled.status, 200);
+    assert.equal((await reconciled.json() as ImportJob).status, 'unknown');
+    assert.equal((await s.call('/imports/open-job/review', { inspected: false, noActiveInsert: false })).status, 400);
+    assert.equal((await s.call('/imports/open-job/review', { inspected: true, noActiveInsert: false })).status, 400);
+    const review = await s.call('/imports/open-job/review', { inspected: true, noActiveInsert: true });
+    assert.equal(review.status, 200);
+    assert.ok((await review.json() as ImportJob).reviewedAt);
+    assert.deepEqual(await (await s.call('/imports?connectionId=demo&recoverable=true')).json(), []);
 });

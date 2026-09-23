@@ -107,11 +107,14 @@ export interface ImportJob {
     createdAt: string;
     status: 'running' | 'succeeded' | 'unknown';
     error?: string;
+    reconciliationRequired?: boolean;
+    reviewedAt?: string;
 }
 export interface ImportDriver {
     schema(connectionId: string): Promise<Schema>;
     allowed(connectionId: string, table: string): boolean;
     insert(connectionId: string, table: string, rows: Record<string, Json>[], queryId: string): Promise<void>;
+    inspectInsert(connectionId: string, queryId: string): Promise<'running' | 'succeeded' | 'unknown'>;
 }
 interface Mapping {
     id: string;
@@ -129,6 +132,7 @@ export class ImportService {
         for (const job of store.list<ImportJob>('imports'))
             if (job.status === 'running') {
                 job.status = 'unknown';
+                job.reconciliationRequired = true;
                 job.error = 'Application restarted during insertion. Inspect the destination; do not retry blindly.';
                 store.put('imports', job.id, job);
             }
@@ -151,6 +155,18 @@ export class ImportService {
         mustOwn(principal, input.owner);
         requireThat(Date.parse(input.expiresAt) > Date.now(), 410, 'INPUT_EXPIRED', 'This preview expired; upload the input again');
         return input;
+    }
+    getJob(principal: Principal, id: string): ImportJob {
+        const job = this.store.get<ImportJob>('imports', id);
+        requireThat(job, 404, 'NOT_FOUND', 'Import job not found');
+        mustOwn(principal, job.owner);
+        return job;
+    }
+    listRecoverable(principal: Principal, connectionId?: string): ImportJob[] {
+        return this.store.list<ImportJob>('imports').filter(job => job.owner === principal.id &&
+            (!connectionId || job.connectionId === connectionId) &&
+            (job.status === 'running' || (job.status === 'unknown' && !job.reviewedAt)))
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     }
     async map(principal: Principal, inputId: string, connectionId: string, table: string, fields: Record<string, string>): Promise<Mapping> {
         canWrite(principal);
@@ -182,6 +198,10 @@ export class ImportService {
         const old = this.store.get<ImportJob>('imports', mappingId);
         if (old)
             return old;
+        const unresolved = this.store.list<ImportJob>('imports').find(job => job.owner === principal.id &&
+            job.connectionId === mapping.connectionId && job.table === mapping.table &&
+            (job.status === 'running' || (job.status === 'unknown' && !job.reviewedAt)));
+        requireThat(!unresolved, 409, 'IMPORT_UNRESOLVED', 'Review or reconcile the previous import to this table before starting another write');
         this.get(principal, mapping.inputId);
         requireThat(this.trusted(principal, mapping.connectionId) && this.driver.allowed(mapping.connectionId, mapping.table), 403, 'IMPORT_NOT_ALLOWED', 'Destination trust or import permission changed');
         requireThat(confirmation === `INSERT ${mapping.rows.length} ROWS`, 400, 'IMPORT_CONFIRMATION', 'Confirm the exact row count before inserting');
@@ -191,6 +211,10 @@ export class ImportService {
         const existing = this.store.get<ImportJob>('imports', mappingId);
         if (existing)
             return existing;
+        const stillUnresolved = this.store.list<ImportJob>('imports').find(job => job.owner === principal.id &&
+            job.connectionId === mapping.connectionId && job.table === mapping.table &&
+            (job.status === 'running' || (job.status === 'unknown' && !job.reviewedAt)));
+        requireThat(!stillUnresolved, 409, 'IMPORT_UNRESOLVED', 'Review or reconcile the previous import to this table before starting another write');
         const job: ImportJob = { id: mappingId, owner: principal.id, inputId: mapping.inputId, connectionId: mapping.connectionId,
             table: mapping.table, queryId: `cathedral-import-${randomUUID()}`, rows: mapping.rows.length, status: 'running', createdAt: new Date().toISOString() };
         this.store.put('imports', job.id, job);
@@ -201,9 +225,69 @@ export class ImportService {
         }
         catch (error) {
             job.status = 'unknown';
+            job.reconciliationRequired = true;
             job.error = `${asError(error).message} The insert may have partially completed. Inspect the destination; automatic retry is disabled.`;
         }
         this.store.put('imports', job.id, job);
+        return job;
+    }
+    async reconcile(principal: Principal, id: string): Promise<ImportJob> {
+        const job = this.getJob(principal, id);
+        if (job.status === 'succeeded' || (job.status === 'running' && !job.reconciliationRequired))
+            return job;
+        requireThat(this.trusted(principal, job.connectionId), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before checking ClickHouse import status');
+        const previous = { status: job.status, error: job.error, reconciliationRequired: job.reconciliationRequired };
+        const evidence = await this.driver.inspectInsert(job.connectionId, job.queryId);
+        if (evidence === 'succeeded') {
+            job.status = 'succeeded';
+            job.error = undefined;
+            job.reconciliationRequired = false;
+        }
+        else if (evidence === 'running') {
+            job.status = 'running';
+            job.error = 'ClickHouse still reports this insert as active. Status checks will continue; a second insert will remain blocked.';
+            job.reconciliationRequired = true;
+        }
+        else {
+            job.status = 'unknown';
+            job.error = 'ClickHouse has no conclusive success record. Inspect the destination before deciding what to do; automatic retry is disabled.';
+            job.reconciliationRequired = false;
+        }
+        const changed = job.status !== previous.status || job.error !== previous.error || job.reconciliationRequired !== previous.reconciliationRequired;
+        if (changed)
+            this.store.put('imports', job.id, job);
+        if (job.status !== previous.status)
+            audit(this.store, principal, 'import.reconcile', job.id);
+        return job;
+    }
+    async review(principal: Principal, id: string, inspected: boolean, noActiveInsert: boolean): Promise<ImportJob> {
+        canWrite(principal);
+        requireThat(inspected && noActiveInsert, 400, 'IMPORT_REVIEW_CONFIRMATION', 'Confirm that you inspected the destination and no insert is still active');
+        const job = this.getJob(principal, id);
+        if (job.reviewedAt)
+            return job;
+        requireThat(job.status === 'unknown', 409, 'IMPORT_NOT_UNKNOWN', 'Only an import with an unknown outcome can be reviewed');
+        requireThat(this.trusted(principal, job.connectionId), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before reviewing an import');
+        const previousStatus = job.status;
+        const evidence = await this.driver.inspectInsert(job.connectionId, job.queryId);
+        if (evidence === 'succeeded') {
+            job.status = 'succeeded';
+            job.error = undefined;
+            job.reconciliationRequired = false;
+        }
+        else if (evidence === 'running') {
+            job.status = 'running';
+            job.error = 'ClickHouse still reports this insert as active. Status checks will continue; a second insert will remain blocked.';
+            job.reconciliationRequired = true;
+        }
+        else {
+            job.reviewedAt = new Date().toISOString();
+            job.reconciliationRequired = false;
+            audit(this.store, principal, 'import.review', job.id);
+        }
+        this.store.put('imports', job.id, job);
+        if (job.status !== previousStatus)
+            audit(this.store, principal, 'import.reconcile', job.id);
         return job;
     }
     remove(principal: Principal, id: string) {

@@ -15,7 +15,100 @@ for (const csv of ['a,a\n1,2', 'a,b\n1', 'a\n"oops', 'a\n"quoted"tail'])
 test('JSON nested values retain structure and large integer strings', () => { const p = parseInput('[{"id":"18446744073709551615","v":[1,null]}]', 'json'); assert.equal(p.rows[0].id, '18446744073709551615'); assert.deepEqual(p.rows[0].v, [1, null]); });
 test('JSON unsafe numeric imports reject', () => assert.throws(() => parseInput('[{"id":18446744073709551615}]', 'json'), { code: 'UNSAFE_NUMBER' }));
 test('Import preview has no write side effect; commit is idempotent', async () => { let inserts = 0; const driver = { schema: async () => schema, allowed: () => true, insert: async () => { inserts++; } }; const imports = new ImportService(new MemoryStore(), driver, () => true); const input = imports.preview(owner, 'a.csv', 'n\n1\n2', 'csv'); assert.equal(inserts, 0); const map = await imports.map(owner, input.id, 'local', 'default.events', { n: 'n' }); assert.equal(inserts, 0); assert.throws(() => imports.get(other, input.id), { code: 'NOT_FOUND' }); const [a, b] = await Promise.all([imports.commit(owner, map.id, 'INSERT 2 ROWS'), imports.commit(owner, map.id, 'INSERT 2 ROWS')]); assert.equal(a.id, b.id); assert.equal(inserts, 1); });
+test('Concurrent imports to the same table recheck the write guard after schema loading', async () => {
+    let schemaCalls = 0, inserts = 0, releaseSchema;
+    let pauseSchema = false;
+    const schemaGate = new Promise(resolve => { releaseSchema = resolve; });
+    const driver = {
+        schema: async () => {
+            if (pauseSchema) {
+                schemaCalls++;
+                if (schemaCalls === 2) releaseSchema();
+                await schemaGate;
+            }
+            return schema;
+        },
+        allowed: () => true,
+        insert: async () => { inserts++; },
+    };
+    const imports = new ImportService(new MemoryStore(), driver, () => true);
+    const first = imports.preview(owner, 'first.csv', 'n\n1', 'csv');
+    const second = imports.preview(owner, 'second.csv', 'n\n2', 'csv');
+    const firstMapping = await imports.map(owner, first.id, 'local', 'default.events', { n: 'n' });
+    const secondMapping = await imports.map(owner, second.id, 'local', 'default.events', { n: 'n' });
+    pauseSchema = true;
+
+    const results = await Promise.allSettled([
+        imports.commit(owner, firstMapping.id, 'INSERT 1 ROWS'),
+        imports.commit(owner, secondMapping.id, 'INSERT 1 ROWS'),
+    ]);
+
+    assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
+    assert.equal(results.filter(result => result.status === 'rejected').length, 1);
+    const rejected = results.find(result => result.status === 'rejected');
+    assert.equal(rejected.reason.code, 'IMPORT_UNRESOLVED');
+    assert.equal(inserts, 1);
+});
 test('Failed inserts are unknown, never auto-retried', async () => { let inserts = 0; const driver = { schema: async () => schema, allowed: () => true, insert: async () => { inserts++; throw new Error('connection lost'); } }; const imports = new ImportService(new MemoryStore(), driver, () => true); const input = imports.preview(owner, 'a.csv', 'n\n1', 'csv'), map = await imports.map(owner, input.id, 'local', 'default.events', { n: 'n' }); assert.equal((await imports.commit(owner, map.id, 'INSERT 1 ROWS')).status, 'unknown'); await imports.commit(owner, map.id, 'INSERT 1 ROWS'); assert.equal(inserts, 1); });
+test('Recoverable imports stay owner-scoped and block another write until reviewed', async () => {
+    let inserts = 0, failFirst = true, evidence = 'running';
+    const driver = { schema: async () => schema, allowed: () => true, insert: async () => { inserts++; if (failFirst) { failFirst = false; throw new Error('connection lost'); } }, inspectInsert: async () => evidence };
+    const imports = new ImportService(new MemoryStore(), driver, () => true);
+    const first = imports.preview(owner, 'first.csv', 'n\n1', 'csv');
+    const firstMapping = await imports.map(owner, first.id, 'local', 'default.events', { n: 'n' });
+    const unknown = await imports.commit(owner, firstMapping.id, 'INSERT 1 ROWS');
+    const second = imports.preview(owner, 'second.csv', 'n\n2', 'csv');
+    const secondMapping = await imports.map(owner, second.id, 'local', 'default.events', { n: 'n' });
+    assert.deepEqual(imports.listRecoverable(owner, 'local').map(job => job.id), [unknown.id]);
+    assert.deepEqual(imports.listRecoverable(other), []);
+    await assert.rejects(imports.commit(owner, secondMapping.id, 'INSERT 1 ROWS'), { code: 'IMPORT_UNRESOLVED' });
+    assert.equal(inserts, 1);
+    const active = await imports.review(owner, unknown.id, true, true);
+    assert.equal(active.status, 'running');
+    assert.equal(active.reviewedAt, undefined);
+    assert.deepEqual(imports.listRecoverable(owner, 'local').map(job => job.id), [unknown.id]);
+    await assert.rejects(imports.commit(owner, secondMapping.id, 'INSERT 1 ROWS'), { code: 'IMPORT_UNRESOLVED' });
+    evidence = 'unknown';
+    assert.equal((await imports.reconcile(owner, unknown.id)).status, 'unknown');
+    const reviewed = await imports.review(owner, unknown.id, true, true);
+    assert.equal(reviewed.status, 'unknown');
+    assert.ok(reviewed.reviewedAt);
+    assert.deepEqual(imports.listRecoverable(owner, 'local'), []);
+    assert.equal((await imports.commit(owner, secondMapping.id, 'INSERT 1 ROWS')).status, 'succeeded');
+    assert.equal(inserts, 2);
+});
+test('An import interrupted by server restart becomes recoverable and requires reconciliation', () => {
+    const store = new MemoryStore();
+    store.put('imports', 'interrupted', { id: 'interrupted', owner: owner.id, inputId: 'input', connectionId: 'local', table: 'default.events', queryId: 'query-interrupted', rows: 1, createdAt: new Date().toISOString(), status: 'running' });
+
+    const imports = new ImportService(store, {}, () => true);
+    const [recovered] = imports.listRecoverable(owner);
+
+    assert.equal(recovered.status, 'unknown');
+    assert.equal(recovered.reconciliationRequired, true);
+    assert.match(recovered.error, /Application restarted/);
+});
+test('Import reconciliation only marks a confirmed successful ClickHouse finish as succeeded', async () => {
+    let evidence = 'running', inserts = 0;
+    const driver = { schema: async () => schema, allowed: () => true, insert: async () => { inserts++; throw new Error('response lost'); }, inspectInsert: async () => evidence };
+    const imports = new ImportService(new MemoryStore(), driver, () => true);
+    const input = imports.preview(owner, 'a.csv', 'n\n1', 'csv'), mapping = await imports.map(owner, input.id, 'local', 'default.events', { n: 'n' });
+    const job = await imports.commit(owner, mapping.id, 'INSERT 1 ROWS');
+    assert.equal(job.status, 'unknown');
+    const active = await imports.reconcile(owner, job.id);
+    assert.equal(active.status, 'running');
+    assert.equal(active.reconciliationRequired, true);
+    evidence = 'unknown';
+    const inconclusive = await imports.reconcile(owner, job.id);
+    assert.equal(inconclusive.status, 'unknown');
+    assert.equal(inconclusive.reviewedAt, undefined);
+    evidence = 'succeeded';
+    const confirmed = await imports.reconcile(owner, job.id);
+    assert.equal(confirmed.status, 'succeeded');
+    assert.equal(confirmed.error, undefined);
+    assert.deepEqual(imports.listRecoverable(owner), []);
+    assert.equal(inserts, 1);
+});
 test('Insert requires exact confirmation', async () => { const imports = new ImportService(new MemoryStore(), { schema: async () => schema, allowed: () => true, insert: async () => { } }, () => true); const p = imports.preview(owner, 'a', 'n\n1', 'csv'), m = await imports.map(owner, p.id, 'local', 'default.events', { n: 'n' }); await assert.rejects(imports.commit(owner, m.id, 'yes'), { code: 'IMPORT_CONFIRMATION' }); });
 test('Preview refuses empty CSV rather than a zero-row mutation', () => { const imports = new ImportService(new MemoryStore(), {}, () => true); assert.throws(() => imports.preview(owner, 'a.csv', 'n\n', 'csv'), { code: 'IMPORT_EMPTY' }); });
 test('AI context preview does not call a model', () => { const f = aiFixture(); f.ai.prepare(owner, f.input); assert.equal(f.calls, 0); });

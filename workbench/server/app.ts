@@ -7,12 +7,12 @@ import type { QueryDriver } from '../core/runs.js';
 import { RunService, terminal } from '../core/runs.js';
 import { ArtifactService } from '../core/artifacts.js';
 import { AssistantService, type AssistantDriver } from '../core/assistant.js';
-import { ImportService, type ImportDriver, type ImportJob } from '../core/imports.js';
+import { ImportService, type ImportDriver } from '../core/imports.js';
 import { MonitorService } from '../core/monitors.js';
 import { SessionService } from '../core/sessions.js';
 import { FileStore, type Store } from '../core/store.js';
 import { AppError, asError, requireThat } from '../core/errors.js';
-import { canWrite, mustOwn } from '../core/guards.js';
+import { canWrite } from '../core/guards.js';
 import { identifier, integer, record, stringMap, text } from '../core/validation.js';
 import { exportCsv } from '../shared/results.js';
 import { buildQueryProfile } from '../shared/profile.js';
@@ -256,10 +256,19 @@ export function createApp(config: Config, overrides: {
     app.get('/api/assistant/proposals/:id', (req, res) => res.json(ai.get(principal(res), id(req))));
     app.post('/api/assistant/proposals/:id/decision', (req, res) => { const v = body(req); requireThat(v.decision === 'accepted' || v.decision === 'rejected', 400, 'DECISION', 'Unknown proposal decision'); res.json(ai.decide(principal(res), id(req), v.decision, identifier(v.connectionId, 'connectionId'), text(v.currentSql, 'current SQL', 200000, true))); });
     app.delete('/api/assistant/proposals/:id', (req, res) => { ai.remove(principal(res), id(req)); res.json({ ok: true }); });
+    app.get('/api/imports', (req, res) => {
+        const p = principal(res), connectionId = typeof req.query.connectionId === 'string' ? text(req.query.connectionId, 'connectionId', 128) : undefined;
+        requireThat(req.query.recoverable === undefined || req.query.recoverable === 'true', 400, 'IMPORT_FILTER', 'Use recoverable=true to list imports that need attention');
+        if (connectionId)
+            driver.connection(p, connectionId);
+        res.json(imports.listRecoverable(p, connectionId));
+    });
     app.post('/api/imports/preview', (req, res) => { const v = body(req); requireThat(['csv', 'json', 'ndjson'].includes(String(v.format)), 400, 'IMPORT_FORMAT', 'Use CSV, JSON, or NDJSON'); const input = imports.preview(principal(res), text(v.name, 'filename', 128), text(v.source, 'input', 2000000), v.format as 'csv' | 'json' | 'ndjson'); res.status(201).json({ ...input, rows: input.rows.slice(0, 20), rowCount: input.rows.length }); });
     app.post('/api/imports/:id/mapping', async (req, res) => { const v = body(req), mapping = await imports.map(principal(res), id(req), identifier(v.connectionId, 'connectionId'), text(v.table, 'table', 256), mappingFields(v.fields)); res.json({ ...mapping, rows: mapping.rows.slice(0, 20), rowCount: mapping.rows.length }); });
     app.post('/api/imports/:id/commit', async (req, res) => res.json(await imports.commit(principal(res), id(req), text(body(req).confirmation, 'confirmation', 100))));
-    app.get('/api/imports/:id', (req, res) => { const job = store.get<ImportJob>('imports', id(req)); requireThat(job, 404, 'NOT_FOUND', 'Import job not found'); mustOwn(principal(res), job.owner); res.json(job); });
+    app.get('/api/imports/:id', (req, res) => res.json(imports.getJob(principal(res), id(req))));
+    app.post('/api/imports/:id/reconcile', async (req, res) => res.json(await imports.reconcile(principal(res), id(req))));
+    app.post('/api/imports/:id/review', async (req, res) => { const v = body(req); res.json(await imports.review(principal(res), id(req), boolean(v.inspected, 'inspected'), boolean(v.noActiveInsert, 'noActiveInsert'))); });
     app.delete('/api/imports/:id', (req, res) => { imports.remove(principal(res), id(req)); res.json({ ok: true }); });
     app.get('/api/monitors', (_req, res) => res.json(monitors.list(principal(res))));
     app.post('/api/monitors', (req, res) => { const v = body(req); requireThat(['changed', 'nonempty', 'failure'].includes(String(v.condition)), 400, 'MONITOR_CONDITION', 'Invalid condition'); res.status(201).json(monitors.create(principal(res), identifier(v.publishedId, 'publishedId'), integer(v.intervalSeconds, 'intervalSeconds', 60, 31536000), v.condition as 'changed' | 'nonempty' | 'failure')); });

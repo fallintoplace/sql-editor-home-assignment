@@ -24,6 +24,7 @@ async function mockWritableWorkspace(page: Page, targets = ['demo.events']) {
     await page.route('**/api/connections/live/import-targets', route => route.fulfill({ json: targets }));
     await page.route('**/api/runs**', route => route.fulfill({ json: [] }));
     await page.route('**/api/documents**', route => route.fulfill({ json: [] }));
+    await page.route(url => url.pathname === '/api/imports' && url.searchParams.get('recoverable') === 'true', route => route.fulfill({ json: [] }));
     await page.goto('/');
     await expect(page.getByRole('button', { name: 'Import data', exact: true })).toBeVisible();
 }
@@ -172,6 +173,50 @@ test('File import reloads the destination mapping when the server detects a sche
     await expect(dialog.getByRole('button', { name: 'Review import', exact: true })).toBeVisible();
     expect(schemaRequests).toBeGreaterThanOrEqual(2);
     expect(commitRequests).toBe(1);
+});
+
+test('File import recovers ambiguous writes without local storage and records a manual review', async ({ page }) => {
+    await mockWritableWorkspace(page);
+    let recoverable: Record<string, unknown>[] = [{ id: 'saved-import', connectionId: 'live', table: 'demo.events', queryId: 'cathedral-import-test', rows: 2, createdAt: '2026-09-23T00:00:00.000Z', status: 'unknown', reconciliationRequired: true, error: 'The insert may have partially completed.' }];
+    let reconcileRequests = 0, reviewBody: Record<string, unknown> | undefined, previewRequests = 0;
+    await page.route(url => url.pathname === '/api/imports' && url.searchParams.get('recoverable') === 'true', route => route.fulfill({ json: recoverable }));
+    await page.route('**/api/imports/saved-import/reconcile', async route => {
+        reconcileRequests++;
+        await route.fulfill({ json: { ...recoverable[0], status: 'unknown', reconciliationRequired: false, error: 'ClickHouse has no conclusive success record.' } });
+    });
+    await page.route('**/api/imports/saved-import/review', async route => {
+        reviewBody = route.request().postDataJSON() as Record<string, unknown>;
+        const job = recoverable[0]!;
+        recoverable = [];
+        await route.fulfill({ json: { ...job, reviewedAt: '2026-09-23T00:02:00.000Z' } });
+    });
+    await page.route('**/api/imports/preview', route => { previewRequests++; return route.fulfill({ status: 500, json: {} }); });
+
+    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Import data', exact: true });
+    await expect(dialog.getByRole('region', { name: 'Import status' })).toContainText('The insert outcome is not confirmed.');
+    await expect(dialog.getByLabel('Choose a CSV, JSON, or NDJSON file')).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'Check ClickHouse status' }).click();
+    await expect(dialog).toContainText('ClickHouse has no conclusive success record.');
+    expect(reconcileRequests).toBe(1);
+    await dialog.getByRole('button', { name: 'I inspected the destination; no insert is active' }).click();
+    await expect(dialog.getByLabel('Choose a CSV, JSON, or NDJSON file')).toBeVisible();
+    expect(reviewBody).toEqual({ inspected: true, noActiveInsert: true });
+    expect(previewRequests).toBe(0);
+});
+
+test('File import stays blocked when recoverable job status cannot be loaded', async ({ page }) => {
+    await mockWritableWorkspace(page);
+    let previewRequests = 0;
+    await page.route(url => url.pathname === '/api/imports' && url.searchParams.get('recoverable') === 'true', route => route.fulfill({ status: 503, json: { error: { code: 'TEMPORARY', message: 'Import status unavailable' } } }));
+    await page.route('**/api/imports/preview', route => { previewRequests++; return route.fulfill({ status: 500, json: {} }); });
+
+    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Import data', exact: true });
+    await expect(dialog.getByRole('alert')).toContainText('Could not check for unresolved imports');
+    await expect(dialog.getByRole('button', { name: 'Retry recovery check' })).toBeVisible();
+    await expect(dialog.getByLabel('Choose a CSV, JSON, or NDJSON file')).toHaveCount(0);
+    expect(previewRequests).toBe(0);
 });
 
 test('Fixture workspace explains that imports never write sample data', async ({ page }) => {

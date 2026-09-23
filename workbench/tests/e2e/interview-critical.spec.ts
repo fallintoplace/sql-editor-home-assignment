@@ -23,6 +23,36 @@ async function runQuery(page: Page) {
     return results;
 }
 
+function parserWorkerStub(initialStatus: 'ready' | 'unavailable') {
+    return `(() => {
+        const NativeWorker = window.Worker;
+        let attempts = 0;
+        class FakeParserWorker extends EventTarget {
+            constructor() {
+                super();
+                const status = attempts++ === 0 ? ${JSON.stringify(initialStatus)} : 'ready';
+                window.__testParserWorker = this;
+                queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', { data: { kind: 'status', status, reason: 'Temporary parser failure' } })));
+            }
+            postMessage(request) {
+                if (request.kind === 'parseMany') {
+                    window.__parserParseCount = (window.__parserParseCount || 0) + 1;
+                    queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', { data: { id: request.id, ok: true, results: request.sql.map(() => ({})) } })));
+                }
+                else window.__pendingParserFormat = request.id;
+            }
+            terminate() {}
+        }
+        window.Worker = new Proxy(NativeWorker, {
+            construct(target, args, newTarget) {
+                if (String(args[0]).includes('clickhouse-native-parser.worker')) return new FakeParserWorker();
+                return Reflect.construct(target, args, newTarget);
+            },
+        });
+        window.__failParserWorker = () => window.__testParserWorker.dispatchEvent(new ErrorEvent('error', { message: 'Temporary parser failure' }));
+    })();`;
+}
+
 test('Run evidence stays with its draft through tab and mode switches', async ({ page }) => {
     let runRequests = 0;
     page.on('request', request => {
@@ -51,6 +81,29 @@ test('Run evidence stays with its draft through tab and mode switches', async ({
     await expect(page.getByRole('group', { name: 'Workspace layouts' })).toHaveCount(0);
     await expect(page.getByRole('navigation', { name: 'Workspace browser' })).toBeVisible();
     expect(runRequests).toBe(2);
+});
+
+test('Native parser can be retried after a temporary worker failure', async ({ page }) => {
+    await page.addInitScript(parserWorkerStub('unavailable'));
+    await trust(page);
+    const retry = page.getByRole('button', { name: 'Retry parser', exact: true });
+    await expect(retry).toBeVisible();
+    await retry.click();
+    await expect(page.getByText('Native parser', { exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => Number((window as any).__parserParseCount ?? 0))).toBeGreaterThan(0);
+});
+
+test('Failed async formatting does not overwrite edits typed while it was pending', async ({ page }) => {
+    await page.addInitScript(parserWorkerStub('ready'));
+    await trust(page);
+    await replaceSql(page, 'select old_value from old_table');
+    await expect(page.getByText('Native parser', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Format', exact: true }).click();
+    await expect.poll(() => page.evaluate(() => Boolean((window as any).__pendingParserFormat))).toBe(true);
+    await replaceSql(page, 'select new_value from new_table');
+    await page.evaluate(() => (window as any).__failParserWorker());
+    await expect(page.locator('.cm-content')).toContainText('new_value');
+    await expect(page.locator('.cm-content')).not.toContainText('old_value');
 });
 
 test('Connection switches keep run evidence isolated and recover each connection workspace', async ({ page }) => {
@@ -96,6 +149,42 @@ test('Insights compare one run with its ClickHouse pipeline evidence', async ({ 
     await graph.getByRole('button', { name: 'Inspect Resize 2 → 1' }).click();
     await expect(queryPlan.locator('.pipeline-node-inspector')).toContainText('Resize 2 → 1');
     await expect(page.locator('.execution-bar code')).toHaveText(startedRun.queryId);
+});
+
+test('Refreshing a pipeline selects the first operator in the new graph', async ({ page }) => {
+    let refreshCount = 0;
+    await page.route(url => url.pathname.endsWith('/profile/pipeline'), async route => {
+        refreshCount++;
+        const label = refreshCount === 1 ? 'First' : 'Next';
+        await route.fulfill({ json: {
+            available: true, source: 'explain_pipeline', notice: 'Fixture pipeline',
+            nodes: [
+                { id: 'source', label: `${label} reader`, kind: 'read', status: 'planned' },
+                { id: 'output', label: `${label} output`, kind: 'output', status: 'planned' },
+            ],
+            edges: [{ source: 'source', target: 'output' }],
+        } });
+    });
+    await trust(page);
+    const results = await runQuery(page);
+    await results.getByRole('tab', { name: 'Insights', exact: true }).click();
+    const section = page.getByRole('region', { name: 'Run and query plan comparison' });
+    const load = section.getByRole('button', { name: 'Load ClickHouse pipeline', exact: true });
+    await expect(load).toBeEnabled();
+    const firstLoad = page.waitForResponse(response => response.url().includes('/profile/pipeline'));
+    await load.click();
+    await firstLoad;
+    const graph = section.getByRole('region', { name: 'Scrollable operator graph' });
+    await graph.getByRole('button', { name: 'Inspect First output', exact: true }).click();
+    await expect(section.locator('.pipeline-node-inspector')).toContainText('First output');
+
+    const refresh = section.getByRole('button', { name: 'Refresh pipeline', exact: true });
+    const refreshed = page.waitForResponse(response => response.url().includes('/profile/pipeline'));
+    await refresh.click();
+    await refreshed;
+    await expect(section.locator('.pipeline-node-inspector')).toContainText('Next reader');
+    await expect(graph.getByRole('button', { name: 'Inspect Next reader', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(graph.getByRole('button', { name: 'Inspect Next output', exact: true })).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('Result filtering searches only the visible retained page without mutating the run', async ({ page }) => {
@@ -394,6 +483,28 @@ test('Cancelling a long-running query reaches a terminal cancelled state', async
     const cancel = page.locator('.execution-bar').getByRole('button', { name: 'Cancel', exact: true });
     await expect(cancel).toBeVisible();
     await cancel.click();
+    await expect(page.locator('.execution-bar')).toContainText('cancelled', { timeout: 10000 });
+});
+
+test('Cancellation stays available while execution profile loading is pending', async ({ page }) => {
+    await page.route(url => /\/api\/runs\/[^/]+\/profile$/.test(url.pathname), async route => {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        await route.continue();
+    });
+    await trust(page);
+    await replaceSql(page, 'SELECT fixture_slow');
+    const started = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/runs');
+    await page.getByRole('button', { name: 'Run statement', exact: true }).click();
+    const run = await (await started).json() as { id: string };
+    const cancel = page.locator('.execution-bar').getByRole('button', { name: 'Cancel', exact: true });
+    await expect(cancel).toBeVisible();
+    const profileRequest = page.waitForRequest(request => new URL(request.url()).pathname === `/api/runs/${run.id}/profile`);
+    await page.locator('.results-tabs').getByRole('tab', { name: 'Insights', exact: true }).click();
+    await profileRequest;
+    await expect(cancel).toBeEnabled();
+    const cancelled = page.waitForResponse(response => new URL(response.url()).pathname === `/api/runs/${run.id}/cancel`);
+    await cancel.click();
+    await cancelled;
     await expect(page.locator('.execution-bar')).toContainText('cancelled', { timeout: 10000 });
 });
 

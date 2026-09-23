@@ -40,6 +40,7 @@ and optional model-provider credentials stay on the server.
 - Validate and format SQL locally with ClickHouse's native WASM parser when the pinned upstream artifact is available; the editor falls back cleanly when it is not.
 - Chart retained data, including nullable and negative numeric values.
 - Run SQL scripts and inspect each statement's status and result independently.
+- Import CSV, JSON, or NDJSON files with a preview, explicit target allowlist, schema-checked column mapping, and row-count confirmation. Ambiguous writes stay blocked until they are reconciled.
 - Track execution progress, cancel work, and reopen prior query evidence.
 - See when an edited query no longer matches the displayed result.
 - Explore schema, save local drafts, and review execution details.
@@ -69,8 +70,8 @@ npm run eval
 ## Assignment
 
 The original task asks for a React SQL editor with query results, charts, SQL script
-execution, and an optional file import. The current UI focuses on the first three.
-The server APIs and architecture notes are documented in [the workbench guide](workbench/docs/WORKBENCH.md).
+execution, and optional file import. ClickStudio implements all four in the UI.
+Server APIs and import safeguards are documented in [the workbench guide](docs/WORKBENCH.md).
 
 ## Original assignment
 

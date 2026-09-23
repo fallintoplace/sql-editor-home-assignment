@@ -30,7 +30,41 @@ test('Title-only change keeps logic review but increments revision', async () =>
 test('Published shares are explicit bearer snapshots and revocable', async () => { const f = await ready(), p = f.a.publish(owner, f.doc.id, 1), share = f.a.share(owner, p.id); assert.equal(f.a.resolveShare(share.token).run.id, f.r.id); f.a.revokeShares(owner, p.id); assert.throws(() => f.a.resolveShare(share.token), { code: 'NOT_FOUND' }); });
 test('Unrelated owners cannot access documents or create share links', async () => { const f = await ready(), p = f.a.publish(owner, f.doc.id, 1); assert.throws(() => f.a.get(other, f.doc.id), { code: 'NOT_FOUND' }); assert.throws(() => f.a.share(other, p.id), { code: 'NOT_FOUND' }); });
 test('Expired published snapshots do not become empty successful results', async () => { const f = await ready(), p = f.a.publish(owner, f.doc.id, 1); p.expiresAt = '2000-01-01T00:00:00Z'; f.store.put('published', p.id, p); f.a.sweep(); assert.throws(() => f.a.published(owner, p.id), { code: 'SNAPSHOT_EXPIRED' }); });
+test('Expired publications release capacity and the same evidence can be republished', async () => {
+    const f = await ready();
+    for (let index = 0; index < 50; index++) {
+        const document = index === 0 ? f.doc : f.a.save(owner, { name: `publication-${index}.sql`, connectionId: 'local', sql: f.r.sql, runId: f.r.id });
+        f.a.publish(owner, document.id, document.revision);
+    }
+    const blocked = f.a.save(owner, { name: 'blocked-publication.sql', connectionId: 'local', sql: f.r.sql, runId: f.r.id });
+    assert.throws(() => f.a.publish(owner, blocked.id, blocked.revision), { code: 'PUBLICATION_CAPACITY' });
+    for (const publication of f.store.list('published')) {
+        publication.expiresAt = '2000-01-01T00:00:00Z';
+        f.store.put('published', publication.id, publication);
+    }
+    f.a.sweep();
+    assert.equal(f.a.publications(owner).length, 0);
+    const republished = f.a.publish(owner, f.doc.id, 1);
+    assert.ok(Date.parse(republished.expiresAt) > Date.now());
+    assert.equal(republished.result.rows.length, 2);
+    assert.equal(f.a.publish(owner, blocked.id, blocked.revision).document.id, blocked.id);
+});
 test('Trash and restore preserve revisions', async () => { const f = await ready(); f.a.trash(owner, f.doc.id); assert.equal(f.a.list(owner).length, 0); assert.equal(f.a.restore(owner, f.doc.id).revision, 1); });
+test('Trash frees active document capacity while restore respects the same limit', async () => {
+    const f = await ready(), trashed = [f.doc];
+    for (let index = 1; index < 200; index++) trashed.push(f.a.save(owner, { name: `trashed-${index}.sql`, connectionId: 'local', sql: 'SELECT 1' }));
+    for (const document of trashed) f.a.trash(owner, document.id, true);
+    assert.equal(f.a.list(owner).length, 0);
+
+    const active = [];
+    for (let index = 0; index < 200; index++) active.push(f.a.save(owner, { name: `active-${index}.sql`, connectionId: 'local', sql: 'SELECT 1' }));
+    assert.throws(() => f.a.save(owner, { name: 'over-limit.sql', connectionId: 'local', sql: 'SELECT 1' }), { code: 'DOCUMENT_CAPACITY' });
+    assert.throws(() => f.a.restore(owner, trashed[0].id), { code: 'DOCUMENT_CAPACITY' });
+    f.a.trash(owner, active[0].id, true);
+    assert.equal(f.a.list(owner).length, 199);
+    assert.equal(f.a.restore(owner, trashed[0].id).deletedAt, undefined);
+    assert.equal(f.a.list(owner).length, 200);
+});
 test('Dependency impact blocks unacknowledged deletion', async () => { const f = await ready(); f.a.save(owner, { name: 'child', connectionId: 'local', sql: 'SELECT 1', dependencies: [f.doc.id] }); assert.throws(() => f.a.trash(owner, f.doc.id), { code: 'DOWNSTREAM_IMPACT' }); });
 test('Dependency cycles are rejected', async () => { const f = await ready(); const child = f.a.save(owner, { name: 'child', connectionId: 'local', sql: 'SELECT 1', dependencies: [f.doc.id] }); assert.throws(() => f.a.save(owner, { ...f.doc, baseRevision: 1, dependencies: [child.id] }, f.doc.id), { code: 'DEPENDENCY_CYCLE' }); });
 test('Workspace imports never inherit source ownership, runs or approval', async () => { const f = await ready(); f.a.review(owner, f.doc.id, 1); const imported = f.a.import(owner, f.a.export(owner))[0]; assert.notEqual(imported.id, f.doc.id); assert.equal(imported.runId, undefined); assert.equal(imported.verifiedRevision, undefined); });

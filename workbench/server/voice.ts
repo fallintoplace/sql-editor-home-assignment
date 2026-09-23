@@ -19,12 +19,12 @@ export interface VoiceService {
 }
 
 const voiceInstructions = (context?: string) => [
-    'You are the concise voice copilot inside Query Studio, a ClickHouse SQL workbench.',
+    'You are the concise voice copilot inside ClickStudio, a ClickHouse SQL workbench.',
     'Help the user understand the current SQL, results, ClickHouse concepts, and possible next steps.',
     'You may suggest SQL in speech, but you must never claim to execute SQL, edit the draft, or change data.',
     'Execution and applying edits are always explicit UI actions outside the voice session.',
     'Prefer short spoken answers. Say when you are unsure. Do not read long SQL or result sets aloud unless asked.',
-    context ? `Current Query Studio context:\n${context}` : '',
+    context ? `Current ClickStudio context:\n${context}` : '',
 ].filter(Boolean).join('\n\n');
 
 export class OpenAIVoiceService implements VoiceService {

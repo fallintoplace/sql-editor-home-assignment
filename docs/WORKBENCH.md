@@ -1,4 +1,4 @@
-# Query Studio workbench: implementation and operations
+# ClickStudio workbench: implementation and operations
 
 ## Delivery status
 

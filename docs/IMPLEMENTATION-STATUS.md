@@ -1,4 +1,4 @@
-# Query Studio roadmap implementation status
+# ClickStudio roadmap implementation status
 
 Base reviewed: `5e3855233a1354d8f61ae99d45ad6b54e125e674` on `fallintoplace/sql-editor-home-assignment:main`.
 

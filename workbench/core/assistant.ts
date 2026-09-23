@@ -156,7 +156,7 @@ export class AssistantService {
         canWrite(p);
         this.sweep();
         requireThat(this.authorized(p, input.connectionId), 403, 'AI_CONTEXT_PERMISSION', 'Trust and authorize this connection before preparing AI context');
-        requireThat(this.store.list('ai-contexts').length < 30, 429, 'CONTEXT_CAPACITY', 'Remove an older prepared context or wait for it to expire');
+        requireThat(this.store.count('ai-contexts') < 30, 429, 'CONTEXT_CAPACITY', 'Remove an older prepared context or wait for it to expire');
         requireThat(Object.hasOwn(PLAYBOOKS, input.action), 400, 'ASSISTANT_ACTION', 'Unknown assistant action');
         const built = buildContext(input);
         const context: PreparedContext = { id: randomUUID(), owner: p.id, connectionId: input.connectionId,
@@ -177,7 +177,7 @@ export class AssistantService {
         requireThat(context.state === 'ready', 409, 'AI_ALREADY_SENT', 'This context was already submitted. It will not be retried automatically.');
         requireThat(Date.parse(context.expiresAt) > Date.now(), 410, 'AI_CONTEXT_EXPIRED', 'Preview a fresh context before sending');
         requireThat(this.driver.available, 503, 'AI_UNAVAILABLE', 'OpenAI is not configured');
-        requireThat(this.store.list('proposals').length < 200, 507, 'PROPOSAL_CAPACITY', 'Delete older proposals before creating another');
+        requireThat(this.store.count('proposals') < 200, 507, 'PROPOSAL_CAPACITY', 'Delete older proposals before creating another');
         const usage = this.usage(p), size = Buffer.byteLength(JSON.stringify(context.payload));
         requireThat(usage.calls < 20 && usage.inputBytes + size <= 5000000, 429, 'AI_BUDGET', 'The workspace daily AI request or context budget has been reached');
         usage.calls++;

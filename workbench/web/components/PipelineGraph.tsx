@@ -1,4 +1,4 @@
-import { useMemo, useState, useId, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useState, useId, type KeyboardEvent } from 'react';
 import { dagre } from 'd3-dag';
 import type { ProfilePipeline, ProfilePipelineNode } from '../../shared/types';
 
@@ -129,6 +129,7 @@ function pathFor(points: PositionedEdge['points']) {
 export function PipelineGraph({ pipeline }: { pipeline: ProfilePipeline }) {
     const layout = useMemo(() => layoutPipeline(pipeline), [pipeline]);
     const [selectedId, setSelectedId] = useState<string | undefined>(pipeline.nodes[0]?.id);
+    useEffect(() => setSelectedId(pipeline.nodes[0]?.id), [pipeline]);
     const selected = pipeline.nodes.find(node => node.id === selectedId) ?? pipeline.nodes[0];
     const markerId = `pipeline-arrow-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
     const incomingCount = selected ? pipeline.edges.filter(edge => edge.target === selected.id).length : 0;

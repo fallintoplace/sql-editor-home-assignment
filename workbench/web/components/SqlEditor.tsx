@@ -90,6 +90,7 @@ export interface EditorHandle {
     insert: (text: string) => void;
     focus: () => void;
     indent: () => void;
+    retryNativeParser: () => void;
     formatNative: () => Promise<'formatted' | 'fallback' | 'unavailable' | 'rejected'>;
     selection: () => {
         from: number;
@@ -102,6 +103,7 @@ interface Props {
     to: number;
     schema?: Schema;
     dark: boolean;
+    parserStatus: NativeParserStatus;
     error?: ApiError;
     onChange: (value: string) => void;
     onSelection: (from: number, to: number) => void;
@@ -141,7 +143,7 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
         const editor = view.current, revision = ++validationRevision.current;
         nativeDiagnostics.current = [];
         applyDiagnostics();
-        if (!editor)
+        if (!editor || props.parserStatus !== 'ready')
             return;
         const outline = editor.state.field(sqlStatementOutline);
         if (outline.error || !outline.statements.length)
@@ -164,7 +166,7 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
             });
         }, 250);
         return () => window.clearTimeout(timer);
-    }, [props.value, applyDiagnostics]);
+    }, [props.parserStatus, props.value, applyDiagnostics]);
     useEffect(() => { const v = view.current; if (!v)
         return; const from = Math.min(props.from, v.state.doc.length), to = Math.min(props.to, v.state.doc.length); if (v.state.selection.main.from !== from || v.state.selection.main.to !== to)
         v.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true }); }, [props.from, props.to]);
@@ -179,6 +181,7 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
         focus: () => view.current?.focus(),
         indent: () => { if (view.current)
             indentSelection(view.current); },
+        retryNativeParser: () => clickHouseNativeParser.retry(),
         formatNative: async () => {
             const editor = view.current;
             if (!editor)

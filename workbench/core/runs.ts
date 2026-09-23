@@ -127,8 +127,8 @@ export class RunService {
             return this.get(principal, previous.resourceId);
         }
         requireThat(this.queue.length + this.active < 50, 429, 'RUN_QUEUE_FULL', 'There are too many pending runs');
-        requireThat(this.store.list('runs').length < 1000, 507, 'HISTORY_FULL', 'Run history is full. Export and delete older runs.');
-        requireThat(this.store.list('receipts').length < 10000, 507, 'RECEIPT_CAPACITY', 'Idempotency storage needs operator maintenance');
+        requireThat(this.store.count('runs') < 1000, 507, 'HISTORY_FULL', 'Run history is full. Export and delete older runs.');
+        requireThat(this.store.count('receipts') < 10000, 507, 'RECEIPT_CAPACITY', 'Idempotency storage needs operator maintenance');
         const id = randomUUID();
         const run: Run = {
             id, queryId: `cathedral-${randomUUID()}`, owner: principal.id, dataSource: conn.dataSource ?? 'clickhouse',
@@ -374,7 +374,7 @@ export class RunService {
     }
     submitScript(principal: Principal, input: unknown, stopOnError = true): Script {
         requireThat(!this.closed, 503, 'SHUTTING_DOWN', 'The server is shutting down');
-        requireThat(this.store.list('scripts').length < 200, 507, 'SCRIPT_CAPACITY', 'Script history needs operator maintenance');
+        requireThat(this.store.count('scripts') < 200, 507, 'SCRIPT_CAPACITY', 'Script history needs operator maintenance');
         const request = runRequest(input), statements = splitSql(request.sql);
         requireThat(statements.length > 0 && statements.length <= 50, 400, 'SCRIPT_SIZE', 'A script must contain 1–50 statements');
         requireThat(!request.kind || request.kind === 'query', 400, 'SCRIPT_KIND', 'Explain one statement at a time');

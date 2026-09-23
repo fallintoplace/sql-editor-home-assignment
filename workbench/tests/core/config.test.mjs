@@ -4,6 +4,17 @@ import { loadConfig, publicProfile, redactor } from '../../.core-build/server/co
 import { insertChildFilter } from '../../.core-build/shared/sql.js';
 test('Local startup binds loopback by default', () => assert.equal(loadConfig({}).host, '127.0.0.1'));
 test('Non-loopback startup requires an owner access token', () => assert.throws(() => loadConfig({ HOST: '0.0.0.0' }), { code: 'AUTH_REQUIRED' }));
+test('A loopback bind with a public application origin requires an owner access token', () => assert.throws(() => loadConfig({ HOST: '127.0.0.1', APP_ORIGIN: 'https://sql.example.com' }), { code: 'AUTH_REQUIRED' }));
+test('A public application origin also requires a restricted ClickHouse identity', () => assert.throws(() => loadConfig({ HOST: '127.0.0.1', APP_ORIGIN: 'https://sql.example.com', WORKBENCH_TOKEN: 'a'.repeat(32) }), { code: 'RESTRICTED_IDENTITY' }));
+test('A loopback bind with a token and restricted identity supports an external application origin', () => {
+    const config = loadConfig({ HOST: '127.0.0.1', APP_ORIGIN: 'https://sql.example.com', WORKBENCH_TOKEN: 'a'.repeat(32), CLICKHOUSE_USER: 'reader' });
+    assert.equal(config.origin, 'https://sql.example.com');
+});
+test('Loopback IPv4 and IPv6 application origins remain local', () => {
+    assert.equal(loadConfig({ HOST: '127.14.0.9', APP_ORIGIN: 'http://localhost:5173' }).host, '127.14.0.9');
+    assert.equal(loadConfig({ HOST: '::1', APP_ORIGIN: 'http://[::1]:5173' }).host, '::1');
+});
+test('Fixture mode remains local when a reverse proxy origin is configured', () => assert.throws(() => loadConfig({ HOST: '127.0.0.1', APP_ORIGIN: 'https://sql.example.com', WORKBENCH_TOKEN: 'a'.repeat(32), CLICKHOUSE_USER: 'reader', DEMO_MODE: 'true' }), { code: 'DEMO_LOCAL_ONLY' }));
 test('A shared binding cannot use the default ClickHouse identity', () => assert.throws(() => loadConfig({ HOST: '0.0.0.0', WORKBENCH_TOKEN: 'a'.repeat(40) }), { code: 'RESTRICTED_IDENTITY' }));
 test('Fixture mode cannot be exposed on a shared bind address', () => assert.throws(() => loadConfig({ HOST: '0.0.0.0', WORKBENCH_TOKEN: 'a'.repeat(40), CLICKHOUSE_USER: 'reader', DEMO_MODE: 'true' }), { code: 'DEMO_LOCAL_ONLY' }));
 test('Connection URLs cannot carry credentials', () => assert.throws(() => loadConfig({ CLICKHOUSE_URL: 'https://user:secret@example.com' }), { code: 'CONNECTION_URL' }));

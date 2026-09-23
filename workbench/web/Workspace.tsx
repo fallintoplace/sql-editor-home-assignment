@@ -84,6 +84,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [compactViewport, setCompactViewport] = useState(() => window.matchMedia('(max-width: 850px)').matches);
     const [importOpen, setImportOpen] = useState(false);
     const [busy, setBusy] = useState<BusyAction>('');
+    const [cancelling, setCancelling] = useState(false);
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
     const [search, setSearch] = useState('');
@@ -126,7 +127,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     }, []);
     const trustedRef = useRef(trusted);
     trustedRef.current = trusted;
-    const schemaRequestRef = useRef(0);
+    const schemaRequestRef = useRef(0), historyRequestRef = useRef(0), documentsRequestRef = useRef(0);
+    const cancellingRef = useRef(false);
 
     useEffect(() => () => recognitionRef.current?.abort(), []);
     useEffect(() => { setDrawerOpen(false); }, [experience]);
@@ -251,26 +253,44 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     }, []);
     const patch = useCallback((values: Partial<Draft>) => update(active.id, draft => ({ ...draft, ...values })), [active.id, update]);
     const formatActiveSql = useCallback(async () => {
+        const draftId = active.id, sourceSql = active.sql;
+        const applyFallback = () => setWorkspace(current => current.activeId !== draftId ? current : ({ ...current,
+            tabs: current.tabs.map(draft => draft.id === draftId && draft.sql === sourceSql ? { ...draft, sql: formatSql(sourceSql) } : draft),
+        }));
         if (nativeParserStatus !== 'ready') {
-            patch({ sql: formatSql(active.sql) });
+            applyFallback();
             return;
         }
         const result = await editor.current?.formatNative();
         if (result === 'unavailable' || result === 'fallback')
-            patch({ sql: formatSql(active.sql) });
-    }, [active.sql, nativeParserStatus, patch]);
+            applyFallback();
+    }, [active.id, active.sql, nativeParserStatus]);
 
     const loadHistory = useCallback(async () => {
-        setHistory(await api<Run[]>(`/runs?connectionId=${encodeURIComponent(connection.id)}`));
+        const requestId = ++historyRequestRef.current;
+        try {
+            const next = await api<Run[]>(`/runs?connectionId=${encodeURIComponent(connection.id)}`);
+            if (historyRequestRef.current === requestId) setHistory(next);
+        } catch (caught) {
+            if (historyRequestRef.current === requestId) throw caught;
+        }
     }, [connection.id]);
     const loadDocuments = useCallback(async () => {
+        const requestId = ++documentsRequestRef.current;
         try {
-            setDocuments(await api<QueryDocument[]>(`/documents?trash=true&connectionId=${encodeURIComponent(connection.id)}`));
-            setDocumentsReadError(false);
+            const next = await api<QueryDocument[]>(`/documents?trash=true&connectionId=${encodeURIComponent(connection.id)}`);
+            if (documentsRequestRef.current === requestId) {
+                setDocuments(next);
+                setDocumentsReadError(false);
+            }
         } catch (caught) {
-            setDocumentsReadError(true);
-            throw caught;
-        } finally { setDocumentsLoaded(true); }
+            if (documentsRequestRef.current === requestId) {
+                setDocumentsReadError(true);
+                throw caught;
+            }
+        } finally {
+            if (documentsRequestRef.current === requestId) setDocumentsLoaded(true);
+        }
     }, [connection.id]);
     const loadSchema = useCallback(async () => {
         const requestId = ++schemaRequestRef.current;
@@ -304,7 +324,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             setSchemaLoading(false);
         }
         const interval = window.setInterval(() => { void loadHistory().catch(() => undefined); }, 15000);
-        return () => { window.clearInterval(interval); schemaRequestRef.current++; };
+        return () => { window.clearInterval(interval); schemaRequestRef.current++; historyRequestRef.current++; documentsRequestRef.current++; };
     }, [loadDocuments, loadHistory, loadSchema, trusted]);
 
     const { run, setRunForRun, page, setPage, resultPage, snapshot, setSnapshotForRun, profile, setProfileForRun, pipeline, setPipelineForRun, eventState } = useRunEvidence({
@@ -368,16 +388,29 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         void loadHistory().catch(() => undefined);
     }, wholeScript ? 'script' : 'run');
 
-    const cancel = () => perform(async () => {
-        if (script?.status === 'running') {
-            const cancelled = await post<Script>(`/scripts/${encodeURIComponent(script.id)}/cancel`);
-            setScripts(current => ({ ...current, [cancelled.id]: cancelled }));
-            return;
+    const cancel = async () => {
+        if (cancellingRef.current) return;
+        const scriptId = script?.status === 'running' ? script.id : undefined;
+        const runId = !scriptId && run && !terminal(run) ? run.id : undefined;
+        if (!scriptId && !runId) return;
+        cancellingRef.current = true;
+        setCancelling(true);
+        setError('');
+        try {
+            if (scriptId) {
+                const cancelled = await post<Script>(`/scripts/${encodeURIComponent(scriptId)}/cancel`);
+                setScripts(current => ({ ...current, [cancelled.id]: cancelled }));
+            } else if (runId) {
+                setRunForRun(runId, await post<Run>(`/runs/${encodeURIComponent(runId)}/cancel`));
+                setNotice('Cancellation requested. The server will confirm the final state.');
+            }
+        } catch (caught) {
+            setError(message(caught));
+        } finally {
+            cancellingRef.current = false;
+            setCancelling(false);
         }
-        if (!run || terminal(run)) return;
-        setRunForRun(run.id, await post<Run>(`/runs/${encodeURIComponent(run.id)}/cancel`));
-        setNotice('Cancellation requested. The server will confirm the final state.');
-    }, 'run');
+    };
 
     const openRun = (selected: Run) => {
         if (selected.connectionId !== connection.id) { onSelectConnection(selected.connectionId); return; }
@@ -572,7 +605,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     {experience === 'beginner' ? <AssistantWorkflow mode="beginner" sql={active.sql} action={assistantAction} onActionChange={changeAssistantAction} question={assistantQuestion} onQuestionChange={changeAssistantQuestion} context={assistantContext} proposal={assistantProposal} busy={assistantBusy} error={assistantError} trusted={trusted} runId={run?.id} includeResult={includeResult} onIncludeResult={setIncludeResult} onVoiceInput={startVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={() => void prepareAssistantContext('generate', assistantQuestion)} onRequestProposal={() => void requestAssistantProposal()} onDecideProposal={decision => void decideAssistantProposal(decision)} onRunQuery={() => void execute()} runDisabled={!trusted || Boolean(busy)} onSave={() => void saveDraft()} saveDisabled={Boolean(busy)}/> : <section className="editor-surface">
                         <div className="editor-heading">
                             <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">QUERY</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label><span className="edit-indicator" title={active.serverId ? `Saved revision ${active.baseRevision}` : 'Only in this browser'}>{active.serverId ? `REV ${active.baseRevision}` : 'LOCAL'}</span></div>
-                            <div className="editor-heading-actions"><Button variant="ghost" className="toolbar-small" title={nativeParserStatus === 'ready' ? 'Format with the native ClickHouse parser' : 'Format SQL'} onClick={() => void formatActiveSql()}>Format</Button></div>
+                            <div className="editor-heading-actions">{nativeParserStatus === 'unavailable' && <><span className="toolbar-small" role="status" title="Formatting remains available while the native parser is unavailable.">Parser unavailable</span><Button variant="ghost" className="toolbar-small" onClick={() => editor.current?.retryNativeParser()}>Retry parser</Button></>}<Button variant="ghost" className="toolbar-small" title={nativeParserStatus === 'ready' ? 'Format with the native ClickHouse parser' : 'Format SQL'} onClick={() => void formatActiveSql()}>Format</Button></div>
                         </div>
                         <div className="editor-toolbar">
                             <div className="editor-mode-label"><span className="editor-language-dot"/>ClickHouse SQL<span className="toolbar-divider"/><span>{statementCount === undefined ? 'Incomplete SQL' : `${statementCount} statement${statementCount === 1 ? '' : 's'}`}</span>{nativeParserStatus === 'ready' && <><span className="toolbar-divider"/><span title="Syntax checks and formatting run locally in a Web Worker using ClickHouse's native parser.">Native parser</span></>}</div>
@@ -588,7 +621,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                 </>}
                             </div>
                         </div>
-                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus}/></div>
+                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} parserStatus={nativeParserStatus} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus}/></div>
                         {parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => patch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
                         <div className="editor-footer"><span><span className="key-hint">⌘↵</span> Run current statement <span className="footer-dot">·</span> <span className="key-hint">⌘⇧↵</span> Run script</span><span>{active.sql.length.toLocaleString()} characters <span className="footer-dot">·</span> {active.sql.split('\n').length} lines</span></div>
                     </section>}
@@ -606,7 +639,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             if (active.scriptId) scriptFollowRef.current = { scriptId: active.scriptId, enabled: false };
                             update(active.id, draft => ({ ...draft, activeRunId: runId }));
                             setPage(0); setView('results');
-                        }} onCancel={() => void cancel()} cancelDisabled={Boolean(busy)}/>}
+                        }} onCancel={() => void cancel()} cancelDisabled={cancelling}/>}
                         {run && view === 'results' && <ResultGrid key={run.id} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/>}
                         {run && view === 'chart' && <ChartView result={snapshot} loading={!snapshot && run.resultState === 'reopenable'} chart={active.chart} onChart={chart => patch({ chart })}/>}
                         {run && view === 'insights' && <InsightsView run={run} profile={profile} pipeline={pipeline} pipelineAvailable={Boolean(trusted && connection.manifest?.pipeline.available)} onLoad={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} loading={busy === 'save'}/>}
@@ -617,6 +650,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             {drawerOpen && (experience === 'beginner' || compactViewport) && <><button className="drawer-backdrop" type="button" aria-label="Close panel" onClick={() => setDrawerOpen(false)}/><InspectorPane {...inspectorProps} drawer onClose={() => setDrawerOpen(false)} onInsert={value => { editor.current?.insert(value); setDrawerOpen(false); }} onOpenDocument={document => { openDocument(document); setDrawerOpen(false); }}/></>}
         </div>
         <ImportWizard open={importOpen} connectionId={connection.id} trusted={trusted} demoMode={demoMode} onClose={() => setImportOpen(false)} onImported={() => { void loadSchema(); setNotice('Import complete. The destination schema was refreshed.'); }}/>
-        {run && <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} busy={Boolean(busy)} scriptRunning={script?.status === 'running'}/>}
+        {run && <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} cancelling={cancelling} scriptRunning={script?.status === 'running'}/>}
     </div>;
 }

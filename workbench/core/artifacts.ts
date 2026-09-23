@@ -40,7 +40,7 @@ export class ArtifactService {
         if (old)
             requireThat(integer(input.baseRevision, 'baseRevision', 1, 1000000) === old.revision, 409, 'REVISION_CONFLICT', 'A newer revision exists. Compare it with your draft; nothing was overwritten.');
         else
-            requireThat(this.list(p, true).length < 200, 507, 'DOCUMENT_CAPACITY', 'This workspace has reached its 200-document limit');
+            requireThat(this.list(p).length < 200, 507, 'DOCUMENT_CAPACITY', 'This workspace has reached its 200-active-document limit');
         const connectionId = text(input.connectionId, 'connectionId', 128);
         this.authorizeConnection(p, connectionId);
         const kind = input.kind ?? old?.kind ?? 'query';
@@ -108,6 +108,8 @@ export class ArtifactService {
     restore(p: Principal, id: string): QueryDocument {
         canWrite(p);
         const d = this.get(p, id);
+        if (d.deletedAt)
+            requireThat(this.list(p).length < 200, 507, 'DOCUMENT_CAPACITY', 'This workspace has reached its 200-active-document limit');
         delete d.deletedAt;
         this.store.put('documents', id, d);
         audit(this.store, p, 'document.restore', id);
@@ -139,10 +141,11 @@ export class ArtifactService {
         }
         const publishedId = hash([id, revision, d.runId]);
         const prior = this.store.get<Published>('published', publishedId);
-        if (prior)
+        const now = Date.now();
+        if (prior && Date.parse(prior.expiresAt) > now)
             return prior;
-        requireThat(this.store.list('published').length < 50, 507, 'PUBLICATION_CAPACITY', 'Remove an older publication before publishing another');
-        const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
+        requireThat(this.store.list<Published>('published').filter(publication => Date.parse(publication.expiresAt) > now).length < 50, 507, 'PUBLICATION_CAPACITY', 'Remove an older publication before publishing another');
+        const expiresAt = new Date(now + 7 * 86400000).toISOString();
         const pub: Published = { id: publishedId, owner: p.id, documentId: id, revision, publishedAt: new Date().toISOString(), expiresAt,
             document: structuredClone(d), run, result: { ...result, rows: bounded.rows,
                 completeness: bounded.truncated ? 'truncated' : 'complete', expiresAt }, resultLifetime: 'snapshot', source: run.dataSource === 'fixture' ? 'fixture' : 'live-run' };

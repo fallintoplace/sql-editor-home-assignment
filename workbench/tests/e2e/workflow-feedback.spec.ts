@@ -229,6 +229,74 @@ async function loadedHistory(page: Page) {
     await trust(page);
     await history(page).getByRole('button', { name: 'Show all workspace files', exact: true }).click();
 }
+test('An older run-history refresh cannot replace a newer response', async ({ page }) => {
+    let requestCount = 0, refreshRequested = false;
+    let markFirstRequest!: () => void, releaseFirstRequest!: () => void;
+    const firstRequest = new Promise<void>(resolve => { markFirstRequest = resolve; });
+    const firstResponseGate = new Promise<void>(resolve => { releaseFirstRequest = resolve; });
+    await page.route(url => url.pathname === '/api/runs' && url.searchParams.has('connectionId'), async route => {
+        requestCount++;
+        if (requestCount === 1) {
+            markFirstRequest();
+            await firstResponseGate;
+            await route.fulfill({ json: [historyRun(0)] });
+        } else {
+            await route.fulfill({ json: [historyRun(refreshRequested ? 1 : 0)] });
+        }
+    });
+    try {
+        await trust(page);
+        await firstRequest;
+        await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
+        await page.getByRole('menuitem', { name: 'Run history', exact: true }).click();
+        const pane = page.locator('.inspector-pane');
+        refreshRequested = true;
+        await pane.getByRole('button', { name: '↻ Refresh', exact: true }).click();
+        await expect(pane.locator('.history-card')).toContainText("loaded-history-1");
+        releaseFirstRequest();
+        await expect(pane.locator('.history-card')).toContainText("loaded-history-1");
+        await expect(pane.locator('.history-card')).not.toContainText("loaded-history-0");
+    } finally {
+        releaseFirstRequest();
+    }
+});
+
+test('An older saved-document refresh cannot replace a newer response', async ({ page }) => {
+    const savedDocument = (id: string, name: string): QueryDocument => ({
+        id, owner: 'local-owner', name, connectionId: 'demo', sql: 'SELECT 1', revision: 1,
+        createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+        parameters: {}, chart: { kind: 'table', x: 0, ys: [], title: 'Query result' }, dependencies: [], kind: 'query',
+    });
+    let requestCount = 0, refreshRequested = false;
+    let markFirstRequest!: () => void, releaseFirstRequest!: () => void;
+    const firstRequest = new Promise<void>(resolve => { markFirstRequest = resolve; });
+    const firstResponseGate = new Promise<void>(resolve => { releaseFirstRequest = resolve; });
+    await page.route(url => url.pathname === '/api/documents' && url.searchParams.get('trash') === 'true', async route => {
+        requestCount++;
+        if (requestCount === 1) {
+            markFirstRequest();
+            await firstResponseGate;
+            await route.fulfill({ json: [savedDocument('saved-old', 'Old saved query.sql')] });
+        } else {
+            const document = refreshRequested ? savedDocument('saved-new', 'Fresh saved query.sql') : savedDocument('saved-old', 'Old saved query.sql');
+            await route.fulfill({ json: [document] });
+        }
+    });
+    try {
+        await trust(page);
+        await firstRequest;
+        await page.getByRole('navigation', { name: 'Workspace browser', exact: true }).getByRole('button', { name: 'Queries', exact: true }).click();
+        const pane = page.locator('.inspector-pane');
+        refreshRequested = true;
+        await pane.getByRole('button', { name: '↻ Refresh', exact: true }).click();
+        await expect(pane.locator('.document-card')).toContainText('Fresh saved query.sql');
+        releaseFirstRequest();
+        await expect(pane.locator('.document-card')).toContainText('Fresh saved query.sql');
+        await expect(pane.locator('.document-card')).not.toContainText('Old saved query.sql');
+    } finally {
+        releaseFirstRequest();
+    }
+});
 test('History filters search SQL and IDs across every loaded run', async ({ page }) => {
     const counts = requests(page);
     await loadedHistory(page);

@@ -37,6 +37,18 @@ class ClickHouseNativeParser {
         return this.request<NativeFormatResult>('formatMany', sql);
     }
 
+    retry() {
+        if (this.state !== 'unavailable') return;
+        this.worker?.terminate();
+        this.worker = undefined;
+        this.setStatus('loading');
+        try {
+            this.ensureWorker();
+        } catch (error) {
+            this.setStatus('unavailable', error instanceof Error ? error.message : String(error));
+        }
+    }
+
     private ensureWorker(): Worker {
         if (this.worker)
             return this.worker;

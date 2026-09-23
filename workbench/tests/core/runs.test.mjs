@@ -6,6 +6,19 @@ import { DEFAULT_LIMITS } from '../../.core-build/shared/types.js';
 import { fixture, owner, other, viewer, until, columns } from './helpers.mjs';
 test('Lifecycle retains typed evidence and actual identity', async () => { const f = fixture(), r = f.runs.submit(owner, f.request()); const done = await f.runs.wait(owner, r.id); assert.equal(done.status, 'succeeded'); assert.equal(done.executedAs, 'reader'); assert.equal(f.runs.result(owner, r.id).rows[0][0], '1'); assert.equal(done.retryPolicy, 'never'); });
 test('Duplicate request executes once', async () => { const f = fixture(), input = f.request(); const a = f.runs.submit(owner, input), b = f.runs.submit(owner, input); assert.equal(a.id, b.id); await f.runs.wait(owner, a.id); assert.equal(f.calls.length, 1); });
+test('Run capacity checks use store counts without loading run or receipt records', async () => {
+    const f = fixture(), list = f.store.list.bind(f.store);
+    f.store.list = bucket => {
+        if (bucket === 'runs' || bucket === 'receipts') throw new Error(`Capacity check loaded ${bucket}`);
+        return list(bucket);
+    };
+    let run;
+    try { run = f.runs.submit(owner, f.request()); }
+    finally { f.store.list = list; }
+    assert.equal((await f.runs.wait(owner, run.id)).status, 'succeeded');
+    assert.equal(f.store.count('runs'), 1);
+    assert.equal(f.store.count('receipts'), 1);
+});
 test('Reusing an id for different SQL rejects', () => { const f = fixture(), input = f.request(); f.runs.submit(owner, input); assert.throws(() => f.runs.submit(owner, { ...input, sql: 'SELECT 9' }), { code: 'IDEMPOTENCY_CONFLICT' }); });
 test('Connection trust is required server-side', () => { const f = fixture(); f.runs.trust(owner, 'local', false); assert.throws(() => f.runs.submit(owner, f.request()), { code: 'WORKSPACE_UNTRUSTED' }); assert.equal(f.calls.length, 0); });
 test('Connection trust is invalidated when the same profile id resolves to another target', () => { let host = 'http://localhost:8123'; const f = fixture({ authorize: (_p, id) => ({ id, name: 'Local', host, database: 'default', username: 'reader', readonly: true, limits: { ...DEFAULT_LIMITS }, manifest: { version: 1, serverVersion: 'fixture', testedAt: new Date().toISOString(), explain: { available: true }, pipeline: { available: true } } }) }); assert.equal(f.runs.isTrusted(owner, 'local'), true); host = 'http://other:8123'; assert.equal(f.runs.isTrusted(owner, 'local'), false); assert.throws(() => f.runs.submit(owner, f.request()), { code: 'WORKSPACE_UNTRUSTED' }); });

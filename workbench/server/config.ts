@@ -1,8 +1,16 @@
 import { readFileSync } from 'node:fs';
+import { isIP } from 'node:net';
 import { resolve } from 'node:path';
 import type { Connection, Limits } from '../shared/types.js';
 import { AppError, requireThat } from '../core/errors.js';
 import { identifier, integer, limits, record, text } from '../core/validation.js';
+function isLoopbackHost(host: string) {
+    const normalized = host.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
+    if (normalized === 'localhost' || normalized.endsWith('.localhost'))
+        return true;
+    const family = isIP(normalized);
+    return family === 4 ? normalized.startsWith('127.') : family === 6 && normalized === '::1';
+}
 export interface Profile {
     id: string;
     name: string;
@@ -35,10 +43,10 @@ export interface Config {
 }
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     const host = env.HOST ?? '127.0.0.1', port = integer(Number(env.PORT ?? 8080), 'PORT', 1, 65535);
-    const origin = new URL(env.APP_ORIGIN ?? 'http://localhost:5173').origin;
-    requireThat(['http:', 'https:'].includes(new URL(origin).protocol), 400, 'APP_ORIGIN', 'APP_ORIGIN must be HTTP(S)');
-    const local = ['127.0.0.1', 'localhost', '::1'].includes(host), token = env.WORKBENCH_TOKEN;
-    requireThat(local || (typeof token === 'string' && token.length >= 32), 400, 'AUTH_REQUIRED', 'Non-loopback binding requires a WORKBENCH_TOKEN of at least 32 characters');
+    const originUrl = new URL(env.APP_ORIGIN ?? 'http://localhost:5173');
+    requireThat(['http:', 'https:'].includes(originUrl.protocol), 400, 'APP_ORIGIN', 'APP_ORIGIN must be HTTP(S)');
+    const origin = originUrl.origin, local = isLoopbackHost(host) && isLoopbackHost(originUrl.hostname), token = env.WORKBENCH_TOKEN;
+    requireThat(local || (typeof token === 'string' && token.length >= 32), 400, 'AUTH_REQUIRED', 'A non-loopback HOST or APP_ORIGIN requires a WORKBENCH_TOKEN of at least 32 characters');
     const getSecret = (key: unknown) => { if (key === undefined)
         return ''; const name = text(key, 'passwordEnv', 100); requireThat(/^[A-Z][A-Z0-9_]*$/.test(name), 400, 'SECRET_REFERENCE', 'Invalid environment secret reference'); return env[name] ?? ''; };
     const raw: unknown = env.CONNECTIONS_FILE ? JSON.parse(readFileSync(resolve(env.CONNECTIONS_FILE), 'utf8')) : [{

@@ -140,7 +140,7 @@ export class ImportService {
     preview(principal: Principal, name: string, source: string, format: InputPreview['format']): InputPreview {
         canWrite(principal);
         this.sweep();
-        requireThat(this.store.list('inputs').length < 20, 429, 'INPUT_CAPACITY', 'Remove an older preview before uploading another file');
+        requireThat(this.store.count('inputs') < 20, 429, 'INPUT_CAPACITY', 'Remove an older preview before uploading another file');
         const parsed = parseInput(source, format);
         requireThat(parsed.rows.length > 0, 400, 'IMPORT_EMPTY', 'The input contains no data rows');
         const input: InputPreview = { id: randomUUID(), owner: principal.id, name: name.slice(0, 128), format, ...parsed,

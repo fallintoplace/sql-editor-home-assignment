@@ -222,12 +222,9 @@
     .run-action-group { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 5px; }
     .run-action-group .run-query-button { min-width: 98px; }
     .run-option-button { min-height: 34px; padding: 0 9px; font-size: 9px; letter-spacing: .02em; }
-    .run-option-button kbd { padding: 3px 5px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); font-family: var(--font-mono); font-size: 7px; }
     .sql-ai-button { color: var(--violet); }
     .sql-ai-button[aria-pressed="true"] { border-color: color-mix(in srgb, var(--violet) 25%, transparent); background: color-mix(in srgb, var(--violet) 8%, transparent); }
     .save-revision-button { min-height: 34px; }
-    .run-query-button kbd, .empty-shortcut kbd, .inspector-search kbd { padding: 3px 5px; border: 1px solid color-mix(in srgb, var(--accent) 18%, var(--line)); border-radius: 4px; background: color-mix(in srgb, var(--accent) 7%, var(--panel)); color: inherit; font-family: var(--font-mono); font-size: 8px; }
-    .run-query-button kbd { padding: 0 2px; border-color: transparent; background: transparent; color: var(--accent-ink); }
     .editor-frame { min-height: 120px; flex: 1; overflow: auto; background: var(--page-raised); }
     .sql-editor, .sql-editor .cm-editor { width: 100%; height: 100%; min-height: 100%; }
     .sql-editor .cm-editor { background: transparent; color: var(--text); }
@@ -260,8 +257,7 @@
     .parameter-field input, .field-input, .field-textarea { width: 100%; min-height: 31px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; outline: none; background: var(--page-raised); color: var(--text); font-size: 10px; transition: .18s ease; }
     .parameter-field input:focus, .field-input:focus, .field-textarea:focus { border-color: color-mix(in srgb, var(--accent) 58%, var(--line)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent); }
     .parameter-count { padding-bottom: 8px; color: var(--green); font-size: 9px; white-space: nowrap; }
-    .editor-footer { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 13px; border-top: 1px solid var(--line); color: var(--muted); font-size: 8px; }
-    .key-hint { color: var(--text-soft); font-family: var(--font-mono); font-size: 8px; }
+    .editor-footer { display: flex; flex: none; align-items: center; justify-content: flex-end; gap: 10px; padding: 7px 13px; border-top: 1px solid var(--line); color: var(--muted); font-size: 8px; }
     .footer-dot { padding: 0 5px; color: var(--line-bright); }
     .results-header { display: flex; min-height: 54px; flex: none; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 14px; border-bottom: 1px solid var(--line); background: linear-gradient(105deg, color-mix(in srgb, var(--accent) 3%, var(--panel-raised)), var(--panel-raised) 48%, var(--panel)); }
     .results-title, .results-actions { display: flex; align-items: center; gap: 10px; }
@@ -346,8 +342,6 @@
     .empty-workspace h3 em { color: var(--accent); font-style: normal; }
     .empty-workspace p { max-width: 390px; margin: 0 0 5px; color: var(--text-soft); font-size: 10px; line-height: 1.7; }
     .empty-workspace > .button-base { min-height: 34px; padding-inline: 14px; }
-    .empty-shortcut { display: inline-flex; align-items: center; gap: 6px; font-size: 9px; }
-    .empty-shortcut kbd { border-color: var(--line-bright); background: var(--panel-raised); color: var(--text-soft); }
     .insights-view, .chart-workspace { min-height: 0; flex: 1; overflow: auto; padding: 17px 18px; }
     .insights-heading, .chart-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
     .insights-heading h3, .chart-title-row h3 { margin: 5px 0 4px; font-size: 16px; font-weight: 650; letter-spacing: -.04em; }
@@ -500,7 +494,6 @@
     .inspector-search { display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--page-raised); color: var(--muted); }
     .inspector-search svg { width: 13px; height: 13px; flex: none; }
     .inspector-search input { width: 100%; min-width: 0; height: 32px; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 9px; }
-    .inspector-search kbd { border-color: var(--line); background: var(--panel); color: var(--muted); white-space: nowrap; }
     .schema-table { overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: color-mix(in srgb, var(--panel-raised) 68%, transparent); transition: border-color .2s ease; }
     .schema-table[open] { border-color: var(--line-bright); }
     .schema-table summary { display: flex; min-height: 53px; align-items: center; gap: 8px; padding: 8px 9px; list-style: none; cursor: pointer; }
@@ -748,7 +741,6 @@
     .empty-core svg { width: 14px; height: 14px; }
     .empty-orbit { inset: 1px; }
     .empty-orbit.orbit-two { inset: 7px -4px; }
-    .empty-shortcut { display: none; }
     .empty-workspace h3 { font-size: 23px; line-height: .99; }
     .empty-workspace p { max-width: 380px; margin-bottom: 2px; font-size: 9px; line-height: 1.45; }
     .empty-workspace > .button-base { min-height: 31px; }
@@ -794,7 +786,6 @@
     .editor-toolbar { min-height: 40px; padding: 5px 8px; }
     .editor-actions { gap: 4px; }
     .editor-mode-label { gap: 6px; font-size: 8px; }
-    .run-query-button kbd { display: none; }
     .editor-footer { font-size: 7px; }
     .execution-bar { min-height: 40px; flex-wrap: wrap; gap: 7px 12px; padding: 6px 10px; }
     .execution-telemetry { justify-content: flex-start; }
@@ -835,14 +826,10 @@
     .run-action-group { gap: 4px; }
     .run-action-group .run-query-button { min-width: 70px; padding: 0 8px; }
     .run-option-button { min-height: 30px; padding: 0 7px; font-size: 8px; }
-    .run-option-button kbd { display: none; }
     .parameters-row { align-items: stretch; gap: 7px; padding: 8px; }
     .parameters-label { min-width: 100%; }
     .parameter-field { min-width: calc(50% - 5px); flex: 1; }
     .parameter-count { align-self: center; padding: 0; }
-    .editor-footer > span:first-child { font-size: 0; }
-    .editor-footer > span:first-child .key-hint { font-size: 8px; }
-    .editor-footer > span:last-child { margin-left: auto; }
     .results-title h2 { font-size: 10px; }
     .results-title > .inline-flex { display: none; }
     .results-header .toolbar-small { display: none; }

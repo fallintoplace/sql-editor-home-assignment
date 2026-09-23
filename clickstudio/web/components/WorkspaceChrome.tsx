@@ -5,7 +5,6 @@ import type { RunEventState } from '../workspace-types';
 
 export type RunAction = {
     label: string;
-    shortcut?: string;
     disabled?: boolean;
     title?: string;
     onSelect: () => void;
@@ -19,8 +18,8 @@ export function RunActionGroup({ runLabel, running, disabled, onRun, actions }: 
     actions: RunAction[];
 }) {
     return <div className="run-action-group" role="group" aria-label="Run actions">
-        <Button variant="primary" className="run-query-button" aria-label={runLabel} onClick={onRun} disabled={disabled}><Icon name="play"/>{running ? 'Running…' : 'Run'}<kbd>⌘ ↵</kbd></Button>
-        {actions.map(action => <Button key={action.label} variant="secondary" className="run-option-button" disabled={action.disabled} title={action.title} onClick={action.onSelect}>{action.label}{action.shortcut && <kbd>{action.shortcut}</kbd>}</Button>)}
+        <Button variant="primary" className="run-query-button" aria-label={runLabel} onClick={onRun} disabled={disabled}><Icon name="play"/>{running ? 'Running…' : 'Run'}</Button>
+        {actions.map(action => <Button key={action.label} variant="secondary" className="run-option-button" disabled={action.disabled} title={action.title} onClick={action.onSelect}>{action.label}</Button>)}
     </div>;
 }
 
@@ -29,7 +28,7 @@ export function RailButton({ icon, label, active, accent, onClick }: { icon: Ico
 }
 
 export function EmptyWorkspace({ onRun, beginner }: { onRun: () => void; beginner: boolean }) {
-    return <div className="empty-workspace"><div className="empty-graphic"><span className="empty-orbit orbit-one"/><span className="empty-orbit orbit-two"/><span className="empty-core"><Icon name="bolt"/></span><span className="empty-spark spark-one"/><span className="empty-spark spark-two"/></div><span className="eyebrow">YOUR NEXT INSIGHT STARTS HERE</span><h3>Make the data<br/><em>say something.</em></h3><p>{beginner ? 'Run a query to see your data. Results stay in this workspace when you switch modes.' : 'Run the current statement. Your query, run, and evidence stay linked.'}</p><Button variant="primary" onClick={onRun}><Icon name="play"/>Focus SQL editor</Button><span className="empty-shortcut">or press <kbd>⌘ ↵</kbd> to run</span></div>;
+    return <div className="empty-workspace"><div className="empty-graphic"><span className="empty-orbit orbit-one"/><span className="empty-orbit orbit-two"/><span className="empty-core"><Icon name="bolt"/></span><span className="empty-spark spark-one"/><span className="empty-spark spark-two"/></div><span className="eyebrow">YOUR NEXT INSIGHT STARTS HERE</span><h3>Make the data<br/><em>say something.</em></h3><p>{beginner ? 'Run a query to see your data. Results stay in this workspace when you switch modes.' : 'Run the current statement. Your query, run, and evidence stay linked.'}</p><Button variant="primary" onClick={onRun}><Icon name="play"/>Focus SQL editor</Button></div>;
 }
 
 export function ScriptResults({ script, runs, activeRunId, onSelectRun, onCancel, cancelDisabled }: {

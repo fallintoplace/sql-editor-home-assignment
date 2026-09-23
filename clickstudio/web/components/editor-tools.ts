@@ -52,8 +52,8 @@ function editorToolsPanel(view: EditorView): Panel {
         element.addEventListener('click', action);
         return element;
     };
-    const previous = button('←', 'Previous SQL statement (Alt+PageUp)', () => { navigateStatement(view, -1); });
-    const next = button('→', 'Next SQL statement (Alt+PageDown)', () => { navigateStatement(view, 1); });
+    const previous = button('←', 'Previous SQL statement', () => { navigateStatement(view, -1); });
+    const next = button('→', 'Next SQL statement', () => { navigateStatement(view, 1); });
     const select = button('Select query', 'Select current SQL statement', () => { selectStatement(view); });
     const picker = doc.createElement('select');
     picker.className = 'cm-sql-statement-picker';

@@ -93,7 +93,7 @@ export function InspectorPane({ inspector, setInspector, connection, schema, sch
         </nav>}
         <div className="inspector-content">
             {inspector === 'schema' && <section className="inspector-section">
-                <div className="inspector-search"><Icon name="search"/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search tables, columns, and dictionaries…" aria-label="Search schema"/><kbd>⌘ F</kbd></div>
+                <div className="inspector-search"><Icon name="search"/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search tables, columns, and dictionaries…" aria-label="Search schema"/></div>
                 <div className="schema-heading"><span>{tables.length} TABLES</span><div className="flex items-center gap-1.5"><Button variant="ghost" className="toolbar-small" onClick={onOpenImport}>Import data</Button><Button variant="ghost" className="toolbar-small" onClick={onRefreshSchema} disabled={schemaLoading || !trusted}>{schemaLoading ? 'Loading…' : 'Refresh'}</Button></div></div>
                 {schemaError && <div className="callout callout-error">{schemaError}</div>}
                 {schema?.metadataWarnings?.map(warning => <div className="schema-metadata-warning" key={warning}>{warning}</div>)}

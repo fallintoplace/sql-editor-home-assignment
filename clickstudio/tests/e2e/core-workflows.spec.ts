@@ -270,6 +270,96 @@ test('Result filtering searches only the visible retained page without mutating 
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
 });
 
+test('JSON cells inspect and copy formatted values without changing numeric lexemes', async ({ page }) => {
+    const rawJson = '{"large":9007199254740993,"overflow":1e309,"negativeZero":-0,"active":true,"tags":["a","b"]}';
+    const prettyJson = '{\n  "large": 9007199254740993,\n  "overflow": 1e309,\n  "negativeZero": -0,\n  "active": true,\n  "tags": [\n    "a",\n    "b"\n  ]\n}';
+    await page.addInitScript(() => {
+        Object.defineProperty(navigator, 'clipboard', {
+            configurable: true,
+            value: { writeText: async (text: string) => {
+                const windowWithClipboard = window as Window & { __clipboardWrites?: string[] };
+                windowWithClipboard.__clipboardWrites ??= [];
+                windowWithClipboard.__clipboardWrites.push(text);
+            } },
+        });
+    });
+    await page.route('**/api/runs/*/result?*', async route => {
+        const response = await route.fetch();
+        const result = await response.json();
+        await route.fulfill({ response, json: {
+            ...result,
+            columns: [{ name: 'payload', type: 'JSON' }],
+            rows: [[rawJson], [{ safe: 42 }]],
+            offset: 0,
+            totalRows: 2,
+            nextOffset: null,
+            completeness: 'complete',
+        } });
+    });
+    await trust(page);
+    const results = await runQuery(page);
+    const cell = results.getByRole('cell', { name: 'Row 1, payload' });
+    await cell.click();
+    const inspector = cell.locator('.json-cell-pre');
+    await expect(inspector).toHaveText(prettyJson);
+    await expect(inspector.locator('.json-token-number')).toContainText(['9007199254740993', '1e309', '-0']);
+
+    await results.getByRole('button', { name: 'Copy raw JSON' }).click();
+    await expect(results.getByRole('status')).toContainText('Copied raw JSON');
+    const copiedValues = () => page.evaluate(() => (window as Window & { __clipboardWrites?: string[] }).__clipboardWrites ?? []);
+    await expect.poll(copiedValues).toEqual([rawJson]);
+    await results.getByRole('button', { name: 'Copy pretty JSON' }).click();
+    await expect.poll(copiedValues).toEqual([rawJson, prettyJson]);
+    await results.getByRole('button', { name: 'Close JSON inspection' }).click();
+    await expect(inspector).toHaveCount(0);
+
+    const objectCell = results.getByRole('cell', { name: 'Row 2, payload' });
+    await objectCell.click();
+    await expect(objectCell.locator('.json-cell-pre')).toHaveText('{\n  "safe": 42\n}');
+    await results.getByRole('button', { name: 'Copy JSON', exact: true }).click();
+    await expect.poll(copiedValues).toEqual([rawJson, prettyJson, '{"safe":42}']);
+});
+
+test('Result grid supports keyboard movement and keeps pinned columns with their run', async ({ page }) => {
+    const columns = Array.from({ length: 14 }, (_, index) => ({ name: `column_${index + 1}`, type: 'String' }));
+    await page.route('**/api/runs/*/result?*', async route => {
+        const response = await route.fetch();
+        const result = await response.json();
+        await route.fulfill({ response, json: {
+            ...result,
+            columns,
+            rows: [columns.map((_, index) => `value-${index + 1}`)],
+            offset: 0,
+            totalRows: 1,
+            nextOffset: null,
+            completeness: 'complete',
+        } });
+    });
+    await trust(page);
+    const results = await runQuery(page);
+    const firstCell = results.getByRole('cell', { name: 'Row 1, column_1', exact: true });
+    await firstCell.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(results.getByRole('cell', { name: 'Row 1, column_2', exact: true })).toBeFocused();
+
+    const firstPin = results.getByRole('button', { name: 'Pin column_1 column', exact: true });
+    const secondPin = results.getByRole('button', { name: 'Pin column_2 column', exact: true });
+    await expect(firstPin).toBeVisible();
+    await firstPin.click();
+    await secondPin.click();
+    await expect(results.getByRole('button', { name: 'Unpin column_1 column', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(results.getByRole('button', { name: 'Unpin column_2 column', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    const firstLeft = Number(await results.locator('thead th').nth(1).evaluate(element => getComputedStyle(element).left.replace('px', '')));
+    const secondLeft = Number(await results.locator('thead th').nth(2).evaluate(element => getComputedStyle(element).left.replace('px', '')));
+    expect(secondLeft).toBeGreaterThan(firstLeft);
+
+    await results.getByRole('tab', { name: 'Chart', exact: true }).click();
+    await results.getByRole('tab', { name: 'Results', exact: true }).click();
+    await expect(results.getByRole('button', { name: 'Unpin column_1 column', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(results.getByRole('button', { name: 'Unpin column_2 column', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(results.locator('thead th').nth(1)).toHaveAttribute('title', 'column_1 · String');
+});
+
 test('SQL and parameter edits label old results without changing their run evidence', async ({ page }) => {
     let runRequests = 0;
     let submittedSql = '';

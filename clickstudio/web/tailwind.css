@@ -27,6 +27,8 @@
     --amber: #ffbd4a;
     --red: #ff7970;
     --violet: #c7d64a;
+    --json-key: #83b7ff;
+    --json-number: #df9cff;
     --editor-selection: #eaff0045;
     --shadow: 0 24px 76px #000a;
     --radius: 14px;
@@ -59,6 +61,8 @@
     --amber: #966300;
     --red: #b63e39;
     --violet: #707b13;
+    --json-key: #245b9e;
+    --json-number: #773f91;
     --editor-selection: #dce94e77;
     --shadow: 0 22px 64px #1b2a1c1a;
 }
@@ -299,6 +303,33 @@
     .data-table tbody tr:hover td { background: color-mix(in srgb, var(--accent) 5%, var(--panel)); }
     .data-table .row-number { position: sticky; z-index: 1; left: 0; min-width: 46px; max-width: 46px; background: var(--panel-raised); color: var(--muted); text-align: right; }
     .data-table th.row-number { z-index: 3; }
+    .data-column-heading { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 8px; }
+    .data-column-heading > span { min-width: 0; }
+    .result-column-pin { flex: none; padding: 3px 5px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--muted); font: inherit; font-family: var(--font-sans); font-size: 8px; cursor: pointer; }
+    .result-column-pin:hover, .result-column-pin[aria-pressed="true"] { border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); background: color-mix(in srgb, var(--accent) 8%, var(--panel)); color: var(--accent); }
+    .result-column-pin:focus-visible, .json-cell-actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .data-table th.is-pinned { z-index: 4; background: var(--panel-raised); box-shadow: 1px 0 var(--line-bright); }
+    .data-table td.is-pinned { position: sticky; z-index: 1; background: var(--panel); box-shadow: 1px 0 var(--line); }
+    .data-table tbody tr:hover td.is-pinned { background: color-mix(in srgb, var(--accent) 5%, var(--panel)); }
+    .data-table td { position: relative; }
+    .data-cell-value { display: block; overflow: hidden; padding-right: 26px; text-overflow: ellipsis; white-space: nowrap; }
+    .result-cell-copy { position: absolute; top: 50%; right: 4px; padding: 3px 5px; transform: translateY(-50%); border: 1px solid var(--line-bright); border-radius: 5px; background: var(--panel-raised); color: var(--text-soft); font-family: var(--font-sans); font-size: 8px; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .14s ease, color .14s ease, border-color .14s ease; }
+    .data-table td:hover .result-cell-copy, .data-table td:focus-within .result-cell-copy { opacity: 1; pointer-events: auto; }
+    .result-cell-copy:hover { border-color: var(--accent); color: var(--accent); }
+    .result-copy-feedback { color: var(--green); font-weight: 650; }
+    .result-copy-feedback.is-error { color: var(--red); }
+    .data-table td.json-cell-expanded { min-width: 290px; max-width: 420px; overflow: visible; vertical-align: top; white-space: normal; background: var(--panel-raised); }
+    .json-cell-inspector { min-width: 260px; max-width: 410px; }
+    .json-cell-actions { display: flex; align-items: center; gap: 5px; padding-bottom: 7px; color: var(--muted); font-family: var(--font-sans); font-size: 8px; }
+    .json-cell-actions > span { margin-right: auto; color: var(--text); font-weight: 650; }
+    .json-cell-actions button { padding: 4px 6px; border: 1px solid var(--line-bright); border-radius: 5px; background: var(--panel); color: var(--text-soft); font: inherit; cursor: pointer; }
+    .json-cell-actions button:hover { border-color: var(--accent); color: var(--accent); }
+    .json-cell-actions .json-cell-close { min-width: 22px; padding-inline: 4px; font-size: 12px; }
+    .json-cell-pre { max-height: 260px; margin: 0; overflow: auto; color: var(--text-soft); font: 9px/1.55 var(--font-mono); tab-size: 2; white-space: pre; }
+    .json-token-key { color: var(--json-key); }
+    .json-token-string { color: var(--green); }
+    .json-token-number { color: var(--json-number); }
+    .json-token-literal { color: var(--amber); }
     .data-table .cell-null { color: var(--muted); font-style: italic; }
     .no-rows { padding: 45px; color: var(--muted); text-align: center; font-size: 11px; }
     .table-pagination { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 9px; }

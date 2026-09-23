@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { displayValue, recommendChart, chartNumber, numericType, filterRows, sampleChartRows, MAX_CHART_RENDER_POINTS } from '../../shared/results';
-import type { ProfilePipeline, QueryProfile, Result, ResultPage, Run } from '../../shared/types';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { baseType, displayValue, recommendChart, chartNumber, numericType, filterRows, sampleChartRows, MAX_CHART_RENDER_POINTS } from '../../shared/results';
+import type { Json, ProfilePipeline, QueryProfile, Result, ResultPage, Row, Run } from '../../shared/types';
 import type { Draft } from '../workspace-state';
 import { PipelineGraph } from './PipelineGraph';
 import { Button, cx, formatBytes, Icon, terminal } from './ui';
@@ -12,21 +12,314 @@ const chartKindOptions = [
     { value: 'bar', label: 'Bar' },
 ] as const satisfies readonly { value: Draft['chart']['kind']; label: string }[];
 
+type GridCellAddress = { rowIndex: number; columnIndex: number };
+type JsonToken = { text: string; kind: 'string' | 'number' | 'literal' | 'punctuation' | 'whitespace' };
+type CopyFeedback = { key: string; message: string; copied: boolean };
+type InspectedJsonCell = GridCellAddress & { raw: string; pretty: string; originalText: boolean };
+
+const pinnedColumnsByRun = new Map<string, number[]>();
+const jsonTokenPattern = /"(?:\\.|[^"\\])*"|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null|[{}\[\],:]|\s+/gy;
+
+function scanJsonTokens(source: string): JsonToken[] | undefined {
+    const tokens: JsonToken[] = [];
+    let offset = 0;
+    while (offset < source.length) {
+        jsonTokenPattern.lastIndex = offset;
+        const match = jsonTokenPattern.exec(source);
+        if (!match || match.index !== offset)
+            return undefined;
+        const token = match[0];
+        const kind = /^\s+$/.test(token) ? 'whitespace'
+            : token.startsWith('"') ? 'string'
+                : /^[{}\[\],:]$/.test(token) ? 'punctuation'
+                    : /^(?:true|false|null)$/.test(token) ? 'literal'
+                        : 'number';
+        tokens.push({ text: token, kind });
+        offset = jsonTokenPattern.lastIndex;
+    }
+    return tokens;
+}
+
+function prettyJsonSource(source: string): string | undefined {
+    try {
+        JSON.parse(source);
+    } catch {
+        return undefined;
+    }
+    const tokens = scanJsonTokens(source);
+    if (!tokens?.length)
+        return undefined;
+    let depth = 0;
+    let previous = '';
+    let pretty = '';
+    for (let index = 0; index < tokens.length; index++) {
+        const token = tokens[index]!.text;
+        if (token === '{' || token === '[') {
+            pretty += token;
+            depth++;
+            const matchingClose = token === '{' ? '}' : ']';
+            if (tokens[index + 1]?.text !== matchingClose)
+                pretty += `\n${'  '.repeat(depth)}`;
+        } else if (token === '}' || token === ']') {
+            depth--;
+            const matchingOpen = token === '}' ? '{' : '[';
+            if (previous !== matchingOpen)
+                pretty += `\n${'  '.repeat(depth)}`;
+            pretty += token;
+        } else if (token === ',') {
+            pretty += `,\n${'  '.repeat(depth)}`;
+        } else if (token === ':') {
+            pretty += ': ';
+        } else if (tokens[index]!.kind !== 'whitespace') {
+            pretty += token;
+        }
+        if (tokens[index]!.kind !== 'whitespace')
+            previous = token;
+    }
+    return pretty;
+}
+
+function highlightedJson(pretty: string) {
+    const tokens = scanJsonTokens(pretty) ?? [];
+    return tokens.map((token, index) => {
+        if (token.kind === 'whitespace')
+            return { ...token, className: undefined };
+        let className = `json-token-${token.kind}`;
+        if (token.kind === 'string') {
+            const next = tokens.slice(index + 1).find(item => item.kind !== 'whitespace');
+            className = next?.text === ':' ? 'json-token-key' : 'json-token-string';
+        }
+        return { ...token, className };
+    });
+}
+
+function cachedPinnedColumns(runId: string): number[] {
+    return [...(pinnedColumnsByRun.get(runId) ?? [])];
+}
+
+function rememberPinnedColumns(runId: string, columns: number[]) {
+    pinnedColumnsByRun.delete(runId);
+    pinnedColumnsByRun.set(runId, columns);
+    while (pinnedColumnsByRun.size > 64) {
+        const oldest = pinnedColumnsByRun.keys().next().value;
+        if (oldest === undefined)
+            break;
+        pinnedColumnsByRun.delete(oldest);
+    }
+}
+
 export function ResultGrid({ run, page, pageIndex, loading, onPage }: { run: Run; page?: ResultPage; pageIndex: number; loading: boolean; onPage: (page: number) => void }) {
     const [filter, setFilter] = useState('');
+    const [pinnedColumns, setPinnedColumns] = useState(() => cachedPinnedColumns(run.id));
+    const [activeCell, setActiveCell] = useState<GridCellAddress>({ rowIndex: 0, columnIndex: 0 });
+    const [inspectedCell, setInspectedCell] = useState<InspectedJsonCell | null>(null);
+    const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>();
+    const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
+    const [columnWidths, setColumnWidths] = useState<number[]>([]);
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const activeCellRef = useRef<HTMLTableCellElement>(null);
+    const restoreGridFocus = useRef(false);
+    const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+    const searchableRows = page?.rows.map(row => row.map(value => displayValue(value).toLocaleLowerCase()).join('\u0001')) ?? [];
+    const matchingRows: Set<Row> = page ? new Set(filterRows(page.rows, filter, searchableRows)) : new Set<Row>();
+    const visibleRows: Array<{ row: Row; index: number }> = page
+        ? page.rows.flatMap((row, index): Array<{ row: Row; index: number }> => matchingRows.has(row) ? [{ row, index }] : [])
+        : [];
+    useEffect(() => {
+        const scroll = scrollRef.current;
+        const table = scroll?.querySelector('table');
+        if (loading || !page || !scroll || !table)
+            return;
+        const measure = () => {
+            setHasHorizontalOverflow(scroll.scrollWidth > scroll.clientWidth + 1);
+            const widths = Array.from(table.querySelectorAll('thead th'), cell => cell.getBoundingClientRect().width);
+            setColumnWidths(previous => previous.length === widths.length && widths.every((width, index) => Math.abs(width - previous[index]!) < 1) ? previous : widths);
+        };
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(scroll);
+        observer.observe(table);
+        return () => observer.disconnect();
+    }, [loading, page?.offset, page?.rows.length, page?.columns.length]);
+    useEffect(() => {
+        const rowIndex = Math.min(activeCell.rowIndex, Math.max(0, visibleRows.length - 1));
+        const columnIndex = Math.min(activeCell.columnIndex, Math.max(0, (page?.columns.length ?? 0) - 1));
+        if (rowIndex !== activeCell.rowIndex || columnIndex !== activeCell.columnIndex)
+            setActiveCell({ rowIndex, columnIndex });
+    }, [activeCell, page?.offset, page?.columns.length, visibleRows.length]);
+    useEffect(() => {
+        if (restoreGridFocus.current) {
+            restoreGridFocus.current = false;
+            activeCellRef.current?.focus();
+        }
+    }, [activeCell, inspectedCell]);
+    useEffect(() => () => {
+        if (copyTimer.current !== undefined)
+            clearTimeout(copyTimer.current);
+    }, []);
     if (run.resultState === 'expired') return <div className="result-empty-state"><span className="empty-result-icon">⌛</span><strong>Result retention expired</strong><p>The SQL and query ID are still available. Run it again to fetch fresh data.</p></div>;
     if (run.resultState !== 'reopenable') return <div className="result-empty-state"><span className="loading-orbit"/><strong>{terminal(run) ? 'No retained result' : 'Query is running'}</strong><p>{terminal(run) ? 'This run did not produce result rows.' : 'The live execution status appears in the bottom bar.'}</p>{run.error && <div className="callout callout-error mt-4">{run.error.code}: {run.error.message}</div>}</div>;
     if (loading || !page) return <div className="result-loading"><span className="loading-orbit"/><span>Loading retained rows…</span></div>;
-    const searchableRows = page.rows.map(row => row.map(value => displayValue(value).toLocaleLowerCase()).join('\u0001'));
-    const matchingRows = new Set(filterRows(page.rows, filter, searchableRows));
-    const visibleRows = page.rows.flatMap((row, index) => matchingRows.has(row) ? [{ row, index }] : []);
     const pageCount = Math.max(1, Math.ceil(page.totalRows / 200));
     const emptyRowsMessage = page.totalRows > 0
         ? 'No retained rows are available on this page.'
         : page.completeness === 'truncated'
             ? 'No rows fit in the retained result. The query may still have matched rows; the result limits left none to keep.'
             : 'This query returned zero rows.';
-    return <div className="result-grid-wrap animate-enter"><div className="result-summary-row"><span><strong>{page.totalRows.toLocaleString()}</strong> rows <i>·</i> <strong>{page.columns.length}</strong> columns</span><span className="result-completeness"><span className={cx('status-light', page.completeness === 'truncated' ? 'is-warning' : 'is-trusted')}/>{page.completeness === 'truncated' ? 'Retained prefix · truncated' : 'Complete result'}</span><label className="result-filter"><span>Find on this page</span><input type="search" aria-label="Filter current page" placeholder="Filter rows" value={filter} onChange={event => setFilter(event.target.value)}/></label>{filter.trim() && <span>{visibleRows.length} matches on this page</span>}<span>Page {pageIndex + 1} of {pageCount}</span></div><div className="data-table-scroll"><table className="data-table" aria-label="Retained query rows"><thead><tr><th className="row-number">#</th>{page.columns.map((column, index) => <th key={`${column.name}-${index}`}><span>{column.name}</span><small>{column.type}</small></th>)}</tr></thead><tbody>{visibleRows.map(({ row, index: rowIndex }) => <tr key={`${page.offset}-${rowIndex}`} style={{ animationDelay: `${Math.min(rowIndex, 12) * 16}ms` }}><td className="row-number">{page.offset + rowIndex + 1}</td>{row.map((value, index) => <td key={index} title={displayValue(value)} className={value === null ? 'cell-null' : ''}>{displayValue(value)}</td>)}</tr>)}</tbody></table>{page.rows.length === 0 ? <div className="no-rows" role="status">{emptyRowsMessage}</div> : visibleRows.length === 0 && <div className="no-rows">No rows match on this page.</div>}</div><div className="table-pagination"><span>Showing {page.rows.length.toLocaleString()} of {page.totalRows.toLocaleString()} retained rows <i>·</i> filter applies to this page only</span><div><Button variant="secondary" disabled={pageIndex === 0} onClick={() => onPage(0)}>First</Button><Button variant="secondary" disabled={pageIndex === 0} onClick={() => onPage(pageIndex - 1)}>←</Button><Button variant="secondary" disabled={pageIndex + 1 >= pageCount} onClick={() => onPage(pageIndex + 1)}>→</Button><Button variant="secondary" disabled={pageIndex + 1 >= pageCount} onClick={() => onPage(pageCount - 1)}>Last</Button></div></div></div>;
+    let nextPinnedOffset = columnWidths[0] ?? 46;
+    const pinnedOffsets = new Map<number, number>();
+    for (const index of [...pinnedColumns].sort((left, right) => left - right)) {
+        pinnedOffsets.set(index, nextPinnedOffset);
+        nextPinnedOffset += columnWidths[index + 1] ?? 128;
+    }
+    const flashCopy = (key: string, message: string, copied: boolean) => {
+        if (copyTimer.current !== undefined)
+            clearTimeout(copyTimer.current);
+        setCopyFeedback({ key, message, copied });
+        copyTimer.current = setTimeout(() => setCopyFeedback(undefined), 1400);
+    };
+    const copyText = async (key: string, label: string, value: string) => {
+        try {
+            if (!navigator.clipboard?.writeText)
+                throw new Error('Clipboard is unavailable');
+            await navigator.clipboard.writeText(value);
+            flashCopy(key, `Copied ${label}`, true);
+        } catch {
+            flashCopy(key, `Could not copy ${label}`, false);
+        }
+    };
+    const togglePinnedColumn = (index: number) => {
+        const next = pinnedColumns.includes(index)
+            ? pinnedColumns.filter(column => column !== index)
+            : [...pinnedColumns, index].sort((left, right) => left - right);
+        setPinnedColumns(next);
+        rememberPinnedColumns(run.id, next);
+    };
+    const inspectJsonCell = (rowIndex: number, columnIndex: number, columnType: string, value: Json | undefined) => {
+        if (!baseType(columnType).startsWith('JSON')) {
+            setInspectedCell(null);
+            return;
+        }
+        const originalText = typeof value === 'string';
+        const raw = originalText ? value : value === undefined ? undefined : JSON.stringify(value);
+        if (raw === undefined) {
+            setInspectedCell(null);
+            return;
+        }
+        const pretty = prettyJsonSource(raw);
+        if (pretty !== undefined)
+            setInspectedCell({ rowIndex, columnIndex, raw, pretty, originalText });
+        else
+            setInspectedCell(null);
+    };
+    const onCellKeyDown = (event: KeyboardEvent<HTMLTableCellElement>, rowPosition: number, columnIndex: number, rowIndex: number, columnType: string, value: Json | undefined) => {
+        if (event.target !== event.currentTarget)
+            return;
+        if (event.key === 'Enter') {
+            inspectJsonCell(rowIndex, columnIndex, columnType, value);
+            event.preventDefault();
+            return;
+        }
+        if (event.key === 'Escape') {
+            if (inspectedCell)
+                setInspectedCell(null);
+            else event.currentTarget.blur();
+            event.preventDefault();
+            return;
+        }
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'c') {
+            event.preventDefault();
+            void copyText(`${page.offset + rowIndex}:${columnIndex}:raw`, `row ${page.offset + rowIndex + 1} value`, displayValue(value));
+            return;
+        }
+        if (event.metaKey || event.ctrlKey || event.altKey)
+            return;
+        let nextRow = rowPosition;
+        let nextColumn = columnIndex;
+        if (event.key === 'ArrowLeft') nextColumn--;
+        else if (event.key === 'ArrowRight') nextColumn++;
+        else if (event.key === 'ArrowUp') nextRow--;
+        else if (event.key === 'ArrowDown') nextRow++;
+        else if (event.key === 'Home') nextColumn = 0;
+        else if (event.key === 'End') nextColumn = page.columns.length - 1;
+        else return;
+        event.preventDefault();
+        nextRow = Math.max(0, Math.min(visibleRows.length - 1, nextRow));
+        nextColumn = Math.max(0, Math.min(page.columns.length - 1, nextColumn));
+        setInspectedCell(null);
+        restoreGridFocus.current = true;
+        setActiveCell({ rowIndex: nextRow, columnIndex: nextColumn });
+    };
+    const closeInspection = () => {
+        restoreGridFocus.current = true;
+        setInspectedCell(null);
+    };
+    return <div className="result-grid-wrap animate-enter">
+        <div className="result-summary-row">
+            <span><strong>{page.totalRows.toLocaleString()}</strong> rows <i>·</i> <strong>{page.columns.length}</strong> columns</span>
+            <span className="result-completeness"><span className={cx('status-light', page.completeness === 'truncated' ? 'is-warning' : 'is-trusted')}/>{page.completeness === 'truncated' ? 'Retained prefix · truncated' : 'Complete result'}</span>
+            <label className="result-filter"><span>Find on this page</span><input type="search" aria-label="Filter current page" placeholder="Filter rows" value={filter} onChange={event => { setFilter(event.target.value); setInspectedCell(null); }}/></label>
+            {filter.trim() && <span>{visibleRows.length} matches on this page</span>}
+            {copyFeedback && <span className={cx('result-copy-feedback', !copyFeedback.copied && 'is-error')} role="status">{copyFeedback.message}</span>}
+            <span>Page {pageIndex + 1} of {pageCount}</span>
+        </div>
+        <div className="data-table-scroll" ref={scrollRef}>
+            <table className="data-table" aria-label="Retained query rows">
+                <thead><tr><th className="row-number">#</th>{page.columns.map((column, index) => {
+                    const pinned = hasHorizontalOverflow && pinnedOffsets.has(index);
+                    return <th key={`${column.name}-${index}`} title={`${column.name} · ${column.type}`} className={cx(pinned && 'is-pinned')} style={pinned ? { left: pinnedOffsets.get(index) } : undefined}>
+                        <div className="data-column-heading"><span>{column.name}</span>{hasHorizontalOverflow && <button type="button" className="result-column-pin" aria-label={`${pinnedColumns.includes(index) ? 'Unpin' : 'Pin'} ${column.name} column`} aria-pressed={pinnedColumns.includes(index)} onClick={() => togglePinnedColumn(index)}>{pinnedColumns.includes(index) ? 'Pinned' : 'Pin'}</button>}</div>
+                        <small>{column.type}</small>
+                    </th>;
+                })}</tr></thead>
+                <tbody>{visibleRows.map(({ row, index: rowIndex }, rowPosition) => <tr key={`${page.offset}-${rowIndex}`} style={{ animationDelay: `${Math.min(rowIndex, 12) * 16}ms` }}>
+                    <td className="row-number">{page.offset + rowIndex + 1}</td>
+                    {row.map((value, columnIndex) => {
+                        const column = page.columns[columnIndex]!;
+                        const active = activeCell.rowIndex === rowPosition && activeCell.columnIndex === columnIndex;
+                        const pinned = hasHorizontalOverflow && pinnedOffsets.has(columnIndex);
+                        const expanded = inspectedCell?.rowIndex === rowIndex && inspectedCell.columnIndex === columnIndex;
+                        const copyKey = `${page.offset + rowIndex}:${columnIndex}:raw`;
+                        return <td
+                            key={columnIndex}
+                            id={`result-cell-${rowPosition}-${columnIndex}`}
+                            ref={active ? activeCellRef : undefined}
+                            tabIndex={active ? 0 : -1}
+                            title={displayValue(value)}
+                            aria-label={`Row ${page.offset + rowIndex + 1}, ${column.name}`}
+                            className={cx(value === null && 'cell-null', pinned && 'is-pinned', expanded && 'json-cell-expanded')}
+                            style={pinned ? { left: pinnedOffsets.get(columnIndex) } : undefined}
+                            onFocus={() => setActiveCell({ rowIndex: rowPosition, columnIndex })}
+                            onClick={() => { setActiveCell({ rowIndex: rowPosition, columnIndex }); inspectJsonCell(rowIndex, columnIndex, column.type, value); }}
+                            onKeyDown={event => onCellKeyDown(event, rowPosition, columnIndex, rowIndex, column.type, value)}
+                        >
+                            {expanded ? <div className="json-cell-inspector">
+                                <div className="json-cell-actions" onClick={event => event.stopPropagation()}>
+                                    <span>JSON value</span>
+                                    <button type="button" className="json-cell-copy" aria-label={inspectedCell.originalText ? 'Copy raw JSON' : 'Copy JSON'} onClick={() => void copyText(copyKey, inspectedCell.originalText ? 'raw JSON' : 'JSON', inspectedCell.raw)}>{copyFeedback?.key === copyKey && copyFeedback.copied ? 'Copied ✓' : inspectedCell.originalText ? 'Copy raw' : 'Copy JSON'}</button>
+                                    <button type="button" className="json-cell-copy" aria-label="Copy pretty JSON" onClick={() => void copyText(`${copyKey}:pretty`, 'pretty JSON', inspectedCell.pretty)}>{copyFeedback?.key === `${copyKey}:pretty` && copyFeedback.copied ? 'Copied ✓' : 'Copy pretty'}</button>
+                                    <button type="button" className="json-cell-close" aria-label="Close JSON inspection" onClick={closeInspection}>×</button>
+                                </div>
+                                <pre className="json-cell-pre">{highlightedJson(inspectedCell.pretty).map((token, index) => token.className
+                                    ? <span key={index} className={token.className}>{token.text}</span>
+                                    : <span key={index}>{token.text}</span>)}</pre>
+                            </div> : <>
+                                <span className="data-cell-value">{displayValue(value)}</span>
+                                <button type="button" tabIndex={active ? 0 : -1} className="result-cell-copy" aria-label={`Copy ${column.name} value from row ${page.offset + rowIndex + 1}`} title="Copy cell value" onFocus={() => setActiveCell({ rowIndex: rowPosition, columnIndex })} onClick={event => { event.stopPropagation(); setActiveCell({ rowIndex: rowPosition, columnIndex }); void copyText(copyKey, `${column.name} value`, displayValue(value)); }}>{copyFeedback?.key === copyKey && copyFeedback.copied ? '✓' : 'Copy'}</button>
+                            </>}
+                        </td>;
+                    })}
+                </tr>)}</tbody>
+            </table>
+            {page.rows.length === 0 ? <div className="no-rows" role="status">{emptyRowsMessage}</div> : visibleRows.length === 0 && <div className="no-rows">No rows match on this page.</div>}
+        </div>
+        <div className="table-pagination"><span>Showing {page.rows.length.toLocaleString()} of {page.totalRows.toLocaleString()} retained rows <i>·</i> filter applies to this page only</span><div>
+            <Button variant="secondary" disabled={pageIndex === 0} onClick={() => { setInspectedCell(null); onPage(0); }}>First</Button>
+            <Button variant="secondary" disabled={pageIndex === 0} onClick={() => { setInspectedCell(null); onPage(pageIndex - 1); }}>←</Button>
+            <Button variant="secondary" disabled={pageIndex + 1 >= pageCount} onClick={() => { setInspectedCell(null); onPage(pageIndex + 1); }}>→</Button>
+            <Button variant="secondary" disabled={pageIndex + 1 >= pageCount} onClick={() => { setInspectedCell(null); onPage(pageCount - 1); }}>Last</Button>
+        </div></div>
+    </div>;
 }
 
 export function ChartView({ result, loading, chart, onChart }: { result?: Result; loading: boolean; chart: Draft['chart']; onChart: (chart: Draft['chart']) => void }) {

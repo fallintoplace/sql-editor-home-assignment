@@ -1,16 +1,14 @@
 import type { Copy } from '../i18n';
-import { OverlayPortal } from './OverlayPortal';
-import { Icon, cx } from './ui';
+import { Icon } from './ui';
 
-export function HelpExamplesButton({ copy, open, placement, onOpen }: {
+export function HelpExamplesButton({ copy, open, onOpen }: {
     copy: Copy['common'];
     open: boolean;
-    placement: 'floating' | 'inline';
     onOpen: (opener: HTMLButtonElement) => void;
 }) {
-    const button = <button
+    return <button
         type="button"
-        className={cx('help-examples-button', placement === 'floating' ? 'is-floating' : 'is-inline')}
+        className="help-examples-button"
         aria-label={copy.help}
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -21,5 +19,4 @@ export function HelpExamplesButton({ copy, open, placement, onOpen }: {
         <Icon name="help"/>
         <span>{copy.help}</span>
     </button>;
-    return placement === 'floating' ? <OverlayPortal>{button}</OverlayPortal> : button;
 }

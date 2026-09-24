@@ -53,7 +53,37 @@ export function ScriptResults({ script, runs, activeRunId, onSelectRun, onCancel
     </section>;
 }
 
-export function ExecutionBar({ run, eventState, onCancel, cancelling, scriptRunning, helpButton }: { run: Run; eventState: RunEventState; onCancel: () => void; cancelling: boolean; scriptRunning: boolean; helpButton: ReactNode }) {
-    const progress = run.progress;
-    return <footer className={cx('execution-bar', (!terminal(run) || scriptRunning) && 'is-running')}><div className="execution-state"><Status run={run}/>{scriptRunning && <span className="execution-kind">SCRIPT RUNNING</span>}<span className="execution-separator"/><strong>{terminal(run) ? `${Math.round(run.elapsedMs)} ms` : `${Math.max(0, Math.round(progress?.elapsedMs ?? run.elapsedMs))} ms`}</strong><span className="execution-link-state"><span className={cx('status-light', eventState === 'live' ? 'is-trusted' : eventState === 'reconnecting' ? 'is-warning' : '')}/>{eventState === 'live' ? 'Live updates' : eventState === 'reconnecting' ? 'Reconnecting' : 'Complete'}</span></div><div className="execution-telemetry"><span><strong>{progress?.readRows ? formatCount(progress.readRows) : '—'}</strong> rows read</span><span><strong>{progress?.readBytes ? formatBytes(progress.readBytes) : '—'}</strong> read</span><span><strong>{progress?.memory ? formatBytes(progress.memory) : '—'}</strong> memory</span>{run.kind !== 'query' && <span className="execution-kind">{run.kind.toUpperCase()}</span>}</div><div className="execution-right"><code title={run.queryId}>{run.queryId}</code>{(scriptRunning || !terminal(run)) && <Button variant="danger" className="cancel-execution" onClick={onCancel} disabled={cancelling}>{cancelling ? 'Cancelling…' : scriptRunning ? 'Cancel script' : 'Cancel'}</Button>}{helpButton}</div><span className="execution-progress-line"/></footer>;
+export function ExecutionBar({ run, eventState, onCancel, cancelling, scriptRunning, helpButton }: { run?: Run; eventState: RunEventState; onCancel: () => void; cancelling: boolean; scriptRunning: boolean; helpButton: ReactNode }) {
+    const progress = run?.progress;
+    const executionInProgress = Boolean(run && (!terminal(run) || scriptRunning));
+    const elapsedMs = run ? terminal(run) ? Math.round(run.elapsedMs) : Math.max(0, Math.round(progress?.elapsedMs ?? run.elapsedMs)) : undefined;
+
+    return <footer className={cx('execution-bar', executionInProgress && 'is-running')}>
+        <div className="execution-state">
+            {run
+                ? <Status run={run}/>
+                : <span className="execution-ready-state"><span className="status-light is-trusted"/>Ready</span>}
+            {run && scriptRunning && <span className="execution-kind">SCRIPT RUNNING</span>}
+            {run && <>
+                <span className="execution-separator"/>
+                <strong>{elapsedMs?.toLocaleString()} ms</strong>
+                <span className="execution-link-state">
+                    <span className={cx('status-light', eventState === 'live' ? 'is-trusted' : eventState === 'reconnecting' ? 'is-warning' : '')}/>
+                    {eventState === 'live' ? 'Live updates' : eventState === 'reconnecting' ? 'Reconnecting' : 'Complete'}
+                </span>
+            </>}
+        </div>
+        {run && <div className="execution-telemetry">
+            <span><strong>{progress?.readRows ? formatCount(progress.readRows) : '—'}</strong> rows read</span>
+            <span><strong>{progress?.readBytes ? formatBytes(progress.readBytes) : '—'}</strong> read</span>
+            <span><strong>{progress?.memory ? formatBytes(progress.memory) : '—'}</strong> memory</span>
+            {run.kind !== 'query' && <span className="execution-kind">{run.kind.toUpperCase()}</span>}
+        </div>}
+        <div className="execution-right">
+            {run && <code title={run.queryId}>{run.queryId}</code>}
+            {run && (scriptRunning || !terminal(run)) && <Button variant="danger" className="cancel-execution" onClick={onCancel} disabled={cancelling}>{cancelling ? 'Cancelling…' : scriptRunning ? 'Cancel script' : 'Cancel'}</Button>}
+            {helpButton}
+        </div>
+        {executionInProgress && <span className="execution-progress-line"/>}
+    </footer>;
 }

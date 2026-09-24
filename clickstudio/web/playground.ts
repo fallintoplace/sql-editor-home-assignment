@@ -25,6 +25,9 @@ const SCHEMA_MAX_COLUMNS = 1_000;
 const SCHEMA_CACHE_KEY = 'clickstudio:playground-schema:v1';
 const SCHEMA_CACHE_AGE_MS = 60 * 60 * 1_000;
 const NULL_MARKER = 'ᴺᵁᴸᴸ';
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+
 const playgroundClient = createClient({
     url: PLAYGROUND_URL, username: PLAYGROUND_USER, password: '', database: 'github',
     request_timeout: REQUEST_TIMEOUT_MS,
@@ -178,7 +181,10 @@ async function executePlaygroundQuery(sql: string, signal: AbortSignal | undefin
         const summaryHeader = response.response_headers['x-clickhouse-summary'];
         const summary = typeof summaryHeader === 'string' ? summaryHeader : undefined;
         let summaryElapsed = 0;
-        try { summaryElapsed = summary ? Number((JSON.parse(summary) as Record<string, unknown>).elapsed_ns) / 1_000_000 : 0; } catch { }
+        try {
+            const parsedSummary: unknown = summary ? JSON.parse(summary) : undefined;
+            summaryElapsed = isRecord(parsedSummary) ? Number(parsedSummary.elapsed_ns) / 1_000_000 : 0;
+        } catch { }
         return {
             ...parsed, queryId: response.query_id || queryId, bytes,
             elapsedMs: Number.isFinite(summaryElapsed) && summaryElapsed > 0 ? summaryElapsed : performance.now() - startedAt,

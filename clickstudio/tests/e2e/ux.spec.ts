@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { trust } from './helpers.js';
+import { openBlankSql, runStatementButton, trust } from './helpers.js';
 
 function countRuns(page: Page) {
     let count = 0;
@@ -12,7 +12,7 @@ function countRuns(page: Page) {
 test('A no-match row filter stays local and can be cleared without rerunning SQL', async ({ page }) => {
     const runs = countRuns(page);
     await trust(page);
-    await page.getByRole('button', { name: 'Run statement', exact: true }).click();
+    await runStatementButton(page).click();
     const results = page.getByRole('region', { name: 'Query results' });
     await expect(results.getByRole('table', { name: 'Retained query rows' })).toBeVisible();
     const filter = results.getByRole('searchbox', { name: 'Filter current page' });
@@ -26,10 +26,8 @@ test('A no-match row filter stays local and can be cleared without rerunning SQL
 
 test('SQL document tabs support arrow and Home/End keyboard navigation', async ({ page }) => {
     await trust(page);
-    await page.getByRole('button', { name: 'New SQL', exact: true }).click();
-    await page.getByRole('dialog', { name: 'SQL examples', exact: true }).getByRole('button', { name: 'Blank SQL', exact: true }).click();
-    await page.getByRole('button', { name: 'New SQL', exact: true }).click();
-    await page.getByRole('dialog', { name: 'SQL examples', exact: true }).getByRole('button', { name: 'Blank SQL', exact: true }).click();
+    await openBlankSql(page);
+    await openBlankSql(page);
     const tabs = page.getByRole('tablist', { name: 'SQL documents' }).getByRole('tab');
     await expect(tabs).toHaveCount(3);
     await tabs.first().focus();
@@ -65,7 +63,7 @@ test('Retained-result pagination reaches the end without rerunning SQL', async (
         } });
     });
     await trust(page);
-    await page.getByRole('button', { name: 'Run statement', exact: true }).click();
+    await runStatementButton(page).click();
     const results = page.getByRole('region', { name: 'Query results', exact: true });
     await expect(results.getByRole('table', { name: 'Retained query rows' })).toBeVisible();
     await expect(results.locator('tbody tr')).toHaveCount(200);

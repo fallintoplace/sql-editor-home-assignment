@@ -15,22 +15,22 @@ test('SQL examples open in a new tab without changing or running the current que
     await page.getByRole('button', { name: 'Collapse SQL query', exact: true }).click();
     await expect(page.locator('#sql-editor-content')).toBeHidden();
 
-    await page.getByRole('button', { name: 'New SQL', exact: true }).click();
+    await page.getByTestId('new-sql').click();
     const dialog = page.getByRole('dialog', { name: 'SQL examples', exact: true });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText('Sample data', { exact: true })).toBeVisible();
-    await dialog.getByRole('searchbox', { name: 'Search examples', exact: true }).fill('Top countries');
-    const example = dialog.getByRole('option', { name: /Top countries/ });
+    await dialog.getByTestId('sql-example-search').fill('Top countries');
+    const example = dialog.getByTestId('sql-example-preview-starter-top-countries');
     await expect(example).toBeVisible();
     await example.click();
     await expect(dialog.locator('.sql-example-preview code')).toContainText('FROM events');
-    await dialog.getByRole('button', { name: 'Open in new SQL', exact: true }).click();
+    await dialog.getByTestId('open-sql-example').click();
 
     await expect(tabs.last()).toHaveAttribute('aria-label', 'Top countries.sql');
     await expect(page.locator('.cm-content')).toContainText('FROM events');
     await expect(page.locator('#sql-editor-content')).toBeVisible();
     await expect(page.locator('.cm-content')).toBeFocused();
-    await expect(page.locator('.execution-bar .execution-ready-state')).toHaveText('Ready');
+    await expect(page.locator('.execution-bar')).toHaveAttribute('data-run-status', 'ready');
     await expect(page.locator('.execution-bar code')).toHaveCount(0);
     expect(originalName).not.toBeNull();
     await page.getByRole('tab', { name: originalName!, exact: true }).click();
@@ -41,10 +41,10 @@ test('SQL examples open in a new tab without changing or running the current que
 
 test('SQL examples search handles no matches and Escape restores focus', async ({ page }) => {
     await trust(page);
-    const trigger = page.getByRole('button', { name: 'New SQL', exact: true });
+    const trigger = page.getByTestId('new-sql');
     await trigger.click();
     const dialog = page.getByRole('dialog', { name: 'SQL examples', exact: true });
-    const search = dialog.getByRole('searchbox', { name: 'Search examples', exact: true });
+    const search = dialog.getByTestId('sql-example-search');
     await search.fill('query-with-no-matching-example');
     await expect(dialog.getByRole('status')).toHaveText('No examples match your search.');
     await search.press('Escape');

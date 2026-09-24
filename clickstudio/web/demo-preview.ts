@@ -397,9 +397,10 @@ function resultFor(run: Run, sequence: number): Result {
 
 function chartConfig(value: unknown): QueryDocument['chart'] {
     const chart = record(value);
+    const chartIndex = (index: unknown): index is number => typeof index === 'number' && Number.isSafeInteger(index) && index >= 0 && index <= 499;
     if ((chart.kind === 'table' || chart.kind === 'number' || chart.kind === 'line' || chart.kind === 'bar' || chart.kind === 'scatter' || chart.kind === 'heatmap') &&
-        typeof chart.x === 'number' && Number.isFinite(chart.x) && Array.isArray(chart.ys) && chart.ys.every(index => Number.isInteger(index)) && typeof chart.title === 'string')
-        return { kind: chart.kind, x: chart.x, ...(typeof chart.groupBy === 'number' && Number.isSafeInteger(chart.groupBy) && chart.groupBy >= 0 ? { groupBy: chart.groupBy } : {}), ys: chart.ys.filter((index): index is number => Number.isSafeInteger(index) && index >= 0), title: chart.title };
+        chartIndex(chart.x) && Array.isArray(chart.ys) && chart.ys.every(chartIndex) && typeof chart.title === 'string')
+        return { kind: chart.kind, x: chart.x, ...(chartIndex(chart.groupBy) ? { groupBy: chart.groupBy } : {}), ys: chart.ys.filter(chartIndex), title: chart.title };
     return { kind: 'table', x: 0, ys: [], title: 'Query result' };
 }
 

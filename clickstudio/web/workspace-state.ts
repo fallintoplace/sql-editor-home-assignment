@@ -66,6 +66,7 @@ const id = (value: unknown) => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,20
 const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 const position = (value: unknown, length: number) => typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(length, Math.trunc(value))) : 0;
 const index = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+const chartIndex = (value: unknown): value is number => index(value) && value <= 499;
 const revision = (value: unknown) => index(value) && value > 0 ? value : undefined;
 const chartKinds = ['table', 'number', 'line', 'bar', 'scatter', 'heatmap'] as const satisfies readonly ChartConfig['kind'][];
 const isChartKind = (value: unknown): value is ChartConfig['kind'] => chartKinds.some(kind => kind === value);
@@ -84,9 +85,9 @@ export function recoverDraft(value: unknown): Draft | undefined {
         parameters: record(value.parameters) ? Object.fromEntries(Object.entries(value.parameters).filter((entry): entry is [string, string] => typeof entry[1] === 'string')) : {},
         chart: {
             kind: isChartKind(chart.kind) ? chart.kind : 'table',
-            x: index(chart.x) ? chart.x : 0,
-            ...(index(chart.groupBy) ? { groupBy: chart.groupBy } : {}),
-            ys: Array.isArray(chart.ys) ? chart.ys.filter(index) : [], title: text(chart.title, 'Query result'),
+            x: chartIndex(chart.x) ? chart.x : 0,
+            ...(chartIndex(chart.groupBy) ? { groupBy: chart.groupBy } : {}),
+            ys: Array.isArray(chart.ys) ? chart.ys.filter(chartIndex) : [], title: text(chart.title, 'Query result'),
         },
         runIds: [...new Set(strings(value.runIds).filter(v => id(v)))],
         activeRunId: id(value.activeRunId), scriptId: id(value.scriptId),

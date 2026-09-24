@@ -56,6 +56,7 @@ test('Scatter and heatmap chart settings survive workspace recovery', () => {
     const charts = [
         { kind: 'scatter', x: 0, ys: [1], title: 'Fare by distance' },
         { kind: 'heatmap', x: 1, groupBy: 0, ys: [2], title: 'Trips by weekday and hour' },
+        { kind: 'heatmap', x: 499, groupBy: 498, ys: [497], title: 'Largest supported axis indexes' },
     ];
     for (const chart of charts) {
         const draft = { ...newDraft('Chart.sql', 'SELECT 1'), chart };

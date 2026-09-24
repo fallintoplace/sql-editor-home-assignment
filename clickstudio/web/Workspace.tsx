@@ -9,6 +9,7 @@ import { api, download, isFrontendDemoPreview, message, post } from './api';
 import { DEMO_PREVIEW_INITIAL_STARTERS, DEMO_PREVIEW_RUN_ID, DEMO_PREVIEW_SQL, DEMO_PREVIEW_STARTER_DOCUMENT_ID, demoPreviewStarterRunId, PLAYGROUND_PREVIEW_STARTER } from './demo-preview';
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { ImportWizard } from './components/ImportWizard';
+import { SqlExamplesMenu } from './components/SqlExamplesMenu';
 import { AssistantWorkflow } from './components/AssistantWorkflow';
 import { ChartView, InsightsView, ResultGrid } from './components/ResultViews';
 import { InspectorPane, type InspectorPaneProps } from './components/InspectorPane';
@@ -21,6 +22,7 @@ import { useWorkspacePersistence } from './useWorkspacePersistence';
 import { useRunEvidence } from './useRunEvidence';
 import { useScriptExecution } from './useScriptExecution';
 import { useScopedValue } from './useScopedValue';
+import { sqlExamplesFor } from './sql-examples';
 import type { Copy, ExperienceLevel, Locale } from './i18n';
 import type { AssistantContext, BusyAction, Connected, Inspector, ResultsView, SpeechRecognitionLike } from './workspace-types';
 
@@ -108,6 +110,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [nativeParserStatus, setNativeParserStatus] = useState<NativeParserStatus>('loading');
     const [nativeParseSnapshot, setNativeParseSnapshot] = useState<NativeParseSnapshot>();
     const [schema, setSchema] = useState<Schema>();
+    const sqlExamples = useMemo(() => sqlExamplesFor(connection, schema), [connection, schema]);
     const [schemaLoading, setSchemaLoading] = useState(false);
     const [schemaError, setSchemaError] = useState('');
     const [documents, setDocuments] = useState<QueryDocument[]>([]);
@@ -456,6 +459,11 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const addDraft = (draft: Draft) => {
         if (workspaceRef.current.tabs.length >= MAX_TABS) { setError(`Close a tab before creating another. This workspace supports ${MAX_TABS} open drafts.`); return false; }
         setWorkspace(current => ({ ...current, tabs: [...current.tabs, draft], activeId: draft.id }));
+        return true;
+    };
+    const openNewDraft = (draft: Draft) => {
+        if (!addDraft(draft)) return false;
+        setQueryCollapsed(false);
         return true;
     };
 
@@ -817,7 +825,12 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             return unsaved ? <span className="tab-unsaved" title={status.label} aria-hidden="true"/> : null;
                         })()}<button type="button" aria-label={`Close ${draft.name}`} onClick={event => { event.stopPropagation(); setWorkspace(current => closeDraft(current, draft.id)); }}>×</button>
                     </div>)}
-                    <button className="new-tab-button" type="button" title="New SQL tab" onClick={() => addDraft(newDraft())}><Icon name="plus"/></button>
+                    <button className="new-tab-button new-tab-labeled" type="button" aria-label="New SQL tab" title="New SQL tab" onClick={() => openNewDraft(newDraft())}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
+                    <SqlExamplesMenu examples={sqlExamples} sourceLabel={connectionLabel} copy={copy.common} onOpenExample={example => {
+                        if (!openNewDraft(newDraft(`${example.name}.sql`, example.sql))) return false;
+                        window.requestAnimationFrame(() => editor.current?.focus());
+                        return true;
+                    }}/>
                     {!!workspace.closedTabs?.length && <button className="new-tab-button reopen-tab-button" type="button" aria-label="Reopen closed tab" title="Reopen closed tab" onClick={() => {
                         if (workspaceRef.current.tabs.length >= MAX_TABS) { setError(`Close a tab before reopening another. This workspace supports ${MAX_TABS} open drafts.`); return; }
                         setWorkspace(current => reopenDraft(current));

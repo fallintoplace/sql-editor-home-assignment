@@ -200,6 +200,49 @@
     .new-tab-button { display: grid; width: 31px; height: 31px; flex: none; align-self: center; place-items: center; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; transition: .18s ease; }
     .new-tab-button:hover { border-color: var(--line); background: var(--panel); color: var(--accent); }
     .new-tab-button svg { width: 16px; height: 16px; }
+    .new-tab-labeled, .sql-examples-trigger { display: inline-flex; width: auto; min-width: max-content; gap: 6px; padding: 0 9px; font-size: 10px; font-weight: 650; }
+    .new-tab-labeled { border-color: var(--line); background: color-mix(in srgb, var(--panel) 74%, transparent); color: var(--text-soft); }
+    .new-tab-labeled:hover, .sql-examples-trigger[aria-expanded="true"] { border-color: color-mix(in srgb, var(--accent) 42%, var(--line)); background: color-mix(in srgb, var(--accent) 8%, var(--panel)); color: var(--accent); }
+    .new-tab-labeled span, .sql-examples-trigger span { white-space: nowrap; }
+    .new-tab-labeled svg, .sql-examples-trigger svg { width: 14px; height: 14px; }
+    .sql-examples-menu { position: relative; display: flex; flex: none; align-self: center; }
+    .sql-examples-trigger { color: var(--muted); }
+    .sql-examples-trigger:focus-visible, .new-tab-labeled:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .sql-examples-panel { position: fixed; z-index: 180; display: flex; min-width: 0; flex-direction: column; overflow: hidden; border: 1px solid var(--line-bright); border-radius: 13px; background: var(--panel-raised); color: var(--text); box-shadow: 0 22px 70px #00000035, 0 4px 16px #00000018; animation: examplesReveal .14s ease-out both; }
+    .sql-examples-header { display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 17px 18px 13px; border-bottom: 1px solid var(--line); background: linear-gradient(110deg, color-mix(in srgb, var(--accent) 7%, var(--panel-raised)), var(--panel-raised) 70%); }
+    .sql-examples-header .eyebrow, .sql-example-preview-heading .eyebrow { display: block; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
+    .sql-examples-header h2 { margin: 4px 0 3px; font-size: 16px; font-weight: 750; letter-spacing: -.02em; }
+    .sql-examples-header p, .sql-example-preview > p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+    .sql-examples-close { display: grid; width: 29px; height: 29px; flex: none; place-items: center; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
+    .sql-examples-close:hover { border-color: var(--line); background: var(--panel); color: var(--text); }
+    .sql-examples-close:focus-visible, .sql-example-category:focus-visible, .sql-example-option:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .sql-examples-close svg { width: 15px; height: 15px; }
+    .sql-examples-toolbar { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 9px; padding: 11px 15px; border-bottom: 1px solid var(--line); }
+    .sql-example-categories { display: flex; min-width: 0; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: thin; }
+    .sql-example-category { min-height: 28px; flex: none; padding: 0 9px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--muted); font: inherit; font-size: 9px; cursor: pointer; }
+    .sql-example-category:hover { background: var(--panel); color: var(--text-soft); }
+    .sql-example-category.is-active { border-color: color-mix(in srgb, var(--accent) 32%, var(--line)); background: color-mix(in srgb, var(--accent) 9%, var(--panel)); color: var(--accent); font-weight: 700; }
+    .sql-example-search { display: flex; min-width: 160px; min-height: 31px; flex: 0 1 230px; align-items: center; gap: 7px; padding: 0 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--muted); }
+    .sql-example-search:focus-within { border-color: color-mix(in srgb, var(--accent) 52%, var(--line)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 13%, transparent); }
+    .sql-example-search svg { width: 14px; height: 14px; flex: none; }
+    .sql-example-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: 10px; }
+    .sql-example-search input::placeholder { color: var(--muted); }
+    .sql-examples-layout { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(220px, .78fr) minmax(0, 1.22fr); gap: 0; overflow: hidden; }
+    .sql-examples-list { display: flex; min-height: 0; flex-direction: column; gap: 5px; padding: 11px; overflow: auto; border-right: 1px solid var(--line); }
+    .sql-example-option { display: grid; min-width: 0; flex: none; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; padding: 9px 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text-soft); text-align: left; cursor: pointer; transition: border-color .14s ease, background .14s ease; }
+    .sql-example-option:hover { border-color: var(--line); background: var(--panel); }
+    .sql-example-option.is-selected { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); background: color-mix(in srgb, var(--accent) 7%, var(--panel)); }
+    .sql-example-option-title { overflow: hidden; color: var(--text); font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .sql-example-option-description { grid-column: 1 / -1; color: var(--muted); font-size: 9px; line-height: 1.4; }
+    .sql-example-option-category { align-self: center; padding: 3px 6px; border: 1px solid var(--line); border-radius: 99px; color: var(--muted); font-size: 8px; white-space: nowrap; }
+    .sql-example-preview { display: flex; min-width: 0; min-height: 0; flex-direction: column; gap: 9px; padding: 16px; overflow: auto; }
+    .sql-example-preview-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .sql-example-preview-heading h3 { overflow-wrap: anywhere; margin: 4px 0 0; font-size: 14px; font-weight: 750; }
+    .sql-example-readonly { padding: 4px 7px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font-family: var(--font-mono); font-size: 8px; }
+    .sql-example-preview pre { min-height: 80px; max-height: 280px; margin: 0; padding: 12px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--page) 74%, var(--panel)); color: var(--text-soft); font-family: var(--font-mono); font-size: 9px; line-height: 1.6; tab-size: 4; white-space: pre; }
+    .sql-example-open { display: inline-flex; min-height: 34px; flex: none; align-items: center; justify-content: center; gap: 7px; align-self: flex-start; padding: 0 11px; font-size: 10px; }
+    .sql-example-open svg { width: 14px; height: 14px; }
+    .sql-examples-empty { display: grid; min-height: 110px; margin: 0; place-items: center; color: var(--muted); font-size: 11px; }
     .draft-status { display: inline-flex; align-items: center; gap: 7px; padding: 0 9px; color: var(--muted); font-size: 9px; white-space: nowrap; }
     .revision-history-trigger { display: inline-flex; min-height: 26px; flex: none; align-items: center; gap: 5px; padding: 0 8px; font-size: 8px; }
     .revision-history-trigger svg { width: 13px; height: 13px; }
@@ -759,6 +802,7 @@
 @keyframes listeningGlow { 0%, 100% { box-shadow: inset 0 0 0 1px transparent; } 50% { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--red) 30%, transparent), 0 0 14px color-mix(in srgb, var(--red) 12%, transparent); } }
 @keyframes statusPulse { 0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent), 0 0 7px color-mix(in srgb, var(--accent) 35%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 6%, transparent), 0 0 13px color-mix(in srgb, var(--accent) 70%, transparent); } }
 @keyframes progressSweep { 0% { right: 100%; left: 0; opacity: 0; } 12% { opacity: 1; } 55% { right: 0; left: 15%; } 100% { right: 0; left: 100%; opacity: .2; } }
+@keyframes examplesReveal { from { opacity: 0; transform: translateY(-4px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes rowReveal { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes drawLine { from { stroke-dashoffset: 1400; } to { stroke-dashoffset: 0; } }
 @keyframes barRise { from { transform: scaleY(.02); opacity: .3; } to { transform: scaleY(1); opacity: 1; } }
@@ -836,6 +880,11 @@
     .beginner-workspace-content { grid-template-rows: minmax(320px, 1fr) minmax(170px, .7fr); }
     .document-tabs { padding-right: 6px; padding-left: 6px; }
     .document-tab { min-width: 85px; max-width: 145px; gap: 5px; padding: 0 7px; font-size: 9px; }
+    .sql-examples-panel { border-radius: 10px; }
+    .sql-examples-toolbar { align-items: stretch; }
+    .sql-example-search { min-width: 100%; flex-basis: 100%; }
+    .sql-examples-layout { grid-template-columns: minmax(150px, .8fr) minmax(0, 1.2fr); }
+    .sql-example-preview { padding: 11px; }
     .draft-status { display: none; }
     .editor-heading { min-height: 47px; padding: 6px 9px; }
     .editor-toolbar { min-height: 40px; padding: 5px 8px; }
@@ -852,6 +901,23 @@
     .results-tabs button { padding: 7px 6px; font-size: 8px; }
     .is-drawer { top: 60px; }
     .drawer-backdrop { top: 60px; }
+}
+
+@media (max-width: 560px) {
+    .new-tab-labeled, .sql-examples-trigger { gap: 4px; padding-inline: 7px; font-size: 9px; }
+    .sql-examples-header { padding: 13px 12px 10px; }
+    .sql-examples-header p { max-width: 270px; }
+    .sql-examples-toolbar { padding: 8px; }
+    .sql-example-categories { width: 100%; }
+    .sql-examples-layout { grid-template-columns: minmax(110px, .72fr) minmax(0, 1.28fr); }
+    .sql-examples-list { gap: 3px; padding: 7px; }
+    .sql-example-option { padding: 8px 7px; }
+    .sql-example-option-category { grid-column: 1 / -1; justify-self: start; }
+    .sql-example-preview pre { font-size: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sql-examples-panel { animation: none; }
 }
 
 @media (max-width: 560px) {

@@ -27,3 +27,29 @@ test('Static Vercel preview loads the native parser and exports retained sample 
     expect(csv.split('\r\n')[0]).toContain('day');
     expect(csv).toContain('events');
 });
+
+test('Playground examples preview real SQL and open a draft without executing it', async ({ page }) => {
+    const exampleSqlRequests: string[] = [];
+    page.on('request', request => {
+        const requestText = `${request.url()}\n${request.postData() ?? ''}`;
+        if (new URL(request.url()).hostname === 'sql-clickhouse.clickhouse.com' && requestText.includes('toDate(created_at) AS day'))
+            exampleSqlRequests.push(requestText);
+    });
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Examples', exact: true }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'SQL examples', exact: true });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText('ClickHouse Playground', { exact: true })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Time series', exact: true }).click();
+    const dailyActivity = dialog.getByRole('option', { name: /Daily activity/ });
+    await expect(dailyActivity).toBeVisible();
+    await dailyActivity.click();
+    await expect(dialog.locator('.sql-example-preview code')).toContainText('FROM github.events');
+    await dialog.getByRole('button', { name: 'Open in new SQL', exact: true }).click();
+
+    await expect(page.getByRole('tab', { name: 'Daily activity.sql', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.cm-content')).toContainText('FROM github.events');
+    await expect(page.locator('.execution-bar')).toHaveCount(0);
+    expect(exampleSqlRequests).toEqual([]);
+});

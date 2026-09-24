@@ -19,6 +19,7 @@
     "web/workspace-state.ts",
     "web/workspace-persistence.ts",
     "web/demo-preview.ts",
+    "web/sql-examples.ts",
     "shared/evidence.ts",
     "shared/workspace-view.ts",
     "web/local-files.ts",

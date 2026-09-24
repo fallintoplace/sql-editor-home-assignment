@@ -111,7 +111,7 @@ export function InspectorPane({ copy, inspector, setInspector, connection, schem
         </nav>}
         <div className="inspector-content">
             {inspector === 'schema' && <section className="inspector-section">
-                <div className="inspector-search"><Icon name="search"/><input value={search} onChange={event => setSearch(event.target.value)} placeholder={copy.schemaSearch} aria-label={copy.schemaSearch}/></div>
+                <div className="inspector-search"><Icon name="search"/><input data-testid="schema-search" value={search} onChange={event => setSearch(event.target.value)} placeholder={copy.schemaSearch} aria-label={copy.schemaSearch}/></div>
                 <div className="schema-heading"><span>{copy.tableCount.replace('{count}', tables.length.toLocaleString())}</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshSchema} disabled={schemaLoading || !trusted}>{schemaLoading ? copy.loading : copy.refresh}</Button></div>
                 {schemaError && <div className="callout callout-error">{schemaError}</div>}
                 {schema?.metadataWarnings?.map(warning => <div className="schema-metadata-warning" key={warning}>{warning}</div>)}
@@ -291,8 +291,8 @@ function InspectorMoreMenu({ copy, inspector, onSelect, items }: { copy: Copy['c
     };
 
     return <div className="inspector-more" ref={root}>
-        <button ref={trigger} type="button" className={cx('inspector-more-trigger', active && 'is-active')} aria-label={copy.workspacePanels} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>{copy.more} <Icon name="chevron"/></button>
-        {open && <div className="inspector-more-menu" role="menu" aria-label={copy.workspacePanels} ref={menu} onKeyDown={moveMenuFocus}>{items.map(item => <button key={item.id} type="button" role="menuitem" aria-pressed={inspector === item.id} onClick={() => { onSelect(item.id); setOpen(false); }}><Icon name={item.icon}/><span>{item.id === 'schema' ? copy.tables : item.id === 'documents' ? copy.queries : item.id === 'history' ? copy.history : inspectorLabel(item.id)}</span></button>)}</div>}
+        <button ref={trigger} data-testid="workspace-panels" type="button" className={cx('inspector-more-trigger', active && 'is-active')} aria-label={copy.workspacePanels} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>{copy.more} <Icon name="chevron"/></button>
+        {open && <div className="inspector-more-menu" role="menu" aria-label={copy.workspacePanels} ref={menu} onKeyDown={moveMenuFocus}>{items.map(item => <button key={item.id} data-testid={`workspace-panel-${item.id}`} type="button" role="menuitem" aria-pressed={inspector === item.id} onClick={() => { onSelect(item.id); setOpen(false); }}><Icon name={item.icon}/><span>{item.id === 'schema' ? copy.tables : item.id === 'documents' ? copy.queries : item.id === 'history' ? copy.history : inspectorLabel(item.id)}</span></button>)}</div>}
     </div>;
 }
 

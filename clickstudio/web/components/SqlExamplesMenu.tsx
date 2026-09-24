@@ -149,7 +149,7 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onC
                 <header className="sql-examples-header">
                     <div><span className="eyebrow">{sourceLabel}</span><h2 id="sql-examples-title">{copy.sqlExamples}</h2><p>{copy.examplesHint}</p></div>
                     <div className="sql-examples-header-actions">
-                        <Button variant="secondary" className="sql-example-blank" onClick={() => { if (onStartBlankSql()) onClose(false); }}><Icon name="plus"/>{copy.startBlankSql}</Button>
+                        <Button variant="secondary" className="sql-example-blank" data-testid="blank-sql" onClick={() => { if (onStartBlankSql()) onClose(false); }}><Icon name="plus"/>{copy.startBlankSql}</Button>
                         <button type="button" className="sql-examples-close" aria-label={copy.closeExamples} title={copy.closeExamples} onClick={() => onClose()}><Icon name="close"/></button>
                     </div>
                 </header>
@@ -157,11 +157,11 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onC
                     <div className="sql-example-categories" role="group" aria-label={copy.exampleCategories}>
                         {availableCategories.map(value => <button key={value} type="button" className={cx('sql-example-category', category === value && 'is-active')} aria-pressed={category === value} onClick={() => setCategory(value)}>{categoryLabel(value, copy, locale)}</button>)}
                     </div>
-                    <label className="sql-example-search"><Icon name="search"/><input ref={searchRef} type="search" aria-label={copy.searchExamples} placeholder={copy.searchExamples} value={search} onChange={event => setSearch(event.target.value)}/></label>
+                    <label className="sql-example-search"><Icon name="search"/><input ref={searchRef} data-testid="sql-example-search" type="search" aria-label={copy.searchExamples} placeholder={copy.searchExamples} value={search} onChange={event => setSearch(event.target.value)}/></label>
                 </div>
                 {filteredExamples.length === 0 ? <p className="sql-examples-empty" role="status">{copy.noExamplesFound}</p> : <div className="sql-examples-layout">
                     <div className="sql-examples-list" role="listbox" aria-label={copy.sqlExamples}>
-                        {filteredExamples.map((example, index) => <button key={example.id} ref={element => { if (element) optionRefs.current.set(example.id, element); else optionRefs.current.delete(example.id); }} type="button" role="option" tabIndex={example.id === selected?.id ? 0 : -1} aria-selected={example.id === selected?.id} className={cx('sql-example-option', example.id === selected?.id && 'is-selected')} onFocus={() => setSelectedId(example.id)} onClick={() => setSelectedId(example.id)} onKeyDown={event => {
+                        {filteredExamples.map((example, index) => <button key={example.id} data-testid={`sql-example-${example.id}`} ref={element => { if (element) optionRefs.current.set(example.id, element); else optionRefs.current.delete(example.id); }} type="button" role="option" tabIndex={example.id === selected?.id ? 0 : -1} aria-selected={example.id === selected?.id} className={cx('sql-example-option', example.id === selected?.id && 'is-selected')} onFocus={() => setSelectedId(example.id)} onClick={() => setSelectedId(example.id)} onKeyDown={event => {
                             let nextIndex: number | undefined;
                             if (event.key === 'ArrowDown') nextIndex = (index + 1) % filteredExamples.length;
                             else if (event.key === 'ArrowUp') nextIndex = (index - 1 + filteredExamples.length) % filteredExamples.length;
@@ -185,7 +185,7 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onC
                         <div className="sql-example-preview-heading"><div><span className="eyebrow">{selected.dataset ?? categoryLabel(selected.category, copy, locale)}</span><h3>{exampleText(selected, locale, copy).name}.sql</h3></div><span className="sql-example-readonly">{chartLabel(selected, copy)}</span></div>
                         <p>{exampleText(selected, locale, copy).description}</p>
                         <pre><code>{selected.sql}</code></pre>
-                        <Button variant="primary" className="sql-example-open" onClick={() => { if (onOpenExample(selected)) onClose(false); }}><Icon name="plus"/>{copy.openInNewSql}</Button>
+                        <Button variant="primary" className="sql-example-open" data-testid="open-sql-example" onClick={() => { if (onOpenExample(selected)) onClose(false); }}><Icon name="plus"/>{copy.openInNewSql}</Button>
                     </article>}
                 </div>}
             </section>

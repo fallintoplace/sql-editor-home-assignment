@@ -21,7 +21,7 @@ export function RunActionGroup({ runLabel, running, disabled, onRun, actions, co
     copy: Copy['common'];
 }) {
     return <div className="run-action-group" role="group" aria-label={copy.runActions}>
-        <Button variant="primary" className="run-query-button" aria-label={runLabel} onClick={onRun} disabled={disabled}><Icon name="play"/>{running ? copy.running : copy.run}</Button>
+        <Button variant="primary" className="run-query-button" data-testid="run-statement" aria-label={runLabel} onClick={onRun} disabled={disabled}><Icon name="play"/>{running ? copy.running : copy.run}</Button>
         {actions.map(action => <Button key={action.label} variant="secondary" className="run-option-button" disabled={action.disabled} title={action.title} onClick={action.onSelect}>{action.label}</Button>)}
     </div>;
 }
@@ -60,7 +60,7 @@ export function ExecutionBar({ run, eventState, onCancel, cancelling, scriptRunn
     const executionInProgress = Boolean(run && (!terminal(run) || scriptRunning));
     const elapsedMs = run ? terminal(run) ? Math.round(run.elapsedMs) : Math.max(0, Math.round(progress?.elapsedMs ?? run.elapsedMs)) : undefined;
 
-    return <footer className={cx('execution-bar', executionInProgress && 'is-running')}>
+    return <footer className={cx('execution-bar', executionInProgress && 'is-running')} data-run-status={run?.status ?? 'ready'}>
         <div className="execution-state">
             {run
                 ? <Status run={run} copy={copy}/>

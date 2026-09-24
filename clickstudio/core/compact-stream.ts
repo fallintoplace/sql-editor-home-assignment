@@ -2,6 +2,22 @@ import { StringDecoder } from 'node:string_decoder';
 import type { Column, Json, Limits, Row } from '../shared/types.js';
 import { AppError, requireThat } from './errors.js';
 import type { DriverResult } from './runs.js';
+
+function isStringArray(value: unknown): value is string[] {
+    return Array.isArray(value) && value.every(item => typeof item === 'string');
+}
+function isJson(value: unknown): value is Json {
+    if (value === null || typeof value === 'string' || typeof value === 'boolean')
+        return true;
+    if (typeof value === 'number')
+        return Number.isFinite(value);
+    if (Array.isArray(value))
+        return value.every(isJson);
+    return value !== null && typeof value === 'object' && Object.values(value).every(isJson);
+}
+function isRow(value: unknown): value is Row {
+    return Array.isArray(value) && value.every(isJson);
+}
 /** Bounded parsing before JSON.parse: even one very large string cannot grow without limit. */
 export async function collectCompactStream(stream: AsyncIterable<Buffer | string>, limits: Limits): Promise<DriverResult> {
     const decoder = new StringDecoder('utf8');
@@ -31,19 +47,24 @@ export async function collectCompactStream(stream: AsyncIterable<Buffer | string
         }
         requireThat(Array.isArray(data), 502, 'RESULT_FORMAT', 'Expected a compact JSON row');
         if (stage < 2) {
-            requireThat(data.length > 0 && data.length <= 500 && data.every(x => typeof x === 'string'), 502, 'RESULT_METADATA', 'Invalid names/types header');
+            requireThat(isStringArray(data) && data.length > 0 && data.length <= 500, 502, 'RESULT_METADATA', 'Invalid names/types header');
             if (stage === 0)
-                names = data as string[];
+                names = data;
             else {
                 requireThat(data.length === names.length, 502, 'RESULT_METADATA', 'Column names and types differ');
-                columns = names.map((name, i) => ({ name, type: data[i] as string }));
+                columns = names.map((name, i) => {
+                    const type = data[i];
+                    requireThat(type !== undefined, 502, 'RESULT_METADATA', 'Column names and types differ');
+                    return { name, type };
+                });
             }
             bytes += size;
             stage++;
             return;
         }
+        requireThat(isRow(data), 502, 'RESULT_FORMAT', 'Expected a compact JSON row');
         requireThat(data.length === columns.length, 502, 'RESULT_WIDTH', 'Unexpected number of fields in a result row');
-        rows.push(data as Json[]);
+        rows.push(data);
         bytes += size;
     };
     outer: for await (const chunk of stream) {

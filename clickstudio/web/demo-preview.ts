@@ -1,5 +1,6 @@
 import { DEFAULT_LIMITS, type ChartConfig, type Connection, type QueryDocument, type Result, type ResultPage, type Run, type Schema, type SchemaColumn, type Script } from '../shared/types.js';
 import { splitSql } from '../shared/sql.js';
+import { isResult, isRun } from '../shared/run-wire.js';
 import { loadPlaygroundSchema, PLAYGROUND_CONNECTION, PLAYGROUND_CONNECTION_ID, PLAYGROUND_STARTER_ID, PLAYGROUND_STARTER_NAME, PLAYGROUND_STARTER_SQL, queryPlayground } from './playground.js';
 
 export const DEMO_PREVIEW_RUN_ID = 'preview-sample-run';
@@ -509,17 +510,16 @@ export class DemoPreviewApi {
             if (typeof state.trusted === 'boolean') this.trusted = state.trusted;
             if (typeof state.sequence === 'number' && Number.isSafeInteger(state.sequence) && state.sequence >= 0) this.sequence = state.sequence;
             if (Array.isArray(state.runs)) for (const value of state.runs) {
-                const run = record(value);
-                if (typeof run.id === 'string' && typeof run.sql === 'string' && typeof run.sequence === 'number' && Array.isArray(run.columns))
-                    this.runs.set(run.id, value as Run);
+                if (isRun(value))
+                    this.runs.set(value.id, value);
             }
             if (Array.isArray(state.results)) for (const value of state.results) {
-                const result = record(value);
-                const run = typeof result.runId === 'string' ? this.runs.get(result.runId) : undefined;
+                if (!isResult(value)) continue;
+                const run = this.runs.get(value.runId);
                 const expiredPlaygroundResult = run?.connectionId === PLAYGROUND_CONNECTION_ID &&
-                    typeof result.expiresAt === 'string' && Date.parse(result.expiresAt) <= Date.now();
-                if (!expiredPlaygroundResult && typeof result.runId === 'string' && typeof result.queryId === 'string' && Array.isArray(result.columns) && Array.isArray(result.rows))
-                    this.results.set(result.runId, value as Result);
+                    Date.parse(value.expiresAt) <= Date.now();
+                if (!expiredPlaygroundResult)
+                    this.results.set(value.runId, value);
             }
             if (Array.isArray(state.scripts)) for (const value of state.scripts) {
                 const script = record(value);

@@ -4,7 +4,7 @@ import { DEFAULT_LIMITS } from '../shared/types.js';
 import { AppError, requireThat } from './errors.js';
 import { canWrite, mustOwn } from './guards.js';
 import { hash, audit, MemoryStore, type Store } from './store.js';
-import { integer, record, stringMap, text } from './validation.js';
+import { choice, integer, record, stringMap, text } from './validation.js';
 import { boundResult, type RunService } from './runs.js';
 import { MAX_CHART_SERIES } from '../shared/results.js';
 interface Share {
@@ -12,6 +12,12 @@ interface Share {
     owner: string;
     publishedId: string;
     expiresAt: string;
+}
+const DOCUMENT_KINDS = ['query', 'snippet', 'metric'] as const satisfies readonly QueryDocument['kind'][];
+const CHART_KINDS = ['table', 'number', 'line', 'bar', 'scatter', 'heatmap', 'candlestick'] as const satisfies readonly ChartConfig['kind'][];
+const LEGACY_CHART_KINDS = ['area', 'stacked', 'pie'] as const;
+function isStringArray(value: unknown): value is string[] {
+    return Array.isArray(value) && value.every(item => typeof item === 'string');
 }
 export class ArtifactService {
     constructor(private readonly store: Store, private readonly runs: RunService, private readonly authorizeConnection: (p: Principal, id: string) => void) { }
@@ -43,12 +49,11 @@ export class ArtifactService {
             requireThat(this.list(p).length < 200, 507, 'DOCUMENT_CAPACITY', 'This workspace has reached its 200-active-document limit');
         const connectionId = text(input.connectionId, 'connectionId', 128);
         this.authorizeConnection(p, connectionId);
-        const kind = input.kind ?? old?.kind ?? 'query';
-        requireThat(['query', 'snippet', 'metric'].includes(String(kind)), 400, 'ARTIFACT_KIND', 'Unknown document kind');
+        const kind = choice(input.kind ?? old?.kind ?? 'query', DOCUMENT_KINDS, 400, 'ARTIFACT_KIND', 'Unknown document kind');
         const dependencies = input.dependencies ?? old?.dependencies ?? [];
-        requireThat(Array.isArray(dependencies) && dependencies.length <= 50 && dependencies.every(d => typeof d === 'string'), 400, 'DEPENDENCIES', 'Invalid dependencies');
+        requireThat(isStringArray(dependencies) && dependencies.length <= 50, 400, 'DEPENDENCIES', 'Invalid dependencies');
         const documentId = id ?? randomUUID();
-        for (const dependency of dependencies as string[]) {
+        for (const dependency of dependencies) {
             const source = this.get(p, dependency);
             requireThat(!source.deletedAt && source.id !== documentId, 409, 'BROKEN_DEPENDENCY', 'Cannot reference a deleted artifact or itself');
             requireThat(!this.descendants(p, documentId).includes(dependency), 409, 'DEPENDENCY_CYCLE', 'This reference would create a dependency cycle');
@@ -57,7 +62,7 @@ export class ArtifactService {
         const document: QueryDocument = { id: documentId, owner: p.id, name: text(input.name, 'name', 180),
             sql: text(input.sql, 'SQL', 200000, true), connectionId, revision: (old?.revision ?? 0) + 1,
             createdAt: old?.createdAt ?? now, updatedAt: now, parameters: stringMap(input.parameters, 'parameters'),
-            chart: parseChart(input.chart), dependencies: dependencies as string[], kind: kind as QueryDocument['kind'],
+            chart: parseChart(input.chart), dependencies, kind,
             publishedRevision: old?.publishedRevision,
             ...(old?.parentDocumentId ? { parentDocumentId: old.parentDocumentId } : {}),
         };
@@ -259,13 +264,12 @@ export class ArtifactService {
 export function parseChart(value: unknown): ChartConfig {
     if (value === undefined)
         return { kind: 'table', x: 0, ys: [], title: 'Query result' };
-    const v = record(value), supportedKinds = ['table', 'number', 'line', 'bar', 'scatter', 'heatmap', 'candlestick'];
-    const legacyKinds = ['area', 'stacked', 'pie'];
-    requireThat(supportedKinds.includes(String(v.kind)) || legacyKinds.includes(String(v.kind)), 400, 'CHART_CONFIG', 'Invalid chart kind');
+    const v = record(value), kind = CHART_KINDS.find(candidate => candidate === v.kind);
+    requireThat(kind !== undefined || LEGACY_CHART_KINDS.some(candidate => candidate === v.kind), 400, 'CHART_CONFIG', 'Invalid chart kind');
     requireThat(Array.isArray(v.ys) && v.ys.length <= MAX_CHART_SERIES, 400, 'CHART_CONFIG', 'Invalid chart series');
     const groupBy = v.groupBy === undefined ? undefined : integer(v.groupBy, 'groupBy', 0, 499);
     let candlestick: ChartConfig['candlestick'];
-    if (v.kind === 'candlestick') {
+    if (kind === 'candlestick') {
         const fields = record(v.candlestick, 'candlestick fields');
         candlestick = {
             ...(fields.open === undefined ? {} : { open: integer(fields.open, 'candlestick.open', 0, 499) }),
@@ -278,7 +282,7 @@ export function parseChart(value: unknown): ChartConfig {
             ...(fields.quoteActivity === undefined ? {} : { quoteActivity: integer(fields.quoteActivity, 'candlestick.quoteActivity', 0, 499) }),
         };
     }
-    return { kind: supportedKinds.includes(String(v.kind)) ? v.kind as ChartConfig['kind'] : 'table', x: integer(v.x, 'x', 0, 499), ...(groupBy === undefined ? {} : { groupBy }), ys: v.ys.map(y => integer(y, 'y', 0, 499)), title: text(v.title, 'chart title', 200, true), ...(candlestick ? { candlestick } : {}) };
+    return { kind: kind ?? 'table', x: integer(v.x, 'x', 0, 499), ...(groupBy === undefined ? {} : { groupBy }), ys: v.ys.map(y => integer(y, 'y', 0, 499)), title: text(v.title, 'chart title', 200, true), ...(candlestick ? { candlestick } : {}) };
 }
 function parseMetric(value: unknown): MetricContract {
     const v = record(value, 'metric contract'), timezone = text(v.timezone, 'timezone', 100);

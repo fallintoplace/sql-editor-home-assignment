@@ -14,7 +14,7 @@ import { SessionService } from '../core/sessions.js';
 import { FileStore, type Store } from '../core/store.js';
 import { AppError, asError, requireThat } from '../core/errors.js';
 import { canWrite } from '../core/guards.js';
-import { identifier, integer, record, stringMap, text } from '../core/validation.js';
+import { choice, identifier, integer, record, stringMap, text } from '../core/validation.js';
 import { exportCsv } from '../shared/results.js';
 import { buildQueryProfile } from '../shared/profile.js';
 import { configuredSecrets, redactor, type Config } from './config.js';
@@ -25,6 +25,9 @@ import { OpenAIVoiceService, safetyIdentifier, type VoiceService } from './voice
 import { telemetry, recordRun } from './telemetry.js';
 type Driver = QueryDriver & ImportDriver & Pick<ClickHouseDriver, 'connection' | 'connections' | 'test' | 'targets' | 'profileEvidence' | 'profilePipeline' | 'systemTableDocumentation' | 'close'>;
 const MAX_WASM_PARSER_BYTES = 64 * 1024 * 1024;
+const ASSISTANT_ACTIONS = ['generate', 'explain', 'repair', 'result', 'performance', 'review'] as const satisfies readonly AssistantAction[];
+const IMPORT_FORMATS = ['csv', 'json', 'ndjson'] as const;
+const MONITOR_CONDITIONS = ['changed', 'nonempty', 'failure'] as const;
 let parserWasmCache: Promise<Uint8Array> | undefined;
 async function loadClickHouseParserWasm(): Promise<Uint8Array> {
     let bytes: Buffer;
@@ -234,7 +237,7 @@ export function createApp(config: Config, overrides: {
         const p = principal(res), v = body(req), connectionId = identifier(v.connectionId, 'connectionId');
         canWrite(p);
         requireThat(authorized(p, connectionId), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before sharing context');
-        const action = text(v.action, 'action', 30) as AssistantAction, sql = text(v.sql, 'SQL', 200000, true), question = text(v.question, 'question', 4000, true), schema: Schema = await driver.schema(connectionId);
+        const action = choice(v.action, ASSISTANT_ACTIONS, 400, 'ASSISTANT_ACTION', 'Unknown assistant action'), sql = text(v.sql, 'SQL', 200000, true), question = text(v.question, 'question', 4000, true), schema: Schema = await driver.schema(connectionId);
         let run: Run | undefined;
         if (v.runId) {
             run = runs.get(p, identifier(v.runId, 'runId'));
@@ -261,7 +264,7 @@ export function createApp(config: Config, overrides: {
             driver.connection(p, connectionId);
         res.json(imports.listRecoverable(p, connectionId));
     });
-    app.post('/api/imports/preview', (req, res) => { const v = body(req); requireThat(['csv', 'json', 'ndjson'].includes(String(v.format)), 400, 'IMPORT_FORMAT', 'Use CSV, JSON, or NDJSON'); const input = imports.preview(principal(res), text(v.name, 'filename', 128), text(v.source, 'input', 2000000), v.format as 'csv' | 'json' | 'ndjson'); res.status(201).json({ ...input, rows: input.rows.slice(0, 20), rowCount: input.rows.length }); });
+    app.post('/api/imports/preview', (req, res) => { const v = body(req), format = choice(v.format, IMPORT_FORMATS, 400, 'IMPORT_FORMAT', 'Use CSV, JSON, or NDJSON'); const input = imports.preview(principal(res), text(v.name, 'filename', 128), text(v.source, 'input', 2000000), format); res.status(201).json({ ...input, rows: input.rows.slice(0, 20), rowCount: input.rows.length }); });
     app.post('/api/imports/:id/mapping', async (req, res) => { const v = body(req), mapping = await imports.map(principal(res), id(req), identifier(v.connectionId, 'connectionId'), text(v.table, 'table', 256), mappingFields(v.fields)); res.json({ ...mapping, rows: mapping.rows.slice(0, 20), rowCount: mapping.rows.length }); });
     app.post('/api/imports/:id/commit', async (req, res) => res.json(await imports.commit(principal(res), id(req), text(body(req).confirmation, 'confirmation', 100))));
     app.get('/api/imports/:id', (req, res) => res.json(imports.getJob(principal(res), id(req))));
@@ -269,7 +272,7 @@ export function createApp(config: Config, overrides: {
     app.post('/api/imports/:id/review', async (req, res) => { const v = body(req); res.json(await imports.review(principal(res), id(req), boolean(v.inspected, 'inspected'), boolean(v.noActiveInsert, 'noActiveInsert'))); });
     app.delete('/api/imports/:id', (req, res) => { imports.remove(principal(res), id(req)); res.json({ ok: true }); });
     app.get('/api/monitors', (_req, res) => res.json(monitors.list(principal(res))));
-    app.post('/api/monitors', (req, res) => { const v = body(req); requireThat(['changed', 'nonempty', 'failure'].includes(String(v.condition)), 400, 'MONITOR_CONDITION', 'Invalid condition'); res.status(201).json(monitors.create(principal(res), identifier(v.publishedId, 'publishedId'), integer(v.intervalSeconds, 'intervalSeconds', 60, 31536000), v.condition as 'changed' | 'nonempty' | 'failure')); });
+    app.post('/api/monitors', (req, res) => { const v = body(req), condition = choice(v.condition, MONITOR_CONDITIONS, 400, 'MONITOR_CONDITION', 'Invalid condition'); res.status(201).json(monitors.create(principal(res), identifier(v.publishedId, 'publishedId'), integer(v.intervalSeconds, 'intervalSeconds', 60, 31536000), condition)); });
     app.post('/api/monitors/:id/pause', (req, res) => res.json(monitors.pause(principal(res), id(req), boolean(body(req).paused, 'paused'))));
     app.get('/api/notices', (_req, res) => res.json(monitors.notices(principal(res))));
     app.get('/api/audit', (_req, res) => res.json(store.list<AuditEvent>('audit').filter(e => e.owner === principal(res).id).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 200)));

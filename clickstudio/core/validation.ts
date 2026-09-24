@@ -3,12 +3,10 @@ import { AppError, requireThat } from './errors.js';
 
 type RunKind = NonNullable<RunRequest['kind']>;
 const LIMIT_KEYS = ['rows', 'bytes', 'seconds', 'memory', 'threads'] satisfies readonly (keyof Limits)[];
+const RUN_KINDS = ['query', 'explain', 'pipeline'] as const satisfies readonly RunKind[];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-function isRunKind(value: unknown): value is RunKind {
-    return value === 'query' || value === 'explain' || value === 'pipeline';
 }
 export function record(value: unknown, name = 'request'): Record<string, unknown> {
     requireThat(isRecord(value), 400, 'INVALID_REQUEST', `${name} must be an object`);
@@ -26,6 +24,11 @@ export function identifier(value: unknown, name: string): string {
 export function integer(value: unknown, name: string, min: number, max: number): number {
     requireThat(typeof value === 'number' && Number.isSafeInteger(value) && value >= min && value <= max, 400, 'INVALID_REQUEST', `${name} must be an integer between ${min} and ${max}`);
     return value;
+}
+export function choice<const T extends string>(value: unknown, options: readonly T[], status: number, code: string, message: string): T {
+    const match = options.find(option => option === value);
+    requireThat(match !== undefined, status, code, message);
+    return match;
 }
 export function stringMap(value: unknown, name: string, maxEntries = 50): Record<string, string> {
     const source = value === undefined ? {} : record(value, name), out: Record<string, string> = Object.create(null);
@@ -47,8 +50,7 @@ export function limits(value: unknown, defaults: Limits = { ...DEFAULT_LIMITS })
 }
 export function runRequest(value: unknown): RunRequest {
     const v = record(value);
-    const kind = v.kind ?? 'query';
-    requireThat(isRunKind(kind), 400, 'INVALID_KIND', 'Unknown run kind');
+    const kind = choice(v.kind ?? 'query', RUN_KINDS, 400, 'INVALID_KIND', 'Unknown run kind');
     const tags = stringMap(v.tags, 'tags', 5);
     requireThat(Object.keys(tags).every(k => ['workspace', 'owner', 'artifact', 'environment', 'cost_center', 'experience'].includes(k)), 400, 'INVALID_TAG', 'Unsupported query tag');
     for (const t of Object.values(tags))

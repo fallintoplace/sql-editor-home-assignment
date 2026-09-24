@@ -1,4 +1,4 @@
-import type { ApiError, Column, Limits, Progress, Run, RunEvent, RunStatus } from './types.js';
+import type { ApiError, Column, Json, Limits, Progress, Result, Run, RunEvent, RunStatus } from './types.js';
 
 const runStatuses = [
     'queued', 'running', 'succeeded', 'truncated', 'failed', 'cancelled', 'timed_out', 'interrupted',
@@ -26,6 +26,16 @@ function isStringRecord(value: unknown): value is Record<string, string> {
 
 function isColumn(value: unknown): value is Column {
     return isRecord(value) && typeof value.name === 'string' && typeof value.type === 'string';
+}
+
+function isJson(value: unknown): value is Json {
+    if (value === null || typeof value === 'string' || typeof value === 'boolean')
+        return true;
+    if (typeof value === 'number')
+        return Number.isFinite(value);
+    if (Array.isArray(value))
+        return value.every(isJson);
+    return isRecord(value) && Object.values(value).every(isJson);
 }
 
 function isLimits(value: unknown): value is Limits {
@@ -98,6 +108,19 @@ export function isRun(value: unknown): value is Run {
         && value.retryPolicy === 'never'
         && isOptionalString(value.traceId)
         && isOptionalString(value.serverVersion);
+}
+
+export function isResult(value: unknown): value is Result {
+    return isRecord(value)
+        && typeof value.runId === 'string'
+        && typeof value.queryId === 'string'
+        && Array.isArray(value.columns)
+        && value.columns.every(isColumn)
+        && Array.isArray(value.rows)
+        && value.rows.every(row => Array.isArray(row) && row.every(isJson))
+        && (value.completeness === 'complete' || value.completeness === 'truncated')
+        && typeof value.createdAt === 'string'
+        && typeof value.expiresAt === 'string';
 }
 
 export function parseRunEvent(value: unknown): RunEvent {

@@ -3,7 +3,7 @@ import type { AssistantAction, AssistantEvaluationReport, Principal, Proposal, P
 import { AppError, requireThat } from './errors.js';
 import { canWrite, guardSql, mustOwn } from './guards.js';
 import { audit, hash, type Store } from './store.js';
-import { record, text } from './validation.js';
+import { choice, record, text } from './validation.js';
 import { buildEvaluationReport, evaluateProposal } from './assistant-evaluation.js';
 export const PROMPT_VERSION = 'clickstudio-review-v1';
 export const PLAYBOOKS = {
@@ -61,6 +61,27 @@ interface Usage {
     calls: number;
     inputBytes: number;
 }
+interface AssistantContextData {
+    dialect: 'ClickHouse';
+    serverVersion: string;
+    sql: string;
+    schema: Array<{ database: string; table: string; name: string; type: string }>;
+    schemaFetchedAt: string;
+    schemaIncomplete: boolean;
+    workspaceRules: string;
+    evidenceSql?: string;
+    error?: string;
+    plan?: string;
+    result?: {
+        queryId: string;
+        createdAt: string;
+        expiresAt: string;
+        completeness: Result['completeness'];
+        columns: Result['columns'];
+        rows: Result['rows'];
+    };
+}
+const FINDING_SEVERITIES = ['high', 'medium', 'low'] as const satisfies readonly ProposalContent['findings'][number]['severity'][];
 const credentialPattern = /\b(?:password|api[_-]?key|access[_-]?token|secret)\s*[:=]\s*['"][^'"]+['"]|\b(?:sk-[A-Za-z0-9_-]{16,})|https?:\/\/[^\s/@]+:[^\s/@]+@/i;
 export function buildContext(input: ContextInput): {
     payload: PreparedContext['payload'];
@@ -72,7 +93,7 @@ export function buildContext(input: ContextInput): {
     const summary = [`Action: ${input.action} (propose/review only)`, `Playbook: ${input.action}@${PROMPT_VERSION}`,
         `Schema: ${Math.min(columns.length, 250)} of ${columns.length} permitted columns`,
         'Connection credentials, cookies and API keys are not included.'];
-    const context: Record<string, unknown> = {
+    const context: AssistantContextData = {
         dialect: 'ClickHouse', serverVersion: input.serverVersion ?? 'unknown', sql: input.sql,
         schema: columns.slice(0, 250).map(c => ({ database: c.database, table: c.table, name: c.name, type: c.type })),
         schemaFetchedAt: input.schema.fetchedAt, schemaIncomplete: input.schema.truncated || columns.length > 250,
@@ -89,20 +110,21 @@ export function buildContext(input: ContextInput): {
         summary.push('The selected plan is included, not invented operator timings.');
     }
     if (input.result) {
-        const keep = input.result.columns.map((c, i) => sensitive.has(c.name.toLowerCase()) ? -1 : i).filter(i => i >= 0);
-        context.result = { queryId: input.result.queryId, createdAt: input.result.createdAt, expiresAt: input.result.expiresAt,
-            completeness: input.result.completeness, columns: keep.map(i => input.result!.columns[i]),
-            rows: input.result.rows.map(row => keep.map(i => row[i])) };
-        summary.push(`Result: ${input.result.rows.length} retained rows before context-size bounding; sensitive columns excluded.`);
+        const result = input.result;
+        const keep = result.columns
+            .map((column, index) => ({ column, index }))
+            .filter(({ column }) => !sensitive.has(column.name.toLowerCase()));
+        context.result = { queryId: result.queryId, createdAt: result.createdAt, expiresAt: result.expiresAt,
+            completeness: result.completeness, columns: keep.map(({ column }) => column),
+            rows: result.rows.map(row => keep.map(({ index }) => row[index] ?? null)) };
+        summary.push(`Result: ${result.rows.length} retained rows before context-size bounding; sensitive columns excluded.`);
     }
     // Bound the actual wire representation. Whole rows/columns are removed, never half a JSON value.
     const encoded = () => JSON.stringify(context);
-    const result = context.result as {
-        rows: unknown[];
-    } | undefined;
+    const result = context.result;
     while (Buffer.byteLength(encoded()) > 60000 && result?.rows.length)
         result.rows.pop();
-    const schema = context.schema as unknown[];
+    const schema = context.schema;
     while (Buffer.byteLength(encoded()) > 60000 && schema.length)
         schema.pop();
     if (schema.length !== Math.min(columns.length, 250))
@@ -125,7 +147,9 @@ export function buildContext(input: ContextInput): {
 export function validateImage(data: string): string {
     const match = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(data);
     requireThat(match, 400, 'IMAGE_TYPE', 'Only PNG, JPEG and WebP image uploads are supported');
-    const buffer = Buffer.from(match[2]!, 'base64');
+    const payload = match[2];
+    requireThat(payload !== undefined, 400, 'IMAGE_TYPE', 'Only PNG, JPEG and WebP image uploads are supported');
+    const buffer = Buffer.from(payload, 'base64');
     requireThat(buffer.length > 0 && buffer.length <= 2000000, 413, 'IMAGE_SIZE', 'Images must be at most 2 MB');
     const valid = match[1] === 'png' ? buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) :
         match[1] === 'jpeg' ? buffer[0] === 255 && buffer[1] === 216 && buffer[2] === 255 :
@@ -264,7 +288,7 @@ export function validateProposal(value: unknown): ProposalContent {
         clarification: v.clarification === null ? null : text(v.clarification, 'clarification', 4000),
         findings: v.findings.map(raw => {
             const f = record(raw);
-            requireThat(['high', 'medium', 'low'].includes(String(f.severity)), 502, 'AI_OUTPUT', 'Invalid finding severity');
-            return { severity: f.severity as 'high' | 'medium' | 'low', message: text(f.message, 'finding', 4000), evidence: text(f.evidence, 'evidence', 4000, true) };
+            const severity = choice(f.severity, FINDING_SEVERITIES, 502, 'AI_OUTPUT', 'Invalid finding severity');
+            return { severity, message: text(f.message, 'finding', 4000), evidence: text(f.evidence, 'evidence', 4000, true) };
         }) };
 }

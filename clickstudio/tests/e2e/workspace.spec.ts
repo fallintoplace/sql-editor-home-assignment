@@ -19,18 +19,18 @@ async function switchConnection(page: Page, name: string) {
 test('Run, chart, save and reload preserve the same execution evidence', async ({ page }) => {
     const runs = countRunRequests(page);
     await trust(page);
-    await page.getByRole('button', { name: 'Run statement', exact: true }).click();
+    await page.getByTestId('run-statement').click();
     const results = page.getByRole('region', { name: 'Query results' });
-    await expect(results.getByText('Succeeded', { exact: true })).toBeVisible();
+    await expect(results.locator('[data-run-status="succeeded"]')).toBeVisible();
     await expect(results.getByRole('cell', { name: '2026-01-01', exact: true })).toBeVisible();
     const queryId = await page.locator('.execution-bar code').innerText();
     await results.getByRole('tab', { name: 'Chart', exact: true }).click();
     await expect(results.locator('svg[role="img"]')).toBeVisible();
-    await page.getByRole('button', { name: 'Save revision', exact: true }).click();
+    await page.getByTestId('save-query').click();
     await expect(page.locator('.draft-status')).toHaveText('Saved r1');
     await page.reload();
     const recovered = page.getByRole('region', { name: 'Query results' });
-    await expect(recovered.getByText('Succeeded', { exact: true })).toBeVisible();
+    await expect(recovered.locator('[data-run-status="succeeded"]')).toBeVisible();
     await expect(recovered.getByRole('cell', { name: '2026-01-01', exact: true })).toBeVisible();
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
     expect(runs()).toBe(1);
@@ -38,8 +38,8 @@ test('Run, chart, save and reload preserve the same execution evidence', async (
 
 test('Switching connections never reuses another connection\'s result', async ({ page }) => {
     await trust(page);
-    await page.getByRole('button', { name: 'Run statement', exact: true }).click();
-    await expect(page.getByRole('region', { name: 'Query results' }).getByText('Succeeded', { exact: true })).toBeVisible();
+    await page.getByTestId('run-statement').click();
+    await expect(page.getByRole('region', { name: 'Query results' }).locator('[data-run-status="succeeded"]')).toBeVisible();
     await switchConnection(page, 'Another sample');
     await trustCurrentConnection(page);
     await expect(page.getByRole('region', { name: 'Query results' })).toHaveCount(0);
@@ -57,9 +57,9 @@ test('Closing and reopening a result tab does not execute SQL again', async ({ p
     await page.keyboard.insertText('SELECT {value:UInt64}');
     await expect(editor).toContainText('SELECT {value:UInt64}');
     await page.getByRole('textbox', { name: 'value:UInt64', exact: true }).fill('9007199254740993');
-    await page.getByRole('button', { name: 'Run statement', exact: true }).click();
+    await page.getByTestId('run-statement').click();
     const results = page.getByRole('region', { name: 'Query results' });
-    await expect(results.getByText('Succeeded', { exact: true })).toBeVisible();
+    await expect(results.locator('[data-run-status="succeeded"]')).toBeVisible();
     const queryId = await page.locator('.execution-bar code').innerText();
     await page.getByRole('button', { name: 'Close Recoverable.sql', exact: true }).click();
     await expect(results).toHaveCount(0);

@@ -7,7 +7,7 @@ async function beginInCompactMode(page: Page) {
     await page.addInitScript(() => localStorage.setItem('clickstudio:experience', 'beginner'));
     await page.goto('/');
     await expect(page.getByRole('textbox', { name: 'SQL editor', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Ask AI', exact: true })).toBeVisible();
+    await expect(page.getByTestId('open-ai')).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Describe your data question', exact: true })).toHaveCount(0);
     await trustCurrentConnection(page);
 }
@@ -24,10 +24,10 @@ test('Compact opens on SQL and can run a query without opening AI', async ({ pag
     const editor = page.getByRole('textbox', { name: 'SQL editor', exact: true });
     await expect(editor).toBeVisible();
     await expect(editor).toContainText('SELECT');
-    await expect(page.getByRole('button', { name: 'Ask AI', exact: true })).toBeVisible();
+    await expect(page.getByTestId('open-ai')).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Describe your data question', exact: true })).toHaveCount(0);
 
-    const runQuery = page.getByRole('button', { name: 'Run statement', exact: true });
+    const runQuery = page.getByTestId('run-statement');
     if (await runQuery.isDisabled()) {
         await page.getByRole('button', { name: 'Start exploring', exact: true }).click();
         await expect(runQuery).toBeEnabled();
@@ -78,7 +78,7 @@ test('Compact AI proposal becomes the same query and run in Advanced mode', asyn
     await beginInCompactMode(page);
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'revision 1' })).toBeVisible();
-    await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
+    await page.getByTestId('open-ai').click();
     const prompt = page.getByRole('textbox', { name: 'Describe your data question', exact: true });
     await prompt.fill('Show event counts by day');
     await page.getByRole('button', { name: 'Review context', exact: true }).click();
@@ -95,7 +95,7 @@ test('Compact AI proposal becomes the same query and run in Advanced mode', asyn
     await page.getByRole('button', { name: 'Run this query', exact: true }).click();
 
     const results = page.getByRole('region', { name: 'Query results', exact: true });
-    await expect(results.getByText('Succeeded', { exact: true })).toBeVisible();
+    await expect(results.locator('[data-run-status="succeeded"]')).toBeVisible();
     await expect(results.getByRole('cell', { name: '2026-01-01', exact: true })).toBeVisible();
     const queryId = await page.locator('.execution-bar code').innerText();
     await results.getByRole('tab', { name: 'Chart', exact: true }).click();
@@ -110,7 +110,7 @@ test('Compact AI proposal becomes the same query and run in Advanced mode', asyn
     await expect(page.locator('.cm-content')).toContainText(generatedSql);
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
     await page.getByText('Compact', { exact: true }).click();
-    await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
+    await page.getByTestId('open-ai').click();
     await expect(prompt).toHaveValue('Show event counts by day');
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
 });
@@ -144,9 +144,9 @@ test('Advanced editor, insights, pipeline and AI copilot stay read-only until a 
     await trust(page);
     const editor = page.getByRole('textbox', { name: 'SQL editor', exact: true });
     await expect(editor).toBeVisible();
-    await page.getByRole('button', { name: 'Run statement', exact: true }).click();
+    await page.getByTestId('run-statement').click();
     const results = page.getByRole('region', { name: 'Query results', exact: true });
-    await expect(results.getByText('Succeeded', { exact: true })).toBeVisible();
+    await expect(results.locator('[data-run-status="succeeded"]')).toBeVisible();
     const queryId = await page.locator('.execution-bar code').innerText();
 
     await results.getByRole('tab', { name: 'Insights', exact: true }).click();
@@ -154,12 +154,11 @@ test('Advanced editor, insights, pipeline and AI copilot stay read-only until a 
     if (await loadDetails.count()) await loadDetails.click();
     await expect(results.getByText('Execution time', { exact: true })).toBeVisible();
 
-    await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Pipeline', exact: true }).click();
+    await openWorkspacePanel(page, 'pipeline');
     await expect(page.locator('.pipeline-stage').first()).toBeVisible();
     await page.getByRole('button', { name: 'Open operator graph in Insights', exact: true }).click();
     await expect(results.getByRole('region', { name: 'Execution plan graph' })).toBeVisible();
-    await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
+    await page.getByTestId('open-ai').click();
     await page.locator('.assistant-panel select').selectOption('performance');
     await page.locator('.assistant-panel textarea').fill('Why is this query slow?');
     await page.getByRole('checkbox').check();
@@ -195,7 +194,7 @@ test('Compact voice dictation fills the question without sending it automaticall
     });
 
     await beginInCompactMode(page);
-    await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
+    await page.getByTestId('open-ai').click();
     const prompt = page.getByRole('textbox', { name: 'Describe your data question', exact: true });
     await page.getByRole('button', { name: 'Dictate question', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toBeVisible();

@@ -3,14 +3,14 @@ import type { NativeParseResult, NativeParserStatus } from '../../shared/native-
 import { buildSqlFlow } from '../sql-flow';
 import { PipelineGraph } from './PipelineGraph';
 
-export function SqlFlowView({ sql, sourceOffset, parseResult, parserEnabled, parserStatus, parseDurationMs, onSelectRange }: {
+export function SqlFlowView({ sql, sourceOffset, parseResult, parserEnabled, parserStatus, parseDurationMs, onRevealRange }: {
     sql: string;
     sourceOffset: number;
     parseResult?: NativeParseResult;
     parserEnabled: boolean;
     parserStatus: NativeParserStatus;
     parseDurationMs?: number;
-    onSelectRange: (from: number, to: number) => void;
+    onRevealRange: (from: number, to: number) => void;
 }) {
     const model = useMemo(() => buildSqlFlow(sql, parseResult, sourceOffset), [sql, parseResult, sourceOffset]);
     const duration = parseDurationMs === undefined ? undefined : `${parseDurationMs.toFixed(1)} ms`;
@@ -23,9 +23,9 @@ export function SqlFlowView({ sql, sourceOffset, parseResult, parserEnabled, par
         </header>
         {model.parserError && <div className="sql-flow-parse-note" role="status">{model.mode === 'native AST' ? 'AST detail: ' : 'SQL detail: '}{model.parserError}</div>}
         {!sql.trim() ? <div className="pipeline-graph-empty">Write a SELECT query to build its structure map.</div>
-            : <PipelineGraph pipeline={model.pipeline} graphKind="sql-flow" heading={model.mode === 'native AST' ? 'CLICKHOUSE SQL FLOW' : 'SQL FLOW · BEST EFFORT'} subheading="Click a node to inspect its clause and select that SQL in the editor" onSelectNode={node => {
+            : <PipelineGraph pipeline={model.pipeline} graphKind="sql-flow" heading={model.mode === 'native AST' ? 'CLICKHOUSE SQL FLOW' : 'SQL FLOW · BEST EFFORT'} subheading="Click a node to inspect its clause and jump to it in the editor" onSelectNode={node => {
                 const range = model.sourceRanges.get(node.id);
-                if (range) onSelectRange(range.from, range.to);
+                if (range) onRevealRange(range.from, range.to);
             }}/>}
     </section>;
 }

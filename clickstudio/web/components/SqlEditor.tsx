@@ -36,6 +36,20 @@ const nativeDecorations = StateField.define<DecorationSet>({
     },
     provide: field => EditorView.decorations.from(field),
 });
+const setSqlMapHighlight = StateEffect.define<DecorationSet>();
+const sqlMapHighlight = StateField.define<DecorationSet>({
+    create: () => Decoration.none,
+    update: (value, transaction) => {
+        if (transaction.docChanged || transaction.selection !== undefined)
+            value = Decoration.none;
+        for (const effect of transaction.effects) {
+            if (effect.is(setSqlMapHighlight))
+                value = effect.value;
+        }
+        return value;
+    },
+    provide: field => EditorView.decorations.from(field),
+});
 const nativeDecorationClasses: Partial<Record<NativeHighlightType, string>> = {
     function: 'cm-native-function',
     alias: 'cm-native-alias',
@@ -120,7 +134,7 @@ function hoverInfo(index: SchemaIndex, sqlText: string, label: string) {
 export interface EditorHandle {
     insert: (text: string) => void;
     focus: () => void;
-    selectRange: (from: number, to: number) => void;
+    revealRange: (from: number, to: number) => void;
     indent: () => void;
     retryNativeParser: () => void;
     formatNative: () => Promise<'formatted' | 'fallback' | 'unavailable' | 'rejected'>;
@@ -163,7 +177,7 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
     const languageExtension = () => sql({ dialect: clickhouse, schema: schemaIndex.codeMirror });
     const themeExtension = () => EditorView.theme({ '&': { height: '100%', backgroundColor: 'var(--panel)', color: 'var(--text)' }, '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace', fontSize: '13px' }, '.cm-gutters': { backgroundColor: 'var(--panel)', color: 'var(--muted)', border: 'none' }, '.cm-content': { minHeight: '220px' }, '.cm-cursor': { borderLeftColor: 'var(--text)' }, '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: 'var(--editor-selection)' } }, { dark: current.current.dark });
     useEffect(() => { if (!element.current)
-        return; const p = current.current; const editor = new EditorView({ parent: element.current, state: EditorState.create({ doc: p.value, selection: { anchor: Math.min(p.from, p.value.length), head: Math.min(p.to, p.value.length) }, extensions: [sqlEditorTools(), nativeDecorations, lineNumbers(), history(), drawSelection(), highlightActiveLine(), rectangularSelection(), bracketMatching(), foldGutter(), highlightSelectionMatches(), syntaxHighlighting(defaultHighlightStyle), autocompletion({ override: [ifNotIn(['QuotedIdentifier', 'String', 'LineComment', 'BlockComment'], context => completionSource(context, schemaIndexRef.current))] }), hoverTooltip((view, pos) => { const word = view.state.wordAt(pos); if (!word)
+        return; const p = current.current; const editor = new EditorView({ parent: element.current, state: EditorState.create({ doc: p.value, selection: { anchor: Math.min(p.from, p.value.length), head: Math.min(p.to, p.value.length) }, extensions: [sqlEditorTools(), nativeDecorations, sqlMapHighlight, lineNumbers(), history(), drawSelection(), highlightActiveLine(), rectangularSelection(), bracketMatching(), foldGutter(), highlightSelectionMatches(), syntaxHighlighting(defaultHighlightStyle), autocompletion({ override: [ifNotIn(['QuotedIdentifier', 'String', 'LineComment', 'BlockComment'], context => completionSource(context, schemaIndexRef.current))] }), hoverTooltip((view, pos) => { const word = view.state.wordAt(pos); if (!word)
                 return null; const label = view.state.sliceDoc(word.from, word.to), info = hoverInfo(schemaIndexRef.current, current.current.value, label); if (!info)
                 return null; return { pos: word.from, end: word.to, above: true, create: () => { const dom = document.createElement('div'); dom.className = 'sql-hover'; dom.textContent = info; return { dom }; } }; }), language.current.of(languageExtension()), theme.current.of(themeExtension()), EditorState.allowMultipleSelections.of(true), EditorView.contentAttributes.of({ 'aria-label': 'SQL editor', 'spellcheck': 'false' }), keymap.of([{ key: 'Tab', run: nextSnippetField, shift: prevSnippetField }, { key: 'Mod-Enter', run: () => { current.current.onRun(false); return true; } }, { key: 'Mod-Shift-Enter', run: () => { current.current.onRun(true); return true; } }, ...defaultKeymap, ...historyKeymap, ...searchKeymap, ...foldKeymap, indentWithTab]), EditorView.updateListener.of(update => { if (update.docChanged)
                     current.current.onChange(update.state.doc.toString()); if (update.selectionSet) {
@@ -236,13 +250,15 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
             v.focus();
         } },
         focus: () => view.current?.focus(),
-        selectRange: (from, to) => {
+        revealRange: (from, to) => {
             const editor = view.current;
             if (!editor) return;
             const start = Math.max(0, Math.min(from, editor.state.doc.length));
             const end = Math.max(start, Math.min(to, editor.state.doc.length));
-            editor.dispatch({ selection: { anchor: start, head: end }, scrollIntoView: true });
-            editor.focus();
+            const highlight = end > start
+                ? Decoration.set([Decoration.mark({ class: 'cm-sql-map-highlight' }).range(start, end)])
+                : Decoration.none;
+            editor.dispatch({ effects: [setSqlMapHighlight.of(highlight), EditorView.scrollIntoView(start, { y: 'center' })] });
         },
         indent: () => { if (view.current)
             indentSelection(view.current); },

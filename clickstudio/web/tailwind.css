@@ -333,6 +333,7 @@
     .sql-editor .cm-native-alias { color: var(--green) !important; font-weight: 560; }
     .sql-editor .cm-native-substitution { color: var(--violet) !important; font-weight: 600; }
     .sql-editor .cm-native-string-escape, .sql-editor .cm-native-string-metacharacter { color: var(--amber) !important; font-weight: 650; }
+    .sql-editor .cm-sql-map-highlight { border-radius: 2px; background: color-mix(in srgb, var(--accent) 24%, transparent); box-shadow: inset 0 -1px color-mix(in srgb, var(--accent) 78%, transparent); }
     .sql-editor .cm-gutters { min-width: 43px; padding-right: 6px; border-right: 1px solid color-mix(in srgb, var(--line) 75%, transparent); background: color-mix(in srgb, var(--panel-raised) 62%, transparent); }
     .sql-editor .cm-lineNumbers .cm-gutterElement { padding: 0 8px 0 4px; }
     .sql-editor .cm-activeLine { background: color-mix(in srgb, var(--accent) 3%, transparent); }

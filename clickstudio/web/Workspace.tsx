@@ -927,7 +927,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             </div>
                         </div>
                         <div id="query-results-content" className="panel-content results-content" hidden={resultsCollapsed}>
-                        {visibleResultsView === 'sqlmap' && <SqlFlowView sql={sqlMapStatement?.sql ?? active.sql} sourceOffset={sqlMapStatement?.from ?? 0} parseResult={sqlMapParseStatement?.result} parserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} parseDurationMs={nativeParseSnapshot?.elapsedMs} onSelectRange={(from, to) => editor.current?.selectRange(from, to)}/>}
+                        {visibleResultsView === 'sqlmap' && <SqlFlowView sql={sqlMapStatement?.sql ?? active.sql} sourceOffset={sqlMapStatement?.from ?? 0} parseResult={sqlMapParseStatement?.result} parserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} parseDurationMs={nativeParseSnapshot?.elapsedMs} onRevealRange={(from, to) => editor.current?.revealRange(from, to)}/>}
                         {visibleResultsView !== 'sqlmap' && staleResult && <div className="result-provenance" aria-live="polite"><span className="status-light is-warning"/><span><strong>Result from previous execution</strong><small>SQL or bound parameters changed since this run. Rerun to refresh the result.</small></span></div>}
                         {visibleResultsView === 'results' && script && <ScriptResults script={script} runs={history} activeRunId={run?.id} onSelectRun={runId => {
                             if (active.scriptId) scriptFollowRef.current = { scriptId: active.scriptId, enabled: false };

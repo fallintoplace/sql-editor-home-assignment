@@ -112,7 +112,7 @@ function App() {
                     <span className={cx('connection-env', isSampleData && 'is-demo', isPlayground && 'is-playground')} title={isSampleData ? 'Sample rows are generated in this browser.' : isPlayground ? 'SQL runs on ClickHouse Playground from this browser.' : undefined}><span className={cx('status-light', isSampleData || !connection?.trusted ? 'is-warning' : 'is-trusted')}/>{isSampleData ? 'SAMPLE DATA' : isPlayground ? 'PLAYGROUND' : 'LIVE CONNECTION'}</span>
                     {isPlayground && <span className="connection-quick-status is-ready">Read only</span>}
                     {!session.demo && <span className={cx('connection-quick-status', connection?.trusted && !connectionNeedsTest ? 'is-ready' : 'is-review')}>{connectionStatus}</span>}
-                    <strong>{connection ? connectionLabel(connection, session.demo) : 'Choose connection'}</strong>
+                    <strong title={connection?.name}>{connection ? isPlayground ? 'ClickHouse' : connectionLabel(connection, session.demo) : 'Choose connection'}</strong>
                     <span className="connection-database">{connection?.database ?? '—'} <Icon name="chevron"/></span>
                 </button>
                 {connectionPicker && connection && <div className="connection-menu animate-enter" id="connection-menu" role="dialog" aria-label={hasPreviewSourceSwitcher ? 'Data source options' : 'Connection details'}>

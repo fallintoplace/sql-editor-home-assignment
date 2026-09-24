@@ -1,17 +1,19 @@
-import type { NativeFormatResult, NativeParseResult, NativeParserStatus } from '../shared/native-parser';
+import type {
+    NativeFormatResult,
+    NativeParseResult,
+    NativeParserReply,
+    NativeParserRequest,
+    NativeParserStatus,
+    NativeParserWorkerStatus,
+} from '../shared/native-parser';
 
-type RequestKind = 'parseMany' | 'formatMany';
-type WorkerRequest = { id: number; kind: RequestKind; sql: string[] };
-type WorkerReply =
-    | { id: number; ok: true; results: Array<NativeParseResult | NativeFormatResult> }
-    | { id: number; ok: false; message: string };
-type WorkerStatus = { kind: 'status'; status: Exclude<NativeParserStatus, 'loading'>; reason?: string };
-type Pending = { resolve: (value: Array<NativeParseResult | NativeFormatResult>) => void; reject: (error: Error) => void };
+type Pending<T> = { resolve: (value: T[]) => void; reject: (error: Error) => void };
 
 class ClickHouseNativeParser {
     private worker?: Worker;
     private nextId = 1;
-    private pending = new Map<number, Pending>();
+    private pendingParses = new Map<number, Pending<NativeParseResult>>();
+    private pendingFormats = new Map<number, Pending<NativeFormatResult>>();
     private listeners = new Set<(status: NativeParserStatus) => void>();
     private state: NativeParserStatus = 'loading';
     private reason = '';
@@ -30,11 +32,11 @@ class ClickHouseNativeParser {
     }
 
     parseMany(sql: string[]): Promise<NativeParseResult[]> {
-        return this.request<NativeParseResult>('parseMany', sql);
+        return this.request('parseMany', sql, this.pendingParses);
     }
 
     formatMany(sql: string[]): Promise<NativeFormatResult[]> {
-        return this.request<NativeFormatResult>('formatMany', sql);
+        return this.request('formatMany', sql, this.pendingFormats);
     }
 
     retry() {
@@ -56,16 +58,27 @@ class ClickHouseNativeParser {
             type: 'module',
             name: 'clickhouse-native-parser',
         });
-        worker.addEventListener('message', event => {
-            const data = event.data as WorkerReply | WorkerStatus;
-            if (!('id' in data)) {
+        worker.addEventListener('message', (event: MessageEvent<NativeParserReply | NativeParserWorkerStatus>) => {
+            const data = event.data;
+            if (data.kind === 'status') {
                 this.setStatus(data.status, data.reason);
                 return;
             }
-            const pending = this.pending.get(data.id);
+            if (data.kind === 'parseMany') {
+                const pending = this.pendingParses.get(data.id);
+                if (!pending)
+                    return;
+                this.pendingParses.delete(data.id);
+                if (data.ok)
+                    pending.resolve(data.results);
+                else
+                    pending.reject(new Error(data.message));
+                return;
+            }
+            const pending = this.pendingFormats.get(data.id);
             if (!pending)
                 return;
-            this.pending.delete(data.id);
+            this.pendingFormats.delete(data.id);
             if (data.ok)
                 pending.resolve(data.results);
             else
@@ -79,16 +92,13 @@ class ClickHouseNativeParser {
         return worker;
     }
 
-    private request<T extends NativeParseResult | NativeFormatResult>(kind: RequestKind, sql: string[]): Promise<T[]> {
+    private request<T>(kind: NativeParserRequest['kind'], sql: string[], pending: Map<number, Pending<T>>): Promise<T[]> {
         if (this.state === 'unavailable')
             return Promise.reject(new Error(this.reason || 'ClickHouse native parser is unavailable'));
         const worker = this.ensureWorker(), id = this.nextId++;
         return new Promise<T[]>((resolve, reject) => {
-            this.pending.set(id, {
-                resolve: results => resolve(results as T[]),
-                reject,
-            });
-            const message: WorkerRequest = { id, kind, sql };
+            pending.set(id, { resolve, reject });
+            const message: NativeParserRequest = { id, kind, sql };
             worker.postMessage(message);
         });
     }
@@ -105,9 +115,12 @@ class ClickHouseNativeParser {
     }
 
     private rejectPending(message: string) {
-        for (const request of this.pending.values())
+        for (const request of this.pendingParses.values())
             request.reject(new Error(message));
-        this.pending.clear();
+        for (const request of this.pendingFormats.values())
+            request.reject(new Error(message));
+        this.pendingParses.clear();
+        this.pendingFormats.clear();
     }
 }
 

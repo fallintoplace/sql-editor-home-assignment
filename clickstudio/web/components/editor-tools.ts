@@ -166,5 +166,9 @@ export function sqlEditorTools(): Extension {
             '.cm-sql-statement-picker': { flex: '1 1 140px', minWidth: '0', maxWidth: '360px', textOverflow: 'ellipsis' },
             '.cm-sql-tools-note': { flexBasis: '100%', color: 'var(--muted)', lineHeight: '1.5' },
         }),
+        EditorView.theme({
+            '.cm-gutters': { zIndex: 'var(--z-editor-gutters)' },
+            '.cm-panels': { zIndex: 'var(--z-editor-panels)' },
+        }),
     ];
 }

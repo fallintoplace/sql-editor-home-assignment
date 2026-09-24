@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Copy } from '../i18n';
 import type { SqlExample, SqlExampleCategory } from '../sql-examples';
+import { OverlayPortal } from './OverlayPortal';
 import { Button, Icon, cx } from './ui';
 
 type CategoryFilter = SqlExampleCategory | 'all';
@@ -24,6 +25,7 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, onOpenExample }: 
 }) {
     const rootRef = useRef<HTMLDivElement>(null);
     const triggerRef = useRef<HTMLButtonElement>(null);
+    const panelRef = useRef<HTMLElement>(null);
     const searchRef = useRef<HTMLInputElement>(null);
     const optionRefs = useRef(new Map<string, HTMLButtonElement>());
     const [open, setOpen] = useState(false);
@@ -60,7 +62,8 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, onOpenExample }: 
             setPosition({ top, left, width, maxHeight: Math.max(220, Math.min(600, window.innerHeight - top - margin)) });
         };
         const onPointerDown = (event: PointerEvent) => {
-            if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+            const target = event.target as Node;
+            if (!rootRef.current?.contains(target) && !panelRef.current?.contains(target)) setOpen(false);
         };
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key !== 'Escape') return;
@@ -93,7 +96,7 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, onOpenExample }: 
         <button ref={triggerRef} type="button" className="new-tab-button sql-examples-trigger" aria-haspopup="dialog" aria-expanded={open} aria-controls="sql-examples-panel" title={copy.examples} onClick={() => open ? setOpen(false) : show()}>
             <Icon name="examples"/><span>{copy.examples}</span>
         </button>
-        {open && <section id="sql-examples-panel" className="sql-examples-panel" role="dialog" aria-modal="false" aria-labelledby="sql-examples-title" style={position ? { top: position.top, left: position.left, width: position.width, maxHeight: position.maxHeight } : undefined}>
+        {open && <OverlayPortal><section ref={panelRef} id="sql-examples-panel" className="sql-examples-panel" role="dialog" aria-modal="false" aria-labelledby="sql-examples-title" style={position ? { top: position.top, left: position.left, width: position.width, maxHeight: position.maxHeight } : undefined}>
             <header className="sql-examples-header">
                 <div><span className="eyebrow">{sourceLabel}</span><h2 id="sql-examples-title">{copy.sqlExamples}</h2><p>{copy.examplesHint}</p></div>
                 <button type="button" className="sql-examples-close" aria-label={copy.closeExamples} title={copy.closeExamples} onClick={() => { setOpen(false); triggerRef.current?.focus(); }}><Icon name="close"/></button>
@@ -130,6 +133,6 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, onOpenExample }: 
                     <Button variant="primary" className="sql-example-open" onClick={() => { if (onOpenExample(selected)) { setOpen(false); triggerRef.current?.focus(); } }}><Icon name="plus"/>{copy.openInNewSql}</Button>
                 </article>}
             </div>}
-        </section>}
+        </section></OverlayPortal>}
     </div>;
 }

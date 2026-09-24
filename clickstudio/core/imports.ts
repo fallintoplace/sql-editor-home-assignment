@@ -5,6 +5,10 @@ import { AppError, requireThat, asError } from './errors.js';
 import { canWrite, mustOwn } from './guards.js';
 import { hash, audit, type Store } from './store.js';
 import { validateJson } from './validation.js';
+
+function isJsonObject(value: Json): value is Record<string, Json> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
 export interface InputPreview {
     id: string;
     owner: string;
@@ -67,7 +71,13 @@ export function parseCsv(source: string, maxRows = 10000): {
     requireThat(new Set(columns).size === columns.length, 400, 'DUPLICATE_HEADERS', 'Duplicate CSV column names');
     const rows = records.map((record, index) => {
         requireThat(record.length === columns.length, 400, 'CSV_WIDTH', `CSV row ${index + 2} has the wrong number of fields`);
-        return Object.fromEntries(columns.map((c, i) => [c, record[i]!])) as Record<string, Json>;
+        const parsed: Record<string, Json> = {};
+        for (const [columnIndex, column] of columns.entries()) {
+            const field = record[columnIndex];
+            requireThat(field !== undefined, 400, 'CSV_WIDTH', `CSV row ${index + 2} has the wrong number of fields`);
+            parsed[column] = field;
+        }
+        return parsed;
     });
     return { columns, rows };
 }
@@ -86,12 +96,12 @@ export function parseInput(source: string, format: InputPreview['format']) {
     const columns = new Set<string>();
     const rows = parsed.map(value => {
         const validated = validateJson(value);
-        requireThat(validated && typeof validated === 'object' && !Array.isArray(validated), 400, 'IMPORT_OBJECT', 'Every JSON row must be an object');
+        requireThat(isJsonObject(validated), 400, 'IMPORT_OBJECT', 'Every JSON row must be an object');
         for (const key of Object.keys(validated)) {
             requireThat(key.length > 0 && key.length <= 256, 400, 'INVALID_HEADERS', 'Invalid JSON field name');
             columns.add(key);
         }
-        return validated as Record<string, Json>;
+        return validated;
     });
     requireThat(columns.size > 0 && columns.size <= 200, 400, 'IMPORT_COLUMNS', 'Import previews support 1–200 columns');
     return { columns: [...columns], rows };
@@ -181,10 +191,16 @@ export class ImportService {
             requireThat(input.columns.includes(source) && columns.some(c => c.name === destination && !['MATERIALIZED', 'ALIAS'].includes(c.defaultKind)), 400, 'IMPORT_MAPPING', 'Mapping references an unknown source or a non-writable destination column');
         }
         // No model-inferred coercion is applied. Strings stay strings; server type errors remain visible.
-        const rows = input.rows.map(row => Object.fromEntries(Object.entries(fields).map(([source, destination]) => {
-            requireThat(Object.hasOwn(row, source), 400, 'IMPORT_MISSING_FIELD', `An input row is missing ${source}`);
-            return [destination, row[source]!];
-        })) as Record<string, Json>);
+        const rows = input.rows.map(row => {
+            const mapped: Record<string, Json> = {};
+            for (const [source, destination] of Object.entries(fields)) {
+                requireThat(Object.hasOwn(row, source), 400, 'IMPORT_MISSING_FIELD', `An input row is missing ${source}`);
+                const value = row[source];
+                requireThat(value !== undefined, 400, 'IMPORT_MISSING_FIELD', `An input row is missing ${source}`);
+                mapped[destination] = value;
+            }
+            return mapped;
+        });
         const mapping: Mapping = { id: randomUUID(), owner: principal.id, inputId, connectionId, table, fields,
             schemaHash: hash(columns), rows, expiresAt: input.expiresAt };
         this.store.put('mappings', mapping.id, mapping);

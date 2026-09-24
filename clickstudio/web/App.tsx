@@ -110,7 +110,7 @@ function App() {
             <div className="connection-wrap">
                 <button className="connection-trigger" type="button" aria-haspopup="dialog" aria-expanded={connectionPicker} aria-controls="connection-menu" onClick={() => setConnectionPicker(value => !value)}>
                     <span className={cx('connection-env', isSampleData && 'is-demo', isPlayground && 'is-playground')} title={isSampleData ? 'Sample rows are generated in this browser.' : isPlayground ? 'SQL runs on ClickHouse Playground from this browser.' : undefined}><span className={cx('status-light', isSampleData || !connection?.trusted ? 'is-warning' : 'is-trusted')}/>{isSampleData ? 'SAMPLE DATA' : isPlayground ? 'PLAYGROUND' : 'LIVE CONNECTION'}</span>
-                    {isPlayground && <span className="connection-quick-status is-ready">Read only</span>}
+                    {isPlayground && <span className="connection-quick-status is-ready">{copy.common.readOnly}</span>}
                     {!session.demo && <span className={cx('connection-quick-status', connection?.trusted && !connectionNeedsTest ? 'is-ready' : 'is-review')}>{connectionStatus}</span>}
                     <strong title={connection?.name}>{connection ? isPlayground ? 'ClickHouse' : connectionLabel(connection, session.demo) : 'Choose connection'}</strong>
                     <span className="connection-database">{connection?.database ?? '—'} <Icon name="chevron"/></span>
@@ -138,20 +138,20 @@ function App() {
             </div>
             <div className="topbar-spacer"/>
             <div className="experience-switch">
-                <span className="mode-caption">WORKSPACE</span>
+                <span className="mode-caption">{copy.common.workspaceMode}</span>
                 <RadioGroup className="navbar-mode-control" value={experience} onValueChange={value => {
                     const selected = experienceOptions(copy).find(option => option.value === value);
                     if (selected) setExperience(selected.value);
-                }} aria-label="Workspace mode" inline orientation="horizontal" dir="end">
+                }} aria-label={copy.common.workspaceMode} inline orientation="horizontal" dir="end">
                     <RadioGroup.Item value="beginner" className={`navbar-mode-option is-beginner ${experience === 'beginner' ? 'is-active' : ''}`} label={copy.app.beginner}/>
                     <RadioGroup.Item value="expert" className={`navbar-mode-option is-expert ${experience === 'expert' ? 'is-active' : ''}`} label={copy.app.expert}/>
                 </RadioGroup>
             </div>
             <div className="experience-switch parser-switch">
-                <span className="mode-caption">PARSER</span>
+                <span className="mode-caption">{copy.common.parserMode}</span>
                 <RadioGroup className="navbar-mode-control" value={parserMode} onValueChange={value => {
                     if (value === 'wasm' || value === 'basic') setParserMode(value);
-                }} aria-label="Parser mode" inline orientation="horizontal" dir="end">
+                }} aria-label={copy.common.parserMode} inline orientation="horizontal" dir="end">
                     <RadioGroup.Item value="wasm" className={`navbar-mode-option parser-mode-option is-wasm ${parserMode === 'wasm' ? 'is-active' : ''}`} label="WASM"/>
                     <RadioGroup.Item value="basic" className={`navbar-mode-option parser-mode-option is-basic ${parserMode === 'basic' ? 'is-active' : ''}`} label="CodeMirror"/>
                 </RadioGroup>

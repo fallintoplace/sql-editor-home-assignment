@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import type { Run } from '../../shared/types';
 import type { Inspector, SelectOption } from '../workspace-types';
+import type { Copy } from '../i18n';
 
 export const terminal = (run?: Run) => Boolean(run && ['succeeded', 'truncated', 'failed', 'cancelled', 'timed_out', 'interrupted'].includes(run.status));
 
@@ -48,9 +49,15 @@ export function Button({ variant = 'secondary', className = '', type = 'button',
     return <button {...props} type={type} className={cx('button-base', variants[variant], className)} />;
 }
 
-export function Status({ run }: { run?: Run }) {
+export function Status({ run, copy }: { run?: Run; copy?: Copy['common'] }) {
     const kind = terminal(run) ? run?.status === 'succeeded' ? 'is-trusted' : run?.status === 'truncated' ? 'is-warning' : 'is-error' : 'is-running';
-    return <span className="inline-flex items-center gap-2 text-[11px] capitalize text-muted"><span className={cx('status-light', kind)}/>{run?.status ?? 'Ready'}</span>;
+    const statusCopy: Partial<Record<NonNullable<Run>['status'], keyof Copy['common']>> = {
+        queued: 'statusQueued', running: 'statusRunning', succeeded: 'statusSucceeded', truncated: 'statusTruncated', failed: 'statusFailed',
+        cancelled: 'statusCancelled', timed_out: 'statusTimedOut', interrupted: 'statusInterrupted',
+    };
+    const key = run ? statusCopy[run.status] : undefined;
+    const label = key && copy ? copy[key] : run?.status ?? copy?.statusReady ?? 'Ready';
+    return <span className="inline-flex items-center gap-2 text-[11px] capitalize text-muted"><span className={cx('status-light', kind)}/>{label}</span>;
 }
 
 export function SelectControl<Value extends string>({ label, value, options, onChange }: { label: string; value: Value; options: readonly SelectOption<Value>[]; onChange: (value: Value) => void }) {

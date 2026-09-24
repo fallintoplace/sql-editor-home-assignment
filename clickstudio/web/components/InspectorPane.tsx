@@ -9,8 +9,10 @@ import type { AssistantContext, Connected, Inspector } from '../workspace-types'
 import { api, message } from '../api';
 import type { NativeParseSnapshot, NativeParserStatus } from '../../shared/native-parser';
 import { NativeParserInspector } from './NativeParserInspector';
+import type { Copy } from '../i18n';
 
 export type InspectorPaneProps = {
+    copy: Copy['common'];
     inspector: Inspector;
     setInspector: (inspector: Inspector) => void;
     connection: Connected;
@@ -89,40 +91,40 @@ const inspectorTabs = [
     { id: 'assistant', icon: 'assistant' },
 ] as const satisfies readonly { id: Inspector; icon: IconName }[];
 
-export function InspectorPane({ inspector, setInspector, connection, schema, schemaLoading, schemaError, search, setSearch, tables, columnsByTable, history, documents, revisions, revisionsDocumentId, revisionLoading, revisionError, currentRevision, unsavedDraft, canRestoreRevision, run, profile, pipeline, onRefreshSchema, onRefreshHistory, onInsert, onOpenImport, onExportResult, exportDisabled, onOpenRun, onOpenDocument, onLoadProfile, onLoadPipeline, onOpenGraph, connectionId, sql, trusted, runId, onRefreshDocuments, onRefreshRevisions, onRestoreRevision, assistantAction, onAssistantAction, assistantQuestion, onAssistantQuestion, assistantContext, assistantProposal, assistantBusy, assistantError, nativeParserEnabled, nativeParserStatus, nativeParseSnapshot, onRetryParser, includeResult, onIncludeResult, onVoiceInput, voiceListening, voiceError, onPreview, onRequestProposal, onDecideProposal, onRunQuery, runDisabled, expert = false, drawer = false, onClose }: InspectorPaneProps) {
+export function InspectorPane({ copy, inspector, setInspector, connection, schema, schemaLoading, schemaError, search, setSearch, tables, columnsByTable, history, documents, revisions, revisionsDocumentId, revisionLoading, revisionError, currentRevision, unsavedDraft, canRestoreRevision, run, profile, pipeline, onRefreshSchema, onRefreshHistory, onInsert, onOpenImport, onExportResult, exportDisabled, onOpenRun, onOpenDocument, onLoadProfile, onLoadPipeline, onOpenGraph, connectionId, sql, trusted, runId, onRefreshDocuments, onRefreshRevisions, onRestoreRevision, assistantAction, onAssistantAction, assistantQuestion, onAssistantQuestion, assistantContext, assistantProposal, assistantBusy, assistantError, nativeParserEnabled, nativeParserStatus, nativeParseSnapshot, onRetryParser, includeResult, onIncludeResult, onVoiceInput, voiceListening, voiceError, onPreview, onRequestProposal, onDecideProposal, onRunQuery, runDisabled, expert = false, drawer = false, onClose }: InspectorPaneProps) {
     const visibleDocuments = documents.filter(document => document.connectionId === connectionId && !document.deletedAt);
     const [selectedRevisionNumber, setSelectedRevisionNumber] = useState<number>();
     useEffect(() => { setSelectedRevisionNumber(currentRevision ?? revisions[0]?.revision); }, [revisionsDocumentId, currentRevision, revisions.length]);
     const selectedRevision = revisions.find(revision => revision.revision === selectedRevisionNumber) ?? revisions[0];
     const closeButton = drawer && <Button variant="ghost" className="icon-only" aria-label="Close inspector" onClick={onClose}><Icon name="close"/></Button>;
-    const title = expert && inspector === 'schema' ? 'Tables' : expert && inspector === 'documents' ? 'Queries' : inspectorLabel(inspector);
+    const title = inspector === 'schema' ? copy.tables : inspector === 'documents' ? copy.queries : inspectorLabel(inspector);
 
     return <aside className={cx('inspector-pane', expert && 'is-expert-browser', expert && (inspector === 'schema' || inspector === 'documents') && 'is-browser-tab-selected', drawer && 'is-drawer animate-drawer')}>
-        <header className="inspector-header"><div><span className="eyebrow">{expert ? 'BROWSE' : 'WORKSPACE INSPECTOR'}</span><h2>{title}</h2></div>{closeButton}</header>
-        {expert ? <nav className="inspector-tabs is-browser-tabs" aria-label="Workspace browser">
-            <button type="button" aria-label="Tables" aria-pressed={inspector === 'schema'} onClick={() => setInspector('schema')}><Icon name="schema"/><span>Tables</span></button>
-            <button type="button" aria-label="Queries" aria-pressed={inspector === 'documents'} onClick={() => setInspector('documents')}><Icon name="documents"/><span>Queries</span></button>
-            <InspectorMoreMenu inspector={inspector} onSelect={setInspector} items={inspectorTabs.filter(item => item.id === 'history' || item.id === 'revisions' || item.id === 'parser' || Boolean(run) && (item.id === 'details' || item.id === 'pipeline'))} />
-        </nav> : <nav className="inspector-tabs is-browser-tabs" aria-label="Workspace browser">
-            <button type="button" aria-label="Tables" aria-pressed={inspector === 'schema'} onClick={() => setInspector('schema')}><Icon name="schema"/><span>Tables</span></button>
-            <InspectorMoreMenu inspector={inspector} onSelect={setInspector} items={inspectorTabs.filter(item => item.id === 'history' || item.id === 'documents' || item.id === 'revisions')} />
+        <header className="inspector-header"><div><span className="eyebrow">{expert ? copy.browse : copy.workspaceInspector}</span><h2>{title}</h2></div>{closeButton}</header>
+        {expert ? <nav className="inspector-tabs is-browser-tabs" aria-label={copy.workspaceBrowser}>
+            <button type="button" aria-label={copy.tables} aria-pressed={inspector === 'schema'} onClick={() => setInspector('schema')}><Icon name="schema"/><span>{copy.tables}</span></button>
+            <button type="button" aria-label={copy.queries} aria-pressed={inspector === 'documents'} onClick={() => setInspector('documents')}><Icon name="documents"/><span>{copy.queries}</span></button>
+            <InspectorMoreMenu copy={copy} inspector={inspector} onSelect={setInspector} items={inspectorTabs.filter(item => item.id === 'history' || item.id === 'revisions' || item.id === 'parser' || Boolean(run) && (item.id === 'details' || item.id === 'pipeline'))} />
+        </nav> : <nav className="inspector-tabs is-browser-tabs" aria-label={copy.workspaceBrowser}>
+            <button type="button" aria-label={copy.tables} aria-pressed={inspector === 'schema'} onClick={() => setInspector('schema')}><Icon name="schema"/><span>{copy.tables}</span></button>
+            <InspectorMoreMenu copy={copy} inspector={inspector} onSelect={setInspector} items={inspectorTabs.filter(item => item.id === 'history' || item.id === 'documents' || item.id === 'revisions')} />
         </nav>}
         <div className="inspector-content">
             {inspector === 'schema' && <section className="inspector-section">
-                <div className="inspector-search"><Icon name="search"/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search tables, columns, and dictionaries…" aria-label="Search schema"/></div>
-                <div className="schema-heading"><span>{tables.length} TABLES</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshSchema} disabled={schemaLoading || !trusted}>{schemaLoading ? 'Loading…' : 'Refresh'}</Button></div>
+                <div className="inspector-search"><Icon name="search"/><input value={search} onChange={event => setSearch(event.target.value)} placeholder={copy.schemaSearch} aria-label={copy.schemaSearch}/></div>
+                <div className="schema-heading"><span>{copy.tableCount.replace('{count}', tables.length.toLocaleString())}</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshSchema} disabled={schemaLoading || !trusted}>{schemaLoading ? copy.loading : copy.refresh}</Button></div>
                 {schemaError && <div className="callout callout-error">{schemaError}</div>}
                 {schema?.metadataWarnings?.map(warning => <div className="schema-metadata-warning" key={warning}>{warning}</div>)}
-                {!trusted && <div className="inspector-empty"><Icon name="lock"/><strong>Schema is private</strong><p>Trust the connection to inspect tables and columns.</p></div>}
-                {schemaLoading && <div className="inspector-empty"><span className="loading-orbit"/><p>Reading ClickHouse schema…</p></div>}
+                {!trusted && <div className="inspector-empty"><Icon name="lock"/><strong>{copy.schemaPrivate}</strong><p>{copy.trustToInspect}</p></div>}
+                {schemaLoading && <div className="inspector-empty"><span className="loading-orbit"/><p>{copy.readingSchema}</p></div>}
                 {trusted && schema && tables.map(table => {
                     const query = search.trim().toLowerCase();
                     const columns = (columnsByTable.get(schemaTableKey(table.database, table.name)) ?? [])
                         .filter(column => !query || `${column.name} ${column.type}`.toLowerCase().includes(query));
                     return <details className="schema-table" key={`${table.database}.${table.name}`} open={Boolean(search)}>
-                        <summary><span className="table-glyph">▦</span><span className="schema-table-name"><strong>{table.name}</strong><small>{table.database} · {table.engine}</small><small className="schema-table-stats">{tableSummary(table)}</small></span><Icon name="chevron" className="schema-chevron"/></summary>
+                        <summary><span className="table-glyph">▦</span><span className="schema-table-name"><strong>{table.name}</strong><small>{table.database} · {table.engine}</small><small className="schema-table-stats">{tableSummary(table, copy)}</small></span><Icon name="chevron" className="schema-chevron"/></summary>
                         <div className="schema-table-content">
-                            <button type="button" className="insert-table-button" onClick={() => onInsert(`${quoteIdentifier(table.database)}.${quoteIdentifier(table.name)}`)}>Insert table name <span>↵</span></button>
+                            <button type="button" className="insert-table-button" onClick={() => onInsert(`${quoteIdentifier(table.database)}.${quoteIdentifier(table.name)}`)}>{copy.insertTableName} <span>↵</span></button>
                             <TableMetadata table={table}/>
                             <div className="schema-columns">{columns.map(column => <button type="button" className="schema-column" key={column.name} title={column.comment || column.type} onClick={() => onInsert(quoteIdentifier(column.name))}><span className="column-type-dot"/><span>{column.name}</span><code>{column.type}</code></button>)}</div>
                             {table.database === 'system' && schema.systemTableDocumentationNames?.includes(table.name) && connection.dataSource !== 'fixture' && connection.trusted && connection.manifest?.documentation.available !== false && <SystemTableDocumentation key={connection.id} connectionId={connection.id} name={table.name} serverVersion={connection.manifest?.serverVersion ?? 'current server'}/>}
@@ -130,7 +132,7 @@ export function InspectorPane({ inspector, setInspector, connection, schema, sch
                     </details>;
                 })}
                 {trusted && schema?.dictionaries !== undefined && <DictionaryList dictionaries={schema.dictionaries} search={search}/>}
-                {trusted && schema && !tables.length && !schema.dictionaries?.some(dictionary => !search || `${dictionary.database} ${dictionary.name} ${dictionary.type} ${dictionary.status} ${dictionary.keyColumns} ${dictionary.attributeColumns}`.toLowerCase().includes(search.toLowerCase())) && <div className="inspector-empty">No tables or dictionaries match this search.</div>}
+                {trusted && schema && !tables.length && !schema.dictionaries?.some(dictionary => !search || `${dictionary.database} ${dictionary.name} ${dictionary.type} ${dictionary.status} ${dictionary.keyColumns} ${dictionary.attributeColumns}`.toLowerCase().includes(search.toLowerCase())) && <div className="inspector-empty">{copy.noTablesMatch}</div>}
             </section>}
             {inspector === 'history' && <section className="inspector-section"><div className="schema-heading"><span>RECENT RUNS</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshHistory}>↻ Refresh</Button></div>{history.length ? history.slice(0, 30).map(item => <button type="button" className="history-card" key={item.id} onClick={() => onOpenRun(item)}><span className={cx('run-state-mark', `state-${item.status}`)}/><span className="history-card-copy"><strong>{item.sql.replace(/\s+/g, ' ').slice(0, 58)}</strong><small>{new Date(item.createdAt).toLocaleString()} <i>·</i> {Math.round(item.elapsedMs)} ms <i>·</i> {item.rowCount.toLocaleString()} rows</small></span><span className="history-open">↗</span></button>) : <div className="inspector-empty"><Icon name="history"/><strong>No runs yet</strong><p>Your recent ClickHouse executions appear here.</p></div>}</section>}
             {inspector === 'documents' && <section className="inspector-section"><div className="schema-heading"><span>SAVED DOCUMENTS</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshDocuments}>↻ Refresh</Button></div>{visibleDocuments.length ? visibleDocuments.map(document => <button type="button" className="document-card" key={document.id} onClick={() => onOpenDocument(document)}><span className="file-type-icon small">SQL</span><span><strong>{document.name}</strong><small>revision {document.revision} · {new Date(document.updatedAt).toLocaleDateString()}</small></span><span className="history-open">↗</span></button>) : <div className="inspector-empty"><Icon name="documents"/><strong>Nothing saved yet</strong><p>Save the current query to keep a named revision on this connection.</p></div>}</section>}
@@ -154,19 +156,19 @@ export function InspectorPane({ inspector, setInspector, connection, schema, sch
             {inspector === 'pipeline' && <PipelineView run={run} profile={profile} pipeline={pipeline} onLoad={onLoadPipeline} onOpenGraph={onOpenGraph} available={connection.manifest?.pipeline.available !== false} unavailableReason={connection.manifest?.pipeline.available === false ? connection.manifest.pipeline.reason : undefined}/>}
             {inspector === 'assistant' && <AssistantWorkflow mode={expert ? 'expert' : 'beginner'} sql={sql} action={assistantAction} onActionChange={onAssistantAction} question={assistantQuestion} onQuestionChange={onAssistantQuestion} context={assistantContext} proposal={assistantProposal} busy={assistantBusy} error={assistantError} trusted={trusted} runId={runId} includeResult={includeResult} onIncludeResult={onIncludeResult} onVoiceInput={onVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={onPreview} onRequestProposal={onRequestProposal} onDecideProposal={onDecideProposal} onRunQuery={onRunQuery} runDisabled={runDisabled}/>}
         </div>
-        <footer className="inspector-footer"><div className="inspector-footer-actions"><Button variant="secondary" className="toolbar-small" onClick={onOpenImport}>Import</Button><Button variant="secondary" className="toolbar-small" onClick={onExportResult} disabled={exportDisabled}>Export</Button></div><div className="inspector-footer-meta"><span className="connection-readonly"><Icon name="lock"/> Read only</span><span title={`${connection.name} · ${connection.database}`}>{connection.name} <i>·</i> {connection.database}</span></div></footer>
+        <footer className="inspector-footer"><div className="inspector-footer-actions"><Button variant="secondary" className="toolbar-small" onClick={onOpenImport}>{copy.import}</Button><Button variant="secondary" className="toolbar-small" onClick={onExportResult} disabled={exportDisabled}>{copy.export}</Button></div><div className="inspector-footer-meta"><span className="connection-readonly"><Icon name="lock"/> {copy.readOnly}</span><span title={`${connection.name} · ${connection.database}`}>{connection.name} <i>·</i> {connection.database}</span></div></footer>
     </aside>;
 }
 
-function tableSummary(table: SchemaTable): string {
+function tableSummary(table: SchemaTable, copy: Copy['common']): string {
     const values = [
-        table.rowEstimate == null ? undefined : `${formatCount(table.rowEstimate)} rows est.`,
+        table.rowEstimate == null ? undefined : `${formatCount(table.rowEstimate)} ${copy.rowsEstimated}`,
         table.sizeBytes == null ? undefined : formatBytes(table.sizeBytes),
-        table.activeParts == null ? undefined : `${formatCount(table.activeParts)} parts`,
-        table.projections === undefined ? undefined : `${table.projections.length} projections`,
-        table.skipIndexes === undefined ? undefined : `${table.skipIndexes.length} skip indexes`,
+        table.activeParts == null ? undefined : `${formatCount(table.activeParts)} ${copy.parts}`,
+        table.projections === undefined ? undefined : `${table.projections.length} ${copy.projections}`,
+        table.skipIndexes === undefined ? undefined : `${table.skipIndexes.length} ${copy.skipIndexes}`,
     ].filter((value): value is string => Boolean(value));
-    return values.join(' · ') || (table.database === 'system' ? 'ClickHouse system table' : 'ClickHouse metadata unavailable');
+    return values.join(' · ') || (table.database === 'system' ? copy.systemTable : copy.metadataUnavailable);
 }
 
 function SystemTableDocumentation({ connectionId, name, serverVersion }: { connectionId: string; name: string; serverVersion: string }) {
@@ -250,7 +252,7 @@ function DictionaryList({ dictionaries, search }: { dictionaries: SchemaDictiona
     </div>;
 }
 
-function InspectorMoreMenu({ inspector, onSelect, items }: { inspector: Inspector; onSelect: (inspector: Inspector) => void; items: Array<{ id: Inspector; icon: IconName }> }) {
+function InspectorMoreMenu({ copy, inspector, onSelect, items }: { copy: Copy['common']; inspector: Inspector; onSelect: (inspector: Inspector) => void; items: Array<{ id: Inspector; icon: IconName }> }) {
     const [open, setOpen] = useState(false);
     const root = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null), menu = useRef<HTMLDivElement>(null);
     const active = items.some(item => item.id === inspector);
@@ -289,8 +291,8 @@ function InspectorMoreMenu({ inspector, onSelect, items }: { inspector: Inspecto
     };
 
     return <div className="inspector-more" ref={root}>
-        <button ref={trigger} type="button" className={cx('inspector-more-trigger', active && 'is-active')} aria-label="More workspace panels" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>More <Icon name="chevron"/></button>
-        {open && <div className="inspector-more-menu" role="menu" aria-label="More workspace panels" ref={menu} onKeyDown={moveMenuFocus}>{items.map(item => <button key={item.id} type="button" role="menuitem" aria-pressed={inspector === item.id} onClick={() => { onSelect(item.id); setOpen(false); }}><Icon name={item.icon}/><span>{inspectorLabel(item.id)}</span></button>)}</div>}
+        <button ref={trigger} type="button" className={cx('inspector-more-trigger', active && 'is-active')} aria-label={copy.workspacePanels} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>{copy.more} <Icon name="chevron"/></button>
+        {open && <div className="inspector-more-menu" role="menu" aria-label={copy.workspacePanels} ref={menu} onKeyDown={moveMenuFocus}>{items.map(item => <button key={item.id} type="button" role="menuitem" aria-pressed={inspector === item.id} onClick={() => { onSelect(item.id); setOpen(false); }}><Icon name={item.icon}/><span>{item.id === 'schema' ? copy.tables : item.id === 'documents' ? copy.queries : item.id === 'history' ? copy.history : inspectorLabel(item.id)}</span></button>)}</div>}
     </div>;
 }
 

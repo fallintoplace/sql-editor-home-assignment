@@ -696,7 +696,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const staleResult = Boolean(run && (!runSourceSql || run.connectionId !== connection.id || !matchesDraft(run, runSourceSql, active.parameters)));
     const columnsByTable = useMemo(() => indexSchemaColumns(schema?.columns ?? []), [schema]);
     const filteredTables = useMemo(() => filterSchemaTables(schema?.tables ?? [], columnsByTable, search), [schema, columnsByTable, search]);
-    const saveStatusLabel = ({
+    const saveStatusLabel = saveStatus.state === 'local' ? copy.common.localDraft : ({
         local: 'Local draft', checking: 'Checking save…', saving: 'Saving…', saved: `Saved r${active.baseRevision}`,
         changed: 'Unsaved changes', conflict: 'Newer revision available', deleted: 'Saved file in trash', unavailable: 'Save status unavailable',
     } as const)[saveStatus.state];
@@ -712,6 +712,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         addDraft(draftFromDocument(document));
     };
     const inspectorProps = {
+        copy: copy.common,
         inspector,
         setInspector: showInspector,
         connection,
@@ -789,10 +790,10 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         <div className="workspace-layout">
             <aside className="icon-rail" aria-label="Workspace tools">
                 <span className="rail-separator"/>
-                <RailButton icon="schema" label={experience === 'beginner' ? 'Tables' : copy.common.schema} active={inspector === 'schema' && drawerOpen} onClick={() => showInspector('schema')}/>
+                <RailButton icon="schema" label={experience === 'beginner' ? copy.common.tables : copy.common.schema} active={inspector === 'schema' && drawerOpen} onClick={() => showInspector('schema')}/>
                 {experience === 'expert' && <>
                     <RailButton icon="history" label={copy.common.history} active={inspector === 'history' && drawerOpen} onClick={() => showInspector('history')}/>
-                    <RailButton icon="documents" label="Documents" active={inspector === 'documents' && drawerOpen} onClick={() => showInspector('documents')}/>
+                    <RailButton icon="documents" label={copy.common.queries} active={inspector === 'documents' && drawerOpen} onClick={() => showInspector('documents')}/>
                 </>}
                 <span className="rail-spacer"/>
                 {experience === 'expert' && <RailButton icon="assistant" label={copy.common.assistant} accent active={inspector === 'assistant'} onClick={() => showInspector('assistant')}/>}
@@ -869,15 +870,15 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                 <div id="sql-document-panel" role="tabpanel" aria-labelledby={`document-tab-${active.id}`} tabIndex={0} className={cx('workspace-content', experience === 'beginner' && 'beginner-workspace-content', run && 'has-run', visibleResultsView === 'sqlmap' && 'has-sql-map', queryCollapsed && 'is-query-collapsed', (run || visibleResultsView === 'sqlmap') && resultsCollapsed && 'is-results-collapsed')}>
                     <section className={cx('editor-surface', queryCollapsed && 'is-collapsed')}>
                         <div className="editor-heading">
-                            <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">QUERY</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label></div>
+                            <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">{copy.common.query}</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label></div>
                         <div className="editor-heading-actions">
                             {experience === 'expert' && <>
                                 {nativeParserEnabled && nativeParserStatus === 'unavailable' && <>
-                                    <span className="toolbar-small" role="status" title="Formatting remains available while the native parser is unavailable.">Parser unavailable</span>
-                                    <Button variant="ghost" className="toolbar-small" onClick={() => editor.current?.retryNativeParser()}>Retry parser</Button>
+                                    <span className="toolbar-small" role="status" title="Formatting remains available while the native parser is unavailable.">{copy.common.parserUnavailable}</span>
+                                    <Button variant="ghost" className="toolbar-small" onClick={() => editor.current?.retryNativeParser()}>{copy.common.retryParser}</Button>
                                 </>}
-                                <div className="formatter-control" role="group" aria-label="Format SQL">
-                                    <span className="formatter-control-label">Format</span>
+                                <div className="formatter-control" role="group" aria-label={copy.common.formatSql}>
+                                    <span className="formatter-control-label">{copy.common.format}</span>
                                     <Button
                                         variant="ghost"
                                         className="toolbar-small formatter-choice formatter-choice-wasm"
@@ -898,51 +899,51 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                         className="toolbar-small formatter-choice formatter-choice-builtin"
                                         title="Format SQL with ClickStudio’s built-in formatter."
                                         onClick={() => void formatActiveSql('builtin')}
-                                    >Built-in</Button>
+                                    >{copy.common.builtInFormatter}</Button>
                                 </div>
                             </>}
-                            <Button variant="ghost" className="panel-collapse-button" aria-label={queryCollapsed ? 'Expand SQL query' : 'Collapse SQL query'} aria-expanded={!queryCollapsed} aria-controls="sql-editor-content" title={queryCollapsed ? 'Expand query' : 'Collapse query'} onClick={() => setQueryCollapsed(value => !value)}><Icon className="panel-toggle-icon" name="chevron"/></Button>
+                            <Button variant="ghost" className="panel-collapse-button" aria-label={queryCollapsed ? copy.common.expandQuery : copy.common.collapseQuery} aria-expanded={!queryCollapsed} aria-controls="sql-editor-content" title={queryCollapsed ? copy.common.expandQuery : copy.common.collapseQuery} onClick={() => setQueryCollapsed(value => !value)}><Icon className="panel-toggle-icon" name="chevron"/></Button>
                         </div>
                         </div>
                         <div id="sql-editor-content" className="panel-content editor-content" hidden={queryCollapsed}>
                         <div className="editor-toolbar">
-                            <div className="editor-mode-label"><span className="editor-language-dot"/>ClickHouse SQL<span className="toolbar-divider"/><span>{statementCount === undefined ? 'Incomplete SQL' : `${statementCount} statement${statementCount === 1 ? '' : 's'}`}</span></div>
+                            <div className="editor-mode-label"><span className="editor-language-dot"/>{copy.common.clickhouseSql}<span className="toolbar-divider"/><span>{statementCount === undefined ? copy.common.incompleteSql : (statementCount === 1 ? copy.common.oneStatement : copy.common.manyStatements).replace('{count}', String(statementCount))}</span></div>
                             <div className="editor-actions">
-                                <Button variant="ghost" className="sql-map-button" aria-label="Visualize SQL structure" aria-pressed={view === 'sqlmap'} title="Visualize SQL structure" onClick={() => { setView(current => current === 'sqlmap' ? 'results' : 'sqlmap'); setResultsCollapsed(false); }}><Icon name="pipeline"/>SQL map</Button>
+                                <Button variant="ghost" className="sql-map-button" aria-label={copy.common.visualizeSqlStructure} aria-pressed={view === 'sqlmap'} title={copy.common.visualizeSqlStructure} onClick={() => { setView(current => current === 'sqlmap' ? 'results' : 'sqlmap'); setResultsCollapsed(false); }}><Icon name="pipeline"/>{copy.common.sqlMap}</Button>
                                 {experience === 'expert' ? <>
-                                    <Button variant="ghost" className="sql-ai-button" aria-pressed={inspector === 'assistant'} onClick={() => showInspector('assistant')}><Icon name="assistant"/>SQL AI</Button>
+                                    <Button variant="ghost" className="sql-ai-button" aria-label={copy.common.askAi} aria-pressed={inspector === 'assistant'} onClick={() => showInspector('assistant')}><Icon name="assistant"/>{copy.common.askAi}</Button>
                                     <Button variant="secondary" className="save-revision-button" aria-label={copy.common.saveRevision} onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/>{copy.common.save}</Button>
-                                    <RunActionGroup runLabel={copy.common.runStatement} running={busy === 'run' || busy === 'script'} disabled={!trusted || Boolean(busy) || unsupportedParameters} onRun={() => void execute()} actions={[
-                                        { label: 'Run script', disabled: !trusted || Boolean(busy) || !connection.manifest?.scripts.available, title: connection.manifest?.scripts.reason, onSelect: () => void execute(true) },
-                                        { label: 'EXPLAIN', disabled: !trusted || Boolean(busy) || !connection.manifest?.explain.available, title: connection.manifest?.explain.reason, onSelect: () => void execute(false, 'explain') },
-                                        { label: 'EXPLAIN PIPELINE', disabled: !trusted || Boolean(busy) || !connection.manifest?.pipeline.available, title: connection.manifest?.pipeline.reason, onSelect: () => void execute(false, 'pipeline') },
+                                    <RunActionGroup copy={copy.common} runLabel={copy.common.runStatement} running={busy === 'run' || busy === 'script'} disabled={!trusted || Boolean(busy) || unsupportedParameters} onRun={() => void execute()} actions={[
+                                        { label: copy.common.runScript, disabled: !trusted || Boolean(busy) || !connection.manifest?.scripts.available, title: connection.manifest?.scripts.reason, onSelect: () => void execute(true) },
+                                        { label: copy.common.explain, disabled: !trusted || Boolean(busy) || !connection.manifest?.explain.available, title: connection.manifest?.explain.reason, onSelect: () => void execute(false, 'explain') },
+                                        { label: copy.common.explainPipeline, disabled: !trusted || Boolean(busy) || !connection.manifest?.pipeline.available, title: connection.manifest?.pipeline.reason, onSelect: () => void execute(false, 'pipeline') },
                                     ]}/>
                                 </> : <>
-                                    <Button variant="ghost" className="sql-ai-button" aria-label="Ask AI" onClick={() => showInspector('assistant')}><Icon name="assistant"/>Ask AI</Button>
-                                    <Button variant="secondary" className="save-revision-button" aria-label="Save query" onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/>Save</Button>
-                                    <Button variant="primary" className="run-query-button" aria-label="Run query" onClick={() => void execute()} disabled={!trusted || Boolean(busy) || unsupportedParameters}><Icon name="play"/>{busy === 'run' ? 'Running…' : 'Run'}</Button>
+                                    <Button variant="ghost" className="sql-ai-button" aria-label={copy.common.askAi} onClick={() => showInspector('assistant')}><Icon name="assistant"/>{copy.common.askAi}</Button>
+                                    <Button variant="secondary" className="save-revision-button" aria-label={copy.common.save} onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/>{copy.common.save}</Button>
+                                    <Button variant="primary" className="run-query-button" aria-label={copy.common.runStatement} onClick={() => void execute()} disabled={!trusted || Boolean(busy) || unsupportedParameters}><Icon name="play"/>{busy === 'run' ? copy.common.running : copy.common.run}</Button>
                                 </>}
                             </div>
                         </div>
                         {experience === 'beginner' && (!trusted || (!demoMode && !connection.manifest)) && <div className="beginner-connection-notice" role="status"><span>{demoMode ? 'Start the sample workspace to run this query.' : !connection.manifest ? trusted ? 'Retest this connection to refresh its feature checks.' : 'Test this connection to discover its ClickHouse features.' : 'Trust this connection to run SQL.'}</span><Button variant="secondary" className="toolbar-small" onClick={() => void (!demoMode && !connection.manifest ? testConnectionActionRef.current() : trustActionRef.current())}>{demoMode ? 'Start exploring' : !connection.manifest ? trusted ? 'Retest connection' : 'Test connection' : 'Trust connection'}</Button></div>}
-                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} nativeParserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus} onNativeParseSnapshot={snapshot => setNativeParseSnapshot(snapshot)}/></div>
+                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} nativeParserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} copy={copy.common} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus} onNativeParseSnapshot={snapshot => setNativeParseSnapshot(snapshot)}/></div>
                         {unsupportedParameters
                             ? <div className="callout mt-3" role="status">{connection.manifest?.parameters.reason ?? 'Query parameters are unavailable on this connection.'} Replace placeholders with SQL literals to run this query.</div>
                             : parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => patch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
-                        {experience === 'expert' && <div className="editor-footer"><span>{active.sql.length.toLocaleString()} characters <span className="footer-dot">·</span> {active.sql.split('\n').length} lines</span></div>}
+                        {experience === 'expert' && <div className="editor-footer"><span>{active.sql.length.toLocaleString()} {copy.common.characters} <span className="footer-dot">·</span> {active.sql.split('\n').length} {copy.common.lines}</span></div>}
                         </div>
                     </section>
 
-                    {(run || visibleResultsView === 'sqlmap') && <section className={cx('results-surface', experience === 'expert' && 'results-expert', resultsCollapsed && 'is-collapsed')} aria-label={visibleResultsView === 'sqlmap' ? 'SQL structure' : 'Query results'}>
+                    {(run || visibleResultsView === 'sqlmap') && <section className={cx('results-surface', experience === 'expert' && 'results-expert', resultsCollapsed && 'is-collapsed')} aria-label={visibleResultsView === 'sqlmap' ? copy.common.sqlStructure : copy.common.queryResults}>
                         <div className="results-header">
-                            <div className="results-title"><span className="results-mark"><Icon name={visibleResultsView === 'sqlmap' ? 'pipeline' : 'chart'}/></span><div><span className="eyebrow">{visibleResultsView === 'sqlmap' ? 'QUERY VISUALIZATION' : 'WORKSPACE OUTPUT'}</span><h2>{visibleResultsView === 'sqlmap' ? 'SQL structure' : copy.common.results}</h2></div>{run && visibleResultsView !== 'sqlmap' && <Status run={run}/>}</div>
+                            <div className="results-title"><span className="results-mark"><Icon name={visibleResultsView === 'sqlmap' ? 'pipeline' : 'chart'}/></span><div><span className="eyebrow">{visibleResultsView === 'sqlmap' ? copy.common.queryVisualization : copy.common.workspaceOutput}</span><h2>{visibleResultsView === 'sqlmap' ? copy.common.sqlStructure : copy.common.results}</h2></div>{run && visibleResultsView !== 'sqlmap' && <Status run={run} copy={copy.common}/>}</div>
                             <div className="results-actions">
-                                {run && <div className="results-tabs" role="tablist" aria-label="Workspace views">{resultTabs.map(tab => <button key={tab} role="tab" aria-selected={visibleResultsView === tab} type="button" onClick={() => { setView(tab); if (tab === 'chart') void perform(loadSnapshot, 'save'); if (tab === 'insights') void perform(loadProfile, 'save'); }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : tab === 'sqlmap' ? 'SQL map' : copy.common.insights}{tab === 'chart' && snapshot && <span className="suggested-dot"/>}</button>)}</div>}
-                                <Button variant="ghost" className="panel-collapse-button" aria-label={`${resultsCollapsed ? 'Expand' : 'Collapse'} ${visibleResultsView === 'sqlmap' ? 'SQL structure' : 'query results'}`} aria-expanded={!resultsCollapsed} aria-controls="query-results-content" title={resultsCollapsed ? 'Expand output' : 'Collapse output'} onClick={() => setResultsCollapsed(value => !value)}><Icon className="panel-toggle-icon" name="chevron"/></Button>
+                                {run && <div className="results-tabs" role="tablist" aria-label={copy.common.workspaceOutput}>{resultTabs.map(tab => <button key={tab} role="tab" aria-selected={visibleResultsView === tab} type="button" onClick={() => { setView(tab); if (tab === 'chart') void perform(loadSnapshot, 'save'); if (tab === 'insights') void perform(loadProfile, 'save'); }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : tab === 'sqlmap' ? copy.common.sqlMap : copy.common.insights}{tab === 'chart' && snapshot && <span className="suggested-dot"/>}</button>)}</div>}
+                                <Button variant="ghost" className="panel-collapse-button" aria-label={`${resultsCollapsed ? copy.common.expand : copy.common.collapse} ${visibleResultsView === 'sqlmap' ? copy.common.sqlStructure : copy.common.queryResults}`} aria-expanded={!resultsCollapsed} aria-controls="query-results-content" title={resultsCollapsed ? copy.common.expandOutput : copy.common.collapseOutput} onClick={() => setResultsCollapsed(value => !value)}><Icon className="panel-toggle-icon" name="chevron"/></Button>
                             </div>
                         </div>
                         <div id="query-results-content" className="panel-content results-content" hidden={resultsCollapsed}>
-                        {visibleResultsView === 'sqlmap' && <SqlFlowView sql={sqlMapStatement?.sql ?? active.sql} sourceOffset={sqlMapStatement?.from ?? 0} parseResult={sqlMapParseStatement?.result} parserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} parseDurationMs={nativeParseSnapshot?.elapsedMs} onRevealRange={(from, to) => editor.current?.revealRange(from, to)}/>}
+                        {visibleResultsView === 'sqlmap' && <SqlFlowView copy={copy.common} sql={sqlMapStatement?.sql ?? active.sql} sourceOffset={sqlMapStatement?.from ?? 0} parseResult={sqlMapParseStatement?.result} parserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} parseDurationMs={nativeParseSnapshot?.elapsedMs} onRevealRange={(from, to) => editor.current?.revealRange(from, to)}/>}
                         {visibleResultsView !== 'sqlmap' && staleResult && <div className="result-provenance" aria-live="polite"><span className="status-light is-warning"/><span><strong>Result from previous execution</strong><small>SQL or bound parameters changed since this run. Rerun to refresh the result.</small></span></div>}
                         {visibleResultsView === 'results' && script && <ScriptResults script={script} runs={history} activeRunId={run?.id} onSelectRun={runId => {
                             if (active.scriptId) scriptFollowRef.current = { scriptId: active.scriptId, enabled: false };
@@ -960,6 +961,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             {drawerOpen && (experience === 'beginner' || compactViewport) && <OverlayPortal><><button className="drawer-backdrop" type="button" aria-label="Close panel" onClick={() => setDrawerOpen(false)}/><InspectorPane {...inspectorProps} drawer onClose={() => setDrawerOpen(false)} onInsert={value => { editor.current?.insert(value); setDrawerOpen(false); }} onOpenDocument={document => { openDocument(document); setDrawerOpen(false); }}/></></OverlayPortal>}
         </div>
         <ImportWizard open={importOpen} connectionId={connection.id} trusted={trusted} demoMode={demoMode} onClose={() => setImportOpen(false)} onImported={() => { void loadSchema(); setNotice('Import complete. The destination schema was refreshed.'); }}/>
-        <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} cancelling={cancelling} scriptRunning={script?.status === 'running'} helpButton={<HelpExamplesButton copy={copy.common} open={examplesOpen} onOpen={openExamples}/>}/>
+        <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} cancelling={cancelling} scriptRunning={script?.status === 'running'} copy={copy.common} helpButton={<HelpExamplesButton copy={copy.common} open={examplesOpen} onOpen={openExamples}/>}/>
     </div>;
 }

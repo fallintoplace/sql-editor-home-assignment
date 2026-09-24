@@ -3,6 +3,7 @@ import { EditorView, keymap, showPanel, type Panel } from '@codemirror/view';
 import { isolateHistory } from '@codemirror/commands';
 import { snippet, snippetCompletion } from '@codemirror/autocomplete';
 import { activeStatementIndex, appendQuerySeparator, CLICKHOUSE_SNIPPETS, statementOutline, type StatementOutline } from '../../shared/editor-tools';
+import type { Copy } from '../i18n';
 
 // Cursor movement reuses the outline; only document edits invoke the boundary lexer.
 export const sqlStatementOutline = StateField.define<StatementOutline>({
@@ -37,12 +38,12 @@ function selectStatement(view: EditorView): boolean {
     return true;
 }
 
-function editorToolsPanel(view: EditorView): Panel {
+function editorToolsPanel(view: EditorView, copy: Copy['common']): Panel {
     const doc = view.dom.ownerDocument;
     const dom = doc.createElement('div');
     dom.className = 'cm-sql-tools';
     dom.setAttribute('role', 'group');
-    dom.setAttribute('aria-label', 'SQL editing tools');
+    dom.setAttribute('aria-label', copy.clickhouseSql);
     const button = (text: string, label: string, action: () => void) => {
         const element = doc.createElement('button');
         element.type = 'button';
@@ -52,12 +53,12 @@ function editorToolsPanel(view: EditorView): Panel {
         element.addEventListener('click', action);
         return element;
     };
-    const previous = button('←', 'Previous SQL statement', () => { navigateStatement(view, -1); });
-    const next = button('→', 'Next SQL statement', () => { navigateStatement(view, 1); });
-    const select = button('Select query', 'Select current SQL statement', () => { selectStatement(view); });
+    const previous = button('←', copy.previousStatement, () => { navigateStatement(view, -1); });
+    const next = button('→', copy.nextStatement, () => { navigateStatement(view, 1); });
+    const select = button(copy.selectQuery, copy.selectCurrentSqlStatement, () => { selectStatement(view); });
     const picker = doc.createElement('select');
     picker.className = 'cm-sql-statement-picker';
-    picker.setAttribute('aria-label', 'Jump to SQL statement');
+    picker.setAttribute('aria-label', copy.jumpToSqlStatement);
     picker.addEventListener('change', () => {
         const target = view.state.field(sqlStatementOutline).statements[Number(picker.value)];
         if (!target) return;
@@ -66,11 +67,11 @@ function editorToolsPanel(view: EditorView): Panel {
     });
 
     const snippets = doc.createElement('select');
-    snippets.setAttribute('aria-label', 'ClickHouse snippet');
-    snippets.title = 'Choose a template, then add it as a new query. Existing SQL is preserved.';
+    snippets.setAttribute('aria-label', copy.clickhouseSnippet);
+    snippets.title = copy.snippetSelectHelp;
     const placeholder = doc.createElement('option');
     placeholder.value = '';
-    placeholder.textContent = 'ClickHouse snippets…';
+    placeholder.textContent = copy.clickhouseSnippets;
     snippets.append(placeholder);
     for (const item of CLICKHOUSE_SNIPPETS) {
         const option = doc.createElement('option');
@@ -78,7 +79,7 @@ function editorToolsPanel(view: EditorView): Panel {
         option.textContent = item.label;
         snippets.append(option);
     }
-    const insert = button('Add query', 'Add snippet as a new query', () => {
+    const insert = button(copy.addQuery, copy.addSnippetAsNewQuery, () => {
         const chosen = CLICKHOUSE_SNIPPETS.find(item => item.id === snippets.value);
         if (!chosen || view.state.readOnly || view.state.field(sqlStatementOutline).error) return;
         const text = view.state.doc.toString();
@@ -115,7 +116,7 @@ function editorToolsPanel(view: EditorView): Panel {
             if (!outline.statements.length) {
                 const option = doc.createElement('option');
                 option.value = '-1';
-                option.textContent = outline.error ? 'Incomplete SQL' : 'No SQL statements';
+                option.textContent = outline.error ? copy.incompleteSql : copy.noSqlStatements;
                 options.append(option);
             }
             outline.statements.forEach((statement, position) => {
@@ -134,8 +135,8 @@ function editorToolsPanel(view: EditorView): Panel {
         insert.disabled = !snippets.value || Boolean(outline.error) || view.state.readOnly;
         const chosen = CLICKHOUSE_SNIPPETS.find(item => item.id === snippets.value);
         const text = outline.error
-            ? `${outline.error}. Finish the quote or comment to use query tools.`
-            : chosen ? `${chosen.detail} Tab edits placeholders. SQL is not run automatically.` : '';
+            ? `${copy.incompleteSql}: ${outline.error}`
+            : chosen ? `${chosen.detail} ${copy.snippetSelectHelp}` : '';
         if (note.textContent !== text) note.textContent = text;
         note.hidden = !text;
     };
@@ -147,10 +148,10 @@ function editorToolsPanel(view: EditorView): Panel {
     };
 }
 
-export function sqlEditorTools(): Extension {
+export function sqlEditorTools(copy: Copy['common']): Extension {
     return [
         sqlStatementOutline,
-        showPanel.of(editorToolsPanel),
+        showPanel.of(view => editorToolsPanel(view, copy)),
         keymap.of([
             { key: 'Alt-PageUp', run: view => navigateStatement(view, -1) },
             { key: 'Alt-PageDown', run: view => navigateStatement(view, 1) },

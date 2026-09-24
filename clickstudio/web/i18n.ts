@@ -59,6 +59,127 @@ export interface Copy {
         exampleChartHeatmap: string;
         examplePreviewTable: string;
         exampleReadRows: string;
+        workspaceMode: string;
+        parserMode: string;
+        browse: string;
+        readOnly: string;
+        tables: string;
+        queries: string;
+        more: string;
+        localDraft: string;
+        query: string;
+        format: string;
+        parserUnavailable: string;
+        retryParser: string;
+        sqlMap: string;
+        visualizeSqlStructure: string;
+        runScript: string;
+        explain: string;
+        explainPipeline: string;
+        askAi: string;
+        running: string;
+        selectQuery: string;
+        selectCurrentSqlStatement: string;
+        jumpToSqlStatement: string;
+        clickhouseSnippet: string;
+        clickhouseSnippets: string;
+        snippetSelectHelp: string;
+        addQuery: string;
+        addSnippetAsNewQuery: string;
+        incompleteSql: string;
+        noSqlStatements: string;
+        oneStatement: string;
+        manyStatements: string;
+        queryVisualization: string;
+        workspaceOutput: string;
+        sqlStructure: string;
+        queryResults: string;
+        expand: string;
+        collapse: string;
+        expandQuery: string;
+        collapseQuery: string;
+        expandOutput: string;
+        collapseOutput: string;
+        sqlFlowTitle: string;
+        sqlFlowDescription: string;
+        sqlFlowClickStage: string;
+        sqlFlowParserStarting: string;
+        sqlFlowParserUnavailable: string;
+        sqlFlowCodeMirror: string;
+        sqlFlowEmpty: string;
+        sqlFlowAstDetail: string;
+        sqlFlowSqlDetail: string;
+        sqlFlowNativeHeading: string;
+        sqlFlowFallbackHeading: string;
+        sqlFlowGraphHint: string;
+        sqlFlowReturnResult: string;
+        sqlFlowOutputColumns: string;
+        sqlFlowSelectedStage: string;
+        sqlFlowInspectStage: string;
+        sqlFlowStageDetails: string;
+        sqlFlowStages: string;
+        sqlFlowOperators: string;
+        sqlFlowConnections: string;
+        sqlFlowInputs: string;
+        sqlFlowOutputs: string;
+        sqlFlowReadKind: string;
+        sqlFlowOutputKind: string;
+        sqlFlowEstimatedStatus: string;
+        sqlFlowSourceDetail: string;
+        sqlFlowNoStages: string;
+        statusReady: string;
+        statusQueued: string;
+        statusRunning: string;
+        statusSucceeded: string;
+        statusTruncated: string;
+        statusFailed: string;
+        statusCancelled: string;
+        statusTimedOut: string;
+        statusInterrupted: string;
+        statusComplete: string;
+        statusLiveUpdates: string;
+        statusReconnecting: string;
+        rowsRead: string;
+        bytesRead: string;
+        memory: string;
+        import: string;
+        export: string;
+        refresh: string;
+        workspaceInspector: string;
+        workspaceBrowser: string;
+        workspacePanels: string;
+        schemaSearch: string;
+        tableCount: string;
+        loading: string;
+        schemaPrivate: string;
+        trustToInspect: string;
+        readingSchema: string;
+        noTablesMatch: string;
+        insertTableName: string;
+        rowsEstimated: string;
+        parts: string;
+        projections: string;
+        skipIndexes: string;
+        metadataUnavailable: string;
+        systemTable: string;
+        clickhouseSql: string;
+        runActions: string;
+        formatSql: string;
+        previousStatement: string;
+        nextStatement: string;
+        sqlFlowNativeAst: string;
+        sqlFlowKeywordEstimate: string;
+        sqlFlowTruncatedWarning: string;
+        sqlFlowFilterKind: string;
+        sqlFlowAggregateKind: string;
+        sqlFlowSortKind: string;
+        sqlFlowJoinKind: string;
+        sqlFlowTransformKind: string;
+        sqlFlowStageKind: string;
+        sqlFlowResizeKind: string;
+        characters: string;
+        lines: string;
+        builtInFormatter: string;
         searchExamples: string;
         noExamplesFound: string;
         openInNewSql: string;
@@ -187,6 +308,127 @@ const english: Copy = {
         exampleChartHeatmap: 'Heatmap',
         examplePreviewTable: 'Preview {table}',
         exampleReadRows: 'Read up to 50 rows from this table.',
+        workspaceMode: 'WORKSPACE',
+        parserMode: 'PARSER',
+        browse: 'BROWSE',
+        readOnly: 'Read only',
+        tables: 'Tables',
+        queries: 'Queries',
+        more: 'More',
+        localDraft: 'Local draft',
+        query: 'QUERY',
+        format: 'Format',
+        parserUnavailable: 'Parser unavailable',
+        retryParser: 'Retry parser',
+        sqlMap: 'SQL map',
+        visualizeSqlStructure: 'Visualize SQL structure',
+        runScript: 'Run script',
+        explain: 'EXPLAIN',
+        explainPipeline: 'EXPLAIN PIPELINE',
+        askAi: 'Ask AI',
+        running: 'Running…',
+        selectQuery: 'Select query',
+        selectCurrentSqlStatement: 'Select current SQL statement',
+        jumpToSqlStatement: 'Jump to SQL statement',
+        clickhouseSnippet: 'ClickHouse snippet',
+        clickhouseSnippets: 'ClickHouse snippets…',
+        snippetSelectHelp: 'Choose a template, then add it as a new query. Existing SQL is preserved.',
+        addQuery: 'Add query',
+        addSnippetAsNewQuery: 'Add snippet as a new query',
+        incompleteSql: 'Incomplete SQL',
+        noSqlStatements: 'No SQL statements',
+        oneStatement: '{count} statement',
+        manyStatements: '{count} statements',
+        queryVisualization: 'QUERY VISUALIZATION',
+        workspaceOutput: 'WORKSPACE OUTPUT',
+        sqlStructure: 'SQL structure',
+        queryResults: 'Query results',
+        expand: 'Expand',
+        collapse: 'Collapse',
+        expandQuery: 'Expand SQL query',
+        collapseQuery: 'Collapse SQL query',
+        expandOutput: 'Expand output',
+        collapseOutput: 'Collapse output',
+        sqlFlowTitle: 'How this query is composed',
+        sqlFlowDescription: 'This is a logical map, not a server execution plan.',
+        sqlFlowClickStage: 'Click a stage to jump to its SQL.',
+        sqlFlowParserStarting: 'Parser starting',
+        sqlFlowParserUnavailable: 'Parser unavailable',
+        sqlFlowCodeMirror: 'CodeMirror mode',
+        sqlFlowEmpty: 'Write a SELECT query to build its structure map.',
+        sqlFlowAstDetail: 'AST detail: ',
+        sqlFlowSqlDetail: 'SQL detail: ',
+        sqlFlowNativeHeading: 'CLICKHOUSE SQL FLOW',
+        sqlFlowFallbackHeading: 'SQL FLOW · BEST EFFORT',
+        sqlFlowGraphHint: 'Click a node to inspect its clause and jump to it in the editor',
+        sqlFlowReturnResult: 'Return result',
+        sqlFlowOutputColumns: 'Columns produced by the SELECT list',
+        sqlFlowSelectedStage: 'Selected stage',
+        sqlFlowInspectStage: 'Inspect stage',
+        sqlFlowStageDetails: 'Selected stage details',
+        sqlFlowStages: 'stages',
+        sqlFlowOperators: 'operators',
+        sqlFlowConnections: 'connections',
+        sqlFlowInputs: 'Inputs',
+        sqlFlowOutputs: 'Outputs',
+        sqlFlowReadKind: 'Read',
+        sqlFlowOutputKind: 'Output',
+        sqlFlowEstimatedStatus: 'estimated',
+        sqlFlowSourceDetail: 'Table source',
+        sqlFlowNoStages: 'No SQL stages were found in this statement.',
+        statusReady: 'Ready',
+        statusQueued: 'Queued',
+        statusRunning: 'Running',
+        statusSucceeded: 'Succeeded',
+        statusTruncated: 'Truncated',
+        statusFailed: 'Failed',
+        statusCancelled: 'Cancelled',
+        statusTimedOut: 'Timed out',
+        statusInterrupted: 'Interrupted',
+        statusComplete: 'Complete',
+        statusLiveUpdates: 'Live updates',
+        statusReconnecting: 'Reconnecting',
+        rowsRead: 'rows read',
+        bytesRead: 'read',
+        memory: 'memory',
+        import: 'Import',
+        export: 'Export',
+        refresh: 'Refresh',
+        workspaceInspector: 'WORKSPACE INSPECTOR',
+        workspaceBrowser: 'Workspace browser',
+        workspacePanels: 'More workspace panels',
+        schemaSearch: 'Search tables, columns, and dictionaries…',
+        tableCount: '{count} TABLES',
+        loading: 'Loading…',
+        schemaPrivate: 'Schema is private',
+        trustToInspect: 'Trust the connection to inspect tables and columns.',
+        readingSchema: 'Reading ClickHouse schema…',
+        noTablesMatch: 'No tables or dictionaries match this search.',
+        insertTableName: 'Insert table name',
+        rowsEstimated: 'rows est.',
+        parts: 'parts',
+        projections: 'projections',
+        skipIndexes: 'skip indexes',
+        metadataUnavailable: 'ClickHouse metadata unavailable',
+        systemTable: 'ClickHouse system table',
+        clickhouseSql: 'ClickHouse SQL',
+        runActions: 'Run actions',
+        formatSql: 'Format SQL',
+        previousStatement: 'Previous SQL statement',
+        nextStatement: 'Next SQL statement',
+        sqlFlowNativeAst: 'Native AST',
+        sqlFlowKeywordEstimate: 'Keyword estimate',
+        sqlFlowTruncatedWarning: 'This query is large. The graph shows a bounded set of SQL stages.',
+        sqlFlowFilterKind: 'Filter',
+        sqlFlowAggregateKind: 'Aggregate',
+        sqlFlowSortKind: 'Sort',
+        sqlFlowJoinKind: 'Join',
+        sqlFlowTransformKind: 'Transform',
+        sqlFlowStageKind: 'Stage',
+        sqlFlowResizeKind: 'Resize',
+        characters: 'characters',
+        lines: 'lines',
+        builtInFormatter: 'Built-in',
         searchExamples: 'Search examples',
         noExamplesFound: 'No examples match your search.',
         openInNewSql: 'Open in new SQL',
@@ -318,6 +560,43 @@ const exampleCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common
     },
 };
 
+type WorkspaceCommonTranslation = Pick<Copy['common'],
+    'workspaceMode' | 'parserMode' | 'browse' | 'readOnly' | 'tables' | 'queries' | 'more' | 'localDraft' | 'query' | 'format' |
+    'parserUnavailable' | 'retryParser' | 'sqlMap' | 'visualizeSqlStructure' | 'runScript' | 'askAi' | 'running' | 'selectQuery' |
+    'selectCurrentSqlStatement' | 'jumpToSqlStatement' | 'clickhouseSnippet' | 'clickhouseSnippets' | 'snippetSelectHelp' | 'addQuery' |
+    'addSnippetAsNewQuery' | 'incompleteSql' | 'noSqlStatements' | 'oneStatement' | 'manyStatements' | 'queryVisualization' |
+    'workspaceOutput' | 'sqlStructure' | 'queryResults' | 'expand' | 'collapse' | 'expandQuery' | 'collapseQuery' | 'expandOutput' |
+    'collapseOutput' | 'sqlFlowTitle' | 'sqlFlowDescription' | 'sqlFlowClickStage' | 'sqlFlowParserStarting' | 'sqlFlowParserUnavailable' |
+    'sqlFlowCodeMirror' | 'sqlFlowEmpty' | 'sqlFlowAstDetail' | 'sqlFlowSqlDetail' | 'sqlFlowNativeHeading' | 'sqlFlowFallbackHeading' |
+    'sqlFlowGraphHint' | 'sqlFlowReturnResult' | 'sqlFlowOutputColumns' | 'sqlFlowSelectedStage' | 'sqlFlowInspectStage' |
+    'sqlFlowStageDetails' | 'sqlFlowStages' | 'sqlFlowOperators' | 'sqlFlowConnections' | 'sqlFlowInputs' | 'sqlFlowOutputs' |
+    'sqlFlowReadKind' | 'sqlFlowOutputKind' | 'sqlFlowEstimatedStatus' | 'sqlFlowSourceDetail' | 'sqlFlowNoStages' | 'statusReady' |
+    'statusQueued' | 'statusRunning' | 'statusSucceeded' | 'statusTruncated' | 'statusFailed' | 'statusCancelled' | 'statusTimedOut' |
+    'statusInterrupted' | 'statusComplete' | 'statusLiveUpdates' | 'statusReconnecting' | 'rowsRead' | 'bytesRead' | 'memory' |
+    'import' | 'export' | 'refresh' | 'workspaceInspector' | 'workspaceBrowser' | 'workspacePanels' | 'schemaSearch' | 'tableCount' |
+    'loading' | 'schemaPrivate' | 'trustToInspect' | 'readingSchema' | 'noTablesMatch' | 'insertTableName' | 'rowsEstimated' | 'parts' |
+    'projections' | 'skipIndexes' | 'metadataUnavailable' | 'systemTable' | 'clickhouseSql' | 'runActions' | 'formatSql' |
+    'previousStatement' | 'nextStatement' | 'sqlFlowNativeAst' | 'sqlFlowKeywordEstimate' | 'sqlFlowTruncatedWarning' | 'characters' | 'lines' | 'builtInFormatter' |
+    'sqlFlowFilterKind' | 'sqlFlowAggregateKind' | 'sqlFlowSortKind' | 'sqlFlowJoinKind' | 'sqlFlowTransformKind' | 'sqlFlowStageKind' | 'sqlFlowResizeKind'>;
+
+const workspaceCommonTranslations: Record<Exclude<Locale, 'en'>, WorkspaceCommonTranslation> = {
+    de: {
+        workspaceMode: 'ARBEITSBEREICH', parserMode: 'PARSER', browse: 'DURCHSUCHEN', readOnly: 'Schreibgeschützt', tables: 'Tabellen', queries: 'Abfragen', more: 'Mehr', localDraft: 'Lokaler Entwurf', query: 'ABFRAGE', format: 'Formatieren', parserUnavailable: 'Parser nicht verfügbar', retryParser: 'Parser erneut versuchen', sqlMap: 'SQL-Struktur', visualizeSqlStructure: 'SQL-Struktur visualisieren', runScript: 'Skript ausführen', askAi: 'KI fragen', running: 'Wird ausgeführt…', selectQuery: 'Abfrage auswählen', selectCurrentSqlStatement: 'Aktuelles SQL-Statement auswählen', jumpToSqlStatement: 'Zu SQL-Statement springen', clickhouseSnippet: 'ClickHouse-Vorlage', clickhouseSnippets: 'ClickHouse-Vorlagen…', snippetSelectHelp: 'Vorlage auswählen und als neue Abfrage hinzufügen. Vorhandenes SQL bleibt erhalten.', addQuery: 'Abfrage hinzufügen', addSnippetAsNewQuery: 'Vorlage als neue Abfrage hinzufügen', incompleteSql: 'Unvollständiges SQL', noSqlStatements: 'Keine SQL-Statements', oneStatement: '{count} Statement', manyStatements: '{count} Statements', queryVisualization: 'ABFRAGEVISUALISIERUNG', workspaceOutput: 'ARBEITSBEREICH-AUSGABE', sqlStructure: 'SQL-Struktur', queryResults: 'Abfrageergebnisse', expand: 'Erweitern', collapse: 'Einklappen', expandQuery: 'SQL-Abfrage erweitern', collapseQuery: 'SQL-Abfrage einklappen', expandOutput: 'Ausgabe erweitern', collapseOutput: 'Ausgabe einklappen', sqlFlowTitle: 'Aufbau dieser Abfrage', sqlFlowDescription: 'Dies ist eine logische Übersicht, kein serverseitiger Ausführungsplan.', sqlFlowClickStage: 'Auf eine Phase klicken, um zum SQL zu springen.', sqlFlowParserStarting: 'Parser wird gestartet', sqlFlowParserUnavailable: 'Parser nicht verfügbar', sqlFlowCodeMirror: 'CodeMirror-Modus', sqlFlowEmpty: 'Schreibe eine SELECT-Abfrage, um ihre Struktur anzuzeigen.', sqlFlowAstDetail: 'AST-Details: ', sqlFlowSqlDetail: 'SQL-Details: ', sqlFlowNativeHeading: 'CLICKHOUSE-SQL-ABLAUF', sqlFlowFallbackHeading: 'SQL-ABLAUF · BESTMÖGLICH', sqlFlowGraphHint: 'Klicke auf einen Knoten, um die Klausel zu prüfen und im Editor aufzurufen', sqlFlowReturnResult: 'Ergebnis zurückgeben', sqlFlowOutputColumns: 'Spalten der SELECT-Liste', sqlFlowSelectedStage: 'Ausgewählte Phase', sqlFlowInspectStage: 'Phase ansehen', sqlFlowStageDetails: 'Details der ausgewählten Phase', sqlFlowStages: 'Phasen', sqlFlowOperators: 'Operatoren', sqlFlowConnections: 'Verbindungen', sqlFlowInputs: 'Eingaben', sqlFlowOutputs: 'Ausgaben', sqlFlowReadKind: 'Lesen', sqlFlowOutputKind: 'Ausgabe', sqlFlowEstimatedStatus: 'geschätzt', sqlFlowSourceDetail: 'Tabellenquelle', sqlFlowNoStages: 'In diesem Statement wurden keine SQL-Phasen gefunden.', statusReady: 'Bereit', statusQueued: 'In Warteschlange', statusRunning: 'Wird ausgeführt', statusSucceeded: 'Erfolgreich', statusTruncated: 'Abgeschnitten', statusFailed: 'Fehlgeschlagen', statusCancelled: 'Abgebrochen', statusTimedOut: 'Zeitüberschreitung', statusInterrupted: 'Unterbrochen', statusComplete: 'Abgeschlossen', statusLiveUpdates: 'Live-Aktualisierungen', statusReconnecting: 'Verbindung wird wiederhergestellt', rowsRead: 'gelesene Zeilen', bytesRead: 'gelesen', memory: 'Speicher', import: 'Importieren', export: 'Exportieren', refresh: 'Aktualisieren', workspaceInspector: 'ARBEITSBEREICH-INSPEKTOR', workspaceBrowser: 'Arbeitsbereich durchsuchen', workspacePanels: 'Weitere Arbeitsbereich-Bereiche', schemaSearch: 'Tabellen, Spalten und Wörterbücher suchen…', tableCount: '{count} TABELLEN', loading: 'Wird geladen…', schemaPrivate: 'Schema ist privat', trustToInspect: 'Vertrauen für die Verbindung, um Tabellen und Spalten anzuzeigen.', readingSchema: 'ClickHouse-Schema wird gelesen…', noTablesMatch: 'Keine Tabellen oder Wörterbücher entsprechen der Suche.', insertTableName: 'Tabellennamen einfügen', rowsEstimated: 'Zeilen geschätzt', parts: 'Teile', projections: 'Projektionen', skipIndexes: 'Skip-Indizes', metadataUnavailable: 'ClickHouse-Metadaten nicht verfügbar', systemTable: 'ClickHouse-Systemtabelle', clickhouseSql: 'ClickHouse-SQL', runActions: 'Ausführungsaktionen', formatSql: 'SQL formatieren', previousStatement: 'Vorheriges SQL-Statement', nextStatement: 'Nächstes SQL-Statement', sqlFlowNativeAst: 'Native AST', sqlFlowKeywordEstimate: 'Keyword-Schätzung', characters: 'Zeichen', lines: 'Zeilen', sqlFlowTruncatedWarning: 'Diese Abfrage ist groß. Die Grafik zeigt eine begrenzte Anzahl von SQL-Phasen.', sqlFlowFilterKind: 'Filtern', sqlFlowAggregateKind: 'Aggregieren', sqlFlowSortKind: 'Sortieren', sqlFlowJoinKind: 'Verknüpfen', sqlFlowTransformKind: 'Umwandeln', sqlFlowStageKind: 'Phase', sqlFlowResizeKind: 'Skalieren', builtInFormatter: 'Integriert',
+    },
+    es: {
+        workspaceMode: 'ESPACIO DE TRABAJO', parserMode: 'ANALIZADOR', browse: 'EXPLORAR', readOnly: 'Solo lectura', tables: 'Tablas', queries: 'Consultas', more: 'Más', localDraft: 'Borrador local', query: 'CONSULTA', format: 'Formatear', parserUnavailable: 'Analizador no disponible', retryParser: 'Reintentar analizador', sqlMap: 'Estructura SQL', visualizeSqlStructure: 'Visualizar estructura SQL', runScript: 'Ejecutar script', askAi: 'Preguntar a la IA', running: 'Ejecutando…', selectQuery: 'Seleccionar consulta', selectCurrentSqlStatement: 'Seleccionar la sentencia SQL actual', jumpToSqlStatement: 'Ir a la sentencia SQL', clickhouseSnippet: 'Fragmento de ClickHouse', clickhouseSnippets: 'Fragmentos de ClickHouse…', snippetSelectHelp: 'Elige una plantilla y añádela como consulta nueva. El SQL existente se conserva.', addQuery: 'Añadir consulta', addSnippetAsNewQuery: 'Añadir fragmento como consulta nueva', incompleteSql: 'SQL incompleto', noSqlStatements: 'No hay sentencias SQL', oneStatement: '{count} sentencia', manyStatements: '{count} sentencias', queryVisualization: 'VISUALIZACIÓN DE LA CONSULTA', workspaceOutput: 'SALIDA DEL ESPACIO DE TRABAJO', sqlStructure: 'Estructura SQL', queryResults: 'Resultados de la consulta', expand: 'Expandir', collapse: 'Contraer', expandQuery: 'Expandir consulta SQL', collapseQuery: 'Contraer consulta SQL', expandOutput: 'Expandir salida', collapseOutput: 'Contraer salida', sqlFlowTitle: 'Cómo se compone esta consulta', sqlFlowDescription: 'Este es un mapa lógico, no un plan de ejecución del servidor.', sqlFlowClickStage: 'Haz clic en una etapa para ir a su SQL.', sqlFlowParserStarting: 'Iniciando analizador', sqlFlowParserUnavailable: 'Analizador no disponible', sqlFlowCodeMirror: 'Modo CodeMirror', sqlFlowEmpty: 'Escribe una consulta SELECT para crear su mapa estructural.', sqlFlowAstDetail: 'Detalle del AST: ', sqlFlowSqlDetail: 'Detalle SQL: ', sqlFlowNativeHeading: 'FLUJO SQL DE CLICKHOUSE', sqlFlowFallbackHeading: 'FLUJO SQL · MEJOR ESFUERZO', sqlFlowGraphHint: 'Haz clic en un nodo para inspeccionar su cláusula y seleccionarla en el editor', sqlFlowReturnResult: 'Devolver resultado', sqlFlowOutputColumns: 'Columnas de la lista SELECT', sqlFlowSelectedStage: 'Etapa seleccionada', sqlFlowInspectStage: 'Inspeccionar etapa', sqlFlowStageDetails: 'Detalles de la etapa seleccionada', sqlFlowStages: 'etapas', sqlFlowOperators: 'operadores', sqlFlowConnections: 'conexiones', sqlFlowInputs: 'Entradas', sqlFlowOutputs: 'Salidas', sqlFlowReadKind: 'Lectura', sqlFlowOutputKind: 'Salida', sqlFlowEstimatedStatus: 'estimado', sqlFlowSourceDetail: 'Origen de tabla', sqlFlowNoStages: 'No se encontraron etapas SQL en esta sentencia.', statusReady: 'Listo', statusQueued: 'En cola', statusRunning: 'Ejecutando', statusSucceeded: 'Correcto', statusTruncated: 'Truncado', statusFailed: 'Error', statusCancelled: 'Cancelado', statusTimedOut: 'Tiempo agotado', statusInterrupted: 'Interrumpido', statusComplete: 'Completo', statusLiveUpdates: 'Actualizaciones en vivo', statusReconnecting: 'Reconectando', rowsRead: 'filas leídas', bytesRead: 'leídos', memory: 'memoria', import: 'Importar', export: 'Exportar', refresh: 'Actualizar', workspaceInspector: 'INSPECTOR DEL ESPACIO DE TRABAJO', workspaceBrowser: 'Explorador del espacio de trabajo', workspacePanels: 'Más paneles del espacio de trabajo', schemaSearch: 'Buscar tablas, columnas y diccionarios…', tableCount: '{count} TABLAS', loading: 'Cargando…', schemaPrivate: 'El esquema es privado', trustToInspect: 'Confía en la conexión para inspeccionar tablas y columnas.', readingSchema: 'Leyendo el esquema de ClickHouse…', noTablesMatch: 'Ninguna tabla o diccionario coincide con la búsqueda.', insertTableName: 'Insertar nombre de tabla', rowsEstimated: 'filas estimadas', parts: 'partes', projections: 'proyecciones', skipIndexes: 'índices de omisión', metadataUnavailable: 'Metadatos de ClickHouse no disponibles', systemTable: 'Tabla del sistema de ClickHouse', clickhouseSql: 'SQL de ClickHouse', runActions: 'Acciones de ejecución', formatSql: 'Formatear SQL', previousStatement: 'Sentencia SQL anterior', nextStatement: 'Sentencia SQL siguiente', sqlFlowNativeAst: 'AST nativo', sqlFlowKeywordEstimate: 'Estimación por palabras clave', characters: 'caracteres', lines: 'líneas', sqlFlowTruncatedWarning: 'Esta consulta es grande. El mapa muestra un conjunto limitado de etapas SQL.', sqlFlowFilterKind: 'Filtrar', sqlFlowAggregateKind: 'Agregar', sqlFlowSortKind: 'Ordenar', sqlFlowJoinKind: 'Unir', sqlFlowTransformKind: 'Transformar', sqlFlowStageKind: 'Etapa', sqlFlowResizeKind: 'Cambiar tamaño', builtInFormatter: 'Integrado',
+    },
+    nl: {
+        workspaceMode: 'WERKRUIMTE', parserMode: 'PARSER', browse: 'BLADEREN', readOnly: 'Alleen lezen', tables: 'Tabellen', queries: 'Query’s', more: 'Meer', localDraft: 'Lokaal concept', query: 'QUERY', format: 'Formatteren', parserUnavailable: 'Parser niet beschikbaar', retryParser: 'Parser opnieuw proberen', sqlMap: 'SQL-structuur', visualizeSqlStructure: 'SQL-structuur visualiseren', runScript: 'Script uitvoeren', askAi: 'AI vragen', running: 'Bezig met uitvoeren…', selectQuery: 'Query selecteren', selectCurrentSqlStatement: 'Huidige SQL-instructie selecteren', jumpToSqlStatement: 'Naar SQL-instructie gaan', clickhouseSnippet: 'ClickHouse-fragment', clickhouseSnippets: 'ClickHouse-fragmenten…', snippetSelectHelp: 'Kies een sjabloon en voeg het toe als nieuwe query. Bestaande SQL blijft behouden.', addQuery: 'Query toevoegen', addSnippetAsNewQuery: 'Fragment toevoegen als nieuwe query', incompleteSql: 'Onvolledige SQL', noSqlStatements: 'Geen SQL-instructies', oneStatement: '{count} instructie', manyStatements: '{count} instructies', queryVisualization: 'QUERYVISUALISATIE', workspaceOutput: 'WERKRUIMTE-UITVOER', sqlStructure: 'SQL-structuur', queryResults: 'Queryresultaten', expand: 'Uitvouwen', collapse: 'Invouwen', expandQuery: 'SQL-query uitvouwen', collapseQuery: 'SQL-query invouwen', expandOutput: 'Uitvoer uitvouwen', collapseOutput: 'Uitvoer invouwen', sqlFlowTitle: 'Zo is deze query opgebouwd', sqlFlowDescription: 'Dit is een logisch schema, geen uitvoeringsplan van de server.', sqlFlowClickStage: 'Klik op een fase om naar de SQL te gaan.', sqlFlowParserStarting: 'Parser wordt gestart', sqlFlowParserUnavailable: 'Parser niet beschikbaar', sqlFlowCodeMirror: 'CodeMirror-modus', sqlFlowEmpty: 'Schrijf een SELECT-query om de structuur te tonen.', sqlFlowAstDetail: 'AST-details: ', sqlFlowSqlDetail: 'SQL-details: ', sqlFlowNativeHeading: 'CLICKHOUSE SQL-STROOM', sqlFlowFallbackHeading: 'SQL-STROOM · BEST EFFORT', sqlFlowGraphHint: 'Klik op een knooppunt om de clausule te bekijken en in de editor te selecteren', sqlFlowReturnResult: 'Resultaat retourneren', sqlFlowOutputColumns: 'Kolommen uit de SELECT-lijst', sqlFlowSelectedStage: 'Geselecteerde fase', sqlFlowInspectStage: 'Fase bekijken', sqlFlowStageDetails: 'Details van geselecteerde fase', sqlFlowStages: 'fasen', sqlFlowOperators: 'operators', sqlFlowConnections: 'verbindingen', sqlFlowInputs: 'Invoer', sqlFlowOutputs: 'Uitvoer', sqlFlowReadKind: 'Lezen', sqlFlowOutputKind: 'Uitvoer', sqlFlowEstimatedStatus: 'geschat', sqlFlowSourceDetail: 'Tabelbron', sqlFlowNoStages: 'Geen SQL-fasen gevonden in deze instructie.', statusReady: 'Gereed', statusQueued: 'In wachtrij', statusRunning: 'Bezig', statusSucceeded: 'Geslaagd', statusTruncated: 'Afgekapt', statusFailed: 'Mislukt', statusCancelled: 'Geannuleerd', statusTimedOut: 'Time-out', statusInterrupted: 'Onderbroken', statusComplete: 'Voltooid', statusLiveUpdates: 'Live-updates', statusReconnecting: 'Opnieuw verbinden', rowsRead: 'gelezen rijen', bytesRead: 'gelezen', memory: 'geheugen', import: 'Importeren', export: 'Exporteren', refresh: 'Vernieuwen', workspaceInspector: 'WERKRUIMTE-INSPECTOR', workspaceBrowser: 'Werkruimte verkennen', workspacePanels: 'Meer werkruimtepanelen', schemaSearch: 'Tabellen, kolommen en woordenboeken zoeken…', tableCount: '{count} TABELLEN', loading: 'Laden…', schemaPrivate: 'Schema is privé', trustToInspect: 'Vertrouw de verbinding om tabellen en kolommen te bekijken.', readingSchema: 'ClickHouse-schema lezen…', noTablesMatch: 'Geen tabellen of woordenboeken komen overeen met deze zoekopdracht.', insertTableName: 'Tabelnaam invoegen', rowsEstimated: 'rijen geschat', parts: 'delen', projections: 'projecties', skipIndexes: 'skip-indexen', metadataUnavailable: 'ClickHouse-metadata niet beschikbaar', systemTable: 'ClickHouse-systeemtabel', clickhouseSql: 'ClickHouse-SQL', runActions: 'Uitvoeracties', formatSql: 'SQL formatteren', previousStatement: 'Vorige SQL-instructie', nextStatement: 'Volgende SQL-instructie', sqlFlowNativeAst: 'Native AST', sqlFlowKeywordEstimate: 'Schatting op basis van trefwoorden', characters: 'tekens', lines: 'regels', sqlFlowTruncatedWarning: 'Deze query is groot. De grafiek toont een beperkte set SQL-fasen.', sqlFlowFilterKind: 'Filteren', sqlFlowAggregateKind: 'Aggregatie', sqlFlowSortKind: 'Sorteren', sqlFlowJoinKind: 'Samenvoegen', sqlFlowTransformKind: 'Transformeren', sqlFlowStageKind: 'Fase', sqlFlowResizeKind: 'Schalen', builtInFormatter: 'Ingebouwd',
+    },
+    zh: {
+        workspaceMode: '工作区', parserMode: '解析器', browse: '浏览', readOnly: '只读', tables: '表', queries: '查询', more: '更多', localDraft: '本地草稿', query: '查询', format: '格式化', parserUnavailable: '解析器不可用', retryParser: '重试解析器', sqlMap: 'SQL 结构图', visualizeSqlStructure: '可视化 SQL 结构', runScript: '运行脚本', askAi: '询问 AI', running: '运行中…', selectQuery: '选择查询', selectCurrentSqlStatement: '选择当前 SQL 语句', jumpToSqlStatement: '跳转到 SQL 语句', clickhouseSnippet: 'ClickHouse 代码片段', clickhouseSnippets: 'ClickHouse 代码片段…', snippetSelectHelp: '选择模板并将其添加为新查询。现有 SQL 会保留。', addQuery: '添加查询', addSnippetAsNewQuery: '将代码片段添加为新查询', incompleteSql: 'SQL 不完整', noSqlStatements: '没有 SQL 语句', oneStatement: '{count} 条语句', manyStatements: '{count} 条语句', queryVisualization: '查询可视化', workspaceOutput: '工作区输出', sqlStructure: 'SQL 结构', queryResults: '查询结果', expand: '展开', collapse: '折叠', expandQuery: '展开 SQL 查询', collapseQuery: '折叠 SQL 查询', expandOutput: '展开输出', collapseOutput: '折叠输出', sqlFlowTitle: '此查询的组成方式', sqlFlowDescription: '这是逻辑结构图，不是服务器执行计划。', sqlFlowClickStage: '点击阶段可跳转到对应 SQL。', sqlFlowParserStarting: '解析器正在启动', sqlFlowParserUnavailable: '解析器不可用', sqlFlowCodeMirror: 'CodeMirror 模式', sqlFlowEmpty: '编写 SELECT 查询以生成结构图。', sqlFlowAstDetail: 'AST 详情：', sqlFlowSqlDetail: 'SQL 详情：', sqlFlowNativeHeading: 'CLICKHOUSE SQL 流程', sqlFlowFallbackHeading: 'SQL 流程 · 尽力解析', sqlFlowGraphHint: '点击节点查看子句，并在编辑器中定位到对应 SQL', sqlFlowReturnResult: '返回结果', sqlFlowOutputColumns: 'SELECT 列表生成的列', sqlFlowSelectedStage: '已选阶段', sqlFlowInspectStage: '查看阶段', sqlFlowStageDetails: '所选阶段详情', sqlFlowStages: '个阶段', sqlFlowOperators: '个算子', sqlFlowConnections: '条连接', sqlFlowInputs: '输入', sqlFlowOutputs: '输出', sqlFlowReadKind: '读取', sqlFlowOutputKind: '输出', sqlFlowEstimatedStatus: '估算', sqlFlowSourceDetail: '表来源', sqlFlowNoStages: '此语句中未找到 SQL 阶段。', statusReady: '就绪', statusQueued: '排队中', statusRunning: '运行中', statusSucceeded: '成功', statusTruncated: '已截断', statusFailed: '失败', statusCancelled: '已取消', statusTimedOut: '已超时', statusInterrupted: '已中断', statusComplete: '已完成', statusLiveUpdates: '实时更新', statusReconnecting: '正在重新连接', rowsRead: '行已读取', bytesRead: '已读取', memory: '内存', import: '导入', export: '导出', refresh: '刷新', workspaceInspector: '工作区检查器', workspaceBrowser: '工作区浏览器', workspacePanels: '更多工作区面板', schemaSearch: '搜索表、列和字典…', tableCount: '{count} 个表', loading: '加载中…', schemaPrivate: '架构为私有', trustToInspect: '信任此连接后即可查看表和列。', readingSchema: '正在读取 ClickHouse 架构…', noTablesMatch: '没有匹配的表或字典。', insertTableName: '插入表名', rowsEstimated: '估算行数', parts: '分区片段', projections: '投影', skipIndexes: '跳过索引', metadataUnavailable: 'ClickHouse 元数据不可用', systemTable: 'ClickHouse 系统表', clickhouseSql: 'ClickHouse SQL', runActions: '运行操作', formatSql: '格式化 SQL', previousStatement: '上一条 SQL 语句', nextStatement: '下一条 SQL 语句', sqlFlowNativeAst: '原生 AST', sqlFlowKeywordEstimate: '关键词估算', characters: '个字符', lines: '行', sqlFlowTruncatedWarning: '此查询较大，图中仅显示有限数量的 SQL 阶段。', sqlFlowFilterKind: '筛选', sqlFlowAggregateKind: '聚合', sqlFlowSortKind: '排序', sqlFlowJoinKind: '联接', sqlFlowTransformKind: '转换', sqlFlowStageKind: '阶段', sqlFlowResizeKind: '调整并行度', builtInFormatter: '内置',
+    },
+    ru: {
+        workspaceMode: 'РАБОЧАЯ ОБЛАСТЬ', parserMode: 'ПАРСЕР', browse: 'ОБЗОР', readOnly: 'Только чтение', tables: 'Таблицы', queries: 'Запросы', more: 'Ещё', localDraft: 'Локальный черновик', query: 'ЗАПРОС', format: 'Форматировать', parserUnavailable: 'Парсер недоступен', retryParser: 'Повторить запуск парсера', sqlMap: 'Структура SQL', visualizeSqlStructure: 'Визуализировать структуру SQL', runScript: 'Выполнить скрипт', askAi: 'Спросить ИИ', running: 'Выполняется…', selectQuery: 'Выбрать запрос', selectCurrentSqlStatement: 'Выбрать текущий SQL-оператор', jumpToSqlStatement: 'Перейти к SQL-оператору', clickhouseSnippet: 'Фрагмент ClickHouse', clickhouseSnippets: 'Фрагменты ClickHouse…', snippetSelectHelp: 'Выберите шаблон и добавьте его как новый запрос. Существующий SQL сохранится.', addQuery: 'Добавить запрос', addSnippetAsNewQuery: 'Добавить фрагмент как новый запрос', incompleteSql: 'Незавершённый SQL', noSqlStatements: 'Нет SQL-операторов', oneStatement: '{count} оператор', manyStatements: '{count} операторов', queryVisualization: 'ВИЗУАЛИЗАЦИЯ ЗАПРОСА', workspaceOutput: 'РЕЗУЛЬТАТЫ РАБОЧЕЙ ОБЛАСТИ', sqlStructure: 'Структура SQL', queryResults: 'Результаты запроса', expand: 'Развернуть', collapse: 'Свернуть', expandQuery: 'Развернуть SQL-запрос', collapseQuery: 'Свернуть SQL-запрос', expandOutput: 'Развернуть результаты', collapseOutput: 'Свернуть результаты', sqlFlowTitle: 'Из чего состоит запрос', sqlFlowDescription: 'Это логическая схема, а не план выполнения на сервере.', sqlFlowClickStage: 'Нажмите этап, чтобы перейти к его SQL.', sqlFlowParserStarting: 'Запуск парсера', sqlFlowParserUnavailable: 'Парсер недоступен', sqlFlowCodeMirror: 'Режим CodeMirror', sqlFlowEmpty: 'Введите SELECT-запрос, чтобы построить его структуру.', sqlFlowAstDetail: 'Сведения AST: ', sqlFlowSqlDetail: 'Сведения SQL: ', sqlFlowNativeHeading: 'ПОТОК CLICKHOUSE SQL', sqlFlowFallbackHeading: 'ПОТОК SQL · ПРИБЛИЗИТЕЛЬНО', sqlFlowGraphHint: 'Нажмите узел, чтобы изучить его условие и найти его в редакторе', sqlFlowReturnResult: 'Вернуть результат', sqlFlowOutputColumns: 'Столбцы из списка SELECT', sqlFlowSelectedStage: 'Выбранный этап', sqlFlowInspectStage: 'Изучить этап', sqlFlowStageDetails: 'Сведения о выбранном этапе', sqlFlowStages: 'этапы', sqlFlowOperators: 'операторы', sqlFlowConnections: 'связи', sqlFlowInputs: 'Входы', sqlFlowOutputs: 'Выходы', sqlFlowReadKind: 'Чтение', sqlFlowOutputKind: 'Результат', sqlFlowEstimatedStatus: 'оценка', sqlFlowSourceDetail: 'Источник таблицы', sqlFlowNoStages: 'В этом операторе не найдены этапы SQL.', statusReady: 'Готово', statusQueued: 'В очереди', statusRunning: 'Выполняется', statusSucceeded: 'Успешно', statusTruncated: 'Обрезано', statusFailed: 'Ошибка', statusCancelled: 'Отменено', statusTimedOut: 'Истекло время', statusInterrupted: 'Прервано', statusComplete: 'Завершено', statusLiveUpdates: 'Обновления в реальном времени', statusReconnecting: 'Переподключение', rowsRead: 'прочитано строк', bytesRead: 'прочитано', memory: 'память', import: 'Импорт', export: 'Экспорт', refresh: 'Обновить', workspaceInspector: 'ОБЗОР РАБОЧЕЙ ОБЛАСТИ', workspaceBrowser: 'Обзор рабочей области', workspacePanels: 'Другие панели рабочей области', schemaSearch: 'Поиск таблиц, столбцов и словарей…', tableCount: 'ТАБЛИЦ: {count}', loading: 'Загрузка…', schemaPrivate: 'Схема закрыта', trustToInspect: 'Доверьте подключение, чтобы просматривать таблицы и столбцы.', readingSchema: 'Чтение схемы ClickHouse…', noTablesMatch: 'Нет таблиц или словарей, соответствующих запросу.', insertTableName: 'Вставить имя таблицы', rowsEstimated: 'строк (оценка)', parts: 'частей', projections: 'проекций', skipIndexes: 'пропускающих индексов', metadataUnavailable: 'Метаданные ClickHouse недоступны', systemTable: 'Системная таблица ClickHouse', clickhouseSql: 'ClickHouse SQL', runActions: 'Действия выполнения', formatSql: 'Форматировать SQL', previousStatement: 'Предыдущий SQL-оператор', nextStatement: 'Следующий SQL-оператор', sqlFlowNativeAst: 'Собственный AST', sqlFlowKeywordEstimate: 'Оценка по ключевым словам', characters: 'символов', lines: 'строк', sqlFlowTruncatedWarning: 'Этот запрос большой. На схеме показан ограниченный набор этапов SQL.', sqlFlowFilterKind: 'Фильтр', sqlFlowAggregateKind: 'Агрегация', sqlFlowSortKind: 'Сортировка', sqlFlowJoinKind: 'Соединение', sqlFlowTransformKind: 'Преобразование', sqlFlowStageKind: 'Этап', sqlFlowResizeKind: 'Изменение параллелизма', builtInFormatter: 'Встроенный',
+    },
+};
+
 export const localeOptions = [
     { value: 'en', label: 'English' },
     { value: 'de', label: 'Deutsch' },
@@ -353,7 +632,7 @@ export function getCopy(locale: Locale): Copy {
     return {
         app: mergeSection(english.app, translated),
         auth: mergeSection(english.auth, translated),
-        common: { ...mergeSection(english.common, translated), ...exampleCommonTranslations[locale] },
+        common: { ...mergeSection(english.common, translated), ...exampleCommonTranslations[locale], ...workspaceCommonTranslations[locale] },
         chart: mergeSection(english.chart, translated),
     };
 }

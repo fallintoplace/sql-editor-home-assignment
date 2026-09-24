@@ -86,6 +86,29 @@ test('Run evidence stays with its draft through tab and mode switches', async ({
     expect(runRequests).toBe(2);
 });
 
+test('Query and result panels collapse to their headings', async ({ page }) => {
+    await page.setViewportSize({ width: 1905, height: 1280 });
+    await trust(page);
+    const results = await runQuery(page);
+    await page.getByText('Compact', { exact: true }).click();
+    const queryPanel = page.locator('.editor-surface');
+    const resultsPanel = results;
+
+    await page.getByRole('button', { name: 'Collapse SQL query', exact: true }).click();
+    await expect(page.locator('#sql-editor-content')).toBeHidden();
+    await expect.poll(async () => (await queryPanel.boundingBox())?.height ?? 0).toBeLessThan(80);
+    await expect(results.getByRole('table', { name: 'Retained query rows' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Collapse query results', exact: true }).click();
+    await expect(page.locator('#query-results-content')).toBeHidden();
+    await expect.poll(async () => (await resultsPanel.boundingBox())?.height ?? 0).toBeLessThan(80);
+
+    await page.getByRole('button', { name: 'Expand SQL query', exact: true }).click();
+    await expect(page.locator('#sql-editor-content')).toBeVisible();
+    await page.getByRole('button', { name: 'Expand query results', exact: true }).click();
+    await expect(page.locator('#query-results-content')).toBeVisible();
+});
+
 test('Native parser can be retried after a temporary worker failure', async ({ page }) => {
     await page.addInitScript(parserWorkerStub('unavailable'));
     await trust(page);

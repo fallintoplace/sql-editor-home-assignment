@@ -60,7 +60,7 @@ test('Result export downloads the complete retained CSV from the server', async 
     const results = await run(page);
     const [download] = await Promise.all([
         page.waitForEvent('download'),
-        results.getByRole('button', { name: 'Export', exact: true }).click(),
+        page.locator('.inspector-footer').getByRole('button', { name: 'Export', exact: true }).click(),
     ]);
     const csv = await downloadedText(download);
     expect(csv.split('\r\n')).toHaveLength(8);

@@ -15,9 +15,13 @@ test('Static Vercel preview loads the native parser and exports retained sample 
     await expect(page.getByText('Ready · local WebAssembly')).toBeVisible();
     await expect(page.getByText('Valid ClickHouse SQL')).toBeVisible();
 
+    await page.locator('.connection-trigger').click();
+    await page.getByRole('dialog', { name: 'Data source options' })
+        .getByRole('button', { name: /Sample data/ }).click();
+
     const [download] = await Promise.all([
         page.waitForEvent('download'),
-        page.getByRole('button', { name: 'Export', exact: true }).click(),
+        page.locator('.inspector-footer').getByRole('button', { name: 'Export', exact: true }).click(),
     ]);
     const csv = await readFile(await download.path(), 'utf8');
     expect(csv.split('\r\n')[0]).toContain('day');

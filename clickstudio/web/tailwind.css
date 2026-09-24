@@ -217,8 +217,6 @@
     .edit-indicator { padding: 4px 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font-family: var(--font-mono); font-size: 8px; }
     .editor-heading-actions { gap: 6px; }
     .panel-collapse-button { width: 29px; min-width: 29px; min-height: 29px; padding: 0; }
-    .panel-collapse-button svg { transition: transform .18s ease; }
-    .panel-collapse-button[aria-expanded="true"] svg { transform: rotate(180deg); }
     .editor-toolbar { display: flex; min-height: 45px; flex: none; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 13px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel-raised) 82%, var(--page)); }
     .editor-mode-label, .editor-actions { display: flex; align-items: center; gap: 9px; }
     .editor-mode-label { color: var(--text-soft); font-size: 10px; }
@@ -898,3 +896,13 @@
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Keep collapsed panels at their heading height after responsive layout rules. */
+.workspace-content.has-run.is-query-collapsed { grid-template-rows: max-content minmax(0, 1fr); }
+.workspace-content.has-run.is-results-collapsed { grid-template-rows: minmax(0, 1fr) max-content; }
+.workspace-content.has-run.is-query-collapsed.is-results-collapsed { grid-template-rows: max-content max-content; align-content: start; }
+.workspace-content:not(.has-run).is-query-collapsed { grid-template-rows: max-content; align-content: start; }
+.workspace-content.beginner-workspace-content:not(.has-run).is-query-collapsed > .editor-surface { flex: 0 0 auto; }
+.panel-collapse-button { width: 34px; min-width: 34px; min-height: 34px; padding: 0; border-color: var(--line-bright); border-radius: 9px; background: var(--panel); color: var(--text-soft); }
+.panel-collapse-button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 40%, var(--line-bright)); background: var(--panel-hover); color: var(--accent); }
+.panel-collapse-button .panel-toggle-icon { width: 18px; height: 18px; stroke-width: 2; }

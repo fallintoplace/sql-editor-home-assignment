@@ -26,7 +26,7 @@ async function mockWritableWorkspace(page: Page, targets = ['demo.events']) {
     await page.route('**/api/documents**', route => route.fulfill({ json: [] }));
     await page.route(url => url.pathname === '/api/imports' && url.searchParams.get('recoverable') === 'true', route => route.fulfill({ json: [] }));
     await page.goto('/');
-    await expect(page.getByRole('button', { name: 'Import data', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Import', exact: true })).toBeVisible();
 }
 
 async function previewCsv(page: Page) {
@@ -58,7 +58,7 @@ test('File import previews, maps, confirms, and reports a successful insert', as
         await route.fulfill({ json: { id: 'mapping-1', table: 'demo.events', rows: 2, status: 'succeeded' } });
     });
 
-    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
     const dialog = await previewCsv(page);
     await dialog.getByRole('button', { name: 'Map columns', exact: true }).click();
     await expect(dialog.getByLabel('Map day to destination')).toHaveValue('day');
@@ -81,7 +81,7 @@ test('File import rejects oversized files in the browser before upload', async (
     let previewRequests = 0;
     await page.route('**/api/imports/preview', route => { previewRequests++; return route.fulfill({ status: 500, json: {} }); });
 
-    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Import data', exact: true });
     await dialog.getByLabel('Choose a CSV, JSON, or NDJSON file').setInputFiles({ name: 'large.csv', mimeType: 'text/csv', buffer: Buffer.alloc(2_000_001) });
     await expect(dialog.getByRole('alert')).toContainText('larger than the 2 MB import limit');
@@ -94,7 +94,7 @@ test('File import rejects unsupported file types before upload', async ({ page }
     let previewRequests = 0;
     await page.route('**/api/imports/preview', route => { previewRequests++; return route.fulfill({ status: 500, json: {} }); });
 
-    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Import data', exact: true });
     await dialog.getByLabel('Choose a CSV, JSON, or NDJSON file').setInputFiles({ name: 'events.txt', mimeType: 'text/plain', buffer: Buffer.from('not csv') });
     await expect(dialog.getByRole('alert')).toContainText('Choose a .csv, .json, .ndjson, or .jsonl file');
@@ -111,7 +111,7 @@ test('File import shows server mapping errors without attempting a write', async
     await page.route('**/api/imports/input-1/mapping', route => route.fulfill({ status: 400, json: { error: { code: 'IMPORT_MISSING_FIELD', message: 'An input row is missing events' } } }));
     await page.route('**/api/imports/mapping-1/commit', route => { commitRequests++; return route.fulfill({ json: {} }); });
 
-    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
     const dialog = await previewCsv(page);
     await dialog.getByRole('button', { name: 'Map columns', exact: true }).click();
     await dialog.getByRole('button', { name: 'Review import', exact: true }).click();
@@ -121,7 +121,7 @@ test('File import shows server mapping errors without attempting a write', async
 
 test('File import explains when the connection has no allowlisted targets', async ({ page }) => {
     await mockWritableWorkspace(page, []);
-    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Import data', exact: true });
     await expect(dialog.getByRole('status')).toContainText('No import targets are configured');
     await expect(dialog.getByLabel('Choose a CSV, JSON, or NDJSON file')).toHaveCount(0);
@@ -139,7 +139,7 @@ test('File import reports an unknown insert without retrying automatically', asy
         await route.fulfill({ json: { id: 'mapping-1', table: 'demo.events', rows: 1, status: 'unknown', error: 'The insert may have partially completed. Inspect the destination; automatic retry is disabled.' } });
     });
 
-    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
     const dialog = await previewCsv(page);
     await dialog.getByRole('button', { name: 'Map columns', exact: true }).click();
     await dialog.getByRole('button', { name: 'Review import', exact: true }).click();
@@ -162,7 +162,7 @@ test('File import reloads the destination mapping when the server detects a sche
     await page.route('**/api/imports/input-1/mapping', route => route.fulfill({ json: { id: 'mapping-1', inputId: 'input-1', connectionId: 'live', table: 'demo.events', fields: { day: 'day', events: 'events' }, rows: [{ day: '2026-01-01', events: '10' }], rowCount: 1 } }));
     await page.route('**/api/imports/mapping-1/commit', route => { commitRequests++; return route.fulfill({ status: 409, json: { error: { code: 'SCHEMA_CHANGED', message: 'The destination schema changed; review a new mapping' } } }); });
 
-    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
     const dialog = await previewCsv(page);
     await dialog.getByRole('button', { name: 'Map columns', exact: true }).click();
     await dialog.getByRole('button', { name: 'Review import', exact: true }).click();
@@ -192,7 +192,7 @@ test('File import recovers ambiguous writes without local storage and records a 
     });
     await page.route('**/api/imports/preview', route => { previewRequests++; return route.fulfill({ status: 500, json: {} }); });
 
-    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Import data', exact: true });
     await expect(dialog.getByRole('region', { name: 'Import status' })).toContainText('The insert outcome is not confirmed.');
     await expect(dialog.getByLabel('Choose a CSV, JSON, or NDJSON file')).toHaveCount(0);
@@ -211,7 +211,7 @@ test('File import stays blocked when recoverable job status cannot be loaded', a
     await page.route(url => url.pathname === '/api/imports' && url.searchParams.get('recoverable') === 'true', route => route.fulfill({ status: 503, json: { error: { code: 'TEMPORARY', message: 'Import status unavailable' } } }));
     await page.route('**/api/imports/preview', route => { previewRequests++; return route.fulfill({ status: 500, json: {} }); });
 
-    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Import data', exact: true });
     await expect(dialog.getByRole('alert')).toContainText('Could not check for unresolved imports');
     await expect(dialog.getByRole('button', { name: 'Retry recovery check' })).toBeVisible();
@@ -221,7 +221,7 @@ test('File import stays blocked when recoverable job status cannot be loaded', a
 
 test('Fixture workspace explains that imports never write sample data', async ({ page }) => {
     await trust(page);
-    await page.getByRole('button', { name: 'Import data', exact: true }).click();
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Import data', exact: true });
     await expect(dialog.getByRole('status')).toContainText('This workspace never writes to a database');
     await expect(dialog.getByLabel('Choose a CSV, JSON, or NDJSON file')).toHaveCount(0);

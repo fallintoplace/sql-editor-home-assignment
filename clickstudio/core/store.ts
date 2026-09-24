@@ -3,6 +3,12 @@ import { join } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 import type { AuditEvent, Principal } from '../shared/types.js';
 import { requireThat } from './errors.js';
+
+function errorCode(error: unknown): string | undefined {
+    return error !== null && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+        ? error.code
+        : undefined;
+}
 export interface Store {
     get<T>(bucket: string, id: string): T | undefined;
     put<T>(bucket: string, id: string, value: T): void;
@@ -48,7 +54,7 @@ export class FileStore implements Store {
             return JSON.parse(readFileSync(this.path(bucket, id), 'utf8')) as T;
         }
         catch (error) {
-            if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+            if (errorCode(error) === 'ENOENT')
                 return undefined;
             throw error;
         }
@@ -86,7 +92,7 @@ export class FileStore implements Store {
             removed = true;
         }
         catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+            if (errorCode(error) !== 'ENOENT')
                 throw error;
         }
         if (removed) {
@@ -101,7 +107,7 @@ export class FileStore implements Store {
             names = readdirSync(this.path(bucket));
         }
         catch (error) {
-            if ((error as NodeJS.ErrnoException).code === 'ENOENT')
+            if (errorCode(error) === 'ENOENT')
                 return [];
             throw error;
         }

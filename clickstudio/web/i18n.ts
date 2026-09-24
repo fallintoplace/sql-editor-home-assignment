@@ -666,9 +666,9 @@ export const experienceOptions = (copy: Copy) => [
 
 function mergeSection<T extends object>(englishSection: T, translated: object): T {
     const result = { ...englishSection };
-    const values = translated as Record<string, unknown>;
+    const values = new Map<string, unknown>(Object.entries(translated));
     for (const key of Object.keys(englishSection)) {
-        const value = values[key];
+        const value = values.get(key);
         if (typeof value === 'string') Object.assign(result, { [key]: value });
     }
     return result;

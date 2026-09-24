@@ -320,6 +320,9 @@
     .run-option-button { min-height: 34px; padding: 0 9px; font-size: 9px; letter-spacing: .02em; }
     .sql-ai-button { color: var(--violet); }
     .sql-ai-button[aria-pressed="true"] { border-color: color-mix(in srgb, var(--violet) 25%, transparent); background: color-mix(in srgb, var(--violet) 8%, transparent); }
+    .sql-map-button { gap: 6px; color: var(--accent); }
+    .sql-map-button[aria-pressed="true"] { border-color: color-mix(in srgb, var(--accent) 28%, transparent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+    .sql-map-button svg { width: 14px; height: 14px; }
     .save-revision-button { min-height: 34px; }
     .editor-frame { min-height: 120px; flex: 1; overflow: auto; background: var(--page-raised); }
     .sql-editor, .sql-editor .cm-editor { width: 100%; height: 100%; min-height: 100%; }
@@ -472,6 +475,14 @@
     .run-analysis-stages strong { overflow: hidden; color: var(--text-soft); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
     .run-analysis-stages small, .run-analysis-stages > small { color: var(--muted); font-size: 7px; text-transform: capitalize; }
     .pipeline-graph-card { min-width: 0; border-color: var(--line); background: color-mix(in srgb, var(--panel) 72%, transparent); }
+    .sql-flow-view { display: grid; min-width: 0; min-height: 0; flex: 1; align-content: start; gap: 11px; overflow: auto; padding: 12px; }
+    .sql-flow-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 13px; border: 1px solid var(--line); border-radius: 10px; background: linear-gradient(112deg, color-mix(in srgb, var(--accent) 6%, var(--panel-raised)), var(--panel-raised) 65%); }
+    .sql-flow-heading > div { display: grid; min-width: 0; gap: 4px; }
+    .sql-flow-heading h3 { margin: 0; color: var(--text); font-size: 14px; font-weight: 690; }
+    .sql-flow-heading p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+    .sql-flow-parser-state { display: inline-flex; flex: none; align-items: center; gap: 7px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--muted); font-size: 8px; white-space: nowrap; }
+    .sql-flow-parser-state.is-native { border-color: color-mix(in srgb, var(--green) 30%, var(--line)); color: var(--green); }
+    .sql-flow-parse-note { padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--amber) 28%, var(--line)); border-radius: 8px; background: color-mix(in srgb, var(--amber) 7%, transparent); color: var(--amber); font-size: 8px; line-height: 1.5; }
     .pipeline-graph-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .pipeline-graph-heading > div { display: grid; gap: 4px; min-width: 0; }
     .pipeline-graph-heading > div > strong { color: var(--text-soft); font-family: var(--font-mono); font-size: 9px; }
@@ -1006,6 +1017,8 @@
     .run-analysis-columns { grid-template-columns: 1fr; }
     .pipeline-graph-heading { align-items: start; flex-direction: column; }
     .pipeline-graph-heading > small { text-align: left; }
+    .sql-flow-heading { align-items: start; flex-direction: column; }
+    .sql-flow-parser-state { max-width: 100%; white-space: normal; }
     .pipeline-node-inspector { grid-template-columns: 1fr; }
     .pipeline-node-facts { justify-content: start; }
     .chart-controls { width: 100%; }
@@ -1033,6 +1046,10 @@
 .workspace-content.has-run.is-query-collapsed { grid-template-rows: max-content minmax(0, 1fr); }
 .workspace-content.has-run.is-results-collapsed { grid-template-rows: minmax(0, 1fr) max-content; }
 .workspace-content.has-run.is-query-collapsed.is-results-collapsed { grid-template-rows: max-content max-content; align-content: start; }
+.workspace-content.has-sql-map:not(.has-run) { display: grid; grid-template-rows: minmax(205px, .9fr) minmax(185px, 1.1fr); }
+.workspace-content.has-sql-map:not(.has-run).is-query-collapsed { grid-template-rows: max-content minmax(185px, 1fr); }
+.workspace-content.has-sql-map:not(.has-run).is-results-collapsed { grid-template-rows: minmax(185px, 1fr) max-content; }
+.workspace-content.has-sql-map:not(.has-run).is-query-collapsed.is-results-collapsed { grid-template-rows: max-content max-content; align-content: start; }
 .workspace-content:not(.has-run).is-query-collapsed { grid-template-rows: max-content; align-content: start; }
 .workspace-content.beginner-workspace-content:not(.has-run).is-query-collapsed > .editor-surface { flex: 0 0 auto; }
 .panel-collapse-button { width: 34px; min-width: 34px; min-height: 34px; padding: 0; border-color: var(--line-bright); border-radius: 9px; background: var(--panel); color: var(--text-soft); }

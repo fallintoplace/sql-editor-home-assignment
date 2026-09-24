@@ -13,6 +13,7 @@ import { SqlExamplesMenu } from './components/SqlExamplesMenu';
 import { OverlayPortal } from './components/OverlayPortal';
 import { AssistantWorkflow } from './components/AssistantWorkflow';
 import { ChartView, InsightsView, ResultGrid } from './components/ResultViews';
+import { SqlFlowView } from './components/SqlFlowView';
 import { InspectorPane, type InspectorPaneProps } from './components/InspectorPane';
 import { Button, cx, Icon, Status, terminal } from './components/ui';
 import { ExecutionBar, RailButton, RunActionGroup, ScriptResults } from './components/WorkspaceChrome';
@@ -688,6 +689,12 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         changed: 'Unsaved changes', conflict: 'Newer revision available', deleted: 'Saved file in trash', unavailable: 'Save status unavailable',
     } as const)[saveStatus.state];
     const visibleResultsView = experience === 'beginner' && view === 'insights' ? 'results' : view;
+    const sqlMapStatement = safeSelectedStatement(active.sql, active.from, active.from);
+    const sqlMapParseStatement = sqlMapStatement && nativeParseSnapshot?.statements.find(statement =>
+        statement.from === sqlMapStatement.from && statement.to === sqlMapStatement.to && active.sql.slice(statement.from, statement.to) === statement.sql);
+    const resultTabs: readonly ResultsView[] = experience === 'beginner'
+        ? ['results', 'chart', 'sqlmap']
+        : ['results', 'chart', 'sqlmap', 'insights'];
     const snapshotChart = snapshot ? recommendChart(snapshot.columns, snapshot.rows) : undefined;
     const openDocument = (document: QueryDocument) => {
         addDraft(draftFromDocument(document));
@@ -844,7 +851,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     {active.serverId && <Button variant="ghost" className="revision-history-trigger" aria-label={`Version history for ${active.name}`} aria-pressed={inspector === 'revisions'} title="View saved versions" onClick={() => showInspector('revisions')}><Icon name="history"/><span>Versions</span></Button>}
                 </div>
 
-                <div id="sql-document-panel" role="tabpanel" aria-labelledby={`document-tab-${active.id}`} tabIndex={0} className={cx('workspace-content', experience === 'beginner' && 'beginner-workspace-content', run && 'has-run', queryCollapsed && 'is-query-collapsed', run && resultsCollapsed && 'is-results-collapsed')}>
+                <div id="sql-document-panel" role="tabpanel" aria-labelledby={`document-tab-${active.id}`} tabIndex={0} className={cx('workspace-content', experience === 'beginner' && 'beginner-workspace-content', run && 'has-run', visibleResultsView === 'sqlmap' && 'has-sql-map', queryCollapsed && 'is-query-collapsed', (run || visibleResultsView === 'sqlmap') && resultsCollapsed && 'is-results-collapsed')}>
                     <section className={cx('editor-surface', queryCollapsed && 'is-collapsed')}>
                         <div className="editor-heading">
                             <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">QUERY</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label></div>
@@ -886,6 +893,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         <div className="editor-toolbar">
                             <div className="editor-mode-label"><span className="editor-language-dot"/>ClickHouse SQL<span className="toolbar-divider"/><span>{statementCount === undefined ? 'Incomplete SQL' : `${statementCount} statement${statementCount === 1 ? '' : 's'}`}</span></div>
                             <div className="editor-actions">
+                                <Button variant="ghost" className="sql-map-button" aria-label="Visualize SQL structure" aria-pressed={view === 'sqlmap'} title="Visualize SQL structure" onClick={() => { setView(current => current === 'sqlmap' ? 'results' : 'sqlmap'); setResultsCollapsed(false); }}><Icon name="pipeline"/>SQL map</Button>
                                 {experience === 'expert' ? <>
                                     <Button variant="ghost" className="sql-ai-button" aria-pressed={inspector === 'assistant'} onClick={() => showInspector('assistant')}><Icon name="assistant"/>SQL AI</Button>
                                     <Button variant="secondary" className="save-revision-button" aria-label={copy.common.saveRevision} onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/>{copy.common.save}</Button>
@@ -910,17 +918,18 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         </div>
                     </section>
 
-                    {run && <section className={cx('results-surface', experience === 'expert' && 'results-expert', resultsCollapsed && 'is-collapsed')} aria-label="Query results">
+                    {(run || visibleResultsView === 'sqlmap') && <section className={cx('results-surface', experience === 'expert' && 'results-expert', resultsCollapsed && 'is-collapsed')} aria-label={visibleResultsView === 'sqlmap' ? 'SQL structure' : 'Query results'}>
                         <div className="results-header">
-                            <div className="results-title"><span className="results-mark"><Icon name="chart"/></span><div><span className="eyebrow">WORKSPACE OUTPUT</span><h2>{copy.common.results}</h2></div>{run && <Status run={run}/>}</div>
+                            <div className="results-title"><span className="results-mark"><Icon name={visibleResultsView === 'sqlmap' ? 'pipeline' : 'chart'}/></span><div><span className="eyebrow">{visibleResultsView === 'sqlmap' ? 'QUERY VISUALIZATION' : 'WORKSPACE OUTPUT'}</span><h2>{visibleResultsView === 'sqlmap' ? 'SQL structure' : copy.common.results}</h2></div>{run && visibleResultsView !== 'sqlmap' && <Status run={run}/>}</div>
                             <div className="results-actions">
-                                <div className="results-tabs" role="tablist" aria-label="Result views">{(experience === 'beginner' ? ['results', 'chart'] as const : ['results', 'chart', 'insights'] as const).map(tab => <button key={tab} role="tab" aria-selected={visibleResultsView === tab} type="button" onClick={() => { setView(tab); if (tab === 'chart') void perform(loadSnapshot, 'save'); if (tab === 'insights') void perform(loadProfile, 'save'); }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : copy.common.insights}{tab === 'chart' && snapshot && <span className="suggested-dot"/>}</button>)}</div>
-                                <Button variant="ghost" className="panel-collapse-button" aria-label={resultsCollapsed ? 'Expand query results' : 'Collapse query results'} aria-expanded={!resultsCollapsed} aria-controls="query-results-content" title={resultsCollapsed ? 'Expand results' : 'Collapse results'} onClick={() => setResultsCollapsed(value => !value)}><Icon className="panel-toggle-icon" name="chevron"/></Button>
+                                {run && <div className="results-tabs" role="tablist" aria-label="Workspace views">{resultTabs.map(tab => <button key={tab} role="tab" aria-selected={visibleResultsView === tab} type="button" onClick={() => { setView(tab); if (tab === 'chart') void perform(loadSnapshot, 'save'); if (tab === 'insights') void perform(loadProfile, 'save'); }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : tab === 'sqlmap' ? 'SQL map' : copy.common.insights}{tab === 'chart' && snapshot && <span className="suggested-dot"/>}</button>)}</div>}
+                                <Button variant="ghost" className="panel-collapse-button" aria-label={`${resultsCollapsed ? 'Expand' : 'Collapse'} ${visibleResultsView === 'sqlmap' ? 'SQL structure' : 'query results'}`} aria-expanded={!resultsCollapsed} aria-controls="query-results-content" title={resultsCollapsed ? 'Expand output' : 'Collapse output'} onClick={() => setResultsCollapsed(value => !value)}><Icon className="panel-toggle-icon" name="chevron"/></Button>
                             </div>
                         </div>
                         <div id="query-results-content" className="panel-content results-content" hidden={resultsCollapsed}>
-                        {staleResult && <div className="result-provenance" aria-live="polite"><span className="status-light is-warning"/><span><strong>Result from previous execution</strong><small>SQL or bound parameters changed since this run. Rerun to refresh the result.</small></span></div>}
-                        {script && <ScriptResults script={script} runs={history} activeRunId={run?.id} onSelectRun={runId => {
+                        {visibleResultsView === 'sqlmap' && <SqlFlowView sql={sqlMapStatement?.sql ?? active.sql} sourceOffset={sqlMapStatement?.from ?? 0} parseResult={sqlMapParseStatement?.result} parserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} parseDurationMs={nativeParseSnapshot?.elapsedMs} onSelectRange={(from, to) => editor.current?.selectRange(from, to)}/>}
+                        {visibleResultsView !== 'sqlmap' && staleResult && <div className="result-provenance" aria-live="polite"><span className="status-light is-warning"/><span><strong>Result from previous execution</strong><small>SQL or bound parameters changed since this run. Rerun to refresh the result.</small></span></div>}
+                        {visibleResultsView === 'results' && script && <ScriptResults script={script} runs={history} activeRunId={run?.id} onSelectRun={runId => {
                             if (active.scriptId) scriptFollowRef.current = { scriptId: active.scriptId, enabled: false };
                             update(active.id, draft => ({ ...draft, activeRunId: runId }));
                             setPage(0); setView('results');

@@ -126,7 +126,13 @@ function pathFor(points: PositionedEdge['points']) {
     return points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ');
 }
 
-export function PipelineGraph({ pipeline }: { pipeline: ProfilePipeline }) {
+export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'execution', onSelectNode }: {
+    pipeline: ProfilePipeline;
+    heading?: string;
+    subheading?: string;
+    graphKind?: 'execution' | 'sql-flow';
+    onSelectNode?: (node: ProfilePipelineNode) => void;
+}) {
     const layout = useMemo(() => layoutPipeline(pipeline), [pipeline]);
     const [selectedId, setSelectedId] = useState<string | undefined>(pipeline.nodes[0]?.id);
     useEffect(() => setSelectedId(pipeline.nodes[0]?.id), [pipeline]);
@@ -134,23 +140,28 @@ export function PipelineGraph({ pipeline }: { pipeline: ProfilePipeline }) {
     const markerId = `pipeline-arrow-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
     const incomingCount = selected ? pipeline.edges.filter(edge => edge.target === selected.id).length : 0;
     const outgoingCount = selected ? pipeline.edges.filter(edge => edge.source === selected.id).length : 0;
-    const chooseNode = (node: ProfilePipelineNode) => setSelectedId(node.id);
+    const chooseNode = (node: ProfilePipelineNode) => {
+        setSelectedId(node.id);
+        onSelectNode?.(node);
+    };
     const onNodeKeyDown = (event: KeyboardEvent<SVGGElement>, node: ProfilePipelineNode) => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
         chooseNode(node);
     };
 
-    if (!pipeline.nodes.length) return <div className="pipeline-graph-empty">This pipeline did not return any operator nodes.</div>;
+    if (!pipeline.nodes.length) return <div className="pipeline-graph-empty">{graphKind === 'sql-flow' ? 'No SQL stages were found in this statement.' : 'This pipeline did not return any operator nodes.'}</div>;
 
-    return <section className="pipeline-graph-card grid gap-3 rounded-xl border p-3" aria-label="Execution plan graph">
+    const terminology = graphKind === 'sql-flow' ? { graph: 'SQL flow graph', item: 'stages', selected: 'Selected stage', action: 'Inspect stage', details: 'Selected stage details' } : { graph: 'Execution plan graph', item: 'operators', selected: 'Selected operator', action: 'Inspect operator', details: 'Selected operator details' };
+
+    return <section className="pipeline-graph-card grid gap-3 rounded-xl border p-3" aria-label={terminology.graph}>
         <div className="pipeline-graph-heading">
-            <div><span className="eyebrow">{pipeline.source === 'explain_pipeline' ? 'CLICKHOUSE OPERATOR PLAN' : 'ESTIMATED QUERY SHAPE'}</span><strong>{pipeline.nodes.length.toLocaleString()} operators <i>·</i> {pipeline.edges.length.toLocaleString()} connections</strong></div>
-            <small>{pipeline.source === 'explain_pipeline' ? 'Planned topology · runtime counters are run-level' : 'Estimated from SQL structure'}</small>
+            <div><span className="eyebrow">{heading ?? (pipeline.source === 'explain_pipeline' ? 'CLICKHOUSE OPERATOR PLAN' : 'ESTIMATED QUERY SHAPE')}</span><strong>{pipeline.nodes.length.toLocaleString()} {terminology.item} <i>·</i> {pipeline.edges.length.toLocaleString()} connections</strong></div>
+            <small>{subheading ?? (pipeline.source === 'explain_pipeline' ? 'Planned topology · runtime counters are run-level' : 'Estimated from SQL structure')}</small>
         </div>
-        {pipeline.truncated && <p className="pipeline-graph-warning" role="status">This plan is large. The graph shows a bounded set of operators.</p>}
-        <div className="pipeline-graph-scroll overflow-auto" role="region" aria-label="Scrollable operator graph">
-            <svg className="pipeline-graph-svg" width={Math.max(480, layout.width)} height={Math.max(160, layout.height)} viewBox={`0 0 ${Math.max(480, layout.width)} ${Math.max(160, layout.height)}`} role="group" aria-label="Click an operator to inspect it">
+        {pipeline.truncated && <p className="pipeline-graph-warning" role="status">{graphKind === 'sql-flow' ? 'This query is large. The graph shows a bounded set of SQL stages.' : 'This plan is large. The graph shows a bounded set of operators.'}</p>}
+        <div className="pipeline-graph-scroll overflow-auto" role="region" aria-label={`Scrollable ${graphKind === 'sql-flow' ? 'SQL flow' : 'operator'} graph`}>
+            <svg className="pipeline-graph-svg" width={Math.max(480, layout.width)} height={Math.max(160, layout.height)} viewBox={`0 0 ${Math.max(480, layout.width)} ${Math.max(160, layout.height)}`} role="group" aria-label={`Click a ${graphKind === 'sql-flow' ? 'stage' : 'operator'} to inspect it`}>
                 <defs><marker id={markerId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" className="pipeline-graph-arrow"/></marker></defs>
                 <g className="pipeline-graph-edges" aria-hidden="true">
                     {layout.edges.map((edge, index) => {
@@ -161,7 +172,7 @@ export function PipelineGraph({ pipeline }: { pipeline: ProfilePipeline }) {
                 {layout.nodes.map(({ node, x, y }) => {
                     const lines = labelLines(node.label);
                     const active = selected?.id === node.id;
-                    return <g key={node.id} role="button" tabIndex={0} aria-label={`Inspect ${node.label}`} aria-pressed={active} data-node-id={node.id} className={`pipeline-graph-node pipeline-node-${node.kind}${active ? ' is-selected' : ''}`} transform={`translate(${x - nodeWidth / 2} ${y - nodeHeight / 2})`} onClick={() => chooseNode(node)} onKeyDown={event => onNodeKeyDown(event, node)}>
+                    return <g key={node.id} role="button" tabIndex={0} aria-label={`${terminology.action} ${node.label}`} aria-pressed={active} data-node-id={node.id} className={`pipeline-graph-node pipeline-node-${node.kind}${active ? ' is-selected' : ''}`} transform={`translate(${x - nodeWidth / 2} ${y - nodeHeight / 2})`} onClick={() => chooseNode(node)} onKeyDown={event => onNodeKeyDown(event, node)}>
                         <title>{node.label}</title>
                         <rect width={nodeWidth} height={nodeHeight} rx="11"/>
                         <text className="pipeline-node-kind" x="14" y="19">{node.kind.toUpperCase()}</text>
@@ -172,8 +183,8 @@ export function PipelineGraph({ pipeline }: { pipeline: ProfilePipeline }) {
                 })}
             </svg>
         </div>
-        {selected && <div className="pipeline-node-inspector" aria-live="polite" aria-label="Selected operator details">
-            <div className="pipeline-node-inspector-main"><span className="eyebrow">SELECTED OPERATOR</span><strong>{selected.label}</strong><small>{selected.kind} <i>·</i> {selected.status}</small>{selected.detail && selected.detail !== selected.label && <p>{selected.detail}</p>}</div>
+        {selected && <div className="pipeline-node-inspector" aria-live="polite" aria-label={terminology.details}>
+            <div className="pipeline-node-inspector-main"><span className="eyebrow">{terminology.selected.toUpperCase()}</span><strong>{selected.label}</strong><small>{selected.kind} <i>·</i> {selected.status}</small>{selected.detail && selected.detail !== selected.label && <p>{selected.detail}</p>}</div>
             <div className="pipeline-node-facts">
                 {selected.parallelism !== undefined && <span><small>Parallelism</small><strong>{selected.parallelism.toLocaleString()}</strong></span>}
                 <span><small>Inputs</small><strong>{incomingCount}</strong></span>

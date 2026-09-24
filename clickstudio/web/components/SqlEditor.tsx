@@ -120,6 +120,7 @@ function hoverInfo(index: SchemaIndex, sqlText: string, label: string) {
 export interface EditorHandle {
     insert: (text: string) => void;
     focus: () => void;
+    selectRange: (from: number, to: number) => void;
     indent: () => void;
     retryNativeParser: () => void;
     formatNative: () => Promise<'formatted' | 'fallback' | 'unavailable' | 'rejected'>;
@@ -235,6 +236,14 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
             v.focus();
         } },
         focus: () => view.current?.focus(),
+        selectRange: (from, to) => {
+            const editor = view.current;
+            if (!editor) return;
+            const start = Math.max(0, Math.min(from, editor.state.doc.length));
+            const end = Math.max(start, Math.min(to, editor.state.doc.length));
+            editor.dispatch({ selection: { anchor: start, head: end }, scrollIntoView: true });
+            editor.focus();
+        },
         indent: () => { if (view.current)
             indentSelection(view.current); },
         retryNativeParser: () => clickHouseNativeParser.retry(),

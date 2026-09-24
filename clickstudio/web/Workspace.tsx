@@ -4,7 +4,7 @@ import { DEFAULT_LIMITS } from '../shared/types';
 import { filterSchemaTables, indexSchemaColumns } from '../shared/schema-browser';
 import { exportCsv, recommendChart } from '../shared/results';
 import { matchesDraft } from '../shared/evidence';
-import { formatSql, parameterNames, selectedStatement, splitSql } from '../shared/sql';
+import { formatSql, hasSqlComments, parameterNames, selectedStatement, splitSql } from '../shared/sql';
 import { api, download, isFrontendDemoPreview, message, post } from './api';
 import { DEMO_PREVIEW_INITIAL_STARTERS, DEMO_PREVIEW_RUN_ID, DEMO_PREVIEW_SQL, DEMO_PREVIEW_STARTER_DOCUMENT_ID, demoPreviewStarterRunId, PLAYGROUND_PREVIEW_STARTER } from './demo-preview';
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
@@ -322,18 +322,19 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         setRenamingTabId(current => current === draftId ? undefined : current);
         window.requestAnimationFrame(() => document.getElementById(`document-tab-${draftId}`)?.focus());
     };
-    const formatActiveSql = useCallback(async () => {
+    const formatActiveSql = useCallback(async (formatter: 'wasm' | 'builtin') => {
         const draftId = active.id, sourceSql = active.sql;
-        const applyFallback = () => setWorkspace(current => current.activeId !== draftId ? current : ({ ...current,
+        const applyBuiltIn = () => setWorkspace(current => current.activeId !== draftId ? current : ({ ...current,
             tabs: current.tabs.map(draft => draft.id === draftId && draft.sql === sourceSql ? { ...draft, sql: formatSql(sourceSql) } : draft),
         }));
-        if (!nativeParserEnabled || nativeParserStatus !== 'ready') {
-            applyFallback();
+        if (formatter === 'builtin') {
+            applyBuiltIn();
             return;
         }
+        if (!nativeParserEnabled || nativeParserStatus !== 'ready') return;
         const result = await editor.current?.formatNative();
         if (result === 'unavailable' || result === 'fallback')
-            applyFallback();
+            applyBuiltIn();
     }, [active.id, active.sql, nativeParserEnabled, nativeParserStatus]);
 
     const loadHistory = useCallback(async () => {
@@ -847,7 +848,39 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     <section className={cx('editor-surface', queryCollapsed && 'is-collapsed')}>
                         <div className="editor-heading">
                             <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">QUERY</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label></div>
-                        <div className="editor-heading-actions">{experience === 'expert' && <>{nativeParserEnabled && nativeParserStatus === 'unavailable' && <><span className="toolbar-small" role="status" title="Formatting remains available while the native parser is unavailable.">Parser unavailable</span><Button variant="ghost" className="toolbar-small" onClick={() => editor.current?.retryNativeParser()}>Retry parser</Button></>}<Button variant="ghost" className="toolbar-small" title={nativeParserEnabled && nativeParserStatus === 'ready' ? 'Format with the native ClickHouse parser' : 'Format SQL'} onClick={() => void formatActiveSql()}>Format</Button></>}<Button variant="ghost" className="panel-collapse-button" aria-label={queryCollapsed ? 'Expand SQL query' : 'Collapse SQL query'} aria-expanded={!queryCollapsed} aria-controls="sql-editor-content" title={queryCollapsed ? 'Expand query' : 'Collapse query'} onClick={() => setQueryCollapsed(value => !value)}><Icon className="panel-toggle-icon" name="chevron"/></Button></div>
+                        <div className="editor-heading-actions">
+                            {experience === 'expert' && <>
+                                {nativeParserEnabled && nativeParserStatus === 'unavailable' && <>
+                                    <span className="toolbar-small" role="status" title="Formatting remains available while the native parser is unavailable.">Parser unavailable</span>
+                                    <Button variant="ghost" className="toolbar-small" onClick={() => editor.current?.retryNativeParser()}>Retry parser</Button>
+                                </>}
+                                <div className="formatter-control" role="group" aria-label="Format SQL">
+                                    <span className="formatter-control-label">Format</span>
+                                    <Button
+                                        variant="ghost"
+                                        className="toolbar-small formatter-choice formatter-choice-wasm"
+                                        disabled={!nativeParserEnabled || nativeParserStatus !== 'ready'}
+                                        title={!nativeParserEnabled
+                                            ? 'Select WASM in the parser switch to enable this formatter.'
+                                            : nativeParserStatus === 'loading'
+                                                ? 'The WASM parser is loading.'
+                                                : nativeParserStatus === 'unavailable'
+                                                    ? 'The WASM parser is unavailable. Retry the parser to enable this formatter.'
+                                                    : hasSqlComments(active.sql)
+                                                        ? 'Formats with WASM when supported; SQL with comments falls back to Built-in Format to preserve them.'
+                                                        : 'Format SQL with the native ClickHouse WASM parser.'}
+                                        onClick={() => void formatActiveSql('wasm')}
+                                    >WASM</Button>
+                                    <Button
+                                        variant="ghost"
+                                        className="toolbar-small formatter-choice formatter-choice-builtin"
+                                        title="Format SQL with ClickStudio’s built-in formatter."
+                                        onClick={() => void formatActiveSql('builtin')}
+                                    >Built-in</Button>
+                                </div>
+                            </>}
+                            <Button variant="ghost" className="panel-collapse-button" aria-label={queryCollapsed ? 'Expand SQL query' : 'Collapse SQL query'} aria-expanded={!queryCollapsed} aria-controls="sql-editor-content" title={queryCollapsed ? 'Expand query' : 'Collapse query'} onClick={() => setQueryCollapsed(value => !value)}><Icon className="panel-toggle-icon" name="chevron"/></Button>
+                        </div>
                         </div>
                         <div id="sql-editor-content" className="panel-content editor-content" hidden={queryCollapsed}>
                         <div className="editor-toolbar">

@@ -282,6 +282,12 @@
     .document-name input { width: min(30vw, 260px); padding: 0; border: 0; outline: none; background: transparent; color: var(--text); font-size: 13px; font-weight: 630; }
     .document-name input:focus { outline: 0; }
     .editor-heading-actions { gap: 6px; }
+    .formatter-control { display: inline-flex; align-items: center; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: color-mix(in srgb, var(--panel) 76%, var(--page)); }
+    .formatter-control-label { padding: 0 5px; color: var(--muted); font-size: 8px; font-weight: 760; letter-spacing: .08em; text-transform: uppercase; }
+    .formatter-control > .formatter-choice { min-height: 25px; padding-inline: 8px; border: 1px solid transparent; border-radius: 6px; font-size: 8px; letter-spacing: .01em; }
+    .formatter-control > .formatter-choice-wasm:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 34%, var(--line)); background: color-mix(in srgb, var(--accent) 7%, var(--panel)); color: color-mix(in srgb, var(--accent) 82%, var(--text)); }
+    .formatter-control > .formatter-choice-wasm:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 56%, var(--line-bright)); background: color-mix(in srgb, var(--accent) 12%, var(--panel-hover)); }
+    .formatter-control > .formatter-choice-builtin:hover:not(:disabled) { border-color: var(--line-bright); background: var(--panel-hover); color: var(--text); }
     .panel-collapse-button { width: 29px; min-width: 29px; min-height: 29px; padding: 0; }
     .editor-toolbar { display: flex; min-height: 45px; flex: none; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 13px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel-raised) 82%, var(--page)); }
     .editor-mode-label, .editor-actions { display: flex; align-items: center; gap: 9px; }
@@ -952,6 +958,9 @@
     .workspace-content.has-run { grid-template-rows: minmax(285px, 1fr) minmax(250px, .94fr); }
     .beginner-workspace-content { grid-template-rows: minmax(310px, 1fr) minmax(165px, .65fr); }
     .editor-heading-actions .icon-only { display: none; }
+    .formatter-control { gap: 2px; padding: 2px; }
+    .formatter-control-label { padding-inline: 3px; font-size: 6px; }
+    .formatter-control > .formatter-choice { min-height: 23px; padding-inline: 5px; font-size: 7px; }
     .file-type-icon { width: 27px; height: 27px; }
     .editor-mode-label > span:last-child, .editor-mode-label .toolbar-divider { display: none; }
     .toolbar-small { min-height: 25px; padding: 0 5px; font-size: 7px; }

@@ -466,7 +466,7 @@ test('A delayed chart snapshot cannot update the draft after selecting another s
         await expect(second).toHaveAttribute('aria-pressed', 'true');
         releaseSnapshot();
         await snapshotFinished;
-        await page.getByRole('button', { name: 'Save revision', exact: true }).click();
+        await page.getByTestId('save-query').click();
         await expect.poll(() => savePayload).toBeDefined();
         expect((savePayload?.chart as { kind: string }).kind).toBe('table');
     } finally {

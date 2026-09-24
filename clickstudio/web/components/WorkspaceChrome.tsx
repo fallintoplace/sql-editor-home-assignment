@@ -6,6 +6,7 @@ import type { RunEventState } from '../workspace-types';
 import type { Copy } from '../i18n';
 
 export type RunAction = {
+    id: string;
     label: string;
     disabled?: boolean;
     title?: string;
@@ -22,7 +23,7 @@ export function RunActionGroup({ runLabel, running, disabled, onRun, actions, co
 }) {
     return <div className="run-action-group" role="group" aria-label={copy.runActions}>
         <Button variant="primary" className="run-query-button" data-testid="run-statement" aria-label={runLabel} onClick={onRun} disabled={disabled}><Icon name="play"/>{running ? copy.running : copy.run}</Button>
-        {actions.map(action => <Button key={action.label} variant="secondary" className="run-option-button" disabled={action.disabled} title={action.title} onClick={action.onSelect}>{action.label}</Button>)}
+        {actions.map(action => <Button key={action.id} data-testid={`run-action-${action.id}`} variant="secondary" className="run-option-button" disabled={action.disabled} title={action.title} onClick={action.onSelect}>{action.label}</Button>)}
     </div>;
 }
 

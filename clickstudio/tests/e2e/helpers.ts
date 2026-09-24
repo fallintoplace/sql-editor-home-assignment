@@ -29,5 +29,5 @@ export async function trustCurrentConnection(page: Page) {
 }
 
 export async function runScript(page: Page) {
-    await page.getByRole('button', { name: /^Run script/ }).click();
+    await page.getByTestId('run-action-script').click();
 }

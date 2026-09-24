@@ -210,7 +210,9 @@ const previewStorageKey = 'clickstudio:vercel-preview-database:v1';
 const previewStorageBudget = 1_500_000;
 const expiresAt = () => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 const now = () => new Date().toISOString();
-const record = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+const record = (value: unknown): Record<string, unknown> => isRecord(value) ? value : {};
 
 const schemaColumns = (table: string, values: Array<[string, string, string]>): SchemaColumn[] => values.map(([name, type, comment]) => ({
     database: 'demo', table, name, type, comment, defaultKind: '',

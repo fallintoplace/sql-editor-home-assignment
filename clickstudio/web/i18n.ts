@@ -190,6 +190,7 @@ export interface Copy {
         builtInFormatter: string;
         searchExamples: string;
         noExamplesFound: string;
+        openExample: string;
         openInNewSql: string;
     };
     chart: {
@@ -465,6 +466,7 @@ const english: Copy = {
         builtInFormatter: 'Built-in',
         searchExamples: 'Search examples',
         noExamplesFound: 'No examples match your search.',
+        openExample: 'Open',
         openInNewSql: 'Open in new SQL',
     },
     chart: {
@@ -588,31 +590,31 @@ const translations: Record<Exclude<Locale, 'en'>, LocalizedCopy> = {
 };
 
 const exampleCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common'],
-    'exampleCharts' | 'exampleChartTable' | 'exampleChartNumber' | 'exampleChartLine' | 'exampleChartBar' | 'exampleChartScatter' | 'exampleChartHeatmap' | 'exampleChartCandlestick' | 'examplePreviewTable' | 'exampleReadRows'>> = {
+    'exampleCharts' | 'exampleChartTable' | 'exampleChartNumber' | 'exampleChartLine' | 'exampleChartBar' | 'exampleChartScatter' | 'exampleChartHeatmap' | 'exampleChartCandlestick' | 'examplePreviewTable' | 'exampleReadRows' | 'openExample'>> = {
     de: {
         exampleCharts: 'Diagramme', exampleChartTable: 'Tabelle', exampleChartNumber: 'Zahl', exampleChartLine: 'Liniendiagramm',
         exampleChartBar: 'Balkendiagramm', exampleChartScatter: 'Streudiagramm', exampleChartHeatmap: 'Heatmap', exampleChartCandlestick: 'Candlestick-Diagramm',
-        examplePreviewTable: 'Vorschau: {table}', exampleReadRows: 'Bis zu 50 Zeilen aus dieser Tabelle lesen.',
+        examplePreviewTable: 'Vorschau: {table}', exampleReadRows: 'Bis zu 50 Zeilen aus dieser Tabelle lesen.', openExample: 'Öffnen',
     },
     es: {
         exampleCharts: 'Gráficos', exampleChartTable: 'Tabla', exampleChartNumber: 'Número', exampleChartLine: 'Gráfico de líneas',
         exampleChartBar: 'Gráfico de barras', exampleChartScatter: 'Gráfico de dispersión', exampleChartHeatmap: 'Mapa de calor', exampleChartCandlestick: 'Gráfico de velas',
-        examplePreviewTable: 'Vista previa: {table}', exampleReadRows: 'Leer hasta 50 filas de esta tabla.',
+        examplePreviewTable: 'Vista previa: {table}', exampleReadRows: 'Leer hasta 50 filas de esta tabla.', openExample: 'Abrir',
     },
     nl: {
         exampleCharts: 'Grafieken', exampleChartTable: 'Tabel', exampleChartNumber: 'Getal', exampleChartLine: 'Lijndiagram',
         exampleChartBar: 'Staafdiagram', exampleChartScatter: 'Spreidingsdiagram', exampleChartHeatmap: 'Heatmap', exampleChartCandlestick: 'Candlestickgrafiek',
-        examplePreviewTable: 'Voorbeeld van {table}', exampleReadRows: 'Lees maximaal 50 rijen uit deze tabel.',
+        examplePreviewTable: 'Voorbeeld van {table}', exampleReadRows: 'Lees maximaal 50 rijen uit deze tabel.', openExample: 'Openen',
     },
     zh: {
         exampleCharts: '图表', exampleChartTable: '表格', exampleChartNumber: '数值', exampleChartLine: '折线图',
         exampleChartBar: '柱状图', exampleChartScatter: '散点图', exampleChartHeatmap: '热力图', exampleChartCandlestick: '蜡烛图',
-        examplePreviewTable: '预览：{table}', exampleReadRows: '读取此表最多 50 行。',
+        examplePreviewTable: '预览：{table}', exampleReadRows: '读取此表最多 50 行。', openExample: '打开',
     },
     ru: {
         exampleCharts: 'Графики', exampleChartTable: 'Таблица', exampleChartNumber: 'Число', exampleChartLine: 'Линейный график',
         exampleChartBar: 'Столбчатая диаграмма', exampleChartScatter: 'Диаграмма рассеяния', exampleChartHeatmap: 'Тепловая карта', exampleChartCandlestick: 'Свечной график',
-        examplePreviewTable: 'Просмотр: {table}', exampleReadRows: 'Прочитать до 50 строк из этой таблицы.',
+        examplePreviewTable: 'Просмотр: {table}', exampleReadRows: 'Прочитать до 50 строк из этой таблицы.', openExample: 'Открыть',
     },
 };
 

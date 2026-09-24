@@ -27,7 +27,7 @@ import { useWorkspacePersistence } from './useWorkspacePersistence';
 import { useRunEvidence } from './useRunEvidence';
 import { useScriptExecution } from './useScriptExecution';
 import { useScopedValue } from './useScopedValue';
-import { sqlExamplesFor } from './sql-examples';
+import { sqlExamplesFor, type SqlExample } from './sql-examples';
 import { localizeSqlExample } from './sql-examples-locales';
 import type { Copy, ExperienceLevel, Locale } from './i18n';
 import type { AssistantContext, BusyAction, Connected, Inspector, ResultsView, SpeechRecognitionLike } from './workspace-types';
@@ -131,6 +131,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [scripts, setScripts] = useState<Record<string, Script>>({});
     const script = active.scriptId ? scripts[active.scriptId] : undefined;
     const [view, setView] = useState<ResultsView>('results');
+    const [exampleChartRunId, setExampleChartRunId] = useState<string>();
     const [queryCollapsed, setQueryCollapsed] = useState(false);
     const [resultsCollapsed, setResultsCollapsed] = useState(false);
     const [inspector, setInspector] = useState<Inspector>('schema');
@@ -494,6 +495,47 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         return true;
     };
 
+    const createExampleDraft = (example: SqlExample) => {
+        const name = example.category === 'schema'
+            ? copy.common.examplePreviewTable.replace('{table}', example.name.replace(/^Preview /, ''))
+            : localizeSqlExample(example, locale).name;
+        const draft = newDraft(`${name}.sql`, example.sql);
+        draft.chart = { ...example.chart, title: locale === 'en' ? example.chart.title : name, ys: [...example.chart.ys], ...(example.chart.candlestick ? { candlestick: { ...example.chart.candlestick } } : {}) };
+        return draft;
+    };
+
+    const runExample = (example: SqlExample, output: 'results' | 'chart') => {
+        if (busy) { setError(copy.common.runActionWait); return true; }
+        if (!trusted) { setError(copy.common.runActionTrustRequired); return true; }
+
+        const draft = createExampleDraft(example);
+        if (!openNewDraft(draft)) return true;
+        void perform(async () => {
+            const statements = splitSql(draft.sql);
+            if (statements.length !== 1) throw new Error('An example must contain exactly one SQL statement to run directly.');
+            const statement = statements[0]!;
+            const created = await post<Run>('/runs', {
+                clientRequestId: crypto.randomUUID(), connectionId: connection.id, documentId: draft.serverId,
+                sql: statement.sql, parameters: draft.parameters, parentRunId: draft.parentRunId, kind: 'query',
+                limits: { rows: connection.limits.rows || DEFAULT_LIMITS.rows, seconds: connection.limits.seconds || DEFAULT_LIMITS.seconds },
+                tags: { workspace: 'clickstudio', experience }, sourceFrom: statement.from, sourceTo: statement.to,
+            });
+            setRunForRun(created.id, created, true);
+            setPage(0);
+            update(draft.id, current => ({ ...current, activeRunId: created.id, scriptId: undefined, runIds: rememberRunIds(current.runIds, [created.id]) }));
+            setView(output);
+            setResultsCollapsed(false);
+            setDrawerOpen(false);
+            setExampleChartRunId(output === 'chart' ? created.id : undefined);
+            if (!isFrontendDemoPreview)
+                setNotice(demoMode
+                    ? 'Sample results were generated. Query SQL was not sent to ClickHouse.'
+                    : 'Query submitted to the selected ClickHouse connection.');
+            void loadHistory().catch(() => undefined);
+        }, 'run');
+        return true;
+    };
+
     const execute = (wholeScript = false, kind: 'query' | 'explain' | 'pipeline' = 'query') => perform(async () => {
         if (!trusted) throw new Error('Review and trust this read only connection before running SQL.');
         if (wholeScript && connection.manifest?.scripts.available === false)
@@ -633,7 +675,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         await loadDocumentRevisions(restored.id);
     }, 'save');
 
-    const loadSnapshot = async () => {
+    const loadSnapshot = useCallback(async () => {
         if (!activeRunId || snapshot || !run || run.resultState !== 'reopenable') return;
         const runId = activeRunId;
         const full = await api<Result>(`/runs/${encodeURIComponent(runId)}/snapshot`);
@@ -641,7 +683,18 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         if (activeRunIdRef.current !== runId || workspaceRef.current.activeId !== active.id) return;
         const suggestion = recommendChart(full.columns, full.rows);
         if (active.chart.kind === 'table' && suggestion.config.kind !== 'table') patch({ chart: suggestion.config });
-    };
+    }, [active.chart.kind, active.id, activeRunId, patch, run, setSnapshotForRun, snapshot]);
+
+    useEffect(() => {
+        if (!exampleChartRunId || exampleChartRunId !== activeRunId || run?.id !== exampleChartRunId || !terminal(run)) return;
+        if (snapshot?.runId === exampleChartRunId || run.resultState !== 'reopenable') {
+            setExampleChartRunId(undefined);
+            return;
+        }
+        void loadSnapshot().catch(caught => setError(message(caught))).finally(() => {
+            setExampleChartRunId(current => current === exampleChartRunId ? undefined : current);
+        });
+    }, [activeRunId, exampleChartRunId, loadSnapshot, run, setError, snapshot?.runId]);
 
     const exportCurrentCsv = async () => {
         if (!run) return;
@@ -862,15 +915,11 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     </div>)}
                     <button className="new-tab-button new-tab-labeled" data-testid="new-sql" type="button" aria-label={copy.common.newSql} title={copy.common.newSql} aria-haspopup="dialog" aria-expanded={examplesOpen} aria-controls="sql-examples-panel" onClick={event => openExamples(event.currentTarget)}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
                     <SqlExamplesMenu open={examplesOpen} onClose={closeExamples} examples={sqlExamples} sourceLabel={connectionLabel} copy={copy.common} locale={locale} onOpenExample={example => {
-                        const name = example.category === 'schema'
-                            ? copy.common.examplePreviewTable.replace('{table}', example.name.replace(/^Preview /, ''))
-                            : localizeSqlExample(example, locale).name;
-                        const draft = newDraft(`${name}.sql`, example.sql);
-                        draft.chart = { ...example.chart, title: locale === 'en' ? example.chart.title : name, ys: [...example.chart.ys], ...(example.chart.candlestick ? { candlestick: { ...example.chart.candlestick } } : {}) };
+                        const draft = createExampleDraft(example);
                         if (!openNewDraft(draft)) return false;
                         window.requestAnimationFrame(() => editor.current?.focus());
                         return true;
-                    }} onStartBlankSql={() => {
+                    }} onRunExample={runExample} onStartBlankSql={() => {
                         if (!openNewDraft(newDraft())) return false;
                         window.requestAnimationFrame(() => editor.current?.focus());
                         return true;

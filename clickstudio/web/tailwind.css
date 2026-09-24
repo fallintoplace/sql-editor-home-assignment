@@ -272,8 +272,9 @@
     .sql-example-preview-heading h3 { overflow-wrap: anywhere; margin: 4px 0 0; font-size: 14px; font-weight: 750; }
     .sql-example-readonly { padding: 4px 7px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font-family: var(--font-mono); font-size: 8px; }
     .sql-example-preview pre { min-height: 80px; max-height: 280px; margin: 0; padding: 12px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--page) 74%, var(--panel)); color: var(--text-soft); font-family: var(--font-mono); font-size: 9px; line-height: 1.6; tab-size: 4; white-space: pre; }
-    .sql-example-open { display: inline-flex; min-height: 34px; flex: none; align-items: center; justify-content: center; gap: 7px; align-self: flex-start; padding: 0 11px; font-size: 10px; }
-    .sql-example-open svg { width: 14px; height: 14px; }
+    .sql-example-actions { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 7px; }
+    .sql-example-action { display: inline-flex; min-height: 34px; flex: none; align-items: center; justify-content: center; gap: 7px; padding: 0 11px; font-size: 10px; }
+    .sql-example-action svg { width: 14px; height: 14px; }
     .sql-examples-empty { display: grid; min-height: 110px; margin: 0; place-items: center; color: var(--muted); font-size: 11px; }
     .draft-status { display: inline-flex; align-items: center; gap: 7px; padding: 0 9px; color: var(--muted); font-size: 9px; white-space: nowrap; }
     .revision-history-trigger { display: inline-flex; min-height: 26px; flex: none; align-items: center; gap: 5px; padding: 0 8px; font-size: 8px; }

@@ -49,7 +49,7 @@ function exampleText(example: SqlExample, locale: Locale, copy: Copy['common']) 
     return localizeSqlExample(example, locale);
 }
 
-export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onClose, onOpenExample, onStartBlankSql }: {
+export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onClose, onOpenExample, onRunExample, onStartBlankSql }: {
     examples: SqlExample[];
     sourceLabel: string;
     copy: Copy['common'];
@@ -57,6 +57,7 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onC
     open: boolean;
     onClose: (restoreFocus?: boolean) => void;
     onOpenExample: (example: SqlExample) => boolean;
+    onRunExample: (example: SqlExample, view: 'results' | 'chart') => boolean;
     onStartBlankSql: () => boolean;
 }) {
     const panelRef = useRef<HTMLElement>(null);
@@ -185,7 +186,11 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onC
                         <div className="sql-example-preview-heading"><div><span className="eyebrow">{selected.dataset ?? categoryLabel(selected.category, copy, locale)}</span><h3>{exampleText(selected, locale, copy).name}.sql</h3></div><span className="sql-example-readonly">{chartLabel(selected, copy)}</span></div>
                         <p>{exampleText(selected, locale, copy).description}</p>
                         <pre><code>{selected.sql}</code></pre>
-                        <Button variant="primary" className="sql-example-open" data-testid="open-sql-example" onClick={() => { if (onOpenExample(selected)) onClose(false); }}><Icon name="plus"/>{copy.openInNewSql}</Button>
+                        <div className="sql-example-actions">
+                            <Button variant="secondary" className="sql-example-action" data-testid="open-sql-example" aria-label={copy.openInNewSql} title={copy.openInNewSql} onClick={() => { if (onOpenExample(selected)) onClose(false); }}><Icon name="plus"/>{copy.openExample}</Button>
+                            <Button variant="primary" className="sql-example-action" data-testid="run-sql-example" onClick={() => { if (onRunExample(selected, 'results')) onClose(false); }}><Icon name="play"/>{copy.run}</Button>
+                            <Button variant="secondary" className="sql-example-action" data-testid="chart-sql-example" onClick={() => { if (onRunExample(selected, 'chart')) onClose(false); }}><Icon name="chart"/>{copy.chart}</Button>
+                        </div>
                     </article>}
                 </div>}
             </section>

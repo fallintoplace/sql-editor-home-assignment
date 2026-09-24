@@ -107,7 +107,7 @@ test('Schema inspector shows ClickHouse keys, storage, indexes, and dictionaries
     await expect(page.getByText('campaign_lookup', { exact: true })).toBeVisible();
     await expect(page.getByText('18.2K entries')).toBeVisible();
 
-    const search = page.getByRole('textbox', { name: 'Search schema' });
+    const search = page.getByRole('textbox', { name: 'Search tables, columns, and dictionaries…' });
     await search.fill('tenant_bloom');
     await expect(page.locator('.schema-table')).toHaveCount(1);
     await search.fill('campaign_lookup');

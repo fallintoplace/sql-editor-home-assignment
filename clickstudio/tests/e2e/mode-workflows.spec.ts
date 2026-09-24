@@ -27,7 +27,7 @@ test('Compact opens on SQL and can run a query without opening AI', async ({ pag
     await expect(page.getByRole('button', { name: 'Ask AI', exact: true })).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Describe your data question', exact: true })).toHaveCount(0);
 
-    const runQuery = page.getByRole('button', { name: 'Run query', exact: true });
+    const runQuery = page.getByRole('button', { name: 'Run statement', exact: true });
     if (await runQuery.isDisabled()) {
         await page.getByRole('button', { name: 'Start exploring', exact: true }).click();
         await expect(runQuery).toBeEnabled();
@@ -76,7 +76,7 @@ test('Compact AI proposal becomes the same query and run in Advanced mode', asyn
     });
 
     await beginInCompactMode(page);
-    await page.getByRole('button', { name: 'Save query', exact: true }).click();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'revision 1' })).toBeVisible();
     await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
     const prompt = page.getByRole('textbox', { name: 'Describe your data question', exact: true });
@@ -95,7 +95,7 @@ test('Compact AI proposal becomes the same query and run in Advanced mode', asyn
     await page.getByRole('button', { name: 'Run this query', exact: true }).click();
 
     const results = page.getByRole('region', { name: 'Query results', exact: true });
-    await expect(results.getByText('succeeded', { exact: true })).toBeVisible();
+    await expect(results.getByText('Succeeded', { exact: true })).toBeVisible();
     await expect(results.getByRole('cell', { name: '2026-01-01', exact: true })).toBeVisible();
     const queryId = await page.locator('.execution-bar code').innerText();
     await results.getByRole('tab', { name: 'Chart', exact: true }).click();
@@ -146,7 +146,7 @@ test('Advanced editor, insights, pipeline and AI copilot stay read-only until a 
     await expect(editor).toBeVisible();
     await page.getByRole('button', { name: 'Run statement', exact: true }).click();
     const results = page.getByRole('region', { name: 'Query results', exact: true });
-    await expect(results.getByText('succeeded', { exact: true })).toBeVisible();
+    await expect(results.getByText('Succeeded', { exact: true })).toBeVisible();
     const queryId = await page.locator('.execution-bar code').innerText();
 
     await results.getByRole('tab', { name: 'Insights', exact: true }).click();
@@ -159,7 +159,7 @@ test('Advanced editor, insights, pipeline and AI copilot stay read-only until a 
     await expect(page.locator('.pipeline-stage').first()).toBeVisible();
     await page.getByRole('button', { name: 'Open operator graph in Insights', exact: true }).click();
     await expect(results.getByRole('region', { name: 'Execution plan graph' })).toBeVisible();
-    await page.getByRole('button', { name: 'SQL AI', exact: true }).click();
+    await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
     await page.locator('.assistant-panel select').selectOption('performance');
     await page.locator('.assistant-panel textarea').fill('Why is this query slow?');
     await page.getByRole('checkbox').check();

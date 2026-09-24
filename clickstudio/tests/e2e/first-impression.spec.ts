@@ -13,7 +13,7 @@ test('Advanced mode gives the editor the full work area before the first run', a
     const browser = page.getByRole('navigation', { name: 'Workspace browser', exact: true });
     await expect(browser.getByRole('button', { name: 'Tables', exact: true })).toBeVisible();
     await expect(browser.getByRole('button', { name: 'Queries', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'SQL AI', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Ask AI', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Save revision', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Run statement', exact: true })).toBeVisible();
 });
@@ -31,13 +31,13 @@ test('Run script and explain actions stay visible beside the primary Run button'
     await expect(runScript).toBeFocused();
 });
 
-test('Advanced panels stay reachable through SQL AI and More', async ({ page }) => {
+test('Advanced panels stay reachable through Ask AI and More', async ({ page }) => {
     await trust(page);
     await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Run history', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Runs', exact: true }).click();
     await expect(page.locator('.inspector-header h2')).toHaveText('Run history');
 
-    await page.getByRole('button', { name: 'SQL AI', exact: true }).click();
+    await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
     await expect(page.locator('.inspector-header h2')).toHaveText('AI copilot');
     await expect(page.locator('.assistant-panel')).toBeVisible();
     await expect(page.locator('.cm-content')).toContainText('SELECT');

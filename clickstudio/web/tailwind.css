@@ -993,4 +993,5 @@
 .workspace-content.beginner-workspace-content:not(.has-run).is-query-collapsed > .editor-surface { flex: 0 0 auto; }
 .panel-collapse-button { width: 34px; min-width: 34px; min-height: 34px; padding: 0; border-color: var(--line-bright); border-radius: 9px; background: var(--panel); color: var(--text-soft); }
 .panel-collapse-button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 40%, var(--line-bright)); background: var(--panel-hover); color: var(--accent); }
-.panel-collapse-button .panel-toggle-icon { width: 18px; height: 18px; stroke-width: 2; }
+.panel-collapse-button .panel-toggle-icon { width: 18px; height: 18px; stroke-width: 2; transition: transform .18s ease; }
+.panel-collapse-button[aria-expanded="true"] .panel-toggle-icon { transform: rotate(180deg); }

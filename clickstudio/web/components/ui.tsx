@@ -23,8 +23,6 @@ const iconPaths = {
     close: <path d="m6 6 12 12M18 6 6 18"/>,
     play: <path d="m8 5 11 7-11 7V5Z"/>,
     chevron: <path d="m8 10 4 4 4-4"/>,
-    panelCollapse: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18m-12 7 3-3 3 3"/></>,
-    panelExpand: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18m-12 3 3 3 3-3"/></>,
     plus: <path d="M12 5v14M5 12h14"/>,
     lock: <><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 1 1 8 0v3"/></>,
     bolt: <path d="m13 2-9 12h7l-1 8 10-13h-7l1-7Z"/>,

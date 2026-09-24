@@ -15,7 +15,7 @@ import { InspectorPane, type InspectorPaneProps } from './components/InspectorPa
 import { Button, cx, Icon, Status, terminal } from './components/ui';
 import { ExecutionBar, RailButton, RunActionGroup, ScriptResults } from './components/WorkspaceChrome';
 import { checkpoint, closeDraft, draftFromDocument, MAX_TABS, newDraft, recover, reopenDraft, SAMPLE_SQL, type Draft, type WorkspaceState } from './workspace-state';
-import { draftSaveStatus, rememberRunIds } from '../shared/workspace-view';
+import { draftSaveStatus, rememberRunIds, sameSavedContent } from '../shared/workspace-view';
 import type { NativeParseSnapshot, NativeParserStatus } from '../shared/native-parser';
 import { useWorkspacePersistence } from './useWorkspacePersistence';
 import { useRunEvidence } from './useRunEvidence';
@@ -37,7 +37,7 @@ function assistantContextKey(connectionId: string, draftId: string, sql: string,
 function previewStarterDraft(starter: typeof DEMO_PREVIEW_INITIAL_STARTERS[number]): Draft {
     const runId = demoPreviewStarterRunId(starter.id);
     return {
-        ...newDraft(starter.name, starter.sql), serverId: starter.id, baseRevision: 1,
+        ...newDraft(starter.name, starter.sql), serverId: starter.id, baseRevision: starter.revision ?? 1,
         chart: { ...starter.chart, ys: [...starter.chart.ys] }, runIds: [runId], activeRunId: runId,
     };
 }
@@ -87,7 +87,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             tabs: [
                 {
                     ...active, sql: DEMO_PREVIEW_SQL,
-                    serverId: DEMO_PREVIEW_STARTER_DOCUMENT_ID, baseRevision: 1,
+                    serverId: DEMO_PREVIEW_STARTER_DOCUMENT_ID, baseRevision: gettingStarted.revision ?? 1,
                     chart: { ...gettingStarted.chart, ys: [...gettingStarted.chart.ys] },
                     activeRunId: runId, runIds: [...new Set([...active.runIds, runId])],
                 },
@@ -113,6 +113,10 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [documents, setDocuments] = useState<QueryDocument[]>([]);
     const [documentsLoaded, setDocumentsLoaded] = useState(false);
     const [documentsReadError, setDocumentsReadError] = useState(false);
+    const [documentRevisions, setDocumentRevisions] = useState<QueryDocument[]>([]);
+    const [revisionsDocumentId, setRevisionsDocumentId] = useState<string>();
+    const [revisionLoading, setRevisionLoading] = useState(false);
+    const [revisionError, setRevisionError] = useState('');
     const [savingDraftIds, setSavingDraftIds] = useState<Record<string, boolean>>({});
     const [history, setHistory] = useState<Run[]>([]);
     const [scripts, setScripts] = useState<Record<string, Script>>({});
@@ -169,7 +173,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     }, []);
     const trustedRef = useRef(trusted);
     trustedRef.current = trusted;
-    const schemaRequestRef = useRef(0), historyRequestRef = useRef(0), documentsRequestRef = useRef(0);
+    const schemaRequestRef = useRef(0), historyRequestRef = useRef(0), documentsRequestRef = useRef(0), revisionsRequestRef = useRef(0);
     const cancellingRef = useRef(false);
 
     useEffect(() => () => recognitionRef.current?.abort(), []);
@@ -343,6 +347,15 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             const next = await api<QueryDocument[]>(`/documents?trash=true&connectionId=${encodeURIComponent(connection.id)}`);
             if (documentsRequestRef.current === requestId) {
                 setDocuments(next);
+                setWorkspace(current => ({
+                    ...current,
+                    tabs: current.tabs.map(draft => {
+                        const saved = next.find(document => document.id === draft.serverId);
+                        return saved && draft.baseRevision !== saved.revision && sameSavedContent(draft, saved)
+                            ? { ...draft, baseRevision: saved.revision }
+                            : draft;
+                    }),
+                }));
                 setDocumentsReadError(false);
             }
         } catch (caught) {
@@ -354,6 +367,34 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             if (documentsRequestRef.current === requestId) setDocumentsLoaded(true);
         }
     }, [connection.id]);
+    const loadDocumentRevisions = useCallback(async (documentId = active.serverId) => {
+        if (!documentId) {
+            revisionsRequestRef.current++;
+            setRevisionsDocumentId(undefined);
+            setDocumentRevisions([]);
+            setRevisionError('Save this query before opening version history.');
+            setRevisionLoading(false);
+            return;
+        }
+        const requestId = ++revisionsRequestRef.current;
+        setRevisionsDocumentId(documentId);
+        setDocumentRevisions([]);
+        setRevisionError('');
+        setRevisionLoading(true);
+        try {
+            const next = await api<QueryDocument[]>(`/documents/${encodeURIComponent(documentId)}/revisions`);
+            const currentDraft = workspaceRef.current.tabs.find(draft => draft.id === workspaceRef.current.activeId);
+            if (revisionsRequestRef.current === requestId && currentDraft?.serverId === documentId)
+                setDocumentRevisions([...next].sort((left, right) => right.revision - left.revision));
+        } catch (caught) {
+            if (revisionsRequestRef.current === requestId) setRevisionError(message(caught));
+        } finally {
+            if (revisionsRequestRef.current === requestId) setRevisionLoading(false);
+        }
+    }, [active.serverId]);
+    useEffect(() => {
+        if (inspector === 'revisions') void loadDocumentRevisions(active.serverId);
+    }, [active.serverId, inspector, loadDocumentRevisions]);
     const loadSchema = useCallback(async (refresh = false) => {
         const requestId = ++schemaRequestRef.current;
         if (!trustedRef.current) {
@@ -386,7 +427,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             setSchemaLoading(false);
         }
         const interval = window.setInterval(() => { void loadHistory().catch(() => undefined); }, 15000);
-        return () => { window.clearInterval(interval); schemaRequestRef.current++; historyRequestRef.current++; documentsRequestRef.current++; };
+        return () => { window.clearInterval(interval); schemaRequestRef.current++; historyRequestRef.current++; documentsRequestRef.current++; revisionsRequestRef.current++; };
     }, [loadDocuments, loadHistory, loadSchema, trusted]);
 
     const { run, setRunForRun, page, setPage, resultPage, snapshot, setSnapshotForRun, profile, setProfileForRun, pipeline, setPipelineForRun, eventState } = useRunEvidence({
@@ -503,7 +544,57 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             patch({ serverId: saved.id, baseRevision: saved.revision });
             setDocuments(current => [saved, ...current.filter(document => document.id !== saved.id)]);
             setNotice(`Saved ${saved.name} · revision ${saved.revision}`);
+            if (active.serverId && inspector === 'revisions') void loadDocumentRevisions(saved.id);
         } finally { setSavingDraftIds(current => ({ ...current, [active.id]: false })); }
+    }, 'save');
+
+    const restoreDocumentRevision = (revision: QueryDocument) => void perform(async () => {
+        const draft = workspaceRef.current.tabs.find(item => item.id === workspaceRef.current.activeId);
+        if (!draft?.serverId || draft.serverId !== revision.id) throw new Error('Open the saved query before restoring one of its versions.');
+        const latestSaved = revisionsDocumentId === draft.serverId ? documentRevisions[0] : documents.find(document => document.id === draft.serverId);
+        if (!latestSaved || latestSaved.deletedAt) throw new Error('The latest saved version could not be checked. Refresh saved queries and try again.');
+        const hasUnsavedChanges = draft.baseRevision !== latestSaved.revision || !sameSavedContent(draft, latestSaved);
+        if (hasUnsavedChanges && !window.confirm(`Restore Version ${revision.revision}? This will replace the current unsaved draft. The restored SQL will be saved as a new version.`)) return;
+        const restoreBase: QueryDocument = {
+            ...latestSaved,
+            name: draft.name,
+            sql: draft.sql,
+            parameters: { ...draft.parameters },
+            chart: { ...draft.chart, ys: [...draft.chart.ys] },
+            runId: draft.activeRunId,
+            parentDocumentId: draft.parentDocumentId,
+            kind: draft.kind,
+            metric: draft.metric ? { ...draft.metric, dimensions: [...draft.metric.dimensions], sourceColumns: [...draft.metric.sourceColumns] } : undefined,
+            dependencies: [...draft.dependencies],
+        };
+        const restored = await post<QueryDocument>(`/documents/${encodeURIComponent(draft.serverId)}/restore-revision`, {
+            revision: revision.revision,
+            baseRevision: latestSaved.revision,
+        });
+        const currentDraft = workspaceRef.current.tabs.find(item => item.id === draft.id);
+        const editedDuringRestore = Boolean(currentDraft && !sameSavedContent(currentDraft, restoreBase));
+        update(draft.id, current => editedDuringRestore ? { ...current, baseRevision: restored.revision } : ({
+            ...checkpoint(current, `Before restoring Version ${revision.revision}`),
+            name: restored.name,
+            sql: restored.sql,
+            baseRevision: restored.revision,
+            parameters: { ...restored.parameters },
+            chart: { ...restored.chart, ys: [...restored.chart.ys] },
+            activeRunId: undefined,
+            scriptId: undefined,
+            parentRunId: undefined,
+            parentDocumentId: restored.parentDocumentId,
+            kind: restored.kind,
+            metric: restored.metric ? { ...restored.metric, dimensions: [...restored.metric.dimensions], sourceColumns: [...restored.metric.sourceColumns] } : undefined,
+            dependencies: [...restored.dependencies],
+            from: 0,
+            to: 0,
+        }));
+        setDocuments(current => [restored, ...current.filter(document => document.id !== restored.id)]);
+        setNotice(editedDuringRestore
+            ? `Restored Version ${revision.revision} as Version ${restored.revision}. Edits made during restore are still in your draft.`
+            : `Restored Version ${revision.revision} as Version ${restored.revision}.`);
+        await loadDocumentRevisions(restored.id);
     }, 'save');
 
     const loadSnapshot = async () => {
@@ -604,6 +695,15 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         columnsByTable,
         history: sortedHistory,
         documents,
+        revisions: revisionsDocumentId === active.serverId ? documentRevisions : [],
+        revisionsDocumentId,
+        revisionLoading,
+        revisionError,
+        currentRevision: revisionsDocumentId === active.serverId
+            ? documentRevisions[0]?.revision ?? savedDocument?.revision ?? active.baseRevision
+            : savedDocument?.revision ?? active.baseRevision,
+        unsavedDraft: saveStatus.state !== 'saved' && saveStatus.state !== 'checking',
+        canRestoreRevision: Boolean(active.serverId && revisionsDocumentId === active.serverId && documentRevisions.length > 1 && !revisionLoading && !documentsReadError && savedDocument && !savedDocument.deletedAt),
         run,
         profile,
         pipeline,
@@ -623,6 +723,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         trusted,
         runId: run?.id,
         onRefreshDocuments: () => void loadDocuments(),
+        onRefreshRevisions: () => void loadDocumentRevisions(active.serverId),
+        onRestoreRevision: restoreDocumentRevision,
         assistantAction,
         onAssistantAction: (value: AssistantAction) => { setAssistantAction(value); setAssistantContext(undefined); setAssistantProposal(undefined); },
         assistantQuestion,
@@ -722,12 +824,13 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     }}>↶</button>}
                     <div className="tabs-spacer"/>
                     <span className="draft-status" data-save-state={saveStatus.state} title={`${saveStatus.label}. ${saveStatus.detail}`}><span className={cx('status-light', saveStatus.state === 'saved' ? 'is-trusted' : ['changed', 'conflict', 'deleted', 'unavailable'].includes(saveStatus.state) ? 'is-warning' : '')}/>{saveStatusLabel}</span>
+                    {active.serverId && <Button variant="ghost" className="revision-history-trigger" aria-label={`Version history for ${active.name}`} aria-pressed={inspector === 'revisions'} title="View saved versions" onClick={() => showInspector('revisions')}><Icon name="history"/><span>Versions</span></Button>}
                 </div>
 
                 <div id="sql-document-panel" role="tabpanel" aria-labelledby={`document-tab-${active.id}`} tabIndex={0} className={cx('workspace-content', experience === 'beginner' && 'beginner-workspace-content', run && 'has-run', queryCollapsed && 'is-query-collapsed', run && resultsCollapsed && 'is-results-collapsed')}>
                     <section className={cx('editor-surface', queryCollapsed && 'is-collapsed')}>
                         <div className="editor-heading">
-                            <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">QUERY</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label><span className="edit-indicator" title={active.serverId ? `Saved revision ${active.baseRevision}` : 'Only in this browser'}>{active.serverId ? `REV ${active.baseRevision}` : 'LOCAL'}</span></div>
+                            <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">QUERY</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label></div>
                         <div className="editor-heading-actions">{experience === 'expert' && <>{nativeParserEnabled && nativeParserStatus === 'unavailable' && <><span className="toolbar-small" role="status" title="Formatting remains available while the native parser is unavailable.">Parser unavailable</span><Button variant="ghost" className="toolbar-small" onClick={() => editor.current?.retryNativeParser()}>Retry parser</Button></>}<Button variant="ghost" className="toolbar-small" title={nativeParserEnabled && nativeParserStatus === 'ready' ? 'Format with the native ClickHouse parser' : 'Format SQL'} onClick={() => void formatActiveSql()}>Format</Button></>}<Button variant="ghost" className="panel-collapse-button" aria-label={queryCollapsed ? 'Expand SQL query' : 'Collapse SQL query'} aria-expanded={!queryCollapsed} aria-controls="sql-editor-content" title={queryCollapsed ? 'Expand query' : 'Collapse query'} onClick={() => setQueryCollapsed(value => !value)}><Icon className="panel-toggle-icon" name={queryCollapsed ? 'panelExpand' : 'panelCollapse'}/></Button></div>
                         </div>
                         <div id="sql-editor-content" className="panel-content editor-content" hidden={queryCollapsed}>

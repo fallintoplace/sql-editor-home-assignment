@@ -77,4 +77,4 @@ export function formatCount(value: string | number): string {
     return Number.isFinite(number) ? new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(number) : String(value);
 }
 
-export function inspectorLabel(value: Inspector): string { return ({ schema: 'Schema explorer', history: 'Run history', documents: 'Documents', details: 'Run details', profile: 'Query profile', pipeline: 'Pipeline', parser: 'ClickHouse parser', assistant: 'AI copilot' })[value]; }
+export function inspectorLabel(value: Inspector): string { return ({ schema: 'Schema explorer', history: 'Run history', documents: 'Documents', revisions: 'Version history', details: 'Run details', profile: 'Query profile', pipeline: 'Pipeline', parser: 'ClickHouse parser', assistant: 'AI copilot' })[value]; }

@@ -14,9 +14,9 @@ WHERE event_time >= now() - INTERVAL 30 DAY
 GROUP BY day
 ORDER BY day`;
 
-export type DemoPreviewStarter = { id: string; name: string; sql: string; chart: ChartConfig; initial?: boolean };
+export type DemoPreviewStarter = { id: string; name: string; sql: string; chart: ChartConfig; initial?: boolean; revision?: number };
 export const DEMO_PREVIEW_STARTERS: DemoPreviewStarter[] = [
-    { id: DEMO_PREVIEW_STARTER_DOCUMENT_ID, name: 'Getting started.sql', sql: DEMO_PREVIEW_SQL, chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Daily activity' }, initial: true },
+    { id: DEMO_PREVIEW_STARTER_DOCUMENT_ID, name: 'Getting started.sql', sql: DEMO_PREVIEW_SQL, chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Daily activity' }, initial: true, revision: 5 },
     { id: 'preview-starter-top-countries', name: 'Top countries.sql', sql: `SELECT
     country,
     count() AS events,
@@ -91,6 +91,39 @@ GROUP BY day
 ORDER BY day`, chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Daily rollup' } },
 ];
 export const DEMO_PREVIEW_INITIAL_STARTERS = DEMO_PREVIEW_STARTERS.filter(starter => starter.initial);
+const DEMO_PREVIEW_STARTER_VERSIONS = [
+    `SELECT
+    toDate(event_time) AS day,
+    count() AS events
+FROM events
+GROUP BY day
+ORDER BY day`,
+    `SELECT
+    toDate(event_time) AS day,
+    count() AS events,
+    uniqExact(user_id) AS unique_users
+FROM events
+GROUP BY day
+ORDER BY day`,
+    `SELECT
+    toDate(event_time) AS day,
+    count() AS events,
+    uniqExact(user_id) AS unique_users,
+    round(sum(revenue), 2) AS revenue
+FROM events
+GROUP BY day
+ORDER BY day`,
+    `SELECT
+    toDate(event_time) AS day,
+    count() AS events,
+    uniqExact(user_id) AS unique_users,
+    round(sum(revenue), 2) AS revenue
+FROM events
+WHERE event_time >= now() - INTERVAL 7 DAY
+GROUP BY day
+ORDER BY day`,
+    DEMO_PREVIEW_SQL,
+] as const;
 export const PLAYGROUND_PREVIEW_STARTER = {
     id: PLAYGROUND_STARTER_ID,
     name: PLAYGROUND_STARTER_NAME,
@@ -307,6 +340,7 @@ export class DemoPreviewApi {
     private results = new Map<string, Result>();
     private scripts = new Map<string, Script>();
     private documents = new Map<string, QueryDocument>();
+    private revisions = new Map<string, QueryDocument[]>();
     private sequence = 0;
 
     constructor() {
@@ -317,11 +351,23 @@ export class DemoPreviewApi {
             const runId = demoPreviewStarterRunId(starter.id);
             const run = this.runs.get(runId) ?? this.addRun(runId, starter.sql, 'query', {});
             const timestamp = now();
-            this.documents.set(starter.id, {
+            const document: QueryDocument = {
                 id: starter.id, owner, name: starter.name, connectionId: 'demo', sql: starter.sql,
-                revision: 1, createdAt: timestamp, updatedAt: timestamp, parameters: {}, chart: starter.chart,
+                revision: starter.revision ?? 1, createdAt: timestamp, updatedAt: timestamp, parameters: {}, chart: starter.chart,
                 runId: run.id, dependencies: [], kind: 'query',
-            });
+            };
+            const sqlVersions = starter.id === DEMO_PREVIEW_STARTER_DOCUMENT_ID ? DEMO_PREVIEW_STARTER_VERSIONS : [starter.sql];
+            const nowMs = Date.now(), firstSavedAt = nowMs - (sqlVersions.length - 1) * 86_400_000;
+            const versions = sqlVersions.map((sql, index): QueryDocument => ({
+                ...document,
+                sql,
+                revision: index + 1,
+                createdAt: new Date(firstSavedAt).toISOString(),
+                updatedAt: new Date(firstSavedAt + index * 86_400_000).toISOString(),
+                runId: index === sqlVersions.length - 1 ? run.id : undefined,
+            }));
+            this.documents.set(starter.id, versions[versions.length - 1]!);
+            this.revisions.set(starter.id, versions);
         }
         if (!this.documents.has(PLAYGROUND_PREVIEW_STARTER.id)) {
             const timestamp = now();
@@ -332,6 +378,8 @@ export class DemoPreviewApi {
                 chart: PLAYGROUND_PREVIEW_STARTER.chart, dependencies: [], kind: 'query',
             });
         }
+        for (const document of this.documents.values())
+            if (!this.revisions.has(document.id)) this.revisions.set(document.id, [document]);
         this.persist();
     }
 
@@ -364,6 +412,15 @@ export class DemoPreviewApi {
                 if (typeof document.id === 'string' && typeof document.sql === 'string' && typeof document.name === 'string')
                     this.documents.set(document.id, value as QueryDocument);
             }
+            if (Array.isArray(state.revisions)) for (const entry of state.revisions) {
+                if (!Array.isArray(entry) || typeof entry[0] !== 'string' || !Array.isArray(entry[1])) continue;
+                const versions = entry[1].filter((value): value is QueryDocument => {
+                    const revision = record(value);
+                    return typeof revision.id === 'string' && typeof revision.name === 'string' && typeof revision.sql === 'string' &&
+                        typeof revision.revision === 'number' && Number.isSafeInteger(revision.revision) && revision.revision > 0;
+                });
+                if (versions.length) this.revisions.set(entry[0], versions);
+            }
             for (const run of this.runs.values()) {
                 if (run.connectionId === PLAYGROUND_CONNECTION_ID && run.resultState === 'reopenable' && !this.results.has(run.id))
                     this.runs.set(run.id, { ...run, resultState: 'expired' });
@@ -374,6 +431,7 @@ export class DemoPreviewApi {
             this.results.clear();
             this.scripts.clear();
             this.documents.clear();
+            this.revisions.clear();
             this.sequence = 0;
         }
     }
@@ -385,6 +443,7 @@ export class DemoPreviewApi {
             const serialize = () => JSON.stringify({
                 version: 1, trusted: this.trusted, sequence: this.sequence,
                 runs, results, scripts: [...this.scripts.values()].slice(-50), documents: [...this.documents.values()].slice(-100),
+                revisions: [...this.revisions.entries()].slice(-100),
             });
             let serialized = serialize();
             while (serialized.length > previewStorageBudget) {
@@ -443,6 +502,8 @@ export class DemoPreviewApi {
             ...(previous?.deletedAt ? { deletedAt: previous.deletedAt } : {}),
         };
         this.documents.set(document.id, document);
+        const versions = this.revisions.get(document.id) ?? (previous ? [previous] : []);
+        this.revisions.set(document.id, [...versions, document]);
         this.persist();
         return document;
     }
@@ -575,6 +636,27 @@ export class DemoPreviewApi {
         if (parts[0] === 'documents' && parts[1]) {
             const id = parts[1];
             if (parts.length === 2 && method === 'PUT') return this.saveDocument(body, id);
+            if (parts[2] === 'revisions' && method === 'GET') {
+                const current = this.documents.get(id);
+                if (!current) throw new Error('Sample document not found.');
+                return [...(this.revisions.get(id) ?? [current])].sort((left, right) => right.revision - left.revision);
+            }
+            if (parts[2] === 'restore-revision' && method === 'POST') {
+                const current = this.documents.get(id);
+                if (!current) throw new Error('Sample document not found.');
+                const revisionNumber = typeof body.revision === 'number' ? body.revision : Number(body.revision);
+                const baseRevision = typeof body.baseRevision === 'number' ? body.baseRevision : Number(body.baseRevision);
+                if (!Number.isSafeInteger(revisionNumber) || revisionNumber < 1 || !Number.isSafeInteger(baseRevision) || baseRevision < 1)
+                    throw new Error('Choose a valid saved version to restore.');
+                if (current.revision !== baseRevision) throw new Error('A newer version exists. Refresh version history and try again.');
+                const historical = this.revisions.get(id)?.find(version => version.revision === revisionNumber);
+                if (!historical) throw new Error('This saved version is no longer available. Refresh version history and try again.');
+                const restored: QueryDocument = { ...historical, revision: current.revision + 1, updatedAt: now(), runId: undefined };
+                this.documents.set(id, restored);
+                this.revisions.set(id, [...(this.revisions.get(id) ?? [current]), restored]);
+                this.persist();
+                return restored;
+            }
             if (parts.length === 2 && method === 'DELETE') {
                 const document = this.documents.get(id);
                 if (document) {

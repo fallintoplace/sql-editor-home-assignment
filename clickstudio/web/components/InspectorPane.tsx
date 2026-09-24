@@ -23,6 +23,13 @@ export type InspectorPaneProps = {
     columnsByTable: ReadonlyMap<string, readonly SchemaColumn[]>;
     history: Run[];
     documents: QueryDocument[];
+    revisions: QueryDocument[];
+    revisionsDocumentId?: string;
+    revisionLoading: boolean;
+    revisionError: string;
+    currentRevision?: number;
+    unsavedDraft: boolean;
+    canRestoreRevision: boolean;
     run?: Run;
     profile?: QueryProfile;
     pipeline?: ProfilePipeline;
@@ -42,6 +49,8 @@ export type InspectorPaneProps = {
     trusted: boolean;
     runId?: string;
     onRefreshDocuments: () => void;
+    onRefreshRevisions: () => void;
+    onRestoreRevision: (revision: QueryDocument) => void;
     assistantAction: AssistantAction;
     onAssistantAction: (action: AssistantAction) => void;
     assistantQuestion: string;
@@ -73,14 +82,18 @@ const inspectorTabs = [
     { id: 'schema', icon: 'schema' },
     { id: 'history', icon: 'history' },
     { id: 'documents', icon: 'documents' },
+    { id: 'revisions', icon: 'history' },
     { id: 'parser', icon: 'parser' },
     { id: 'details', icon: 'details' },
     { id: 'pipeline', icon: 'pipeline' },
     { id: 'assistant', icon: 'assistant' },
 ] as const satisfies readonly { id: Inspector; icon: IconName }[];
 
-export function InspectorPane({ inspector, setInspector, connection, schema, schemaLoading, schemaError, search, setSearch, tables, columnsByTable, history, documents, run, profile, pipeline, onRefreshSchema, onRefreshHistory, onInsert, onOpenImport, onExportResult, exportDisabled, onOpenRun, onOpenDocument, onLoadProfile, onLoadPipeline, onOpenGraph, connectionId, sql, trusted, runId, onRefreshDocuments, assistantAction, onAssistantAction, assistantQuestion, onAssistantQuestion, assistantContext, assistantProposal, assistantBusy, assistantError, nativeParserEnabled, nativeParserStatus, nativeParseSnapshot, onRetryParser, includeResult, onIncludeResult, onVoiceInput, voiceListening, voiceError, onPreview, onRequestProposal, onDecideProposal, onRunQuery, runDisabled, expert = false, drawer = false, onClose }: InspectorPaneProps) {
+export function InspectorPane({ inspector, setInspector, connection, schema, schemaLoading, schemaError, search, setSearch, tables, columnsByTable, history, documents, revisions, revisionsDocumentId, revisionLoading, revisionError, currentRevision, unsavedDraft, canRestoreRevision, run, profile, pipeline, onRefreshSchema, onRefreshHistory, onInsert, onOpenImport, onExportResult, exportDisabled, onOpenRun, onOpenDocument, onLoadProfile, onLoadPipeline, onOpenGraph, connectionId, sql, trusted, runId, onRefreshDocuments, onRefreshRevisions, onRestoreRevision, assistantAction, onAssistantAction, assistantQuestion, onAssistantQuestion, assistantContext, assistantProposal, assistantBusy, assistantError, nativeParserEnabled, nativeParserStatus, nativeParseSnapshot, onRetryParser, includeResult, onIncludeResult, onVoiceInput, voiceListening, voiceError, onPreview, onRequestProposal, onDecideProposal, onRunQuery, runDisabled, expert = false, drawer = false, onClose }: InspectorPaneProps) {
     const visibleDocuments = documents.filter(document => document.connectionId === connectionId && !document.deletedAt);
+    const [selectedRevisionNumber, setSelectedRevisionNumber] = useState<number>();
+    useEffect(() => { setSelectedRevisionNumber(currentRevision ?? revisions[0]?.revision); }, [revisionsDocumentId, currentRevision, revisions.length]);
+    const selectedRevision = revisions.find(revision => revision.revision === selectedRevisionNumber) ?? revisions[0];
     const closeButton = drawer && <Button variant="ghost" className="icon-only" aria-label="Close inspector" onClick={onClose}><Icon name="close"/></Button>;
     const title = expert && inspector === 'schema' ? 'Tables' : expert && inspector === 'documents' ? 'Queries' : inspectorLabel(inspector);
 
@@ -89,10 +102,10 @@ export function InspectorPane({ inspector, setInspector, connection, schema, sch
         {expert ? <nav className="inspector-tabs is-browser-tabs" aria-label="Workspace browser">
             <button type="button" aria-label="Tables" aria-pressed={inspector === 'schema'} onClick={() => setInspector('schema')}><Icon name="schema"/><span>Tables</span></button>
             <button type="button" aria-label="Queries" aria-pressed={inspector === 'documents'} onClick={() => setInspector('documents')}><Icon name="documents"/><span>Queries</span></button>
-            <InspectorMoreMenu inspector={inspector} onSelect={setInspector} items={inspectorTabs.filter(item => item.id === 'history' || item.id === 'parser' || Boolean(run) && (item.id === 'details' || item.id === 'pipeline'))} />
+            <InspectorMoreMenu inspector={inspector} onSelect={setInspector} items={inspectorTabs.filter(item => item.id === 'history' || item.id === 'revisions' || item.id === 'parser' || Boolean(run) && (item.id === 'details' || item.id === 'pipeline'))} />
         </nav> : <nav className="inspector-tabs is-browser-tabs" aria-label="Workspace browser">
             <button type="button" aria-label="Tables" aria-pressed={inspector === 'schema'} onClick={() => setInspector('schema')}><Icon name="schema"/><span>Tables</span></button>
-            <InspectorMoreMenu inspector={inspector} onSelect={setInspector} items={inspectorTabs.filter(item => item.id === 'history' || item.id === 'documents')} />
+            <InspectorMoreMenu inspector={inspector} onSelect={setInspector} items={inspectorTabs.filter(item => item.id === 'history' || item.id === 'documents' || item.id === 'revisions')} />
         </nav>}
         <div className="inspector-content">
             {inspector === 'schema' && <section className="inspector-section">
@@ -121,6 +134,21 @@ export function InspectorPane({ inspector, setInspector, connection, schema, sch
             </section>}
             {inspector === 'history' && <section className="inspector-section"><div className="schema-heading"><span>RECENT RUNS</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshHistory}>↻ Refresh</Button></div>{history.length ? history.slice(0, 30).map(item => <button type="button" className="history-card" key={item.id} onClick={() => onOpenRun(item)}><span className={cx('run-state-mark', `state-${item.status}`)}/><span className="history-card-copy"><strong>{item.sql.replace(/\s+/g, ' ').slice(0, 58)}</strong><small>{new Date(item.createdAt).toLocaleString()} <i>·</i> {Math.round(item.elapsedMs)} ms <i>·</i> {item.rowCount.toLocaleString()} rows</small></span><span className="history-open">↗</span></button>) : <div className="inspector-empty"><Icon name="history"/><strong>No runs yet</strong><p>Your recent ClickHouse executions appear here.</p></div>}</section>}
             {inspector === 'documents' && <section className="inspector-section"><div className="schema-heading"><span>SAVED DOCUMENTS</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshDocuments}>↻ Refresh</Button></div>{visibleDocuments.length ? visibleDocuments.map(document => <button type="button" className="document-card" key={document.id} onClick={() => onOpenDocument(document)}><span className="file-type-icon small">SQL</span><span><strong>{document.name}</strong><small>revision {document.revision} · {new Date(document.updatedAt).toLocaleDateString()}</small></span><span className="history-open">↗</span></button>) : <div className="inspector-empty"><Icon name="documents"/><strong>Nothing saved yet</strong><p>Save the current query to keep a named revision on this connection.</p></div>}</section>}
+            {inspector === 'revisions' && <section className="inspector-section revision-history-section">
+                <div className="schema-heading"><span>{revisionsDocumentId ? revisions.find(revision => revision.revision === currentRevision)?.name ?? 'QUERY VERSIONS' : 'QUERY VERSIONS'}</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshRevisions} disabled={revisionLoading || !revisionsDocumentId}>{revisionLoading ? 'Loading…' : 'Refresh'}</Button></div>
+                <p className="revision-history-help">Browse saved versions. Restoring one creates a new version.</p>
+                {revisionError && <div className="callout callout-error" role="alert">{revisionError}</div>}
+                {revisionLoading && !revisions.length && <div className="inspector-empty"><span className="loading-orbit"/><p>Loading saved versions…</p></div>}
+                {!revisionLoading && !revisionError && !revisions.length && <div className="inspector-empty"><Icon name="history"/><strong>No saved versions</strong><p>Save this query to start a version history.</p></div>}
+                {revisions.length > 0 && <>
+                    <div className="revision-list" aria-label="Saved query versions">
+                        {revisions.map(revision => <button type="button" key={`${revision.id}-${revision.revision}`} className={cx('revision-item', selectedRevision?.revision === revision.revision && 'is-selected')} aria-pressed={selectedRevision?.revision === revision.revision} onClick={() => setSelectedRevisionNumber(revision.revision)}>
+                            <span className="revision-item-mark"><Icon name="history"/></span><span className="revision-item-copy"><strong>Version {revision.revision}{revision.revision === currentRevision && <em>Current</em>}</strong><small>{new Date(revision.updatedAt).toLocaleString()}</small></span><span className="history-open">›</span>
+                        </button>)}
+                    </div>
+                    {selectedRevision && <div className="revision-preview"><div className="revision-preview-heading"><span>VERSION {selectedRevision.revision}</span>{selectedRevision.revision !== currentRevision && <Button variant="secondary" className="toolbar-small" title={canRestoreRevision ? 'Restore this version as a new latest version' : 'Restore the saved query before restoring a version'} disabled={revisionLoading || !canRestoreRevision} onClick={() => onRestoreRevision(selectedRevision)}>Restore</Button>}</div><pre aria-label={`SQL from version ${selectedRevision.revision}`}>{selectedRevision.sql}</pre>{unsavedDraft && <small className="revision-unsaved-note">Restoring replaces the current draft. You’ll be asked to confirm.</small>}</div>}
+                </>}
+            </section>}
             {inspector === 'parser' && <NativeParserInspector enabled={nativeParserEnabled} status={nativeParserStatus} snapshot={nativeParseSnapshot} onRetry={onRetryParser}/>}
             {inspector === 'details' && <RunDetails run={run} profile={profile} onLoad={onLoadProfile} unavailableReason={connection.manifest?.queryLog.available === false ? connection.manifest.queryLog.reason : undefined}/>}
             {inspector === 'pipeline' && <PipelineView run={run} profile={profile} pipeline={pipeline} onLoad={onLoadPipeline} onOpenGraph={onOpenGraph} available={connection.manifest?.pipeline.available !== false} unavailableReason={connection.manifest?.pipeline.available === false ? connection.manifest.pipeline.reason : undefined}/>}

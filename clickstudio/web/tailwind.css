@@ -201,6 +201,9 @@
     .new-tab-button:hover { border-color: var(--line); background: var(--panel); color: var(--accent); }
     .new-tab-button svg { width: 16px; height: 16px; }
     .draft-status { display: inline-flex; align-items: center; gap: 7px; padding: 0 9px; color: var(--muted); font-size: 9px; white-space: nowrap; }
+    .revision-history-trigger { display: inline-flex; min-height: 26px; flex: none; align-items: center; gap: 5px; padding: 0 8px; font-size: 8px; }
+    .revision-history-trigger svg { width: 13px; height: 13px; }
+    .revision-history-trigger[aria-pressed="true"] { color: var(--accent); }
     .workspace-content { display: grid; min-height: 0; flex: 1; grid-template-rows: minmax(0, 1fr); gap: 10px; padding: 12px; overflow: auto; }
     .workspace-content.has-run { grid-template-rows: minmax(205px, 1.08fr) minmax(185px, .92fr); }
     .workspace-content.has-run.is-query-collapsed { grid-template-rows: auto minmax(0, 1fr); }
@@ -218,7 +221,6 @@
     .document-name { display: grid; min-width: 0; gap: 1px; }
     .document-name input { width: min(30vw, 260px); padding: 0; border: 0; outline: none; background: transparent; color: var(--text); font-size: 13px; font-weight: 630; }
     .document-name input:focus { outline: 0; }
-    .edit-indicator { padding: 4px 6px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font-family: var(--font-mono); font-size: 8px; }
     .editor-heading-actions { gap: 6px; }
     .panel-collapse-button { width: 29px; min-width: 29px; min-height: 29px; padding: 0; }
     .editor-toolbar { display: flex; min-height: 45px; flex: none; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 13px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel-raised) 82%, var(--page)); }
@@ -595,6 +597,21 @@
     .history-card-copy i { padding: 0 3px; font-style: normal; }
     .history-open { color: var(--muted); font-size: 12px; }
     .document-card > span:nth-child(2) { display: grid; min-width: 0; flex: 1; gap: 4px; }
+    .revision-history-help { margin: -3px 0 1px; color: var(--muted); font-size: 9px; line-height: 1.5; }
+    .revision-list { display: grid; max-height: min(36vh, 350px); gap: 5px; overflow: auto; padding: 1px 2px 3px 0; }
+    .revision-item { display: flex; width: 100%; min-width: 0; align-items: center; gap: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--panel-raised) 66%, transparent); color: var(--text-soft); text-align: left; cursor: pointer; }
+    .revision-item:hover, .revision-item.is-selected { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: color-mix(in srgb, var(--accent) 6%, var(--panel-raised)); }
+    .revision-item-mark { display: grid; width: 24px; height: 24px; flex: none; place-items: center; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); }
+    .revision-item-mark svg { width: 13px; height: 13px; }
+    .revision-item.is-selected .revision-item-mark { border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); color: var(--accent); }
+    .revision-item-copy { display: grid; min-width: 0; flex: 1; gap: 3px; }
+    .revision-item-copy strong { display: flex; min-width: 0; align-items: center; gap: 6px; color: var(--text-soft); font-size: 9px; font-weight: 640; }
+    .revision-item-copy small { overflow: hidden; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+    .revision-item-copy em { margin-left: auto; padding: 2px 5px; border: 1px solid color-mix(in srgb, var(--green) 28%, var(--line)); border-radius: 4px; color: var(--green); font-size: 7px; font-style: normal; font-weight: 600; text-transform: uppercase; }
+    .revision-preview { display: grid; min-width: 0; gap: 7px; padding-top: 5px; border-top: 1px solid var(--line); }
+    .revision-preview-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 8px; font-weight: 650; letter-spacing: .08em; }
+    .revision-preview pre { max-height: min(34vh, 280px); margin: 0; overflow: auto; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-raised); color: var(--text-soft); font-family: var(--font-mono); font-size: 8px; line-height: 1.6; tab-size: 4; white-space: pre; }
+    .revision-unsaved-note { color: var(--amber); font-size: 8px; line-height: 1.5; }
     .run-detail-hero { display: grid; gap: 7px; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: radial-gradient(ellipse at 100% 0, color-mix(in srgb, var(--accent) 7%, transparent), transparent 60%), var(--panel-raised); }
     .run-detail-hero > strong { overflow: hidden; color: var(--text-soft); font-family: var(--font-mono); font-size: 9px; text-overflow: ellipsis; }
     .run-detail-hero > small { color: var(--muted); font-size: 8px; }
@@ -852,10 +869,10 @@
     .beginner-workspace-content { grid-template-rows: minmax(310px, 1fr) minmax(165px, .65fr); }
     .editor-heading-actions .icon-only { display: none; }
     .file-type-icon { width: 27px; height: 27px; }
-    .edit-indicator { display: none; }
     .editor-mode-label > span:last-child, .editor-mode-label .toolbar-divider { display: none; }
     .toolbar-small { min-height: 25px; padding: 0 5px; font-size: 7px; }
     .editor-actions .toolbar-small { display: none; }
+    .revision-history-trigger span { display: none; }
     .editor-actions { gap: 4px; }
     .sql-ai-button, .save-revision-button { width: 31px; min-width: 31px; padding: 0; font-size: 0; }
     .sql-ai-button svg, .save-revision-button svg { width: 15px; height: 15px; }

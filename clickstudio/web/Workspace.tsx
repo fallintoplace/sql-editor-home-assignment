@@ -6,7 +6,7 @@ import { exportCsv, recommendChart } from '../shared/results';
 import { matchesDraft } from '../shared/evidence';
 import { formatSql, parameterNames, selectedStatement, splitSql } from '../shared/sql';
 import { api, download, isFrontendDemoPreview, message, post } from './api';
-import { DEMO_PREVIEW_INITIAL_STARTERS, DEMO_PREVIEW_RUN_ID, DEMO_PREVIEW_SQL, DEMO_PREVIEW_STARTER_DOCUMENT_ID, demoPreviewStarterRunId } from './demo-preview';
+import { DEMO_PREVIEW_INITIAL_STARTERS, DEMO_PREVIEW_RUN_ID, DEMO_PREVIEW_SQL, DEMO_PREVIEW_STARTER_DOCUMENT_ID, demoPreviewStarterRunId, PLAYGROUND_PREVIEW_STARTER } from './demo-preview';
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { ImportWizard } from './components/ImportWizard';
 import { AssistantWorkflow } from './components/AssistantWorkflow';
@@ -69,6 +69,17 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             (active.sql.trim() === SAMPLE_SQL.trim() || active.sql.trim() === DEMO_PREVIEW_SQL.trim()) &&
             (!active.serverId || active.serverId === DEMO_PREVIEW_STARTER_DOCUMENT_ID);
         if (!isStarterDraft || recovered.tabs.length !== 1 || recovered.closedTabs?.length) return recovered;
+        if (connection.id === 'playground') {
+            return {
+                ...recovered,
+                tabs: [{
+                    ...active, name: PLAYGROUND_PREVIEW_STARTER.name, sql: PLAYGROUND_PREVIEW_STARTER.sql,
+                    serverId: undefined, baseRevision: undefined, chart: { ...PLAYGROUND_PREVIEW_STARTER.chart, ys: [] },
+                    runIds: [], activeRunId: undefined, scriptId: undefined, parentRunId: undefined,
+                    parentDocumentId: undefined, kind: 'query', metric: undefined, dependencies: [],
+                }],
+            };
+        }
         const gettingStarted = DEMO_PREVIEW_INITIAL_STARTERS[0]!;
         const runId = demoPreviewStarterRunId(gettingStarted.id);
         return {
@@ -131,6 +142,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const parameters = useMemo(() => {
         try { return parameterNames(active.sql); } catch { return []; }
     }, [active.sql]);
+    const unsupportedParameters = parameters.length > 0 && connection.manifest?.parameters.available === false;
     const assistantKey = assistantContextKey(connection.id, active.id, active.sql, active.parameters, activeRunId, includeResult, assistantAction, assistantQuestion);
     const assistantKeyRef = useRef(assistantKey);
     assistantKeyRef.current = assistantKey;
@@ -340,7 +352,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             if (documentsRequestRef.current === requestId) setDocumentsLoaded(true);
         }
     }, [connection.id]);
-    const loadSchema = useCallback(async () => {
+    const loadSchema = useCallback(async (refresh = false) => {
         const requestId = ++schemaRequestRef.current;
         if (!trustedRef.current) {
             setSchema(undefined);
@@ -350,7 +362,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         }
         setSchemaLoading(true); setSchemaError('');
         try {
-            const next = await api<Schema>(`/connections/${encodeURIComponent(connection.id)}/schema`);
+            const next = await api<Schema>(`/connections/${encodeURIComponent(connection.id)}/schema${refresh ? '?refresh=true' : ''}`);
             if (schemaRequestRef.current === requestId && trustedRef.current)
                 setSchema(next);
         } catch (caught) {
@@ -406,6 +418,14 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
 
     const execute = (wholeScript = false, kind: 'query' | 'explain' | 'pipeline' = 'query') => perform(async () => {
         if (!trusted) throw new Error('Review and trust this read only connection before running SQL.');
+        if (wholeScript && connection.manifest?.scripts.available === false)
+            throw new Error(connection.manifest.scripts.reason ?? 'Scripts are unavailable on this connection.');
+        if (unsupportedParameters)
+            throw new Error(connection.manifest?.parameters.reason ?? 'Query parameters are unavailable on this connection.');
+        if (kind === 'explain' && connection.manifest?.explain.available === false)
+            throw new Error(connection.manifest.explain.reason ?? 'EXPLAIN is unavailable on this connection.');
+        if (kind === 'pipeline' && connection.manifest?.pipeline.available === false)
+            throw new Error(connection.manifest.pipeline.reason ?? 'Pipeline profiling is unavailable on this connection.');
         const selected = editor.current?.selection() ?? { from: active.from, to: active.to };
         const statement = wholeScript ? undefined : selectedStatement(active.sql, selected.from, selected.to);
         if (!wholeScript && !statement) throw new Error('Write or select a SQL statement before running it.');
@@ -513,6 +533,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
 
     const loadProfile = async () => {
         if (!activeRunId) return;
+        if (connection.manifest?.queryLog.available === false) return;
         const runId = activeRunId;
         const response = await api<QueryProfile>(`/runs/${encodeURIComponent(runId)}/profile`);
         setProfileForRun(runId, response);
@@ -520,6 +541,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
 
     const loadPipeline = async () => {
         if (!activeRunId) return;
+        if (connection.manifest?.pipeline.available === false) return;
         const runId = activeRunId;
         const response = await api<ProfilePipeline>(`/runs/${encodeURIComponent(runId)}/profile/pipeline`);
         if (activeRunIdRef.current !== runId) return;
@@ -582,7 +604,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         run,
         profile,
         pipeline,
-        onRefreshSchema: () => void loadSchema(),
+        onRefreshSchema: () => void loadSchema(true),
         onRefreshHistory: () => void loadHistory(),
         onInsert: (value: string) => editor.current?.insert(value),
         onOpenImport: () => setImportOpen(true),
@@ -617,7 +639,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         onRequestProposal: () => void requestAssistantProposal(),
         onDecideProposal: (decision: 'accepted' | 'rejected') => void decideAssistantProposal(decision),
         onRunQuery: () => void execute(),
-        runDisabled: !trusted || Boolean(busy),
+        runDisabled: !trusted || Boolean(busy) || unsupportedParameters,
         expert: experience === 'expert',
     } satisfies InspectorPaneProps;
 
@@ -709,7 +731,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                 {experience === 'expert' ? <>
                                     <Button variant="ghost" className="sql-ai-button" aria-pressed={inspector === 'assistant'} onClick={() => showInspector('assistant')}><Icon name="assistant"/>SQL AI</Button>
                                     <Button variant="secondary" className="save-revision-button" aria-label={copy.common.saveRevision} onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/>{copy.common.save}</Button>
-                                    <RunActionGroup runLabel={copy.common.runStatement} running={busy === 'run' || busy === 'script'} disabled={!trusted || Boolean(busy)} onRun={() => void execute()} actions={[
+                                    <RunActionGroup runLabel={copy.common.runStatement} running={busy === 'run' || busy === 'script'} disabled={!trusted || Boolean(busy) || unsupportedParameters} onRun={() => void execute()} actions={[
                                         { label: 'Run script', disabled: !trusted || Boolean(busy) || !connection.manifest?.scripts.available, title: connection.manifest?.scripts.reason, onSelect: () => void execute(true) },
                                         { label: 'EXPLAIN', disabled: !trusted || Boolean(busy) || !connection.manifest?.explain.available, title: connection.manifest?.explain.reason, onSelect: () => void execute(false, 'explain') },
                                         { label: 'EXPLAIN PIPELINE', disabled: !trusted || Boolean(busy) || !connection.manifest?.pipeline.available, title: connection.manifest?.pipeline.reason, onSelect: () => void execute(false, 'pipeline') },
@@ -717,13 +739,15 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                 </> : <>
                                     <Button variant="ghost" className="sql-ai-button" aria-label="Ask AI" onClick={() => showInspector('assistant')}><Icon name="assistant"/>Ask AI</Button>
                                     <Button variant="secondary" className="save-revision-button" aria-label="Save query" onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/>Save</Button>
-                                    <Button variant="primary" className="run-query-button" aria-label="Run query" onClick={() => void execute()} disabled={!trusted || Boolean(busy)}><Icon name="play"/>{busy === 'run' ? 'Running…' : 'Run'}</Button>
+                                    <Button variant="primary" className="run-query-button" aria-label="Run query" onClick={() => void execute()} disabled={!trusted || Boolean(busy) || unsupportedParameters}><Icon name="play"/>{busy === 'run' ? 'Running…' : 'Run'}</Button>
                                 </>}
                             </div>
                         </div>
                         {experience === 'beginner' && (!trusted || (!demoMode && !connection.manifest)) && <div className="beginner-connection-notice" role="status"><span>{demoMode ? 'Start the sample workspace to run this query.' : !connection.manifest ? trusted ? 'Retest this connection to refresh its feature checks.' : 'Test this connection to discover its ClickHouse features.' : 'Trust this connection to run SQL.'}</span><Button variant="secondary" className="toolbar-small" onClick={() => void (!demoMode && !connection.manifest ? testConnectionActionRef.current() : trustActionRef.current())}>{demoMode ? 'Start exploring' : !connection.manifest ? trusted ? 'Retest connection' : 'Test connection' : 'Trust connection'}</Button></div>}
                         <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} nativeParserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus} onNativeParseSnapshot={snapshot => setNativeParseSnapshot(snapshot)}/></div>
-                        {parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => patch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
+                        {unsupportedParameters
+                            ? <div className="callout mt-3" role="status">{connection.manifest?.parameters.reason ?? 'Query parameters are unavailable on this connection.'} Replace placeholders with SQL literals to run this query.</div>
+                            : parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => patch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
                         {experience === 'expert' && <div className="editor-footer"><span>{active.sql.length.toLocaleString()} characters <span className="footer-dot">·</span> {active.sql.split('\n').length} lines</span></div>}
                     </section>
 

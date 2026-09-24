@@ -1,5 +1,6 @@
 import { DEFAULT_LIMITS, type ChartConfig, type Connection, type QueryDocument, type Result, type ResultPage, type Run, type Schema, type SchemaColumn, type Script } from '../shared/types.js';
 import { splitSql } from '../shared/sql.js';
+import { loadPlaygroundSchema, PLAYGROUND_CONNECTION, PLAYGROUND_CONNECTION_ID, PLAYGROUND_STARTER_ID, PLAYGROUND_STARTER_NAME, PLAYGROUND_STARTER_SQL, queryPlayground } from './playground.js';
 
 export const DEMO_PREVIEW_RUN_ID = 'preview-sample-run';
 export const DEMO_PREVIEW_STARTER_DOCUMENT_ID = 'preview-starter-getting-started';
@@ -90,6 +91,12 @@ GROUP BY day
 ORDER BY day`, chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Daily rollup' } },
 ];
 export const DEMO_PREVIEW_INITIAL_STARTERS = DEMO_PREVIEW_STARTERS.filter(starter => starter.initial);
+export const PLAYGROUND_PREVIEW_STARTER = {
+    id: PLAYGROUND_STARTER_ID,
+    name: PLAYGROUND_STARTER_NAME,
+    sql: PLAYGROUND_STARTER_SQL,
+    chart: { kind: 'table', x: 0, ys: [], title: 'GitHub events' } satisfies ChartConfig,
+};
 
 export function demoPreviewStarterRunId(id: string) {
     return id === DEMO_PREVIEW_STARTER_DOCUMENT_ID ? DEMO_PREVIEW_RUN_ID : `preview-run-${id}`;
@@ -99,6 +106,7 @@ type RequestOptions = { method?: string; body?: unknown; signal?: AbortSignal };
 
 const owner = 'preview-user';
 const previewStorageKey = 'clickstudio:vercel-preview-database:v1';
+const previewStorageBudget = 1_500_000;
 const expiresAt = () => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 const now = () => new Date().toISOString();
 const record = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -315,6 +323,15 @@ export class DemoPreviewApi {
                 runId: run.id, dependencies: [], kind: 'query',
             });
         }
+        if (!this.documents.has(PLAYGROUND_PREVIEW_STARTER.id)) {
+            const timestamp = now();
+            this.documents.set(PLAYGROUND_PREVIEW_STARTER.id, {
+                id: PLAYGROUND_PREVIEW_STARTER.id, owner, name: PLAYGROUND_PREVIEW_STARTER.name,
+                connectionId: PLAYGROUND_CONNECTION_ID, sql: PLAYGROUND_PREVIEW_STARTER.sql,
+                revision: 1, createdAt: timestamp, updatedAt: timestamp, parameters: {},
+                chart: PLAYGROUND_PREVIEW_STARTER.chart, dependencies: [], kind: 'query',
+            });
+        }
         this.persist();
     }
 
@@ -332,7 +349,10 @@ export class DemoPreviewApi {
             }
             if (Array.isArray(state.results)) for (const value of state.results) {
                 const result = record(value);
-                if (typeof result.runId === 'string' && typeof result.queryId === 'string' && Array.isArray(result.columns) && Array.isArray(result.rows))
+                const run = typeof result.runId === 'string' ? this.runs.get(result.runId) : undefined;
+                const expiredPlaygroundResult = run?.connectionId === PLAYGROUND_CONNECTION_ID &&
+                    typeof result.expiresAt === 'string' && Date.parse(result.expiresAt) <= Date.now();
+                if (!expiredPlaygroundResult && typeof result.runId === 'string' && typeof result.queryId === 'string' && Array.isArray(result.columns) && Array.isArray(result.rows))
                     this.results.set(result.runId, value as Result);
             }
             if (Array.isArray(state.scripts)) for (const value of state.scripts) {
@@ -343,6 +363,10 @@ export class DemoPreviewApi {
                 const document = record(value);
                 if (typeof document.id === 'string' && typeof document.sql === 'string' && typeof document.name === 'string')
                     this.documents.set(document.id, value as QueryDocument);
+            }
+            for (const run of this.runs.values()) {
+                if (run.connectionId === PLAYGROUND_CONNECTION_ID && run.resultState === 'reopenable' && !this.results.has(run.id))
+                    this.runs.set(run.id, { ...run, resultState: 'expired' });
             }
             for (const run of this.runs.values()) this.sequence = Math.max(this.sequence, run.sequence);
         } catch {
@@ -356,11 +380,20 @@ export class DemoPreviewApi {
 
     private persist() {
         try {
-            localStorage.setItem(previewStorageKey, JSON.stringify({
+            const runs = [...this.runs.values()].slice(-100);
+            const results = [...this.results.values()].slice(-100);
+            const serialize = () => JSON.stringify({
                 version: 1, trusted: this.trusted, sequence: this.sequence,
-                runs: [...this.runs.values()].slice(-100), results: [...this.results.values()].slice(-100),
-                scripts: [...this.scripts.values()].slice(-50), documents: [...this.documents.values()].slice(-100),
-            }));
+                runs, results, scripts: [...this.scripts.values()].slice(-50), documents: [...this.documents.values()].slice(-100),
+            });
+            let serialized = serialize();
+            while (serialized.length > previewStorageBudget) {
+                const oldestPlaygroundResult = results.findIndex(result => this.runs.get(result.runId)?.connectionId === PLAYGROUND_CONNECTION_ID);
+                if (oldestPlaygroundResult < 0) break;
+                results.splice(oldestPlaygroundResult, 1);
+                serialized = serialize();
+            }
+            localStorage.setItem(previewStorageKey, serialized);
         } catch {}
     }
 
@@ -374,12 +407,21 @@ export class DemoPreviewApi {
 
     private getRun(id: string) {
         let run = this.runs.get(id);
-        if (!run) run = this.addRun(id, DEMO_PREVIEW_SQL, 'query', {});
+        if (!run) throw new Error('This retained run is no longer available in this browser. Run the SQL again.');
+        const expiresAtMs = run.resultExpiresAt ? Date.parse(run.resultExpiresAt) : Number.NaN;
+        if (run.connectionId === PLAYGROUND_CONNECTION_ID && run.resultState === 'reopenable' &&
+            (!this.results.has(run.id) || Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now())) {
+            this.results.delete(run.id);
+            run = { ...run, resultState: 'expired' };
+            this.runs.set(run.id, run);
+            this.persist();
+        }
         return run;
     }
 
-    private documentsFor(trash: boolean) {
-        return [...this.documents.values()].filter(document => trash || !document.deletedAt);
+    private documentsFor(trash: boolean, connectionId?: string | null) {
+        return [...this.documents.values()].filter(document =>
+            (trash || !document.deletedAt) && (!connectionId || document.connectionId === connectionId));
     }
 
     private saveDocument(input: Record<string, unknown>, id?: string) {
@@ -388,7 +430,8 @@ export class DemoPreviewApi {
         const parameters = Object.fromEntries(Object.entries(record(input.parameters)).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
         const document: QueryDocument = {
             id: previous?.id ?? id ?? crypto.randomUUID(), owner, name: typeof input.name === 'string' ? input.name : 'Untitled.sql',
-            connectionId: 'demo', sql: typeof input.sql === 'string' ? input.sql : DEMO_PREVIEW_SQL,
+            connectionId: input.connectionId === PLAYGROUND_CONNECTION_ID ? PLAYGROUND_CONNECTION_ID : 'demo',
+            sql: typeof input.sql === 'string' ? input.sql : DEMO_PREVIEW_SQL,
             revision: (previous?.revision ?? 0) + 1, createdAt: previous?.createdAt ?? timestamp, updatedAt: timestamp,
             parameters,
             chart: chartConfig(input.chart),
@@ -413,18 +456,54 @@ export class DemoPreviewApi {
         const body = record(options.body);
 
         if (pathname === '/session') return { principal: { id: owner, role: 'owner' }, requiresLogin: false, demo: true };
-        if (pathname === '/connections' && method === 'GET') return [connection(this.trusted)];
+        if (pathname === '/connections' && method === 'GET') return [connection(this.trusted), PLAYGROUND_CONNECTION];
         if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'schema') return schema;
+        if (parts[0] === 'connections' && parts[1] === PLAYGROUND_CONNECTION_ID && parts[2] === 'schema')
+            return loadPlaygroundSchema(options.signal, url.searchParams.get('refresh') === 'true');
         if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'trust' && method === 'POST') {
             this.trusted = body.trusted === true;
             this.persist();
             return { trusted: this.trusted };
         }
         if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'import-targets') return [];
+        if (parts[0] === 'connections' && parts[1] === PLAYGROUND_CONNECTION_ID && parts[2] === 'import-targets') return [];
 
         if (pathname === '/runs' && method === 'POST') {
             const requestedKind = body.kind === 'explain' || body.kind === 'pipeline' ? body.kind : 'query';
             const parameters = record(body.parameters) as Record<string, string>;
+            if (body.connectionId === PLAYGROUND_CONNECTION_ID) {
+                if (requestedKind !== 'query') throw new Error('Only regular SQL queries are enabled on ClickHouse Playground.');
+                if (Object.keys(parameters).length) throw new Error('Remove query parameters before running SQL on ClickHouse Playground.');
+                const sql = typeof body.sql === 'string' ? body.sql : '';
+                const response = await queryPlayground(sql, options.signal);
+                const finishedAt = now();
+                const startedAt = new Date(Date.now() - response.elapsedMs).toISOString();
+                const runId = crypto.randomUUID();
+                const status = response.truncated ? 'truncated' as const : 'succeeded' as const;
+                const warnings = response.truncated
+                    ? ['The result reached the 1,000-row display limit and may be incomplete.']
+                    : [];
+                const resultExpiresAt = expiresAt();
+                const run: Run = {
+                    dataSource: 'clickhouse', id: runId, queryId: response.queryId, owner,
+                    connectionId: PLAYGROUND_CONNECTION_ID, sql, kind: 'query', parameters: {},
+                    limits: { ...PLAYGROUND_CONNECTION.limits },
+                    tags: { workspace: 'clickstudio', source: 'ClickHouse SQL Playground', execution: 'browser direct' },
+                    status, createdAt: startedAt, startedAt, finishedAt, elapsedMs: response.elapsedMs,
+                    rowCount: response.rows.length, bytes: response.bytes, columns: response.columns, warnings,
+                    sequence: ++this.sequence, resultExpiresAt, resultState: 'reopenable',
+                    requestedBy: owner, executedAs: PLAYGROUND_CONNECTION.username,
+                    permissionSnapshot: { readonly: true, role: 'public demo' }, retryPolicy: 'never',
+                };
+                const result: Result = {
+                    runId, queryId: response.queryId, columns: response.columns, rows: response.rows,
+                    completeness: response.truncated ? 'truncated' : 'complete', createdAt: finishedAt, expiresAt: resultExpiresAt,
+                };
+                this.runs.set(run.id, run);
+                this.results.set(run.id, result);
+                this.persist();
+                return run;
+            }
             const run = this.addRun(crypto.randomUUID(), typeof body.sql === 'string' ? body.sql : DEMO_PREVIEW_SQL, requestedKind, parameters);
             return run;
         }
@@ -435,11 +514,14 @@ export class DemoPreviewApi {
         if (parts[0] === 'runs' && parts[1]) {
             const run = this.getRun(parts[1]);
             if (parts[2] === 'result' || parts[2] === 'snapshot') {
-                const result = this.results.get(run.id) ?? resultFor(run, run.sequence);
-                if (parts[2] === 'snapshot') return result;
+                const result = this.results.get(run.id);
+                if (!result && run.connectionId === PLAYGROUND_CONNECTION_ID)
+                    throw new Error('This retained Playground result is no longer available in this browser. Run the SQL again.');
+                const retained = result ?? resultFor(run, run.sequence);
+                if (parts[2] === 'snapshot') return retained;
                 const offset = Math.max(0, Number(url.searchParams.get('offset') ?? 0) || 0);
                 const count = Math.max(1, Math.min(500, Number(url.searchParams.get('count') ?? 200) || 200));
-                return { ...result, rows: result.rows.slice(offset, offset + count), offset, totalRows: result.rows.length, nextOffset: offset + count < result.rows.length ? offset + count : null } satisfies ResultPage;
+                return { ...retained, rows: retained.rows.slice(offset, offset + count), offset, totalRows: retained.rows.length, nextOffset: offset + count < retained.rows.length ? offset + count : null } satisfies ResultPage;
             }
             if (parts[2] === 'cancel' && method === 'POST') {
                 const cancelled = { ...run, status: 'cancelled' as const, resultState: 'unavailable' as const, finishedAt: now() };
@@ -449,6 +531,8 @@ export class DemoPreviewApi {
                 return cancelled;
             }
             if (parts[2] === 'profile') {
+                if (run.connectionId === PLAYGROUND_CONNECTION_ID)
+                    throw new Error('Query-log and pipeline profiling are unavailable on ClickHouse Playground.');
                 const pipeline = {
                     available: true, source: 'query_shape' as const, truncated: false,
                     nodes: [
@@ -470,6 +554,8 @@ export class DemoPreviewApi {
         }
 
         if (pathname === '/scripts' && method === 'POST') {
+            if (body.connectionId === PLAYGROUND_CONNECTION_ID)
+                throw new Error('Run one statement at a time on ClickHouse Playground.');
             const sql = typeof body.sql === 'string' ? body.sql : DEMO_PREVIEW_SQL;
             const id = crypto.randomUUID();
             const statements = splitSql(sql);
@@ -484,7 +570,7 @@ export class DemoPreviewApi {
         }
         if (parts[0] === 'scripts' && parts[1]) return this.scripts.get(parts[1]) ?? { id: parts[1], owner, connectionId: 'demo', sql: DEMO_PREVIEW_SQL, createdAt: now(), status: 'succeeded', stopOnError: true, cancelled: false, statements: [] } satisfies Script;
 
-        if (pathname === '/documents' && method === 'GET') return this.documentsFor(url.searchParams.get('trash') === 'true');
+        if (pathname === '/documents' && method === 'GET') return this.documentsFor(url.searchParams.get('trash') === 'true', url.searchParams.get('connectionId'));
         if (pathname === '/documents' && method === 'POST') return this.saveDocument(body);
         if (parts[0] === 'documents' && parts[1]) {
             const id = parts[1];

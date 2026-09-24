@@ -35,7 +35,13 @@ function App() {
     const testConnectionActionRef = useRef<() => Promise<void>>(async () => undefined);
     const copy = getCopy(locale);
     const connection = connections.find(item => item.id === connectionId) ?? connections[0];
-    const otherConnections = connection ? connections.filter(item => item.id !== connection.id && (!session?.demo || experience === 'expert')) : [];
+    const hasPreviewSourceSwitcher = Boolean(session?.demo && connections.some(item => item.id === 'playground'));
+    const isSampleData = Boolean(session?.demo && connection?.dataSource === 'fixture');
+    const isPlayground = Boolean(session?.demo && connection?.id === 'playground');
+    const otherConnections = connection ? connections.filter(item => item.id !== connection.id && (hasPreviewSourceSwitcher || !session?.demo || experience === 'expert')) : [];
+    const sourceChoices = hasPreviewSourceSwitcher
+        ? connections.filter(item => item.id === 'demo' || item.id === 'playground')
+        : otherConnections;
     const dark = themeAppearance[theme].dark;
     const selectConnection = useCallback((id: string) => {
         setConnectionId(id);
@@ -101,28 +107,29 @@ function App() {
             <div className="topbar-divider"/>
             <div className="connection-wrap">
                 <button className="connection-trigger" type="button" aria-haspopup="dialog" aria-expanded={connectionPicker} aria-controls="connection-menu" onClick={() => setConnectionPicker(value => !value)}>
-                    <span className={cx('connection-env', session.demo && 'is-demo')} title={session.demo ? 'Queries are not sent to a live database.' : undefined}><span className={cx('status-light', session.demo ? 'is-warning' : connection?.trusted ? 'is-trusted' : 'is-warning')}/>{session.demo ? 'DEMO DATA' : 'LIVE CONNECTION'}</span>
+                    <span className={cx('connection-env', isSampleData && 'is-demo', isPlayground && 'is-playground')} title={isSampleData ? 'Sample rows are generated in this browser.' : isPlayground ? 'SQL runs on ClickHouse Playground from this browser.' : undefined}><span className={cx('status-light', isSampleData || !connection?.trusted ? 'is-warning' : 'is-trusted')}/>{isSampleData ? 'SAMPLE DATA' : isPlayground ? 'PLAYGROUND' : 'LIVE CONNECTION'}</span>
+                    {isPlayground && <span className="connection-quick-status is-ready">Read only</span>}
                     {!session.demo && <span className={cx('connection-quick-status', connection?.trusted && !connectionNeedsTest ? 'is-ready' : 'is-review')}>{connectionStatus}</span>}
                     <strong>{connection ? connectionLabel(connection, session.demo) : 'Choose connection'}</strong>
                     <span className="connection-database">{connection?.database ?? '—'} <Icon name="chevron"/></span>
                 </button>
-                {connectionPicker && connection && <div className="connection-menu animate-enter" id="connection-menu" role="dialog" aria-label="Connection details">
+                {connectionPicker && connection && <div className="connection-menu animate-enter" id="connection-menu" role="dialog" aria-label={hasPreviewSourceSwitcher ? 'Data source options' : 'Connection details'}>
                     <div className="connection-menu-current">
-                        <span className="connection-menu-heading">Current connection</span>
+                        <span className="connection-menu-heading">{hasPreviewSourceSwitcher ? 'Current data source' : 'Current connection'}</span>
                         <strong>{connectionLabel(connection, session.demo)}</strong>
-                        <small>{session.demo ? 'Local sample data' : `Database: ${connection.database} · Server: ${connection.host}`}</small>
+                        <small>{isSampleData ? 'Generated sample data · SQL stays in this browser' : isPlayground ? `${connection.host} · public read-only access` : session.demo ? 'Local sample data' : `Database: ${connection.database} · Server: ${connection.host}`}</small>
                     </div>
-                    <p className={cx('connection-menu-note', session.demo ? 'is-sample' : connection.trusted && !connectionNeedsTest ? 'is-ready' : 'is-review')} role="status">
-                        {session.demo ? 'This demo uses sample data. Your SQL is not sent to a real database.' : connectionNeedsTest ? connection.trusted ? 'Read-only access is on, but this server needs a fresh capability check.' : 'Test this connection to discover its ClickHouse features.' : connection.trusted ? 'Read-only access is on. Queries can read data but cannot change it.' : 'Connection tested. Turn on read-only access when you are ready to query.'}
+                    <p className={cx('connection-menu-note', isSampleData ? 'is-sample' : isPlayground || connection.trusted && !connectionNeedsTest ? 'is-ready' : 'is-review')} role="status">
+                        {isSampleData ? 'Sample rows are generated for the preview. SQL is not sent to a database.' : isPlayground ? 'Queries run against the public ClickHouse SQL Playground directly from your browser. Access is read only.' : session.demo ? 'This demo uses sample data. Your SQL is not sent to a real database.' : connectionNeedsTest ? connection.trusted ? 'Read-only access is on, but this server needs a fresh capability check.' : 'Test this connection to discover its ClickHouse features.' : connection.trusted ? 'Read-only access is on. Queries can read data but cannot change it.' : 'Connection tested. Turn on read-only access when you are ready to query.'}
                     </p>
                     {(!session.demo || !connection.trusted) && <Button variant={!session.demo && connection.trusted ? 'ghost' : 'primary'} className="connection-menu-action" disabled={connectionActionBusy} onClick={() => void runConnectionAction(connectionNeedsTest)}>
                         {connectionActionBusy ? connectionNeedsTest ? 'Testing…' : 'Saving…' : session.demo ? 'Start exploring' : connectionNeedsTest ? connection.trusted ? 'Retest connection' : 'Test connection' : connection.trusted ? 'Turn off read-only access' : 'Trust connection'}
                     </Button>}
-                    {otherConnections.length > 0 && <div className="connection-switch-list">
-                        <span className="connection-menu-heading">Switch connection</span>
-                        {otherConnections.map(item => <button key={item.id} type="button" onClick={() => { selectConnection(item.id); setConnectionPicker(false); }}>
-                            <span><strong>{connectionLabel(item, session.demo)}</strong><small>{session.demo ? 'Local sample data' : `${item.database} · ${item.host}`}</small></span>
-                            <span className="connection-choice-arrow" aria-hidden="true">›</span>
+                    {sourceChoices.length > 0 && <div className="connection-switch-list">
+                        <span className="connection-menu-heading">{hasPreviewSourceSwitcher ? 'Choose data source' : 'Switch connection'}</span>
+                        {sourceChoices.map(item => <button key={item.id} type="button" aria-pressed={item.id === connection.id} onClick={() => { selectConnection(item.id); setConnectionPicker(false); }}>
+                            <span><strong>{connectionLabel(item, session.demo)}</strong><small>{item.id === 'playground' ? 'Real ClickHouse · public read only' : item.dataSource === 'fixture' ? 'Generated sample rows · no database request' : `${item.database} · ${item.host}`}</small></span>
+                            <span className="connection-choice-arrow" aria-hidden="true">{item.id === connection.id ? '✓' : '›'}</span>
                         </button>)}
                     </div>}
                 </div>}

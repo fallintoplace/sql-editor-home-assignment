@@ -157,7 +157,9 @@ export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, o
 
         if (demoMode) {
             setRecoveryState('ready');
-            setImportUnavailable('File imports are disabled in sample data. This workspace never writes to a database.');
+            setImportUnavailable(connectionId === 'playground'
+                ? 'File imports are disabled on the public read-only ClickHouse Playground connection.'
+                : 'File imports are disabled in sample data. This workspace never writes to a database.');
             return () => { current = false; controller.abort(); };
         }
         if (!trusted) {

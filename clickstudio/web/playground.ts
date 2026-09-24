@@ -1,0 +1,260 @@
+import { DEFAULT_LIMITS, type Column, type Connection, type Json, type Row, type Schema } from '../shared/types.js';
+import { lexSql, splitSql } from '../shared/sql.js';
+import { ClickHouseError, createClient } from '@clickhouse/client-web';
+
+export const PLAYGROUND_CONNECTION_ID = 'playground';
+export const PLAYGROUND_STARTER_ID = 'playground-starter-github-events';
+export const PLAYGROUND_STARTER_NAME = 'GitHub events.sql';
+export const PLAYGROUND_STARTER_SQL = `SELECT
+    event_type,
+    repo_name,
+    actor_login,
+    created_at
+FROM github.events
+LIMIT 50`;
+
+const PLAYGROUND_URL = 'https://sql-clickhouse.clickhouse.com:8443/';
+const PLAYGROUND_USER = 'demo';
+const PLAYGROUND_FORMAT = 'JSONCompactStringsEachRowWithNamesAndTypes';
+const REQUEST_TIMEOUT_MS = 65_000;
+const MAX_RESULT_ROWS = 1_000;
+const MAX_RESPONSE_BYTES = 2_000_000;
+const RESPONSE_BYTE_WARNING_THRESHOLD = 0.9;
+const SCHEMA_MAX_TABLES = 1_000;
+const SCHEMA_MAX_COLUMNS = 1_000;
+const SCHEMA_CACHE_KEY = 'clickstudio:playground-schema:v1';
+const SCHEMA_CACHE_AGE_MS = 60 * 60 * 1_000;
+const NULL_MARKER = 'ᴺᵁᴸᴸ';
+const playgroundClient = createClient({
+    url: PLAYGROUND_URL, username: PLAYGROUND_USER, password: '', database: 'github',
+    request_timeout: REQUEST_TIMEOUT_MS,
+});
+
+const capability = (available: boolean, reason?: string) => ({ available, ...(reason ? { reason } : {}) });
+
+export const PLAYGROUND_CONNECTION: Connection & { trusted: boolean } = {
+    dataSource: 'clickhouse', id: PLAYGROUND_CONNECTION_ID, name: 'ClickHouse Playground',
+    host: 'sql-clickhouse.clickhouse.com:8443', database: 'github', username: PLAYGROUND_USER,
+    readonly: true, trusted: true,
+    limits: { ...DEFAULT_LIMITS, rows: MAX_RESULT_ROWS, seconds: 60 },
+    manifest: {
+        version: 1, serverVersion: 'ClickHouse SQL Playground', testedAt: new Date(0).toISOString(),
+        schema: capability(true),
+        progress: capability(false, 'The public Playground does not expose query progress to this browser connection.'),
+        cancellation: capability(false, 'Closing the request cannot confirm that ClickHouse stopped the query.'),
+        explain: capability(false, 'EXPLAIN is not enabled in this browser preview.'),
+        pipeline: capability(false, 'Pipeline profiling is not enabled in this browser preview.'),
+        queryLog: capability(false, 'Query-log profiling is not enabled in this browser preview.'),
+        documentation: capability(false, 'System-table documentation is not enabled in this browser preview.'),
+        import: capability(false, 'The public Playground connection is read only.'),
+        scripts: capability(false, 'Run one statement at a time on the public Playground connection.'),
+        parameters: capability(false, 'Query parameters are not enabled in this browser preview.'),
+    },
+};
+
+export class PlaygroundError extends Error {
+    constructor(public readonly code: string, message: string) { super(message); }
+}
+
+export type PlaygroundQueryResult = {
+    columns: Column[];
+    rows: Row[];
+    queryId: string;
+    elapsedMs: number;
+    bytes: number;
+    truncated: boolean;
+};
+
+function unwrapType(type: string) {
+    let value = type;
+    while ((value.startsWith('Nullable(') || value.startsWith('LowCardinality(')) && value.endsWith(')')) {
+        value = value.slice(value.indexOf('(') + 1, -1);
+    }
+    return value;
+}
+
+function nullableType(type: string) {
+    let value = type;
+    while ((value.startsWith('Nullable(') || value.startsWith('LowCardinality(')) && value.endsWith(')')) {
+        if (value.startsWith('Nullable(')) return true;
+        value = value.slice(value.indexOf('(') + 1, -1);
+    }
+    return false;
+}
+
+function valueForType(value: unknown, type: string): Json {
+    if (value === null) return null;
+    if (typeof value === 'boolean' || typeof value === 'number') return value;
+    if (typeof value !== 'string') throw new PlaygroundError('INVALID_PLAYGROUND_RESPONSE', 'ClickHouse Playground returned a value with an unsupported type.');
+    if (value === NULL_MARKER && nullableType(type)) return null;
+
+    const baseType = unwrapType(type);
+    if (/^(?:U?Int(?:8|16|32|64|128|256))$/.test(baseType) && /^-?\d+$/.test(value)) {
+        try {
+            const integer = BigInt(value);
+            if (integer <= BigInt(Number.MAX_SAFE_INTEGER) && integer >= BigInt(Number.MIN_SAFE_INTEGER)) return Number(value);
+        } catch { }
+        return value;
+    }
+    if (/^(?:Float(?:32|64)|BFloat16)$/.test(baseType)) {
+        const number = Number(value);
+        if (Number.isFinite(number)) return number;
+    }
+    return value;
+}
+
+function parseCompactRows(body: string) {
+    const lines = body.split(/\r?\n/).filter(line => line.trim().length > 0);
+    if (lines.length < 2) throw parsePlaygroundError(body);
+
+    let names: unknown, types: unknown;
+    try {
+        names = JSON.parse(lines[0]!);
+        types = JSON.parse(lines[1]!);
+    } catch {
+        throw parsePlaygroundError(body);
+    }
+    if (!Array.isArray(names) || !names.every(name => typeof name === 'string') ||
+        !Array.isArray(types) || !types.every(type => typeof type === 'string') || names.length !== types.length)
+        throw new PlaygroundError('INVALID_PLAYGROUND_RESPONSE', 'ClickHouse Playground returned invalid column metadata.');
+
+    const columns = names.map((name, index) => ({ name, type: types[index] as string }));
+    const rows = lines.slice(2).map((line, rowIndex) => {
+        let values: unknown;
+        try { values = JSON.parse(line); }
+        catch { throw new PlaygroundError('INVALID_PLAYGROUND_RESPONSE', `ClickHouse Playground returned an invalid row at position ${rowIndex + 1}.`); }
+        if (!Array.isArray(values) || values.length !== columns.length)
+            throw new PlaygroundError('INVALID_PLAYGROUND_RESPONSE', `ClickHouse Playground returned an invalid row at position ${rowIndex + 1}.`);
+        return values.map((value, columnIndex) => valueForType(value, columns[columnIndex]!.type));
+    });
+    return { columns, rows };
+}
+
+function parsePlaygroundError(body: string, status?: number) {
+    const trimmed = body.trim();
+    const match = trimmed.match(/^(?:Code:\s*(\d+)\.\s*)?(?:DB::Exception:\s*)?([\s\S]*)$/);
+    const code = match?.[1] ? `CLICKHOUSE_${match[1]}` : status ? `PLAYGROUND_HTTP_${status}` : 'PLAYGROUND_QUERY_ERROR';
+    const message = (match?.[2] ?? trimmed).replace(/\s+\(version [^)]+\)\s*$/, '').trim().slice(0, 1_500);
+    return new PlaygroundError(code, message || 'ClickHouse Playground could not run this query.');
+}
+
+function validateQuery(sql: string) {
+    const statements = splitSql(sql);
+    if (statements.length !== 1) throw new PlaygroundError('SINGLE_STATEMENT', 'Run one SQL statement at a time on the public Playground.');
+    const command = lexSql(statements[0]!.sql).find(token => token.kind === 'word')?.text.toUpperCase();
+    if (!command || !['SELECT', 'WITH', 'SHOW', 'DESCRIBE', 'DESC', 'EXPLAIN'].includes(command))
+        throw new PlaygroundError('READ_ONLY_SQL', 'The public Playground connection accepts read-only SQL only.');
+}
+
+async function executePlaygroundQuery(sql: string, signal: AbortSignal | undefined, maxRows: number, maxBytes: number): Promise<PlaygroundQueryResult> {
+    if (!sql.trim()) throw new PlaygroundError('EMPTY_QUERY', 'Write a SQL statement before running it.');
+    validateQuery(sql);
+
+    const controller = new AbortController();
+    let timedOut = false;
+    const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, REQUEST_TIMEOUT_MS);
+    const abortRequest = () => controller.abort(signal?.reason);
+    signal?.addEventListener('abort', abortRequest, { once: true });
+    const startedAt = performance.now();
+    try {
+        const queryId = crypto.randomUUID();
+        const response = await playgroundClient.query({
+            query: sql,
+            format: PLAYGROUND_FORMAT,
+            query_id: queryId,
+            abort_signal: controller.signal,
+            clickhouse_settings: {
+                max_result_rows: String(maxRows),
+                max_result_bytes: String(maxBytes),
+                max_execution_time: 60,
+                result_overflow_mode: 'break',
+            },
+        });
+        const body = await response.text();
+        const bytes = new TextEncoder().encode(body).byteLength;
+        if (bytes > maxBytes) throw new PlaygroundError('PLAYGROUND_RESPONSE_TOO_LARGE', 'The Playground result is too large to display. Add a LIMIT and try again.');
+        const parsed = parseCompactRows(body);
+        const mayBeTruncated = parsed.rows.length >= maxRows || bytes >= maxBytes * RESPONSE_BYTE_WARNING_THRESHOLD;
+        const summaryHeader = response.response_headers['x-clickhouse-summary'];
+        const summary = typeof summaryHeader === 'string' ? summaryHeader : undefined;
+        let summaryElapsed = 0;
+        try { summaryElapsed = summary ? Number((JSON.parse(summary) as Record<string, unknown>).elapsed_ns) / 1_000_000 : 0; } catch { }
+        return {
+            ...parsed, queryId: response.query_id || queryId, bytes,
+            elapsedMs: Number.isFinite(summaryElapsed) && summaryElapsed > 0 ? summaryElapsed : performance.now() - startedAt,
+            truncated: mayBeTruncated,
+        };
+    } catch (error) {
+        if (error instanceof PlaygroundError) throw error;
+        if (error instanceof ClickHouseError)
+            throw new PlaygroundError(`CLICKHOUSE_${error.code}`, error.message);
+        if (timedOut) throw new PlaygroundError('PLAYGROUND_TIMEOUT', 'ClickHouse Playground did not respond within 65 seconds.');
+        if (controller.signal.aborted) throw new PlaygroundError('PLAYGROUND_REQUEST_ABORTED', 'The ClickHouse Playground request was interrupted.');
+        throw new PlaygroundError('PLAYGROUND_UNAVAILABLE', 'Could not reach ClickHouse Playground. Check the network and try again.');
+    } finally {
+        window.clearTimeout(timeout);
+        signal?.removeEventListener('abort', abortRequest);
+    }
+}
+
+export function queryPlayground(sql: string, signal?: AbortSignal) {
+    return executePlaygroundQuery(sql, signal, MAX_RESULT_ROWS, MAX_RESPONSE_BYTES);
+}
+
+const tablesSql = `SELECT database, name, engine, sorting_key, primary_key, partition_key, sampling_key,
+       total_rows, total_bytes, total_bytes_uncompressed
+FROM system.tables
+WHERE database NOT IN ('system', 'INFORMATION_SCHEMA', 'information_schema') AND is_temporary = 0
+ORDER BY database, name
+LIMIT ${SCHEMA_MAX_TABLES + 1}`;
+const columnsSql = `SELECT database, table, name, type, default_kind, comment
+FROM system.columns
+WHERE database NOT IN ('system', 'INFORMATION_SCHEMA', 'information_schema')
+ORDER BY database, table, position
+LIMIT ${SCHEMA_MAX_COLUMNS + 1}`;
+
+const text = (value: Json | undefined) => value === null || value === undefined ? '' : String(value);
+const nullableText = (value: Json | undefined) => value === null || value === undefined ? null : String(value);
+
+function cachedSchema(): Schema | undefined {
+    try {
+        const stored: unknown = JSON.parse(localStorage.getItem(SCHEMA_CACHE_KEY) ?? 'null');
+        if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return undefined;
+        const value = stored as { savedAt?: unknown; schema?: unknown };
+        if (typeof value.savedAt !== 'number' || Date.now() - value.savedAt > SCHEMA_CACHE_AGE_MS || !value.schema || typeof value.schema !== 'object') return undefined;
+        const schema = value.schema as Schema;
+        if (schema.connectionId !== PLAYGROUND_CONNECTION_ID || !Array.isArray(schema.tables) || !Array.isArray(schema.columns)) return undefined;
+        return schema;
+    } catch { return undefined; }
+}
+
+export async function loadPlaygroundSchema(signal?: AbortSignal, refresh = false): Promise<Schema> {
+    if (!refresh) {
+        const cached = cachedSchema();
+        if (cached) return cached;
+    }
+
+    const [tableResult, columnResult] = await Promise.all([
+        executePlaygroundQuery(tablesSql, signal, SCHEMA_MAX_TABLES + 1, 4_000_000),
+        executePlaygroundQuery(columnsSql, signal, SCHEMA_MAX_COLUMNS + 1, 6_000_000),
+    ]);
+    const tableRows = tableResult.rows.slice(0, SCHEMA_MAX_TABLES);
+    const columnRows = columnResult.rows.slice(0, SCHEMA_MAX_COLUMNS);
+    const truncated = tableResult.rows.length >= MAX_RESULT_ROWS || columnResult.rows.length >= MAX_RESULT_ROWS;
+    const schema: Schema = {
+        connectionId: PLAYGROUND_CONNECTION_ID, fetchedAt: new Date().toISOString(),
+        tables: tableRows.map(row => ({
+            database: text(row[0]), name: text(row[1]), engine: text(row[2]),
+            orderBy: text(row[3]), primaryKey: text(row[4]), partitionKey: text(row[5]), samplingKey: text(row[6]),
+            rowEstimate: nullableText(row[7]), sizeBytes: nullableText(row[8]), uncompressedBytes: nullableText(row[9]),
+        })),
+        columns: columnRows.map(row => ({
+            database: text(row[0]), table: text(row[1]), name: text(row[2]), type: text(row[3]),
+            defaultKind: text(row[4]), comment: text(row[5]),
+        })),
+        warnings: truncated ? [`The public Playground returned its ${MAX_RESULT_ROWS.toLocaleString()}-row limit. Some tables or columns may be missing.`] : [],
+        truncated,
+    };
+    try { localStorage.setItem(SCHEMA_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), schema })); } catch { }
+    return schema;
+}

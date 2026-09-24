@@ -152,6 +152,9 @@
     .select-chevron { position: absolute; right: 6px; width: 13px !important; height: 13px !important; pointer-events: none; color: var(--muted); }
     .connection-env.is-demo { color: var(--amber); }
     .connection-env.is-demo .status-light { background: var(--amber); }
+    .connection-env.is-playground { color: var(--green); }
+    .connection-switch-list > button[aria-pressed="true"] { background: color-mix(in srgb, var(--green) 8%, var(--panel)); }
+    .connection-switch-list > button[aria-pressed="true"] .connection-choice-arrow { color: var(--green); }
     .connection-readonly { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 9px; font-weight: 690; letter-spacing: .08em; text-transform: uppercase; }
     .connection-readonly svg { width: 13px; height: 13px; }
     .workspace-root { position: relative; display: flex; min-height: 0; flex: 1; flex-direction: column; }

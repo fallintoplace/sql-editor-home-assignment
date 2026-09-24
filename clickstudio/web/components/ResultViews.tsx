@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react';
-import { displayValue, recommendChart, chartNumber, numericType, filterRows, sampleChartRows, MAX_CHART_RENDER_POINTS } from '../../shared/results';
+import { displayValue, recommendChart, chartNumber, countRowsByCategory, countRowsOverTime, numericType, temporalType, filterRows, sampleChartRows, MAX_CHART_RENDER_POINTS } from '../../shared/results';
 import type { ProfilePipeline, QueryProfile, Result, ResultPage, Run } from '../../shared/types';
 import type { Draft } from '../workspace-state';
 import { PipelineGraph } from './PipelineGraph';
@@ -47,11 +47,120 @@ export function ResultGrid({ run, page, pageIndex, loading, onPage }: { run: Run
     return <div className="result-grid-wrap animate-enter"><div className="result-summary-row"><span><strong>{page.totalRows.toLocaleString()}</strong> rows <i>·</i> <strong>{page.columns.length}</strong> columns</span><span className="result-completeness"><span className={cx('status-light', page.completeness === 'truncated' ? 'is-warning' : 'is-trusted')}/>{page.completeness === 'truncated' ? 'Retained prefix · truncated' : 'Complete result'}</span><label className="result-filter"><span>Find on this page</span><input type="search" aria-label="Filter current page" placeholder="Filter rows" value={filter} onChange={event => setFilter(event.target.value)}/></label>{filter.trim() && <span>{visibleRows.length} matches on this page</span>}<span>Page {pageIndex + 1} of {pageCount}</span></div><div className="data-table-scroll"><table className="data-table" aria-label="Retained query rows"><thead><tr><th className="row-number">#</th>{page.columns.map((column, index) => <th key={`${column.name}-${index}`}><span>{column.name}</span><small>{column.type}</small></th>)}</tr></thead><tbody>{visibleRows.map(({ row, index: rowIndex }) => <tr key={`${page.offset}-${rowIndex}`} style={{ animationDelay: `${Math.min(rowIndex, 12) * 16}ms` }}><td className="row-number">{page.offset + rowIndex + 1}</td>{row.map((value, index) => <td key={index} title={displayValue(value)} className={value === null ? 'cell-null' : ''}>{displayValue(value)}</td>)}</tr>)}</tbody></table>{page.rows.length === 0 ? <div className="no-rows" role="status">{emptyRowsMessage}</div> : visibleRows.length === 0 && <div className="no-rows">No rows match on this page.</div>}</div><div className="table-pagination"><span>Showing {page.rows.length.toLocaleString()} of {page.totalRows.toLocaleString()} retained rows <i>·</i> filter applies to this page only</span><div><Button variant="secondary" disabled={pageIndex === 0} onClick={() => onPage(0)}>First</Button><Button variant="secondary" disabled={pageIndex === 0} onClick={() => onPage(pageIndex - 1)}>←</Button><Button variant="secondary" disabled={pageIndex + 1 >= pageCount} onClick={() => onPage(pageIndex + 1)}>→</Button><Button variant="secondary" disabled={pageIndex + 1 >= pageCount} onClick={() => onPage(pageCount - 1)}>Last</Button></div></div></div>;
 }
 
+function RowCountChart({ result, chart, suggestion, onChart }: {
+    result: Result;
+    chart: Draft['chart'];
+    suggestion: ReturnType<typeof recommendChart>;
+    onChart: (chart: Draft['chart']) => void;
+}) {
+    const dimensions = result.columns.flatMap((column, index) => numericType(column.type) ? [] : [index]);
+    if (!dimensions.length) return <div className="chart-empty">This result has no dimensions to group.</div>;
+    const usesSuggestion = chart.kind === 'table' || !dimensions.includes(chart.x);
+    const xIndex = usesSuggestion ? suggestion.config.x : chart.x;
+    const timeAxis = temporalType(result.columns[xIndex]?.type ?? '');
+    const breakdowns = dimensions.filter(index => index !== xIndex && !temporalType(result.columns[index]?.type ?? ''));
+    const defaultGroupBy = usesSuggestion ? suggestion.config.groupBy : chart.groupBy;
+    const groupByIndex = timeAxis && defaultGroupBy !== undefined && breakdowns.includes(defaultGroupBy)
+        ? defaultGroupBy
+        : undefined;
+    const countData = timeAxis
+        ? countRowsOverTime(result.rows, xIndex, groupByIndex)
+        : undefined;
+    const categoryData = !timeAxis ? countRowsByCategory(result.rows, xIndex) : undefined;
+    const series = countData?.series ?? [];
+    const allTimePoints = series.flatMap(item => item.points).sort((left, right) => left.timestamp - right.timestamp);
+    const timeTicks = [...new Map(allTimePoints.map(point => [point.timestamp, point])).values()];
+    const counts = timeAxis ? allTimePoints.map(point => point.count) : categoryData?.map(group => group.count) ?? [];
+    const max = Math.max(0, ...counts);
+    const min = 0;
+    const range = max || 1;
+    const plotTop = 40, plotBottom = 190;
+    const y = (value: number) => plotBottom - (value / range) * (plotBottom - plotTop);
+    const timeMin = allTimePoints[0]?.timestamp ?? 0;
+    const timeMax = allTimePoints.at(-1)?.timestamp ?? timeMin;
+    const xTime = (timestamp: number) => 32 + (timeMax === timeMin ? 350 : ((timestamp - timeMin) / (timeMax - timeMin)) * 700);
+    const xCategory = (index: number, length: number) => 32 + (length <= 1 ? 350 : index * (700 / (length - 1)));
+    const bars = categoryData ?? [];
+    const axisValueCount = timeAxis ? timeTicks.length : bars.length;
+    const labelIndexes = axisValueCount <= 3
+        ? Array.from({ length: axisValueCount }, (_value, index) => index)
+        : [0, Math.floor((axisValueCount - 1) / 2), axisValueCount - 1];
+    const axisLabels = timeAxis
+        ? labelIndexes.map(index => timeTicks[index]?.label ?? '')
+        : labelIndexes.map(index => categoryData?.[index]?.label ?? '');
+    const valueFormatter = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
+    const barWidth = Math.max(4, Math.min(32, 680 / Math.max(1, bars.length) * .64));
+    const hasRows = result.rows.length > 0;
+    const noTimeValues = timeAxis && !series.length;
+    const title = usesSuggestion
+        ? suggestion.config.title
+        : chart.title || (timeAxis ? 'Rows over time' : `Rows by ${result.columns[xIndex]?.name}`);
+
+    return <div className="chart-workspace animate-enter">
+        <div className="chart-title-row">
+            <div>
+                <span className="eyebrow">VISUAL EXPLORATION</span>
+                <h3>{title}</h3>
+                <p>{timeAxis
+                    ? `Rows are counted in ${countData?.unit ?? 'automatic'} time buckets from the retained result. No aggregate query is sent.`
+                    : `Rows are counted by ${result.columns[xIndex]?.name} from the retained result. No aggregate query is sent.`}</p>
+            </div>
+            <div className="chart-controls">
+                <label>X axis<select aria-label="X axis" value={xIndex} onChange={event => {
+                    const nextX = Number(event.target.value);
+                    const nextTime = temporalType(result.columns[nextX]?.type ?? '');
+                    const nextGroupBy = nextTime
+                        ? groupByIndex ?? dimensions.find(index => index !== nextX && !temporalType(result.columns[index]?.type ?? ''))
+                        : undefined;
+                    const nextTitle = nextTime
+                        ? nextGroupBy === undefined ? 'Rows over time' : `Rows over time by ${result.columns[nextGroupBy]?.name}`
+                        : `Rows by ${result.columns[nextX]?.name}`;
+                    onChart({ ...chart, kind: nextTime ? 'line' : 'bar', x: nextX, groupBy: nextGroupBy, ys: [], title: nextTitle });
+                }}>{dimensions.map(index => <option key={index} value={index}>{result.columns[index]?.name}</option>)}</select></label>
+                {timeAxis && breakdowns.length > 0 && <label>Break down by<select aria-label="Break down by" value={groupByIndex ?? ''} onChange={event => {
+                    const nextGroupBy = event.target.value === '' ? undefined : Number(event.target.value);
+                    onChart({ ...chart, kind: 'line', x: xIndex, groupBy: nextGroupBy, ys: [], title: nextGroupBy === undefined ? 'Rows over time' : `Rows over time by ${result.columns[nextGroupBy]?.name}` });
+                }}><option value="">All rows</option>{breakdowns.map(index => <option key={index} value={index}>{result.columns[index]?.name}</option>)}</select></label>}
+                <span className="chart-row-count-type"><span className="chart-legend-dot"/>Rows</span>
+            </div>
+        </div>
+        {!hasRows
+            ? <div className="chart-empty">This result has no retained rows to chart.</div>
+            : noTimeValues
+                ? <div className="chart-empty">No retained rows contain a valid value for this time column.</div>
+                : <div className="chart-canvas">
+                    <div className="chart-axis-labels"><span>{valueFormatter.format(max)}</span><span>{valueFormatter.format(max / 2)}</span><span>{valueFormatter.format(min)}</span></div>
+                    <svg viewBox="0 0 760 230" role="img" aria-label={timeAxis ? `Rows over time by ${result.columns[xIndex]?.name}` : `Rows by ${result.columns[xIndex]?.name}`}>
+                        {[40, 115, 190].map(value => <line key={value} x1="32" x2="732" y1={value} y2={value} className="chart-gridline"/>)}
+                        <line x1="32" x2="732" y1={plotBottom} y2={plotBottom} className="chart-zero-line"/>
+                        {timeAxis
+                            ? series.map((item, seriesIndex) => <g key={item.key} style={{ '--series-color': seriesColor(seriesIndex) } as CSSProperties}>
+                                {item.points.length > 1 && <polyline points={item.points.map(point => `${xTime(point.timestamp)},${y(point.count)}`).join(' ')} className="chart-line"/>}
+                                {item.points.map(point => <circle key={`${item.key}-${point.timestamp}`} cx={xTime(point.timestamp)} cy={y(point.count)} r="3.5" className="chart-point"><title>{`${point.label} · ${item.label}: ${point.count.toLocaleString()} rows`}</title></circle>)}
+                            </g>)
+                            : bars.map((group, index) => {
+                                const valueY = y(group.count), top = Math.min(plotBottom, valueY), height = Math.max(1, plotBottom - valueY);
+                                return <rect key={group.key} x={xCategory(index, bars.length) - barWidth / 2} y={top} width={barWidth} height={height} rx="3" className="chart-bar" style={{ '--series-color': seriesColor(0), animationDelay: `${index * 25}ms` } as CSSProperties}><title>{`${group.label}: ${group.count.toLocaleString()} rows`}</title></rect>;
+                            })}
+                    </svg>
+                    <div className="chart-x-labels">{axisLabels.map((label, index) => <span key={`${label}-${index}`}>{label}</span>)}</div>
+                </div>}
+        <div className="chart-footer">
+            <span className="chart-legend">{(timeAxis ? series : [{ key: 'rows', label: 'Rows' }]).map((item, index) => <span key={item.key}><span className="chart-legend-dot" style={{ backgroundColor: seriesColor(index) }}/>{item.label}</span>)}</span>
+            <span>{timeAxis
+                ? `${timeTicks.length.toLocaleString()} ${countData?.unit ?? ''} buckets from ${result.rows.length.toLocaleString()} returned rows${countData?.excludedRows ? ` · ${countData.excludedRows} invalid dates skipped` : ''}`
+                : `${bars.length.toLocaleString()} categories from ${result.rows.length.toLocaleString()} returned rows`}
+                <i>·</i> {result.completeness === 'truncated' ? 'retained prefix only' : 'complete query result'}</span>
+        </div>
+    </div>;
+}
+
 export function ChartView({ result, loading, chart, onChart }: { result?: Result; loading: boolean; chart: Draft['chart']; onChart: (chart: Draft['chart']) => void }) {
     if (loading || !result) return <div className="result-loading"><span className="loading-orbit"/><span>Preparing a chart from retained rows…</span></div>;
     if (!result.columns.length) return <div className="chart-empty">This result has no columns to chart.</div>;
     const suggestion = recommendChart(result.columns, result.rows);
     const numericIndexes = result.columns.flatMap((column, index) => numericType(column.type) ? [index] : []);
+    if (!numericIndexes.length) return <RowCountChart result={result} chart={chart} suggestion={suggestion} onChart={onChart}/>;
     const chartKind = chart.kind === 'table'
         ? (suggestion.config.kind === 'table' ? 'bar' : suggestion.config.kind)
         : chart.kind;

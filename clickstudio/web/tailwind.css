@@ -524,6 +524,7 @@
     .chart-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
     .chart-controls label { display: grid; gap: 4px; color: var(--muted); font-size: 8px; }
     .chart-controls select { min-width: 100px; max-width: 150px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-raised); color: var(--text-soft); font-size: 9px; }
+    .chart-row-count-type { display: inline-flex; min-height: 28px; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--text-soft); font-size: 9px; }
     .chart-measures { display: flex; max-width: 280px; flex-wrap: wrap; align-items: center; gap: 5px 9px; min-width: 0; margin: 0; padding: 5px 7px; border: 1px solid var(--line); border-radius: 7px; }
     .chart-measures legend { padding: 0 3px; color: var(--muted); font-size: 8px; }
     .chart-measures label { display: inline-flex; min-width: 0; grid-auto-flow: column; align-items: center; gap: 4px; color: var(--text-soft); font-size: 8px; }

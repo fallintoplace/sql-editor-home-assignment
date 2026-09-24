@@ -1,4 +1,11 @@
-import { parseNativeParseResult, type NativeFormatResult, type NativeParseResult } from '../shared/native-parser';
+import {
+    parseNativeParseResult,
+    type NativeFormatResult,
+    type NativeParseResult,
+    type NativeParserReply,
+    type NativeParserRequest,
+    type NativeParserWorkerStatus,
+} from '../shared/native-parser';
 
 type ParserExports = {
     memory: WebAssembly.Memory;
@@ -11,15 +18,9 @@ type ParserExports = {
     ch_result_data: () => number;
     ch_result_size: () => number;
 };
-type WorkerRequest = { id: number; kind: 'parseMany' | 'formatMany'; sql: string[] };
-type WorkerReply =
-    | { id: number; ok: true; results: Array<NativeParseResult | NativeFormatResult> }
-    | { id: number; ok: false; message: string };
-type WorkerStatus = { kind: 'status'; status: 'ready' | 'unavailable'; reason?: string };
-
 const worker = globalThis as unknown as {
-    postMessage: (message: WorkerReply | WorkerStatus) => void;
-    addEventListener: (type: 'message', listener: (event: MessageEvent<WorkerRequest>) => void) => void;
+    postMessage: (message: NativeParserReply | NativeParserWorkerStatus) => void;
+    addEventListener: (type: 'message', listener: (event: MessageEvent<NativeParserRequest>) => void) => void;
 };
 
 const ERRNO_SUCCESS = 0;
@@ -30,6 +31,17 @@ const decoder = new TextDecoder();
 
 function message(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+}
+
+const requiredParserFunctions = [
+    'ch_features', 'ch_alloc', 'ch_free', 'ch_parse', 'ch_result_data', 'ch_result_size',
+] as const satisfies readonly (keyof ParserExports)[];
+
+function isParserExports(value: WebAssembly.Exports): value is WebAssembly.Exports & ParserExports {
+    return value.memory instanceof WebAssembly.Memory
+        && requiredParserFunctions.every(name => typeof value[name] === 'function')
+        && (value._initialize === undefined || typeof value._initialize === 'function')
+        && (value.ch_format === undefined || typeof value.ch_format === 'function');
 }
 
 async function instantiate(bytes: Uint8Array): Promise<ParserExports> {
@@ -85,7 +97,7 @@ async function instantiate(bytes: Uint8Array): Promise<ParserExports> {
         sched_yield: success,
     };
 
-    const source = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    const source = new Uint8Array(bytes).buffer;
     const module = await WebAssembly.compile(source);
     for (const imported of WebAssembly.Module.imports(module)) {
         if (imported.module !== 'wasi_snapshot_preview1' || imported.kind !== 'function')
@@ -93,10 +105,10 @@ async function instantiate(bytes: Uint8Array): Promise<ParserExports> {
         preview1[imported.name] ??= notSupported;
     }
     const instance = await WebAssembly.instantiate(module, { wasi_snapshot_preview1: preview1 });
-    const exports = instance.exports as unknown as ParserExports;
+    const exports = instance.exports;
+    if (!isParserExports(exports))
+        throw new Error('ClickHouse parser exports are incomplete');
     memory = exports.memory;
-    if (!(memory instanceof WebAssembly.Memory))
-        throw new Error('ClickHouse parser did not export WebAssembly memory');
     exports._initialize?.();
     return exports;
 }
@@ -124,7 +136,7 @@ function createParser(exports: ParserExports) {
             const result = call(exports.ch_parse, sql);
             let envelope: unknown;
             try {
-                envelope = JSON.parse(result.out) as unknown;
+                envelope = JSON.parse(result.out);
             } catch (error) {
                 return { error: { message: result.out || message(error) || 'ClickHouse parser returned invalid diagnostics' } };
             }
@@ -135,9 +147,10 @@ function createParser(exports: ParserExports) {
             }
         },
         format(sql: string): NativeFormatResult {
-            if (typeof exports.ch_format !== 'function')
+            const format = exports.ch_format;
+            if (typeof format !== 'function')
                 return { error: { message: 'Formatting is unavailable in this ClickHouse parser build' } };
-            const result = call((ptr, size) => exports.ch_format!(ptr, size, 0), sql);
+            const result = call((ptr, size) => format(ptr, size, 0), sql);
             return result.ok ? { sql: result.out } : { error: { message: result.out } };
         },
     };
@@ -173,12 +186,23 @@ worker.addEventListener('message', event => {
         const request = event.data;
         try {
             const runtime = await parser();
-            const results = request.kind === 'parseMany'
-                ? request.sql.map(sql => runtime.parse(sql))
-                : request.sql.map(sql => runtime.format(sql));
-            worker.postMessage({ id: request.id, ok: true, results });
+            if (request.kind === 'parseMany') {
+                worker.postMessage({
+                    id: request.id,
+                    kind: 'parseMany',
+                    ok: true,
+                    results: request.sql.map(sql => runtime.parse(sql)),
+                });
+            } else {
+                worker.postMessage({
+                    id: request.id,
+                    kind: 'formatMany',
+                    ok: true,
+                    results: request.sql.map(sql => runtime.format(sql)),
+                });
+            }
         } catch (error) {
-            worker.postMessage({ id: request.id, ok: false, message: message(error) });
+            worker.postMessage({ id: request.id, kind: request.kind, ok: false, message: message(error) });
         }
     })();
 });

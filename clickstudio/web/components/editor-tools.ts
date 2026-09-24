@@ -44,6 +44,7 @@ function editorToolsPanel(view: EditorView, copy: Copy['common']): Panel {
     dom.className = 'cm-sql-tools';
     dom.setAttribute('role', 'group');
     dom.setAttribute('aria-label', copy.clickhouseSql);
+    dom.dataset.testid = 'sql-editor-tools';
     const button = (text: string, label: string, action: () => void) => {
         const element = doc.createElement('button');
         element.type = 'button';

@@ -57,7 +57,7 @@ export function Status({ run, copy }: { run?: Run; copy?: Copy['common'] }) {
     };
     const key = run ? statusCopy[run.status] : undefined;
     const label = key && copy ? copy[key] : run?.status ?? copy?.statusReady ?? 'Ready';
-    return <span className="inline-flex items-center gap-2 text-[11px] capitalize text-muted"><span className={cx('status-light', kind)}/>{label}</span>;
+    return <span data-run-status={run?.status ?? 'ready'} className="inline-flex items-center gap-2 text-[11px] capitalize text-muted"><span className={cx('status-light', kind)}/>{label}</span>;
 }
 
 export function SelectControl<Value extends string>({ label, value, options, onChange }: { label: string; value: Value; options: readonly SelectOption<Value>[]; onChange: (value: Value) => void }) {

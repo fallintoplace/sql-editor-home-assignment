@@ -1,8 +1,18 @@
 import { DEFAULT_LIMITS, HARD_LIMITS, type Limits, type RunRequest, type Json } from '../shared/types.js';
 import { AppError, requireThat } from './errors.js';
+
+type RunKind = NonNullable<RunRequest['kind']>;
+const LIMIT_KEYS = ['rows', 'bytes', 'seconds', 'memory', 'threads'] satisfies readonly (keyof Limits)[];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+function isRunKind(value: unknown): value is RunKind {
+    return value === 'query' || value === 'explain' || value === 'pipeline';
+}
 export function record(value: unknown, name = 'request'): Record<string, unknown> {
-    requireThat(value !== null && typeof value === 'object' && !Array.isArray(value), 400, 'INVALID_REQUEST', `${name} must be an object`);
-    return value as Record<string, unknown>;
+    requireThat(isRecord(value), 400, 'INVALID_REQUEST', `${name} must be an object`);
+    return value;
 }
 export function text(value: unknown, name: string, max = 1000, allowEmpty = false): string {
     requireThat(typeof value === 'string' && (allowEmpty || value.trim().length > 0) && value.length <= max, 400, 'INVALID_REQUEST', `${name} must be ${allowEmpty ? '0' : '1'}–${max} characters`);
@@ -29,7 +39,7 @@ export function stringMap(value: unknown, name: string, maxEntries = 50): Record
 export function limits(value: unknown, defaults: Limits = { ...DEFAULT_LIMITS }): Limits {
     const source = value === undefined ? {} : record(value, 'limits'), out = { ...defaults };
     requireThat(Object.keys(source).every(k => Object.hasOwn(HARD_LIMITS, k)), 400, 'INVALID_LIMIT', 'Unknown limit');
-    for (const key of Object.keys(HARD_LIMITS) as (keyof Limits)[]) {
+    for (const key of LIMIT_KEYS) {
         if (source[key] !== undefined)
             out[key] = integer(source[key], key, 1, HARD_LIMITS[key]);
     }
@@ -38,21 +48,27 @@ export function limits(value: unknown, defaults: Limits = { ...DEFAULT_LIMITS })
 export function runRequest(value: unknown): RunRequest {
     const v = record(value);
     const kind = v.kind ?? 'query';
-    requireThat(['query', 'explain', 'pipeline'].includes(String(kind)), 400, 'INVALID_KIND', 'Unknown run kind');
+    requireThat(isRunKind(kind), 400, 'INVALID_KIND', 'Unknown run kind');
     const tags = stringMap(v.tags, 'tags', 5);
     requireThat(Object.keys(tags).every(k => ['workspace', 'owner', 'artifact', 'environment', 'cost_center', 'experience'].includes(k)), 400, 'INVALID_TAG', 'Unsupported query tag');
     for (const t of Object.values(tags))
         requireThat(/^[A-Za-z0-9_. :/-]{0,80}$/.test(t), 400, 'INVALID_TAG', 'Tags must be short, non-secret labels');
     const requestedLimits = v.limits === undefined ? undefined : record(v.limits, 'limits');
     const checkedLimits = limits(requestedLimits);
+    const selectedLimits: Partial<Limits> = {};
+    if (requestedLimits !== undefined) {
+        for (const key of LIMIT_KEYS)
+            if (requestedLimits[key] !== undefined)
+                selectedLimits[key] = checkedLimits[key];
+    }
     const sourceFrom = v.sourceFrom === undefined ? undefined : integer(v.sourceFrom, 'sourceFrom', 0, 200000);
     const sourceTo = v.sourceTo === undefined ? undefined : integer(v.sourceTo, 'sourceTo', 0, 200000);
     requireThat(sourceFrom === undefined ? sourceTo === undefined : sourceTo !== undefined && sourceTo >= sourceFrom, 400, 'INVALID_SOURCE_RANGE', 'sourceTo must be greater than or equal to sourceFrom');
     return {
         clientRequestId: identifier(v.clientRequestId, 'clientRequestId'),
         connectionId: identifier(v.connectionId, 'connectionId'), sql: text(v.sql, 'SQL', 200000),
-        kind: kind as RunRequest['kind'], parameters: stringMap(v.parameters, 'parameters'),
-        limits: requestedLimits === undefined ? undefined : Object.fromEntries(Object.keys(requestedLimits).map(k => [k, checkedLimits[k as keyof Limits]])), tags,
+        kind, parameters: stringMap(v.parameters, 'parameters'),
+        limits: requestedLimits === undefined ? undefined : selectedLimits, tags,
         ...(sourceFrom === undefined ? {} : { sourceFrom, sourceTo }),
         ...(v.documentId !== undefined ? { documentId: identifier(v.documentId, 'documentId') } : {}),
         ...(v.parentRunId !== undefined ? { parentRunId: identifier(v.parentRunId, 'parentRunId') } : {}),

@@ -90,6 +90,7 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
                 return { warning: `${label} metadata is unavailable to this reader or ClickHouse version.` };
             }
         };
+        const emptyRows = <T>(): { rows: T[]; warning?: string } => ({ rows: [] });
         const [columns, tables, systemColumns, systemTables, documentationNames, tableDetails, projections, skipIndexes, dictionaries] = await Promise.all([
             this.rows<{
                 database: string;
@@ -104,7 +105,7 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
                 name: string;
                 engine: string;
             }>(id, 'SELECT database, name, engine FROM system.tables WHERE database = {database:String} ORDER BY name LIMIT 1001', { database }),
-            database === 'system' ? Promise.resolve({ rows: [] as Array<{ database: string; table: string; name: string; type: string; default_kind: string; comment: string }>, warning: undefined as string | undefined }) : optionalRows<{
+            database === 'system' ? emptyRows<{ database: string; table: string; name: string; type: string; default_kind: string; comment: string }>() : optionalRows<{
                 database: string;
                 table: string;
                 name: string;
@@ -112,12 +113,12 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
                 default_kind: string;
                 comment: string;
             }>('System table columns', 'SELECT database, table, name, type, default_kind, comment FROM system.columns WHERE database = {database:String} ORDER BY table, position LIMIT 5001', { database: 'system' }),
-            database === 'system' ? Promise.resolve({ rows: [] as Array<{ database: string; name: string; engine: string }>, warning: undefined as string | undefined }) : optionalRows<{
+            database === 'system' ? emptyRows<{ database: string; name: string; engine: string }>() : optionalRows<{
                 database: string;
                 name: string;
                 engine: string;
             }>('System tables', 'SELECT database, name, engine FROM system.tables WHERE database = {database:String} ORDER BY name LIMIT 1001', { database: 'system' }),
-            this.manifests.get(id)?.documentation.available === false ? Promise.resolve({ rows: [] as Array<{ name: string }>, warning: undefined as string | undefined }) : optionalRows<{ name: string }>(
+            this.manifests.get(id)?.documentation.available === false ? emptyRows<{ name: string }>() : optionalRows<{ name: string }>(
                 'System table documentation', "SELECT name FROM system.documentation WHERE type = 'System Table' AND notEmpty(description) ORDER BY name LIMIT 1001", {}),
             optionalRows<{
                 database: string;

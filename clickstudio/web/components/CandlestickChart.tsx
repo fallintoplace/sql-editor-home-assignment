@@ -96,13 +96,17 @@ export function CandlestickChart({ result, config, x, copy, locale }: Props) {
         const svg = select(svgElement);
         svg.selectAll('*').remove();
         const root = svg.append('g');
-        const fullDomain = extent(candles, candle => new Date(candle.time)) as [Date, Date];
-        if (+fullDomain[0] === +fullDomain[1]) fullDomain[1] = new Date(+fullDomain[1] + 60_000);
-        const clampedRange = windowRange?.every(Number.isFinite)
-            ? [Math.max(+fullDomain[0], windowRange[0]), Math.min(+fullDomain[1], windowRange[1])] as [number, number]
+        const [domainStart, domainEnd] = extent(candles, candle => new Date(candle.time));
+        if (!domainStart || !domainEnd) return;
+        const fullDomain: [Date, Date] = [
+            domainStart,
+            +domainStart === +domainEnd ? new Date(+domainEnd + 60_000) : domainEnd,
+        ];
+        const clampedRange: [number, number] | undefined = windowRange?.every(Number.isFinite)
+            ? [Math.max(+fullDomain[0], windowRange[0]), Math.min(+fullDomain[1], windowRange[1])]
             : undefined;
-        const domain = clampedRange && clampedRange[0] < clampedRange[1]
-            ? [new Date(clampedRange[0]), new Date(clampedRange[1])] as [Date, Date]
+        const domain: [Date, Date] = clampedRange && clampedRange[0] < clampedRange[1]
+            ? [new Date(clampedRange[0]), new Date(clampedRange[1])]
             : fullDomain;
         const visible = candles.filter(candle => candle.time >= +domain[0] && candle.time <= +domain[1]);
         const plotted = visible.length ? visible : candles;

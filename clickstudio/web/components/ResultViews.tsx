@@ -2,20 +2,33 @@ import { useState, type CSSProperties } from 'react';
 import { displayValue, recommendChart, chartNumber, countRowsByCategory, countRowsOverTime, numericType, temporalType, filterRows, sampleChartRows, MAX_CHART_RENDER_POINTS } from '../../shared/results';
 import type { ProfilePipeline, QueryProfile, Result, ResultPage, Run } from '../../shared/types';
 import type { Draft } from '../workspace-state';
+import type { Copy, Locale } from '../i18n';
 import { PipelineGraph } from './PipelineGraph';
 import { Button, cx, formatBytes, Icon, terminal } from './ui';
 import type { IconName } from './ui';
 
 const chartKindOptions = [
-    { value: 'number', label: 'Number' },
-    { value: 'line', label: 'Line' },
-    { value: 'bar', label: 'Bar' },
-    { value: 'scatter', label: 'Scatter' },
-    { value: 'heatmap', label: 'Heatmap' },
-] as const satisfies readonly { value: Draft['chart']['kind']; label: string }[];
+    { value: 'number' },
+    { value: 'line' },
+    { value: 'bar' },
+    { value: 'scatter' },
+    { value: 'heatmap' },
+] as const satisfies readonly { value: Draft['chart']['kind'] }[];
 const chartColors = ['var(--accent)', 'var(--green)', 'var(--amber)', 'var(--red)', 'var(--violet)'] as const;
 const seriesColor = (index: number) => chartColors[index % chartColors.length]!;
 type ChartPoint = { label: string; value: number | null; index: number };
+
+function chartText(template: string, values: Record<string, string | number> = {}) {
+    return template.replace(/\{(\w+)\}/g, (_match, key: string) => String(values[key] ?? ''));
+}
+
+function chartTypeLabel(kind: Draft['chart']['kind'], copy: Copy['chart']) {
+    return ({ number: copy.numberType, line: copy.lineType, bar: copy.barType, scatter: copy.scatterType, heatmap: copy.heatmapType, table: copy.queryResult })[kind];
+}
+
+function formatCount(value: number, locale: Locale) {
+    return new Intl.NumberFormat(locale).format(value);
+}
 
 function splitChartSegments(points: ChartPoint[]) {
     const segments: ChartPoint[][] = [];
@@ -47,14 +60,16 @@ export function ResultGrid({ run, page, pageIndex, loading, onPage }: { run: Run
     return <div className="result-grid-wrap animate-enter"><div className="result-summary-row"><span><strong>{page.totalRows.toLocaleString()}</strong> rows <i>·</i> <strong>{page.columns.length}</strong> columns</span><span className="result-completeness"><span className={cx('status-light', page.completeness === 'truncated' ? 'is-warning' : 'is-trusted')}/>{page.completeness === 'truncated' ? 'Retained prefix · truncated' : 'Complete result'}</span><label className="result-filter"><span>Find on this page</span><input type="search" aria-label="Filter current page" placeholder="Filter rows" value={filter} onChange={event => setFilter(event.target.value)}/></label>{filter.trim() && <span>{visibleRows.length} matches on this page</span>}<span>Page {pageIndex + 1} of {pageCount}</span></div><div className="data-table-scroll"><table className="data-table" aria-label="Retained query rows"><thead><tr><th className="row-number">#</th>{page.columns.map((column, index) => <th key={`${column.name}-${index}`}><span>{column.name}</span><small>{column.type}</small></th>)}</tr></thead><tbody>{visibleRows.map(({ row, index: rowIndex }) => <tr key={`${page.offset}-${rowIndex}`} style={{ animationDelay: `${Math.min(rowIndex, 12) * 16}ms` }}><td className="row-number">{page.offset + rowIndex + 1}</td>{row.map((value, index) => <td key={index} title={displayValue(value)} className={value === null ? 'cell-null' : ''}>{displayValue(value)}</td>)}</tr>)}</tbody></table>{page.rows.length === 0 ? <div className="no-rows" role="status">{emptyRowsMessage}</div> : visibleRows.length === 0 && <div className="no-rows">No rows match on this page.</div>}</div><div className="table-pagination"><span>Showing {page.rows.length.toLocaleString()} of {page.totalRows.toLocaleString()} retained rows <i>·</i> filter applies to this page only</span><div><Button variant="secondary" disabled={pageIndex === 0} onClick={() => onPage(0)}>First</Button><Button variant="secondary" disabled={pageIndex === 0} onClick={() => onPage(pageIndex - 1)}>←</Button><Button variant="secondary" disabled={pageIndex + 1 >= pageCount} onClick={() => onPage(pageIndex + 1)}>→</Button><Button variant="secondary" disabled={pageIndex + 1 >= pageCount} onClick={() => onPage(pageCount - 1)}>Last</Button></div></div></div>;
 }
 
-function RowCountChart({ result, chart, suggestion, onChart }: {
+function RowCountChart({ result, chart, suggestion, onChart, copy, locale }: {
     result: Result;
     chart: Draft['chart'];
     suggestion: ReturnType<typeof recommendChart>;
     onChart: (chart: Draft['chart']) => void;
+    copy: Copy['chart'];
+    locale: Locale;
 }) {
     const dimensions = result.columns.flatMap((column, index) => numericType(column.type) ? [] : [index]);
-    if (!dimensions.length) return <div className="chart-empty">This result has no dimensions to group.</div>;
+    if (!dimensions.length) return <div className="chart-empty">{copy.noDimensions}</div>;
     const usesSuggestion = chart.kind === 'table' || !dimensions.includes(chart.x);
     const xIndex = usesSuggestion ? suggestion.config.x : chart.x;
     const timeAxis = temporalType(result.columns[xIndex]?.type ?? '');
@@ -88,25 +103,35 @@ function RowCountChart({ result, chart, suggestion, onChart }: {
     const axisLabels = timeAxis
         ? labelIndexes.map(index => timeTicks[index]?.label ?? '')
         : labelIndexes.map(index => categoryData?.[index]?.label ?? '');
-    const valueFormatter = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
+    const valueFormatter = new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 });
     const barWidth = Math.max(4, Math.min(32, 680 / Math.max(1, bars.length) * .64));
     const hasRows = result.rows.length > 0;
     const noTimeValues = timeAxis && !series.length;
-    const title = usesSuggestion
-        ? suggestion.config.title
-        : chart.title || (timeAxis ? 'Rows over time' : `Rows by ${result.columns[xIndex]?.name}`);
+    const dimensionName = result.columns[xIndex]?.name ?? '';
+    const groupName = groupByIndex === undefined ? '' : result.columns[groupByIndex]?.name ?? '';
+    const title = timeAxis
+        ? groupByIndex === undefined ? copy.rowsOverTime : chartText(copy.rowsOverTimeBy, { dimension: groupName })
+        : chartText(copy.rowsBy, { dimension: dimensionName });
+    const timeUnit = countData?.unit === 'minute' ? copy.minutes
+        : countData?.unit === 'hour' ? copy.hours
+            : countData?.unit === 'day' ? copy.days
+                : countData?.unit === 'week' ? copy.weeks
+                    : countData?.unit === 'month' ? copy.months : '';
+    const chartAriaLabel = timeAxis
+        ? groupByIndex === undefined ? copy.rowsOverTime : chartText(copy.rowsOverTimeBy, { dimension: groupName })
+        : chartText(copy.rowsBy, { dimension: dimensionName });
 
     return <div className="chart-workspace animate-enter">
         <div className="chart-title-row">
             <div>
-                <span className="eyebrow">VISUAL EXPLORATION</span>
+                <span className="eyebrow">{copy.visualExploration}</span>
                 <h3>{title}</h3>
                 <p>{timeAxis
-                    ? `Rows are counted in ${countData?.unit ?? 'automatic'} time buckets from the retained result. No aggregate query is sent.`
-                    : `Rows are counted by ${result.columns[xIndex]?.name} from the retained result. No aggregate query is sent.`}</p>
+                    ? chartText(copy.timeCountDescription, { unit: timeUnit || copy.days })
+                    : chartText(copy.categoryCountDescription, { dimension: dimensionName })}</p>
             </div>
             <div className="chart-controls">
-                <label>X axis<select aria-label="X axis" value={xIndex} onChange={event => {
+                <label>{copy.xAxis}<select aria-label={copy.xAxis} value={xIndex} onChange={event => {
                     const nextX = Number(event.target.value);
                     const nextTime = temporalType(result.columns[nextX]?.type ?? '');
                     const nextGroupBy = nextTime
@@ -117,50 +142,51 @@ function RowCountChart({ result, chart, suggestion, onChart }: {
                         : `Rows by ${result.columns[nextX]?.name}`;
                     onChart({ ...chart, kind: nextTime ? 'line' : 'bar', x: nextX, groupBy: nextGroupBy, ys: [], title: nextTitle });
                 }}>{dimensions.map(index => <option key={index} value={index}>{result.columns[index]?.name}</option>)}</select></label>
-                {timeAxis && breakdowns.length > 0 && <label>Break down by<select aria-label="Break down by" value={groupByIndex ?? ''} onChange={event => {
+                {timeAxis && breakdowns.length > 0 && <label>{copy.breakdownBy}<select aria-label={copy.breakdownBy} value={groupByIndex ?? ''} onChange={event => {
                     const nextGroupBy = event.target.value === '' ? undefined : Number(event.target.value);
                     onChart({ ...chart, kind: 'line', x: xIndex, groupBy: nextGroupBy, ys: [], title: nextGroupBy === undefined ? 'Rows over time' : `Rows over time by ${result.columns[nextGroupBy]?.name}` });
-                }}><option value="">All rows</option>{breakdowns.map(index => <option key={index} value={index}>{result.columns[index]?.name}</option>)}</select></label>}
-                <span className="chart-row-count-type"><span className="chart-legend-dot"/>Rows</span>
+                }}><option value="">{copy.allRows}</option>{breakdowns.map(index => <option key={index} value={index}>{result.columns[index]?.name}</option>)}</select></label>}
+                <span className="chart-row-count-type"><span className="chart-legend-dot"/>{copy.rowsLabel}</span>
             </div>
         </div>
         {!hasRows
-            ? <div className="chart-empty">This result has no retained rows to chart.</div>
+            ? <div className="chart-empty">{copy.noRetainedRows}</div>
             : noTimeValues
-                ? <div className="chart-empty">No retained rows contain a valid value for this time column.</div>
+                ? <div className="chart-empty">{copy.noValidTimeValues}</div>
                 : <div className="chart-canvas">
                     <div className="chart-axis-labels"><span>{valueFormatter.format(max)}</span><span>{valueFormatter.format(max / 2)}</span><span>{valueFormatter.format(min)}</span></div>
-                    <svg viewBox="0 0 760 230" role="img" aria-label={timeAxis ? `Rows over time by ${result.columns[xIndex]?.name}` : `Rows by ${result.columns[xIndex]?.name}`}>
+                    <svg viewBox="0 0 760 230" role="img" aria-label={chartAriaLabel}>
                         {[40, 115, 190].map(value => <line key={value} x1="32" x2="732" y1={value} y2={value} className="chart-gridline"/>)}
                         <line x1="32" x2="732" y1={plotBottom} y2={plotBottom} className="chart-zero-line"/>
                         {timeAxis
                             ? series.map((item, seriesIndex) => <g key={item.key} style={{ '--series-color': seriesColor(seriesIndex) } as CSSProperties}>
                                 {item.points.length > 1 && <polyline points={item.points.map(point => `${xTime(point.timestamp)},${y(point.count)}`).join(' ')} className="chart-line"/>}
-                                {item.points.map(point => <circle key={`${item.key}-${point.timestamp}`} cx={xTime(point.timestamp)} cy={y(point.count)} r="3.5" className="chart-point"><title>{`${point.label} · ${item.label}: ${point.count.toLocaleString()} rows`}</title></circle>)}
+                                {item.points.map(point => <circle key={`${item.key}-${point.timestamp}`} cx={xTime(point.timestamp)} cy={y(point.count)} r="3.5" className="chart-point"><title>{chartText(copy.timePointTooltip, { bucket: point.label, series: item.label, count: formatCount(point.count, locale) })}</title></circle>)}
                             </g>)
                             : bars.map((group, index) => {
                                 const valueY = y(group.count), top = Math.min(plotBottom, valueY), height = Math.max(1, plotBottom - valueY);
-                                return <rect key={group.key} x={xCategory(index, bars.length) - barWidth / 2} y={top} width={barWidth} height={height} rx="3" className="chart-bar" style={{ '--series-color': seriesColor(0), animationDelay: `${index * 25}ms` } as CSSProperties}><title>{`${group.label}: ${group.count.toLocaleString()} rows`}</title></rect>;
+                                return <rect key={group.key} x={xCategory(index, bars.length) - barWidth / 2} y={top} width={barWidth} height={height} rx="3" className="chart-bar" style={{ '--series-color': seriesColor(0), animationDelay: `${index * 25}ms` } as CSSProperties}><title>{chartText(copy.categoryBarTooltip, { category: group.label, count: formatCount(group.count, locale) })}</title></rect>;
                             })}
                     </svg>
                     <div className="chart-x-labels">{axisLabels.map((label, index) => <span key={`${label}-${index}`}>{label}</span>)}</div>
                 </div>}
         <div className="chart-footer">
-            <span className="chart-legend">{(timeAxis ? series : [{ key: 'rows', label: 'Rows' }]).map((item, index) => <span key={item.key}><span className="chart-legend-dot" style={{ backgroundColor: seriesColor(index) }}/>{item.label}</span>)}</span>
+            <span className="chart-legend">{(timeAxis ? series : [{ key: 'rows', label: copy.rowsLabel }]).map((item, index) => <span key={item.key}><span className="chart-legend-dot" style={{ backgroundColor: seriesColor(index) }}/>{item.label}</span>)}</span>
             <span>{timeAxis
-                ? `${timeTicks.length.toLocaleString()} ${countData?.unit ?? ''} buckets from ${result.rows.length.toLocaleString()} returned rows${countData?.excludedRows ? ` · ${countData.excludedRows} invalid dates skipped` : ''}`
-                : `${bars.length.toLocaleString()} categories from ${result.rows.length.toLocaleString()} returned rows`}
-                <i>·</i> {result.completeness === 'truncated' ? 'retained prefix only' : 'complete query result'}</span>
+                ? `${chartText(copy.timeSummary, { buckets: formatCount(timeTicks.length, locale), unit: timeUnit, rows: formatCount(result.rows.length, locale) })}${countData?.excludedRows ? ` · ${chartText(copy.invalidDatesSkipped, { count: formatCount(countData.excludedRows, locale) })}` : ''}`
+                : chartText(copy.categorySummary, { categories: formatCount(bars.length, locale), rows: formatCount(result.rows.length, locale) })}
+                <i>·</i> {result.completeness === 'truncated' ? copy.retainedPrefixOnly : copy.completeQueryResult}</span>
         </div>
     </div>;
 }
 
-export function ChartView({ result, loading, chart, onChart }: { result?: Result; loading: boolean; chart: Draft['chart']; onChart: (chart: Draft['chart']) => void }) {
-    if (loading || !result) return <div className="result-loading"><span className="loading-orbit"/><span>Preparing a chart from retained rows…</span></div>;
-    if (!result.columns.length) return <div className="chart-empty">This result has no columns to chart.</div>;
+export function ChartView({ result, loading, chart, onChart, copy, locale }: { result?: Result; loading: boolean; chart: Draft['chart']; onChart: (chart: Draft['chart']) => void; copy: Copy; locale: Locale }) {
+    const chartCopy = copy.chart;
+    if (loading || !result) return <div className="result-loading"><span className="loading-orbit"/><span>{chartCopy.preparing}</span></div>;
+    if (!result.columns.length) return <div className="chart-empty">{chartCopy.noColumns}</div>;
     const suggestion = recommendChart(result.columns, result.rows);
     const numericIndexes = result.columns.flatMap((column, index) => numericType(column.type) ? [index] : []);
-    if (!numericIndexes.length) return <RowCountChart result={result} chart={chart} suggestion={suggestion} onChart={onChart}/>;
+    if (!numericIndexes.length) return <RowCountChart result={result} chart={chart} suggestion={suggestion} onChart={onChart} copy={chartCopy} locale={locale}/>;
     const chartKind = chart.kind === 'table'
         ? (suggestion.config.kind === 'table' ? 'bar' : suggestion.config.kind)
         : chart.kind;
@@ -204,13 +230,13 @@ export function ChartView({ result, loading, chart, onChart }: { result?: Result
     const y = (value: number) => plotBottom - ((value - min) / range) * (plotBottom - plotTop);
     const x = (index: number) => 32 + index * (700 / Math.max(1, chartRows.length - 1));
     const rowSummary = chartRows.length < result.rows.length
-        ? `${chartRows.length.toLocaleString()} sampled rows from ${result.rows.length.toLocaleString()} retained rows`
-        : `${chartRows.length.toLocaleString()} retained rows across ${measureIndexes.length} measure${measureIndexes.length === 1 ? '' : 's'}`;
+        ? chartText(chartCopy.sampledRowsSummary, { sampled: formatCount(chartRows.length, locale), rows: formatCount(result.rows.length, locale) })
+        : chartText(measureIndexes.length === 1 ? chartCopy.retainedRowsAcrossOneMeasure : chartCopy.retainedRowsAcrossManyMeasures, { rows: formatCount(chartRows.length, locale), measures: formatCount(measureIndexes.length, locale) });
     const barWidth = Math.max(1, Math.min(28, (680 / Math.max(1, chartRows.length)) * .68 / measureIndexes.length));
     const heatmapRows = chartKind === 'heatmap' && groupByIndex !== undefined
         ? result.rows.map(row => ({ xLabel: displayValue(row[xIndex]), yLabel: displayValue(row[groupByIndex]), value: chartNumber(row[yIndex]) }))
         : [];
-    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+    const collator = new Intl.Collator(locale, { numeric: true, sensitivity: 'base' });
     const heatmapXLabels = [...new Set(heatmapRows.map(row => row.xLabel))].sort(collator.compare);
     const heatmapYLabels = [...new Set(heatmapRows.map(row => row.yLabel))].sort(collator.compare);
     const heatmapCells = new Map<string, number>();
@@ -222,7 +248,7 @@ export function ChartView({ result, loading, chart, onChart }: { result?: Result
     }
     const heatmapMaximum = Math.max(0, ...heatmapCells.values());
     const heatmapTooLarge = heatmapXLabels.length * heatmapYLabels.length > 1_200;
-    const compactNumber = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
+    const compactNumber = new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 });
     const scatterPoints = chartRows.map(row => ({ x: chartNumber(row[xIndex]), y: chartNumber(row[yIndex]), label: displayValue(row[xIndex]) }))
         .filter((point): point is { x: number; y: number; label: string } => point.x !== null && point.y !== null);
     const scatterMinX = Math.min(...scatterPoints.map(point => point.x), 0);
@@ -233,33 +259,39 @@ export function ChartView({ result, loading, chart, onChart }: { result?: Result
     const scatterRangeY = scatterMaxY - scatterMinY || 1;
     const scatterX = (value: number) => 32 + ((value - scatterMinX) / scatterRangeX) * 700;
     const scatterY = (value: number) => plotBottom - ((value - scatterMinY) / scatterRangeY) * (plotBottom - plotTop);
+    const suggestionReason = result.rows.length === 1
+        ? chartCopy.reasonSingleNumber
+        : temporalType(result.columns[suggestion.config.x]?.type ?? '')
+            ? chartCopy.reasonTimeMeasure
+            : chartCopy.reasonDimensionMeasure;
+    const chartTitle = chart.title === 'Query result' ? chartCopy.queryResult : chart.title || result.columns[yIndex]?.name || chartCopy.queryResult;
     return <div className="chart-workspace animate-enter">
-        <div className="chart-title-row"><div><span className="eyebrow">VISUAL EXPLORATION</span><h3>{chart.title || result.columns[yIndex]?.name || 'Query result'}</h3><p>{suggestion.reason} {chartKind === 'heatmap' ? 'Cells come from returned rows; missing groups are left blank.' : 'Long results are evenly sampled for display.'}</p></div><div className="chart-controls">
-            {chartKind !== 'number' && <label>{chartKind === 'scatter' ? 'X measure' : 'X axis'}<select value={xIndex} onChange={event => {
+        <div className="chart-title-row"><div><span className="eyebrow">{chartCopy.visualExploration}</span><h3>{chartTitle}</h3><p>{suggestionReason} {chartKind === 'heatmap' ? chartCopy.heatmapReturnedRows : chartCopy.sampledForDisplay}</p></div><div className="chart-controls">
+            {chartKind !== 'number' && <label>{chartKind === 'scatter' ? chartCopy.xAxisMeasure : chartCopy.xAxis}<select value={xIndex} onChange={event => {
                 const nextX = Number(event.target.value);
                 const nextGroupCandidate = chartKind === 'heatmap' && nextX === groupByIndex ? result.columns.findIndex((_column, index) => index !== nextX && index !== yIndex) : groupByIndex;
                 const nextGroupBy = nextGroupCandidate !== undefined && nextGroupCandidate >= 0 ? nextGroupCandidate : undefined;
                 onChart({ ...chart, x: nextX, groupBy: nextGroupBy, ys: measureIndexes.filter(index => index !== nextX && index !== nextGroupBy) });
             }}>{result.columns.map((column, index) => <option value={index} key={index} disabled={chartKind === 'scatter' ? !numericIndexes.includes(index) || index === yIndex : index === yIndex || index === groupByIndex}>{column.name}</option>)}</select></label>}
-            {chartKind === 'heatmap' && <label>Y axis<select value={groupByIndex ?? -1} onChange={event => onChart({ ...chart, groupBy: Number(event.target.value) })}>{result.columns.map((column, index) => <option value={index} key={index} disabled={index === xIndex || index === yIndex}>{column.name}</option>)}</select></label>}
+            {chartKind === 'heatmap' && <label>{chartCopy.yAxis}<select value={groupByIndex ?? -1} onChange={event => onChart({ ...chart, groupBy: Number(event.target.value) })}>{result.columns.map((column, index) => <option value={index} key={index} disabled={index === xIndex || index === yIndex}>{column.name}</option>)}</select></label>}
             {chartKind === 'line' || chartKind === 'bar'
-                ? <fieldset className="chart-measures"><legend>Measures</legend>{availableMeasures.map(index => <label key={index}><input type="checkbox" checked={measureIndexes.includes(index)} disabled={measureIndexes.length === 1 && measureIndexes.includes(index)} onChange={event => {
+                ? <fieldset className="chart-measures"><legend>{chartCopy.measures}</legend>{availableMeasures.map(index => <label key={index}><input type="checkbox" checked={measureIndexes.includes(index)} disabled={measureIndexes.length === 1 && measureIndexes.includes(index)} onChange={event => {
                     const next = event.target.checked ? [...measureIndexes, index] : measureIndexes.filter(value => value !== index);
                     onChart({ ...chart, ys: next.slice(0, 5) });
                 }}/><span style={{ '--series-color': seriesColor(Math.max(0, measureIndexes.indexOf(index))) } as CSSProperties}/>{result.columns[index]?.name}</label>)}</fieldset>
-                : <label>Measure<select value={yIndex} onChange={event => onChart({ ...chart, ys: [Number(event.target.value)] })}>{numericIndexes.map(index => <option value={index} key={index} disabled={index === xIndex || index === groupByIndex}>{result.columns[index]?.name}</option>)}</select></label>}
-            <label>Type<select value={chartKind} onChange={event => {
+                : <label>{chartCopy.measure}<select value={yIndex} onChange={event => onChart({ ...chart, ys: [Number(event.target.value)] })}>{numericIndexes.map(index => <option value={index} key={index} disabled={index === xIndex || index === groupByIndex}>{result.columns[index]?.name}</option>)}</select></label>}
+            <label>{chartCopy.type}<select value={chartKind} onChange={event => {
                 const option = chartKindOptions.find(candidate => candidate.value === event.target.value);
                 if (!option) return;
                 const nextGroupBy = option.value === 'heatmap' ? groupByIndex ?? result.columns.findIndex((_column, index) => index !== xIndex && index !== yIndex) : undefined;
                 onChart({ ...chart, kind: option.value, groupBy: nextGroupBy !== undefined && nextGroupBy >= 0 ? nextGroupBy : undefined, ys: option.value === 'line' || option.value === 'bar' ? measureIndexes : [yIndex] });
-            }}>{chartKindOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+            }}>{chartKindOptions.map(option => <option key={option.value} value={option.value}>{chartTypeLabel(option.value, chartCopy)}</option>)}</select></label>
         </div></div>
-        {chartKind === 'number' ? result.rows.length !== 1 ? <div className="chart-empty">Number view needs one retained row. Choose Line or Bar for multiple rows.</div> : !numericType(result.columns[yIndex]?.type ?? '') ? <div className="chart-empty">Choose a numeric result column to show one value.</div> : <div className="chart-number-card"><span className="eyebrow">SINGLE VALUE</span><strong>{displayValue(result.rows[0]?.[yIndex])}</strong><span>{result.columns[yIndex]?.name}</span><small>1 retained row · exact result value</small></div>
+        {chartKind === 'number' ? result.rows.length !== 1 ? <div className="chart-empty">{chartCopy.numberNeedsOneRow}</div> : !numericType(result.columns[yIndex]?.type ?? '') ? <div className="chart-empty">{chartCopy.chooseNumericColumn}</div> : <div className="chart-number-card"><span className="eyebrow">{chartCopy.singleValue}</span><strong>{displayValue(result.rows[0]?.[yIndex])}</strong><span>{result.columns[yIndex]?.name}</span><small>{chartCopy.exactResultValue}</small></div>
             : chartKind === 'heatmap'
-                ? heatmapTooLarge ? <div className="chart-empty">This result has too many row and column labels for a readable heatmap. Group it into a smaller grid first.</div>
-                    : !heatmapRows.length || groupByIndex === undefined ? <div className="chart-empty">Heatmap needs two dimensions and one numeric measure.</div>
-                        : <div className="heatmap-scroll"><table className="heatmap-grid" aria-label={`${result.columns[yIndex]?.name} by ${result.columns[groupByIndex]?.name} and ${result.columns[xIndex]?.name}`}>
+                ? heatmapTooLarge ? <div className="chart-empty">{chartCopy.tooManyHeatmapLabels}</div>
+                    : !heatmapRows.length || groupByIndex === undefined ? <div className="chart-empty">{chartCopy.heatmapNeedsDimensions}</div>
+                        : <div className="heatmap-scroll"><table className="heatmap-grid" aria-label={chartText(chartCopy.heatmapTableAria, { measure: result.columns[yIndex]?.name ?? '', groupBy: result.columns[groupByIndex]?.name ?? '', xAxis: result.columns[xIndex]?.name ?? '' })}>
                             <thead><tr><th className="heatmap-corner" scope="col">{result.columns[groupByIndex]?.name} / {result.columns[xIndex]?.name}</th>
                             {heatmapXLabels.map(label => <th className="heatmap-axis-label" scope="col" key={`x-${label}`}>{label}</th>)}</tr></thead>
                             <tbody>{heatmapYLabels.map(yLabel => <tr key={`y-${yLabel}`}><th className="heatmap-axis-label heatmap-row-label" scope="row" title={yLabel}>{yLabel}</th>{heatmapXLabels.map(xLabel => {
@@ -267,20 +299,20 @@ export function ChartView({ result, loading, chart, onChart }: { result?: Result
                                 const value = heatmapCells.get(key);
                                 const hasRow = heatmapPresent.has(key);
                                 const missing = !hasRow;
-                                const cellDescription = missing ? result.completeness === 'truncated' ? 'not retained' : 'no returned row' : value === undefined ? 'null measure' : value.toLocaleString();
+                                const cellDescription = missing ? result.completeness === 'truncated' ? chartCopy.heatmapNotRetained : chartCopy.heatmapNoReturnedRow : value === undefined ? chartCopy.heatmapNullMeasure : formatCount(value, locale);
                                 const plotted = value ?? 0;
                                 const intensity = heatmapMaximum > 0 ? plotted / heatmapMaximum : 0;
                                 const displayNumber = value === undefined ? '·' : compactNumber.format(value);
                                 return <td className="heatmap-cell" key={`${yLabel}-${xLabel}`} title={`${result.columns[groupByIndex]?.name}: ${yLabel} · ${result.columns[xIndex]?.name}: ${xLabel} · ${result.columns[yIndex]?.name}: ${cellDescription}`} aria-label={`${yLabel}, ${xLabel}: ${cellDescription}`} style={{ backgroundColor: missing || value === undefined ? 'var(--panel)' : `color-mix(in srgb, var(--accent) ${Math.round(intensity * 78)}%, var(--panel-raised))`, color: intensity > .55 ? 'var(--accent-ink)' : 'var(--text-soft)' }}>{missing ? '·' : displayNumber}</td>;
                             })}</tr>)}</tbody>
-                        </table><div className="heatmap-caption">{result.columns[yIndex]?.name} · {heatmapYLabels.length} rows × {heatmapXLabels.length} columns · {result.completeness === 'truncated' ? 'blank cells may be outside the retained result' : 'blank cells had no returned group'}</div></div>
-                : chartKind === 'scatter' && (xIndex === yIndex || !numericIndexes.includes(xIndex) || !numericIndexes.includes(yIndex)) ? <div className="chart-empty">Scatter needs two numeric columns. Choose another result or use Line or Bar.</div>
-                    : !values.length ? <div className="chart-empty">Choose a numeric measure to plot.</div>
-                    : <div className="chart-canvas"><div className="chart-axis-labels"><span>{max.toLocaleString()}</span><span>{((min + max) / 2).toLocaleString()}</span><span>{min.toLocaleString()}</span></div>
-                        <svg viewBox="0 0 760 230" role="img" aria-label={`${chartKind} chart comparing ${result.columns[xIndex]?.name} and ${result.columns[yIndex]?.name}`}>
+                        </table><div className="heatmap-caption">{chartText(chartCopy.heatmapCaption, { measure: result.columns[yIndex]?.name ?? '', rows: formatCount(heatmapYLabels.length, locale), columns: formatCount(heatmapXLabels.length, locale), note: result.completeness === 'truncated' ? chartCopy.heatmapTruncatedNote : chartCopy.heatmapCompleteNote })}</div></div>
+                : chartKind === 'scatter' && (xIndex === yIndex || !numericIndexes.includes(xIndex) || !numericIndexes.includes(yIndex)) ? <div className="chart-empty">{chartCopy.scatterNeedsTwoNumeric}</div>
+                    : !values.length ? <div className="chart-empty">{chartCopy.chooseNumericMeasure}</div>
+                    : <div className="chart-canvas"><div className="chart-axis-labels"><span>{formatCount(max, locale)}</span><span>{formatCount((min + max) / 2, locale)}</span><span>{formatCount(min, locale)}</span></div>
+                        <svg viewBox="0 0 760 230" role="img" aria-label={chartText(chartCopy.chartComparing, { type: chartTypeLabel(chartKind, chartCopy), x: result.columns[xIndex]?.name ?? '', y: result.columns[yIndex]?.name ?? '' })}>
                             {[40, 115, 190].map(value => <line key={value} x1="32" x2="732" y1={value} y2={value} className="chart-gridline"/>)}
                             {chartKind !== 'scatter' && <line x1="32" x2="732" y1={zeroY} y2={zeroY} className="chart-zero-line"/>}
-                            {chartKind === 'scatter' ? scatterPoints.map((point, index) => <circle key={index} cx={scatterX(point.x)} cy={scatterY(point.y)} r="3.5" className="chart-point" style={{ fill: seriesColor(0), stroke: seriesColor(0) }}><title>{`${result.columns[xIndex]?.name}: ${point.x} · ${result.columns[yIndex]?.name}: ${point.y}`}</title></circle>)
+                            {chartKind === 'scatter' ? scatterPoints.map((point, index) => <circle key={index} cx={scatterX(point.x)} cy={scatterY(point.y)} r="3.5" className="chart-point" style={{ fill: seriesColor(0), stroke: seriesColor(0) }}><title>{`${result.columns[xIndex]?.name}: ${formatCount(point.x, locale)} · ${result.columns[yIndex]?.name}: ${formatCount(point.y, locale)}`}</title></circle>)
                                 : chartKind === 'line' ? plotSeries.map(series => {
                                     const segments = splitChartSegments(series.points);
                                     return <g key={series.columnIndex} style={{ '--series-color': series.color } as CSSProperties}>
@@ -294,14 +326,14 @@ export function ChartView({ result, loading, chart, onChart }: { result?: Result
                                     return [<rect key={`${series.columnIndex}-${point.index}`} x={x(point.index) + groupOffset - barWidth / 2} y={top} width={barWidth} height={height} rx="3" className="chart-bar" style={{ '--series-color': series.color, animationDelay: `${point.index * 20}ms` } as CSSProperties}/>];
                                 }))}
                         </svg><div className="chart-x-labels">{chartKind === 'scatter'
-                            ? <><span>{scatterMinX.toLocaleString()}</span><span>{((scatterMinX + scatterMaxX) / 2).toLocaleString()}</span><span>{scatterMaxX.toLocaleString()}</span></>
+                            ? <><span>{formatCount(scatterMinX, locale)}</span><span>{formatCount((scatterMinX + scatterMaxX) / 2, locale)}</span><span>{formatCount(scatterMaxX, locale)}</span></>
                             : <><span>{plotSeries[0]?.points[0]?.label}</span><span>{plotSeries[0]?.points[Math.floor((plotSeries[0]?.points.length ?? 1) / 2)]?.label}</span><span>{plotSeries[0]?.points.at(-1)?.label}</span></>}</div>
                     </div>}
         <div className="chart-footer"><span className="chart-legend">{chartKind === 'heatmap'
             ? <><span className="chart-legend-dot"/>{result.columns[yIndex]?.name}</>
             : chartKind === 'line' || chartKind === 'bar'
                 ? measureIndexes.map((index, seriesIndex) => <span key={index}><span className="chart-legend-dot" style={{ backgroundColor: seriesColor(seriesIndex) }}/>{result.columns[index]?.name}</span>)
-                : <><span className="chart-legend-dot" style={{ backgroundColor: seriesColor(0) }}/>{result.columns[yIndex]?.name}</>}</span><span>{chartKind === 'number' ? result.rows.length === 1 ? '1 value' : `${result.rows.length.toLocaleString()} retained rows` : chartKind === 'heatmap' ? `${heatmapCells.size.toLocaleString()} populated cells from ${result.rows.length.toLocaleString()} rows` : chartKind === 'scatter' ? `${scatterPoints.length.toLocaleString()} plotted points` : rowSummary} <i>·</i> {result.completeness === 'truncated' ? 'retained prefix' : 'complete result'}</span></div>
+                : <><span className="chart-legend-dot" style={{ backgroundColor: seriesColor(0) }}/>{result.columns[yIndex]?.name}</>}</span><span>{chartKind === 'number' ? result.rows.length === 1 ? chartCopy.oneValue : chartText(chartCopy.retainedRows, { rows: formatCount(result.rows.length, locale) }) : chartKind === 'heatmap' ? chartText(chartCopy.populatedCells, { cells: formatCount(heatmapCells.size, locale), rows: formatCount(result.rows.length, locale) }) : chartKind === 'scatter' ? chartText(chartCopy.plottedPoints, { points: formatCount(scatterPoints.length, locale) }) : rowSummary} <i>·</i> {result.completeness === 'truncated' ? chartCopy.retainedPrefixOnly : chartCopy.completeQueryResult}</span></div>
     </div>;
 }
 

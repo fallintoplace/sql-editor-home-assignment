@@ -118,6 +118,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [scripts, setScripts] = useState<Record<string, Script>>({});
     const script = active.scriptId ? scripts[active.scriptId] : undefined;
     const [view, setView] = useState<ResultsView>('results');
+    const [queryCollapsed, setQueryCollapsed] = useState(false);
+    const [resultsCollapsed, setResultsCollapsed] = useState(false);
     const [inspector, setInspector] = useState<Inspector>('schema');
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [compactViewport, setCompactViewport] = useState(() => window.matchMedia('(max-width: 850px)').matches);
@@ -722,12 +724,13 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     <span className="draft-status" data-save-state={saveStatus.state} title={`${saveStatus.label}. ${saveStatus.detail}`}><span className={cx('status-light', saveStatus.state === 'saved' ? 'is-trusted' : ['changed', 'conflict', 'deleted', 'unavailable'].includes(saveStatus.state) ? 'is-warning' : '')}/>{saveStatusLabel}</span>
                 </div>
 
-                <div id="sql-document-panel" role="tabpanel" aria-labelledby={`document-tab-${active.id}`} tabIndex={0} className={cx('workspace-content', experience === 'beginner' && 'beginner-workspace-content', run && 'has-run')}>
-                    <section className="editor-surface">
+                <div id="sql-document-panel" role="tabpanel" aria-labelledby={`document-tab-${active.id}`} tabIndex={0} className={cx('workspace-content', experience === 'beginner' && 'beginner-workspace-content', run && 'has-run', queryCollapsed && 'is-query-collapsed', run && resultsCollapsed && 'is-results-collapsed')}>
+                    <section className={cx('editor-surface', queryCollapsed && 'is-collapsed')}>
                         <div className="editor-heading">
                             <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">QUERY</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label><span className="edit-indicator" title={active.serverId ? `Saved revision ${active.baseRevision}` : 'Only in this browser'}>{active.serverId ? `REV ${active.baseRevision}` : 'LOCAL'}</span></div>
-                            <div className="editor-heading-actions">{experience === 'expert' && <>{nativeParserEnabled && nativeParserStatus === 'unavailable' && <><span className="toolbar-small" role="status" title="Formatting remains available while the native parser is unavailable.">Parser unavailable</span><Button variant="ghost" className="toolbar-small" onClick={() => editor.current?.retryNativeParser()}>Retry parser</Button></>}<Button variant="ghost" className="toolbar-small" title={nativeParserEnabled && nativeParserStatus === 'ready' ? 'Format with the native ClickHouse parser' : 'Format SQL'} onClick={() => void formatActiveSql()}>Format</Button></>}</div>
+                            <div className="editor-heading-actions">{experience === 'expert' && <>{nativeParserEnabled && nativeParserStatus === 'unavailable' && <><span className="toolbar-small" role="status" title="Formatting remains available while the native parser is unavailable.">Parser unavailable</span><Button variant="ghost" className="toolbar-small" onClick={() => editor.current?.retryNativeParser()}>Retry parser</Button></>}<Button variant="ghost" className="toolbar-small" title={nativeParserEnabled && nativeParserStatus === 'ready' ? 'Format with the native ClickHouse parser' : 'Format SQL'} onClick={() => void formatActiveSql()}>Format</Button></>}<Button variant="ghost" className="panel-collapse-button" aria-label={queryCollapsed ? 'Expand SQL query' : 'Collapse SQL query'} aria-expanded={!queryCollapsed} aria-controls="sql-editor-content" title={queryCollapsed ? 'Expand query' : 'Collapse query'} onClick={() => setQueryCollapsed(value => !value)}><Icon name="chevron"/></Button></div>
                         </div>
+                        <div id="sql-editor-content" className="panel-content editor-content" hidden={queryCollapsed}>
                         <div className="editor-toolbar">
                             <div className="editor-mode-label"><span className="editor-language-dot"/>ClickHouse SQL<span className="toolbar-divider"/><span>{statementCount === undefined ? 'Incomplete SQL' : `${statementCount} statement${statementCount === 1 ? '' : 's'}`}</span></div>
                             <div className="editor-actions">
@@ -752,15 +755,18 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             ? <div className="callout mt-3" role="status">{connection.manifest?.parameters.reason ?? 'Query parameters are unavailable on this connection.'} Replace placeholders with SQL literals to run this query.</div>
                             : parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => patch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
                         {experience === 'expert' && <div className="editor-footer"><span>{active.sql.length.toLocaleString()} characters <span className="footer-dot">·</span> {active.sql.split('\n').length} lines</span></div>}
+                        </div>
                     </section>
 
-                    {run && <section className={cx('results-surface', experience === 'expert' && 'results-expert')} aria-label="Query results">
+                    {run && <section className={cx('results-surface', experience === 'expert' && 'results-expert', resultsCollapsed && 'is-collapsed')} aria-label="Query results">
                         <div className="results-header">
                             <div className="results-title"><span className="results-mark"><Icon name="chart"/></span><div><span className="eyebrow">WORKSPACE OUTPUT</span><h2>{copy.common.results}</h2></div>{run && <Status run={run}/>}</div>
                             <div className="results-actions">
                                 <div className="results-tabs" role="tablist" aria-label="Result views">{(experience === 'beginner' ? ['results', 'chart'] as const : ['results', 'chart', 'insights'] as const).map(tab => <button key={tab} role="tab" aria-selected={visibleResultsView === tab} type="button" onClick={() => { setView(tab); if (tab === 'chart') void perform(loadSnapshot, 'save'); if (tab === 'insights') void perform(loadProfile, 'save'); }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : copy.common.insights}{tab === 'chart' && snapshot && <span className="suggested-dot"/>}</button>)}</div>
+                                <Button variant="ghost" className="panel-collapse-button" aria-label={resultsCollapsed ? 'Expand query results' : 'Collapse query results'} aria-expanded={!resultsCollapsed} aria-controls="query-results-content" title={resultsCollapsed ? 'Expand results' : 'Collapse results'} onClick={() => setResultsCollapsed(value => !value)}><Icon name="chevron"/></Button>
                             </div>
                         </div>
+                        <div id="query-results-content" className="panel-content results-content" hidden={resultsCollapsed}>
                         {staleResult && <div className="result-provenance" aria-live="polite"><span className="status-light is-warning"/><span><strong>Result from previous execution</strong><small>SQL or bound parameters changed since this run. Rerun to refresh the result.</small></span></div>}
                         {script && <ScriptResults script={script} runs={history} activeRunId={run?.id} onSelectRun={runId => {
                             if (active.scriptId) scriptFollowRef.current = { scriptId: active.scriptId, enabled: false };
@@ -770,6 +776,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         {run && visibleResultsView === 'results' && <ResultGrid key={run.id} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/>}
                         {run && visibleResultsView === 'chart' && snapshotChart?.config.kind === 'table' ? <div className="chart-table-fallback"><div className="chart-table-notice" role="status">This result has no numeric measure to chart, so the typed table is shown.</div><ResultGrid key={`${run.id}-chart-table`} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/></div> : run && visibleResultsView === 'chart' && <ChartView result={snapshot} loading={!snapshot && run.resultState === 'reopenable'} chart={active.chart} onChart={chart => patch({ chart })}/>}
                         {run && visibleResultsView === 'insights' && <InsightsView run={run} profile={profile} pipeline={pipeline} pipelineAvailable={Boolean(trusted && connection.manifest?.pipeline.available)} onLoad={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} loading={busy === 'save'}/>}
+                        </div>
                     </section>}
                 </div>
             </main>

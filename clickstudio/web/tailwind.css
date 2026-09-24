@@ -787,8 +787,9 @@
     .drawer-backdrop { position: fixed; z-index: var(--z-overlay-backdrop); inset: 68px 0 0; border: 0; background: #0008; animation: fadeIn .18s ease both; backdrop-filter: blur(2px); }
     .execution-bar { position: relative; z-index: var(--z-execution-bar); display: flex; min-height: 43px; flex: none; align-items: center; justify-content: space-between; gap: 18px; overflow: hidden; padding: 5px 17px; border-top: 1px solid var(--line-bright); background: color-mix(in srgb, var(--panel-raised) 93%, transparent); box-shadow: 0 -10px 28px #0002; }
     .execution-bar.is-running { border-top-color: color-mix(in srgb, var(--accent) 37%, var(--line)); }
-    .help-examples-button { position: fixed; z-index: var(--z-popover); right: 18px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: inline-flex; min-height: 40px; align-items: center; gap: 8px; padding: 0 13px; border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line-bright)); border-radius: 999px; background: color-mix(in srgb, var(--panel-raised) 94%, transparent); box-shadow: 0 8px 26px #0004, inset 0 1px #ffffff0a; color: var(--text); font-size: 11px; font-weight: 700; cursor: pointer; backdrop-filter: blur(12px); transition: border-color .16s ease, background .16s ease, transform .16s ease; }
-    .help-examples-button.is-above-execution-bar { bottom: calc(59px + env(safe-area-inset-bottom, 0px)); }
+    .help-examples-button { display: inline-flex; align-items: center; gap: 8px; border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line-bright)); background: color-mix(in srgb, var(--panel-raised) 94%, transparent); color: var(--text); font-size: 11px; font-weight: 700; cursor: pointer; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+    .help-examples-button.is-floating { position: fixed; z-index: var(--z-popover); right: 18px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); min-height: 40px; padding: 0 13px; border-radius: 999px; box-shadow: 0 8px 26px #0004, inset 0 1px #ffffff0a; backdrop-filter: blur(12px); }
+    .help-examples-button.is-inline { position: relative; min-height: 27px; flex: none; justify-content: center; gap: 6px; padding: 0 8px; border-radius: 6px; background: transparent; font-size: 9px; white-space: nowrap; }
     .help-examples-button:hover { transform: translateY(-2px); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 11%, var(--panel-raised)); color: var(--accent); }
     .help-examples-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     .help-examples-button svg { width: 16px; height: 16px; color: var(--accent); }
@@ -952,8 +953,8 @@
     .editor-mode-label { gap: 6px; font-size: 8px; }
     .editor-footer { font-size: 7px; }
     .execution-bar { min-height: 40px; flex-wrap: wrap; gap: 7px 12px; padding: 6px 10px; }
-    .help-examples-button { right: 12px; }
-    .help-examples-button.is-above-execution-bar { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+    .help-examples-button.is-floating { right: 12px; }
+    .help-examples-button.is-inline { min-height: 27px; }
     .execution-telemetry { justify-content: flex-start; }
     .execution-right code { max-width: 90px; }
     .toast-stack { right: 10px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); width: calc(100vw - 20px); }
@@ -979,7 +980,9 @@
     .sql-example-option { padding: 8px 7px; }
     .sql-example-option-category { grid-column: 1 / -1; justify-self: start; }
     .sql-example-preview pre { font-size: 8px; }
-    .help-examples-button { right: 10px; min-height: 38px; }
+    .help-examples-button.is-floating { right: 10px; min-height: 38px; }
+    .help-examples-button.is-inline { width: 29px; min-height: 29px; padding: 0; }
+    .help-examples-button.is-inline span { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -956,7 +956,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             {drawerOpen && (experience === 'beginner' || compactViewport) && <OverlayPortal><><button className="drawer-backdrop" type="button" aria-label="Close panel" onClick={() => setDrawerOpen(false)}/><InspectorPane {...inspectorProps} drawer onClose={() => setDrawerOpen(false)} onInsert={value => { editor.current?.insert(value); setDrawerOpen(false); }} onOpenDocument={document => { openDocument(document); setDrawerOpen(false); }}/></></OverlayPortal>}
         </div>
         <ImportWizard open={importOpen} connectionId={connection.id} trusted={trusted} demoMode={demoMode} onClose={() => setImportOpen(false)} onImported={() => { void loadSchema(); setNotice('Import complete. The destination schema was refreshed.'); }}/>
-        {run && <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} cancelling={cancelling} scriptRunning={script?.status === 'running'}/>}
-        <HelpExamplesButton copy={copy.common} open={examplesOpen} executionBarVisible={Boolean(run)} onOpen={openExamples}/>
+        {run
+            ? <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} cancelling={cancelling} scriptRunning={script?.status === 'running'} helpButton={<HelpExamplesButton copy={copy.common} open={examplesOpen} placement="inline" onOpen={openExamples}/>}/>
+            : <HelpExamplesButton copy={copy.common} open={examplesOpen} placement="floating" onOpen={openExamples}/>}
     </div>;
 }

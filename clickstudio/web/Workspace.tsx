@@ -11,6 +11,7 @@ import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { ImportWizard } from './components/ImportWizard';
 import { SqlExamplesMenu } from './components/SqlExamplesMenu';
 import { HelpExamplesButton } from './components/HelpExamplesButton';
+import { RestoreSqlMenu } from './components/RestoreSqlMenu';
 import { OverlayPortal } from './components/OverlayPortal';
 import { AssistantWorkflow } from './components/AssistantWorkflow';
 import { ChartView, InsightsView, ResultGrid } from './components/ResultViews';
@@ -862,10 +863,12 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         window.requestAnimationFrame(() => editor.current?.focus());
                         return true;
                     }}/>
-                    {!!workspace.closedTabs?.length && <button className="new-tab-button reopen-tab-button" type="button" aria-label="Reopen closed tab" title="Reopen closed tab" onClick={() => {
-                        if (workspaceRef.current.tabs.length >= MAX_TABS) { setError(`Close a tab before reopening another. This workspace supports ${MAX_TABS} open drafts.`); return; }
-                        setWorkspace(current => reopenDraft(current));
-                    }}>↶</button>}
+                    {!!workspace.closedTabs?.length && <RestoreSqlMenu closedTabs={workspace.closedTabs} copy={copy.common} onRestore={draftId => {
+                        if (workspaceRef.current.tabs.length >= MAX_TABS) { setError(`Close a tab before restoring one. This workspace supports ${MAX_TABS} open drafts.`); return false; }
+                        setWorkspace(current => reopenDraft(current, draftId));
+                        window.requestAnimationFrame(() => editor.current?.focus());
+                        return true;
+                    }}/>}
                     <div className="tabs-spacer"/>
                     <span className="draft-status" data-save-state={saveStatus.state} title={`${saveStatus.label}. ${saveStatus.detail}`}><span className={cx('status-light', saveStatus.state === 'saved' ? 'is-trusted' : ['changed', 'conflict', 'deleted', 'unavailable'].includes(saveStatus.state) ? 'is-warning' : '')}/>{saveStatusLabel}</span>
                     {active.serverId && <Button variant="ghost" className="revision-history-trigger" aria-label={`Version history for ${active.name}`} aria-pressed={inspector === 'revisions'} title="View saved versions" onClick={() => showInspector('revisions')}><Icon name="history"/><span>Versions</span></Button>}

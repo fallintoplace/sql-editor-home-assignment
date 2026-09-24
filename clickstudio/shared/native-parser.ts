@@ -56,9 +56,11 @@ export interface NativeFormatResult {
     error?: NativeParseError;
 }
 
-export type NativeParserRequest =
-    | { id: number; kind: 'parseMany'; sql: string[] }
-    | { id: number; kind: 'formatMany'; sql: string[] };
+export type NativeParserRequest = {
+    id: number;
+    kind: 'parseMany' | 'formatMany';
+    sql: string[];
+};
 export type NativeParserReply =
     | { id: number; kind: 'parseMany'; ok: true; results: NativeParseResult[] }
     | { id: number; kind: 'formatMany'; ok: true; results: NativeFormatResult[] }

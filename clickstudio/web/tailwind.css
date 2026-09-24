@@ -36,16 +36,15 @@
     --z-local-intersection: 3;
     --z-execution-bar: 12;
     --z-editor-tooltip: 50;
-    --z-local-menu: 65;
     --z-editor-gutters: 200;
     --z-editor-panels: 300;
     --z-app-chrome: 400;
     --z-popover: 500;
+    --z-tooltip: 550;
     --z-overlay-backdrop: 600;
     --z-drawer: 610;
     --z-dialog: 620;
     --z-toast: 800;
-    --z-tooltip: 900;
     --z-splash: 1000;
     font-family: var(--font-sans);
     background: var(--page);
@@ -199,7 +198,7 @@
     .rail-icon-button.is-accent { color: var(--violet); }
     .rail-icon-button.is-accent.is-active { border-color: color-mix(in srgb, var(--violet) 35%, var(--line)); background: color-mix(in srgb, var(--violet) 10%, var(--panel)); }
     .rail-icon-muted { margin-top: 3px; }
-    .rail-tooltip { position: absolute; z-index: var(--z-popover); top: 50%; left: calc(100% + 11px); width: max-content; padding: 7px 9px; border: 1px solid var(--line-bright); border-radius: 7px; background: var(--panel-raised); color: var(--text); font-size: 10px; box-shadow: var(--shadow); opacity: 0; pointer-events: none; transform: translate(-4px, -50%); transition: .16s ease; }
+    .rail-tooltip { position: absolute; z-index: var(--z-tooltip); top: 50%; left: calc(100% + 11px); width: max-content; padding: 7px 9px; border: 1px solid var(--line-bright); border-radius: 7px; background: var(--panel-raised); color: var(--text); font-size: 10px; box-shadow: var(--shadow); opacity: 0; pointer-events: none; transform: translate(-4px, -50%); transition: .16s ease; }
     .rail-icon-button:hover .rail-tooltip { opacity: 1; transform: translate(0, -50%); }
     .workspace-main { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; }
     .document-tabs { display: flex; min-height: 40px; flex: none; align-items: stretch; gap: 2px; padding: 4px 10px 0; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--page-raised) 82%, transparent); }
@@ -226,7 +225,7 @@
     .restore-sql-menu { position: relative; display: flex; flex: none; align-self: center; }
     .restore-sql-trigger { color: var(--text-soft); }
     .restore-sql-trigger:hover, .restore-sql-trigger[aria-expanded="true"] { border-color: color-mix(in srgb, var(--accent) 42%, var(--line)); background: color-mix(in srgb, var(--accent) 8%, var(--panel)); color: var(--accent); }
-    .restore-sql-menu-list { position: absolute; z-index: var(--z-local-menu); top: calc(100% + 6px); left: 0; display: grid; width: min(300px, calc(100vw - 24px)); max-height: min(360px, calc(100dvh - 90px)); gap: 2px; overflow: auto; padding: 5px; border: 1px solid var(--line-bright); border-radius: 9px; background: var(--panel-raised); box-shadow: var(--shadow); }
+    .restore-sql-menu-list { position: absolute; z-index: var(--z-popover); top: calc(100% + 6px); left: 0; display: grid; width: min(300px, calc(100vw - 24px)); max-height: min(360px, calc(100dvh - 90px)); gap: 2px; overflow: auto; padding: 5px; border: 1px solid var(--line-bright); border-radius: 9px; background: var(--panel-raised); box-shadow: var(--shadow); }
     .restore-sql-menu-list button { display: flex; width: 100%; min-width: 0; align-items: center; gap: 8px; padding: 7px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text-soft); text-align: left; cursor: pointer; }
     .restore-sql-menu-list button:hover, .restore-sql-menu-list button:focus-visible { outline: none; background: var(--panel-hover); color: var(--text); }
     .restore-sql-menu-list button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -601,7 +600,7 @@
     .heatmap-corner { font-family: var(--font-sans); text-align: left; }
     .heatmap-row-label { max-width: 200px; overflow: hidden; text-align: left; text-overflow: ellipsis; }
     .heatmap-cell { position: relative; min-width: 26px; height: 27px; padding: 2px; border: 1px solid color-mix(in srgb, var(--line) 65%, transparent); border-radius: 4px; font-family: var(--font-mono); font-size: 7px; font-variant-numeric: tabular-nums; text-align: center; transition: transform .12s ease, border-color .12s ease; }
-    .heatmap-cell:hover { z-index: 1; border-color: var(--text-soft); transform: scale(1.08); }
+    .heatmap-cell:hover { z-index: var(--z-local-control); border-color: var(--text-soft); transform: scale(1.08); }
     .heatmap-caption { padding: 0 12px 10px; color: var(--muted); font-size: 8px; }
     .inspector-pane { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; border-left: 1px solid var(--line); background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 90%, var(--page)), var(--page-raised)); animation: inspectorReveal .35s cubic-bezier(.2,.7,.2,1) both; }
     .inspector-pane.is-expert-browser.is-browser-tab-selected:not(.is-drawer) > .inspector-header { display: none; }
@@ -619,7 +618,7 @@
     .inspector-tabs.is-browser-tabs .inspector-more-trigger { display: flex; width: auto; min-width: 48px; height: 34px; align-items: center; justify-content: center; gap: 3px; padding: 0 7px; border-color: transparent; font-size: 8px; }
     .inspector-more-trigger svg { width: 12px !important; height: 12px !important; }
     .inspector-tabs.is-browser-tabs .inspector-more-trigger.is-active { color: var(--accent); }
-    .inspector-more-menu { position: absolute; z-index: var(--z-local-menu); top: calc(100% + 6px); right: 0; display: grid; width: 180px; gap: 2px; padding: 5px; border: 1px solid var(--line-bright); border-radius: 9px; background: var(--panel-raised); box-shadow: var(--shadow); }
+    .inspector-more-menu { position: absolute; z-index: var(--z-popover); top: calc(100% + 6px); right: 0; display: grid; width: 180px; gap: 2px; padding: 5px; border: 1px solid var(--line-bright); border-radius: 9px; background: var(--panel-raised); box-shadow: var(--shadow); }
     .inspector-tabs.is-browser-tabs .inspector-more-menu button { display: flex; width: 100%; height: 34px; align-items: center; justify-content: flex-start; gap: 8px; padding: 0 9px; border: 0; border-radius: 6px; color: var(--text-soft); font-size: 9px; text-align: left; }
     .inspector-tabs.is-browser-tabs .inspector-more-menu button:hover { background: var(--panel-hover); color: var(--text); }
     .inspector-tabs.is-browser-tabs .inspector-more-menu button[aria-pressed="true"] { color: var(--accent); }

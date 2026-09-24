@@ -828,7 +828,9 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     </div>)}
                     <button className="new-tab-button new-tab-labeled" type="button" aria-label="New SQL tab" title="New SQL tab" onClick={() => openNewDraft(newDraft())}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
                     <SqlExamplesMenu examples={sqlExamples} sourceLabel={connectionLabel} copy={copy.common} onOpenExample={example => {
-                        if (!openNewDraft(newDraft(`${example.name}.sql`, example.sql))) return false;
+                        const draft = newDraft(`${example.name}.sql`, example.sql);
+                        draft.chart = { ...example.chart, ys: [...example.chart.ys] };
+                        if (!openNewDraft(draft)) return false;
                         window.requestAnimationFrame(() => editor.current?.focus());
                         return true;
                     }}/>

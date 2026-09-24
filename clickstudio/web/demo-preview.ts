@@ -46,7 +46,7 @@ FROM events
 WHERE event_time >= now() - INTERVAL 1 DAY
 GROUP BY page_path
 ORDER BY p95_ms DESC
-LIMIT 10`, chart: { kind: 'bar', x: 0, ys: [3], title: '95th percentile latency' } },
+LIMIT 10`, chart: { kind: 'bar', x: 0, ys: [3], title: '95th percentile latency' }, initial: true },
     { id: 'preview-starter-hourly', name: 'Hourly traffic.sql', sql: `SELECT
     toStartOfHour(event_time) AS hour,
     count() AS events,
@@ -83,12 +83,80 @@ ORDER BY average_lifetime_value DESC`, chart: { kind: 'bar', x: 0, ys: [2], titl
     { id: 'preview-starter-daily-rollup', name: 'Daily rollup.sql', sql: `SELECT
     day,
     sum(events) AS events,
-    sum(unique_users) AS unique_users,
+    sum(orders) AS orders,
     round(sum(revenue), 2) AS revenue
 FROM daily_metrics
 WHERE day >= today() - 30
 GROUP BY day
-ORDER BY day`, chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Daily rollup' } },
+ORDER BY day`, chart: { kind: 'line', x: 0, ys: [1], title: 'Daily events from the rollup' } },
+    { id: 'preview-starter-latency-anomaly', name: 'Latency anomaly baseline.sql', sql: `WITH hourly_latency AS (
+    SELECT
+        toStartOfHour(event_time) AS hour,
+        page_path,
+        quantileTDigest(0.95)(duration_ms) AS p95_ms
+    FROM events
+    WHERE event_time >= now() - INTERVAL 14 DAY
+    GROUP BY hour, page_path
+), rolling_baseline AS (
+    SELECT
+        hour,
+        page_path,
+        p95_ms,
+        avg(p95_ms) OVER (
+            PARTITION BY page_path
+            ORDER BY hour
+            ROWS BETWEEN 7 PRECEDING AND 1 PRECEDING
+        ) AS baseline_ms,
+        stddevPop(p95_ms) OVER (
+            PARTITION BY page_path
+            ORDER BY hour
+            ROWS BETWEEN 7 PRECEDING AND 1 PRECEDING
+        ) AS deviation_ms
+    FROM hourly_latency
+)
+SELECT
+    hour,
+    page_path,
+    p95_ms,
+    round(baseline_ms, 1) AS baseline_ms,
+    round(baseline_ms + 3 * deviation_ms, 1) AS alert_threshold_ms
+FROM rolling_baseline
+WHERE baseline_ms IS NOT NULL
+ORDER BY hour
+LIMIT 500`, chart: { kind: 'line', x: 0, ys: [2, 3, 4], title: 'P95 latency vs rolling baseline' } },
+    { id: 'preview-starter-latest-event', name: 'Latest event per user.sql', sql: `SELECT
+    user_id,
+    argMax(event_type, event_time) AS last_event,
+    argMax(page_path, event_time) AS last_page,
+    max(event_time) AS last_seen
+FROM events
+WHERE event_time >= now() - INTERVAL 30 DAY
+GROUP BY user_id
+ORDER BY last_seen DESC
+LIMIT 20`, chart: { kind: 'table', x: 0, ys: [], title: 'Latest event per user' } },
+    { id: 'preview-starter-top-pages-country', name: 'Top pages by country.sql', sql: `SELECT
+    country,
+    page_path,
+    count() AS page_views,
+    uniqExact(user_id) AS visitors
+FROM events
+WHERE event_time >= now() - INTERVAL 7 DAY
+GROUP BY country, page_path
+ORDER BY country, visitors DESC
+LIMIT 3 BY country
+LIMIT 30`, chart: { kind: 'bar', x: 0, ys: [3], title: 'Top pages by country' } },
+    { id: 'preview-starter-distinct-estimates', name: 'Exact vs estimated visitors.sql', sql: `WITH visitor_counts AS (
+    SELECT
+        uniqExact(user_id) AS exact_visitors,
+        uniqCombined64(user_id) AS estimated_visitors
+    FROM events
+    WHERE event_time >= now() - INTERVAL 30 DAY
+)
+SELECT
+    exact_visitors,
+    estimated_visitors,
+    round(abs(toFloat64(exact_visitors) - estimated_visitors) / nullIf(exact_visitors, 0) * 100, 2) AS difference_pct
+FROM visitor_counts`, chart: { kind: 'table', x: 0, ys: [], title: 'Exact vs estimated visitors' } },
 ];
 export const DEMO_PREVIEW_INITIAL_STARTERS = DEMO_PREVIEW_STARTERS.filter(starter => starter.initial);
 const DEMO_PREVIEW_STARTER_VERSIONS = [
@@ -253,29 +321,64 @@ function dailyRows(): PreviewRows {
     return { columns: [{ name: 'day', type: 'Date' }, { name: 'events', type: 'UInt64' }, { name: 'unique_users', type: 'UInt64' }, { name: 'revenue', type: 'Decimal(18, 2)' }], rows };
 }
 
+function normalizePreviewSql(sql: string) {
+    return sql.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function hourlyTrafficRows(): PreviewRows {
+    const rows = Array.from({ length: 24 }, (_, index) => {
+        const hour = new Date(Date.now() - (23 - index) * 60 * 60 * 1000).toISOString().slice(0, 13) + ':00:00';
+        const events = 1250 + ((index * 173 + index * index * 11) % 2340);
+        return [hour, events, Math.round(events * (0.006 + (index % 4) * 0.001))];
+    });
+    return { columns: [{ name: 'hour', type: 'DateTime' }, { name: 'events', type: 'UInt64' }, { name: 'server_errors', type: 'UInt64' }], rows };
+}
+
+function latencyAnomalyRows(): PreviewRows {
+    const p95Values = [218, 205, 212, 224, 216, 208, 230, 226, 219, 305, 468, 612];
+    const rows = p95Values.flatMap((p95, index) => {
+        const history = p95Values.slice(Math.max(0, index - 7), index);
+        if (history.length === 0) return [];
+        const hour = new Date(Date.now() - (p95Values.length - index) * 60 * 60 * 1000).toISOString().slice(0, 13) + ':00:00';
+        const baseline = history.reduce((sum, value) => sum + value, 0) / history.length;
+        const deviation = Math.sqrt(history.reduce((sum, value) => sum + (value - baseline) ** 2, 0) / history.length);
+        return [[hour, '/api/checkout', p95, Math.round(baseline * 10) / 10, Math.round((baseline + 3 * deviation) * 10) / 10]];
+    });
+    return { columns: [{ name: 'hour', type: 'DateTime' }, { name: 'page_path', type: 'String' }, { name: 'p95_ms', type: 'Float64' }, { name: 'baseline_ms', type: 'Float64' }, { name: 'alert_threshold_ms', type: 'Float64' }], rows };
+}
+
+function recentEventRows(): PreviewRows {
+    const recentUsers: Array<[number, string, string, number]> = [
+        [1042, 'purchase', '/pricing/checkout', 8], [2088, 'signup_complete', '/welcome', 20],
+        [3811, 'page_view', '/docs/sql', 35], [4927, 'add_to_cart', '/products/analytics', 52],
+        [6120, 'purchase', '/pricing/checkout', 71],
+    ];
+    const rows = recentUsers.map(([userId, event, page, minutesAgo]) => [
+        userId, event, page, new Date(Date.now() - minutesAgo * 60_000).toISOString().slice(0, 19).replace('T', ' '),
+    ]);
+    return { columns: [{ name: 'user_id', type: 'UInt64' }, { name: 'last_event', type: 'String' }, { name: 'last_page', type: 'String' }, { name: 'last_seen', type: 'DateTime' }], rows };
+}
+
+const demoResultRows: Record<string, PreviewRows> = {
+    'preview-starter-getting-started': dailyRows(),
+    'preview-starter-top-countries': { columns: [{ name: 'country', type: 'String' }, { name: 'events', type: 'UInt64' }, { name: 'unique_users', type: 'UInt64' }, { name: 'revenue', type: 'Decimal(18, 2)' }], rows: countries.map(row => [...row]) },
+    'preview-starter-revenue-channel': { columns: [{ name: 'channel', type: 'String' }, { name: 'orders', type: 'UInt64' }, { name: 'revenue', type: 'Decimal(18, 2)' }, { name: 'average_order_value', type: 'Decimal(18, 2)' }], rows: channels.map(row => [...row]) },
+    'preview-starter-latency': { columns: [{ name: 'page_path', type: 'String' }, { name: 'requests', type: 'UInt64' }, { name: 'p50_ms', type: 'UInt32' }, { name: 'p95_ms', type: 'UInt32' }, { name: 'p99_ms', type: 'UInt32' }], rows: endpoints.map(row => [...row]) },
+    'preview-starter-hourly': hourlyTrafficRows(),
+    'preview-starter-funnel': { columns: [{ name: 'step', type: 'String' }, { name: 'users', type: 'UInt64' }, { name: 'conversion_pct', type: 'Float64' }], rows: steps.map(row => [...row]) },
+    'preview-starter-device-engagement': { columns: [{ name: 'device_type', type: 'String' }, { name: 'sessions', type: 'UInt64' }, { name: 'avg_page_views', type: 'Float64' }, { name: 'conversion_rate', type: 'Float64' }], rows: [['Desktop', 24820, 5.8, 8.4], ['Mobile', 38640, 3.6, 5.1], ['Tablet', 4280, 4.2, 6.3]] },
+    'preview-starter-customer-value': { columns: [{ name: 'plan', type: 'String' }, { name: 'users', type: 'UInt64' }, { name: 'average_lifetime_value', type: 'Decimal(18, 2)' }], rows: [['Free', 18420, 0], ['Starter', 12680, 48.5], ['Growth', 6420, 286.4], ['Business', 1280, 1842.75]] },
+    'preview-starter-daily-rollup': { columns: [{ name: 'day', type: 'Date' }, { name: 'events', type: 'UInt64' }, { name: 'orders', type: 'UInt64' }, { name: 'revenue', type: 'Decimal(18, 2)' }], rows: dailyRows().rows.map((row, index) => [row[0]!, row[1]!, Math.round(Number(row[1]) * (0.004 + (index % 4) * 0.0007)), row[3]!]) },
+    'preview-starter-latency-anomaly': latencyAnomalyRows(),
+    'preview-starter-latest-event': recentEventRows(),
+    'preview-starter-top-pages-country': { columns: [{ name: 'country', type: 'String' }, { name: 'page_path', type: 'String' }, { name: 'page_views', type: 'UInt64' }, { name: 'visitors', type: 'UInt64' }], rows: [['United States', '/pricing', 3240, 1940], ['United States', '/docs/sql', 2860, 1710], ['United States', '/blog/clickhouse', 1940, 1280], ['United Kingdom', '/docs/sql', 1620, 980], ['United Kingdom', '/pricing', 1480, 910], ['United Kingdom', '/blog/clickhouse', 1140, 740], ['Germany', '/docs/sql', 1320, 810], ['Germany', '/pricing', 1080, 640], ['Germany', '/blog/clickhouse', 920, 580]] },
+    'preview-starter-distinct-estimates': { columns: [{ name: 'exact_visitors', type: 'UInt64' }, { name: 'estimated_visitors', type: 'UInt64' }, { name: 'difference_pct', type: 'Float64' }], rows: [[84216, 84102, 0.14]] },
+};
+const demoStarterIdBySql = new Map(DEMO_PREVIEW_STARTERS.map(starter => [normalizePreviewSql(starter.sql), starter.id]));
+
 function previewRowsFor(sql: string): PreviewRows {
-    const normalized = sql.toLowerCase();
-    if (normalized.includes('quantile') || normalized.includes('duration_ms') || normalized.includes('p95'))
-        return { columns: [{ name: 'page_path', type: 'String' }, { name: 'requests', type: 'UInt64' }, { name: 'p50_ms', type: 'UInt32' }, { name: 'p95_ms', type: 'UInt32' }, { name: 'p99_ms', type: 'UInt32' }], rows: endpoints.map(row => [...row]) };
-    if (normalized.includes('signup') || normalized.includes('multiif') || normalized.includes('conversion_pct'))
-        return { columns: [{ name: 'step', type: 'String' }, { name: 'users', type: 'UInt64' }, { name: 'conversion_pct', type: 'Float64' }], rows: steps.map(row => [...row]) };
-    if (normalized.includes('from orders') || normalized.includes('from `orders`') || normalized.includes('order_status'))
-        return { columns: [{ name: 'channel', type: 'String' }, { name: 'orders', type: 'UInt64' }, { name: 'revenue', type: 'Decimal(18, 2)' }, { name: 'average_order_value', type: 'Decimal(18, 2)' }], rows: channels.map(row => [...row]) };
-    if (normalized.includes('country'))
-        return { columns: [{ name: 'country', type: 'String' }, { name: 'events', type: 'UInt64' }, { name: 'unique_users', type: 'UInt64' }, { name: 'revenue', type: 'Decimal(18, 2)' }], rows: countries.map(row => [...row]) };
-    if (normalized.includes('tostartofhour') || normalized.includes('server_errors') || normalized.includes('interval 24 hour')) {
-        const rows = Array.from({ length: 24 }, (_, index) => {
-            const hour = new Date(Date.now() - (23 - index) * 60 * 60 * 1000).toISOString().slice(0, 13) + ':00:00';
-            const events = 1250 + ((index * 173 + index * index * 11) % 2340);
-            return [hour, events, Math.round(events * (0.006 + (index % 4) * 0.001))];
-        });
-        return { columns: [{ name: 'hour', type: 'DateTime' }, { name: 'events', type: 'UInt64' }, { name: 'server_errors', type: 'UInt64' }], rows };
-    }
-    if (normalized.includes('from users') || normalized.includes('lifetime_value'))
-        return { columns: [{ name: 'plan', type: 'String' }, { name: 'users', type: 'UInt64' }, { name: 'average_lifetime_value', type: 'Decimal(18, 2)' }], rows: [['Free', 18420, 0], ['Starter', 12680, 48.5], ['Growth', 6420, 286.4], ['Business', 1280, 1842.75]] };
-    if (normalized.includes('from sessions') || normalized.includes('page_views'))
-        return { columns: [{ name: 'device_type', type: 'String' }, { name: 'sessions', type: 'UInt64' }, { name: 'avg_page_views', type: 'Float64' }, { name: 'conversion_rate', type: 'Float64' }], rows: [['Desktop', 24820, 5.8, 8.4], ['Mobile', 38640, 3.6, 5.1], ['Tablet', 4280, 4.2, 6.3]] };
-    return dailyRows();
+    const starterId = demoStarterIdBySql.get(normalizePreviewSql(sql));
+    return starterId ? demoResultRows[starterId] ?? dailyRows() : dailyRows();
 }
 
 function resultFor(run: Run, sequence: number): Result {

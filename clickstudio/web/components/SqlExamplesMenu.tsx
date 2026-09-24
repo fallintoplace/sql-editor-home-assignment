@@ -7,13 +7,14 @@ import { Button, Icon, cx } from './ui';
 type CategoryFilter = SqlExampleCategory | 'all';
 type PanelPosition = { top: number; left: number; width: number; maxHeight: number };
 
-const categories: CategoryFilter[] = ['all', 'basics', 'aggregation', 'timeSeries', 'schema'];
+const categories: CategoryFilter[] = ['all', 'basics', 'aggregation', 'timeSeries', 'clickhouse', 'schema'];
 
 function categoryLabel(category: CategoryFilter, copy: Copy['common']) {
     if (category === 'all') return copy.allExamples;
     if (category === 'basics') return copy.exampleBasics;
     if (category === 'aggregation') return copy.exampleAggregation;
     if (category === 'timeSeries') return copy.exampleTimeSeries;
+    if (category === 'clickhouse') return copy.exampleClickHouse;
     return copy.exampleSchema;
 }
 

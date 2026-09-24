@@ -32,6 +32,8 @@ export interface Manifest {
     progress: Capability;
     cancellation: Capability;
     explain: Capability;
+    /** Running EXPLAIN PIPELINE as a query is separate from loading structured pipeline evidence. */
+    explainPipeline?: Capability;
     pipeline: Capability;
     queryLog: Capability;
     documentation: Capability;

@@ -23,7 +23,15 @@ export function RunActionGroup({ runLabel, running, disabled, onRun, actions, co
 }) {
     return <div className="run-action-group" role="group" aria-label={copy.runActions}>
         <Button variant="primary" className="run-query-button" data-testid="run-statement" aria-label={runLabel} onClick={onRun} disabled={disabled}><Icon name="play"/>{running ? copy.running : copy.run}</Button>
-        {actions.map(action => <Button key={action.id} data-testid={`run-action-${action.id}`} variant="secondary" className="run-option-button" disabled={action.disabled} title={action.title} onClick={action.onSelect}>{action.label}</Button>)}
+        {actions.map(action => {
+            if (!action.disabled || !action.title)
+                return <Button key={action.id} data-testid={`run-action-${action.id}`} variant="secondary" className="run-option-button" disabled={action.disabled} title={action.title} onClick={action.onSelect}>{action.label}</Button>;
+            const tooltipId = `run-action-${action.id}-reason`;
+            return <span key={action.id} className="run-option-tooltip-anchor" role="group" tabIndex={0} aria-describedby={tooltipId} aria-label={`${action.label}: ${action.title}`}>
+                <Button data-testid={`run-action-${action.id}`} variant="secondary" className="run-option-button" disabled title={undefined} onClick={action.onSelect}>{action.label}</Button>
+                <span id={tooltipId} className="run-option-tooltip" role="tooltip">{action.title}</span>
+            </span>;
+        })}
     </div>;
 }
 

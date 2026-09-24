@@ -651,10 +651,14 @@ export class DemoPreviewApi {
             const requestedKind = body.kind === 'explain' || body.kind === 'pipeline' ? body.kind : 'query';
             const parameters = record(body.parameters) as Record<string, string>;
             if (body.connectionId === PLAYGROUND_CONNECTION_ID) {
-                if (requestedKind !== 'query') throw new Error('Only regular SQL queries are enabled on ClickHouse Playground.');
                 if (Object.keys(parameters).length) throw new Error('Remove query parameters before running SQL on ClickHouse Playground.');
                 const sql = typeof body.sql === 'string' ? body.sql : '';
-                const response = await queryPlayground(sql, options.signal);
+                const executionSql = requestedKind === 'explain'
+                    ? `EXPLAIN indexes = 1\n${sql}`
+                    : requestedKind === 'pipeline'
+                        ? `EXPLAIN PIPELINE\n${sql}`
+                        : sql;
+                const response = await queryPlayground(executionSql, options.signal);
                 const finishedAt = now();
                 const startedAt = new Date(Date.now() - response.elapsedMs).toISOString();
                 const runId = crypto.randomUUID();
@@ -665,7 +669,7 @@ export class DemoPreviewApi {
                 const resultExpiresAt = expiresAt();
                 const run: Run = {
                     dataSource: 'clickhouse', id: runId, queryId: response.queryId, owner,
-                    connectionId: PLAYGROUND_CONNECTION_ID, sql, kind: 'query', parameters: {},
+                    connectionId: PLAYGROUND_CONNECTION_ID, sql, kind: requestedKind, parameters: {},
                     limits: { ...PLAYGROUND_CONNECTION.limits },
                     tags: { workspace: 'clickstudio', source: 'ClickHouse SQL Playground', execution: 'browser direct' },
                     status, createdAt: startedAt, startedAt, finishedAt, elapsedMs: response.elapsedMs,

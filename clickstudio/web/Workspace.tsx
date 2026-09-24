@@ -7,6 +7,7 @@ import { matchesDraft } from '../shared/evidence';
 import { formatSql, hasSqlComments, parameterNames, selectedStatement, splitSql } from '../shared/sql';
 import { api, download, isFrontendDemoPreview, message, post } from './api';
 import { DEMO_PREVIEW_INITIAL_STARTERS, DEMO_PREVIEW_RUN_ID, DEMO_PREVIEW_SQL, DEMO_PREVIEW_STARTER_DOCUMENT_ID, demoPreviewStarterRunId, PLAYGROUND_PREVIEW_STARTER } from './demo-preview';
+import { PLAYGROUND_CONNECTION_ID } from './playground';
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { ImportWizard } from './components/ImportWizard';
 import { SqlExamplesMenu } from './components/SqlExamplesMenu';
@@ -167,6 +168,16 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         try { return parameterNames(active.sql); } catch { return []; }
     }, [active.sql]);
     const unsupportedParameters = parameters.length > 0 && connection.manifest?.parameters.available === false;
+    const runActionTitle = (capability: { available: boolean; reason?: string } | undefined, action: 'script' | 'explain' | 'explain-pipeline') => {
+        if (!trusted) return copy.common.runActionTrustRequired;
+        if (busy) return copy.common.runActionWait;
+        if (unsupportedParameters) return copy.common.runActionRemoveParameters;
+        if (capability?.available === false) {
+            if (action === 'script' && connection.id === PLAYGROUND_CONNECTION_ID) return copy.common.playgroundScriptUnavailable;
+            return capability.reason;
+        }
+        return undefined;
+    };
     const assistantKey = assistantContextKey(connection.id, active.id, active.sql, active.parameters, activeRunId, includeResult, assistantAction, assistantQuestion);
     const assistantKeyRef = useRef(assistantKey);
     assistantKeyRef.current = assistantKey;
@@ -491,8 +502,9 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             throw new Error(connection.manifest?.parameters.reason ?? 'Query parameters are unavailable on this connection.');
         if (kind === 'explain' && connection.manifest?.explain.available === false)
             throw new Error(connection.manifest.explain.reason ?? 'EXPLAIN is unavailable on this connection.');
-        if (kind === 'pipeline' && connection.manifest?.pipeline.available === false)
-            throw new Error(connection.manifest.pipeline.reason ?? 'Pipeline profiling is unavailable on this connection.');
+        const explainPipeline = connection.manifest?.explainPipeline ?? connection.manifest?.pipeline;
+        if (kind === 'pipeline' && explainPipeline?.available === false)
+            throw new Error(explainPipeline.reason ?? 'EXPLAIN PIPELINE is unavailable on this connection.');
         const selected = editor.current?.selection() ?? { from: active.from, to: active.to };
         const statement = wholeScript ? undefined : selectedStatement(active.sql, selected.from, selected.to);
         if (!wholeScript && !statement) throw new Error('Write or select a SQL statement before running it.');
@@ -921,9 +933,9 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                     <Button variant="ghost" className="sql-ai-button" data-testid="open-ai" aria-label={copy.common.askAi} aria-pressed={inspector === 'assistant'} onClick={() => showInspector('assistant')}><Icon name="assistant"/>{copy.common.askAi}</Button>
                                     <Button variant="secondary" className="save-revision-button" data-testid="save-query" aria-label={copy.common.saveRevision} onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/>{copy.common.save}</Button>
                                     <RunActionGroup copy={copy.common} runLabel={copy.common.runStatement} running={busy === 'run' || busy === 'script'} disabled={!trusted || Boolean(busy) || unsupportedParameters} onRun={() => void execute()} actions={[
-                                        { id: 'script', label: copy.common.runScript, disabled: !trusted || Boolean(busy) || !connection.manifest?.scripts.available, title: connection.manifest?.scripts.reason, onSelect: () => void execute(true) },
-                                        { id: 'explain', label: copy.common.explain, disabled: !trusted || Boolean(busy) || !connection.manifest?.explain.available, title: connection.manifest?.explain.reason, onSelect: () => void execute(false, 'explain') },
-                                        { id: 'explain-pipeline', label: copy.common.explainPipeline, disabled: !trusted || Boolean(busy) || !connection.manifest?.pipeline.available, title: connection.manifest?.pipeline.reason, onSelect: () => void execute(false, 'pipeline') },
+                                        { id: 'script', label: copy.common.runScript, disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.scripts.available, title: runActionTitle(connection.manifest?.scripts, 'script'), onSelect: () => void execute(true) },
+                                        { id: 'explain', label: copy.common.explain, disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.explain.available, title: runActionTitle(connection.manifest?.explain, 'explain'), onSelect: () => void execute(false, 'explain') },
+                                        { id: 'explain-pipeline', label: copy.common.explainPipeline, disabled: !trusted || Boolean(busy) || unsupportedParameters || !(connection.manifest?.explainPipeline ?? connection.manifest?.pipeline)?.available, title: runActionTitle(connection.manifest?.explainPipeline ?? connection.manifest?.pipeline, 'explain-pipeline'), onSelect: () => void execute(false, 'pipeline') },
                                     ]}/>
                                 </> : <>
                                     <Button variant="ghost" className="sql-ai-button" data-testid="open-ai" aria-label={copy.common.askAi} onClick={() => showInspector('assistant')}><Icon name="assistant"/>{copy.common.askAi}</Button>

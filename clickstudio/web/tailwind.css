@@ -333,6 +333,10 @@
     .run-action-group { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 5px; }
     .run-action-group .run-query-button { min-width: 98px; }
     .run-option-button { min-height: 34px; padding: 0 9px; font-size: 9px; letter-spacing: .02em; }
+    .run-option-tooltip-anchor { position: relative; display: inline-flex; flex: none; }
+    .run-option-tooltip-anchor:focus-visible { border-radius: 8px; outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 3px; }
+    .run-option-tooltip { position: absolute; z-index: var(--z-tooltip); right: 0; bottom: calc(100% + 8px); width: max-content; max-width: min(300px, calc(100vw - 32px)); padding: 8px 10px; border: 1px solid var(--line-bright); border-radius: 8px; background: var(--panel-raised); color: var(--text-soft); box-shadow: var(--shadow); font-size: 9px; line-height: 1.5; white-space: normal; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(4px); transition: opacity .14s ease, transform .14s ease, visibility .14s ease; }
+    .run-option-tooltip-anchor:hover .run-option-tooltip, .run-option-tooltip-anchor:focus .run-option-tooltip { opacity: 1; visibility: visible; transform: translateY(0); }
     .sql-ai-button { color: var(--violet); }
     .sql-ai-button[aria-pressed="true"] { border-color: color-mix(in srgb, var(--violet) 25%, transparent); background: color-mix(in srgb, var(--violet) 8%, transparent); }
     .sql-map-button { gap: 6px; color: var(--accent); }

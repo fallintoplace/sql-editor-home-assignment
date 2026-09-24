@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { displayValue, recommendChart, chartNumber, countRowsByCategory, countRowsOverTime, numericType, temporalType, filterRows, sampleChartRows, MAX_CHART_RENDER_POINTS } from '../../shared/results';
-import type { ProfilePipeline, QueryProfile, Result, ResultPage, Run } from '../../shared/types';
+import { CandlestickChart } from './CandlestickChart';
+import type { CandlestickConfig, ProfilePipeline, QueryProfile, Result, ResultPage, Run } from '../../shared/types';
 import type { Draft } from '../workspace-state';
 import type { Copy, Locale } from '../i18n';
 import { PipelineGraph } from './PipelineGraph';
@@ -13,6 +14,7 @@ const chartKindOptions = [
     { value: 'bar' },
     { value: 'scatter' },
     { value: 'heatmap' },
+    { value: 'candlestick' },
 ] as const satisfies readonly { value: Draft['chart']['kind'] }[];
 const chartColors = ['var(--accent)', 'var(--green)', 'var(--amber)', 'var(--red)', 'var(--violet)'] as const;
 const seriesColor = (index: number) => chartColors[index % chartColors.length]!;
@@ -23,7 +25,7 @@ function chartText(template: string, values: Record<string, string | number> = {
 }
 
 function chartTypeLabel(kind: Draft['chart']['kind'], copy: Copy['chart']) {
-    return ({ number: copy.numberType, line: copy.lineType, bar: copy.barType, scatter: copy.scatterType, heatmap: copy.heatmapType, table: copy.queryResult })[kind];
+    return ({ number: copy.numberType, line: copy.lineType, bar: copy.barType, scatter: copy.scatterType, heatmap: copy.heatmapType, candlestick: copy.candlestickType, table: copy.queryResult })[kind];
 }
 
 function formatCount(value: number, locale: Locale) {
@@ -186,6 +188,42 @@ export function ChartView({ result, loading, chart, onChart, copy, locale }: { r
     if (!result.columns.length) return <div className="chart-empty">{chartCopy.noColumns}</div>;
     const suggestion = recommendChart(result.columns, result.rows);
     const numericIndexes = result.columns.flatMap((column, index) => numericType(column.type) ? [index] : []);
+    const inferredCandle = suggestion.config.candlestick;
+    const canChooseCandlestick = numericIndexes.length >= 4;
+    const validCandleIndex = (index: number | undefined): index is number => typeof index === 'number' && Number.isSafeInteger(index) && index >= 0 && index < result.columns.length && numericType(result.columns[index]?.type ?? '');
+    const namedTime = result.columns.findIndex(column => /^(?:time|timestamp|datetime|date)$/i.test(column.name));
+    const fallbackTime = result.columns.findIndex((column, index) => temporalType(column.type) || (!numericIndexes.includes(index) && !['open', 'high', 'low', 'close'].includes(column.name.toLowerCase())));
+    const chartXIsTime = chart.x >= 0 && chart.x < result.columns.length && (temporalType(result.columns[chart.x]?.type ?? '') || /^(?:time|timestamp|datetime|date)$/i.test(result.columns[chart.x]?.name ?? ''));
+    const candleX = chartXIsTime ? chart.x : suggestion.config.kind === 'candlestick' ? suggestion.config.x : namedTime >= 0 ? namedTime : fallbackTime >= 0 ? fallbackTime : suggestion.config.x;
+    const activeCandle = chart.candlestick ?? inferredCandle;
+    const activeCandleValid = Boolean(activeCandle && [activeCandle.open, activeCandle.high, activeCandle.low, activeCandle.close].every(validCandleIndex) && new Set([activeCandle.open, activeCandle.high, activeCandle.low, activeCandle.close]).size === 4);
+    if (chart.kind === 'candlestick' || (chart.kind === 'table' && suggestion.config.kind === 'candlestick')) {
+        const candle = activeCandle ?? {};
+        const patchCandle = (field: 'open' | 'high' | 'low' | 'close' | 'bid' | 'ask' | 'spread' | 'quoteActivity', value: string) => {
+            const next = value === '' ? undefined : Number(value);
+            const candlestick: CandlestickConfig = { ...candle };
+            if (next === undefined) delete candlestick[field];
+            else candlestick[field] = next;
+            onChart({ ...chart, kind: 'candlestick', x: candleX, ys: [], candlestick });
+        };
+        const updateKind = (value: string) => {
+            const option = chartKindOptions.find(candidate => candidate.value === value);
+            if (!option) return;
+            if (option.value === 'candlestick' && !canChooseCandlestick) return;
+            onChart({ ...chart, kind: option.value, ...(option.value === 'candlestick' ? { x: candleX, ys: [], candlestick: inferredCandle ?? {} } : { ys: numericIndexes.slice(0, 1) }) });
+        };
+        const candleColumns = (selected: number | undefined) => <><option value="">—</option>{numericIndexes.map(index => <option value={index} key={index} disabled={index !== selected && [candle.open, candle.high, candle.low, candle.close].includes(index)}>{result.columns[index]?.name}</option>)}</>;
+        const optionalColumns = (selected: number | undefined) => <><option value="">—</option>{numericIndexes.map(index => <option value={index} key={index} disabled={index !== selected && [candle.open, candle.high, candle.low, candle.close].includes(index)}>{result.columns[index]?.name}</option>)}</>;
+        return <div className="chart-workspace animate-enter">
+            <div className="chart-title-row"><div><span className="eyebrow">{chartCopy.visualExploration}</span><h3>{chart.title === 'Query result' ? chartCopy.candlestickType : chart.title}</h3><p>{chartCopy.returnedData}. {chartCopy.candlestickDisplayNote}</p></div><div className="chart-controls">
+                <label>{chartCopy.type}<select value="candlestick" onChange={event => updateKind(event.target.value)}>{chartKindOptions.map(option => <option key={option.value} value={option.value} disabled={option.value === 'candlestick' && !canChooseCandlestick}>{chartTypeLabel(option.value, chartCopy)}</option>)}</select></label>
+                <label>{chartCopy.xAxis}<select value={candleX} onChange={event => onChart({ ...chart, kind: 'candlestick', x: Number(event.target.value), ys: [], candlestick: { ...candle } })}>{result.columns.map((column, index) => <option value={index} key={index}>{column.name}</option>)}</select></label>
+                {(['open', 'high', 'low', 'close'] as const).map(field => <label key={field}>{chartCopy[`${field}Label`]}<select value={candle[field] ?? ''} onChange={event => patchCandle(field, event.target.value)}>{candleColumns(candle[field])}</select></label>)}
+                {(['bid', 'ask', 'spread', 'quoteActivity'] as const).map(field => <label key={field}>{field === 'bid' || field === 'ask' ? field.toUpperCase() : field === 'spread' ? chartCopy.spreadBps : chartCopy.quoteActivity}<select value={candle[field] ?? ''} onChange={event => patchCandle(field, event.target.value)}>{optionalColumns(candle[field])}</select></label>)}
+            </div></div>
+            {!activeCandleValid ? <div className="chart-empty" role="status">{chartCopy.noValidCandles}</div> : <CandlestickChart result={result} config={candle} x={candleX} copy={chartCopy} locale={locale}/>}
+        </div>;
+    }
     if (!numericIndexes.length) return <RowCountChart result={result} chart={chart} suggestion={suggestion} onChart={onChart} copy={chartCopy} locale={locale}/>;
     const chartKind = chart.kind === 'table'
         ? (suggestion.config.kind === 'table' ? 'bar' : suggestion.config.kind)
@@ -283,9 +321,14 @@ export function ChartView({ result, loading, chart, onChart, copy, locale }: { r
             <label>{chartCopy.type}<select value={chartKind} onChange={event => {
                 const option = chartKindOptions.find(candidate => candidate.value === event.target.value);
                 if (!option) return;
+                if (option.value === 'candlestick') {
+                    if (!canChooseCandlestick) return;
+                    onChart({ ...chart, kind: 'candlestick', x: candleX, ys: [], candlestick: inferredCandle ?? {} });
+                    return;
+                }
                 const nextGroupBy = option.value === 'heatmap' ? groupByIndex ?? result.columns.findIndex((_column, index) => index !== xIndex && index !== yIndex) : undefined;
                 onChart({ ...chart, kind: option.value, groupBy: nextGroupBy !== undefined && nextGroupBy >= 0 ? nextGroupBy : undefined, ys: option.value === 'line' || option.value === 'bar' ? measureIndexes : [yIndex] });
-            }}>{chartKindOptions.map(option => <option key={option.value} value={option.value}>{chartTypeLabel(option.value, chartCopy)}</option>)}</select></label>
+            }}>{chartKindOptions.map(option => <option key={option.value} value={option.value} disabled={option.value === 'candlestick' && !canChooseCandlestick}>{chartTypeLabel(option.value, chartCopy)}</option>)}</select></label>
         </div></div>
         {chartKind === 'number' ? result.rows.length !== 1 ? <div className="chart-empty">{chartCopy.numberNeedsOneRow}</div> : !numericType(result.columns[yIndex]?.type ?? '') ? <div className="chart-empty">{chartCopy.chooseNumericColumn}</div> : <div className="chart-number-card"><span className="eyebrow">{chartCopy.singleValue}</span><strong>{displayValue(result.rows[0]?.[yIndex])}</strong><span>{result.columns[yIndex]?.name}</span><small>{chartCopy.exactResultValue}</small></div>
             : chartKind === 'heatmap'

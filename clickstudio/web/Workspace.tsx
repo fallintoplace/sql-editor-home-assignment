@@ -853,7 +853,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             ? copy.common.examplePreviewTable.replace('{table}', example.name.replace(/^Preview /, ''))
                             : localizeSqlExample(example, locale).name;
                         const draft = newDraft(`${name}.sql`, example.sql);
-                        draft.chart = { ...example.chart, title: locale === 'en' ? example.chart.title : name, ys: [...example.chart.ys] };
+                        draft.chart = { ...example.chart, title: locale === 'en' ? example.chart.title : name, ys: [...example.chart.ys], ...(example.chart.candlestick ? { candlestick: { ...example.chart.candlestick } } : {}) };
                         if (!openNewDraft(draft)) return false;
                         window.requestAnimationFrame(() => editor.current?.focus());
                         return true;

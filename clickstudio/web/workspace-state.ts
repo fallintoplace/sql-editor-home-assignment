@@ -45,7 +45,7 @@ export function draftFromDocument(document: QueryDocument): Draft {
         serverId: document.id,
         baseRevision: document.revision,
         parameters: { ...document.parameters },
-        chart: { ...document.chart, ys: [...document.chart.ys] },
+        chart: { ...document.chart, ys: [...document.chart.ys], ...(document.chart.candlestick ? { candlestick: { ...document.chart.candlestick } } : {}) },
         runIds: document.runId ? [document.runId] : [],
         activeRunId: document.runId,
         parentDocumentId: document.parentDocumentId,
@@ -68,8 +68,19 @@ const position = (value: unknown, length: number) => typeof value === 'number' &
 const index = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 const chartIndex = (value: unknown): value is number => index(value) && value <= 499;
 const revision = (value: unknown) => index(value) && value > 0 ? value : undefined;
-const chartKinds = ['table', 'number', 'line', 'bar', 'scatter', 'heatmap'] as const satisfies readonly ChartConfig['kind'][];
+const chartKinds = ['table', 'number', 'line', 'bar', 'scatter', 'heatmap', 'candlestick'] as const satisfies readonly ChartConfig['kind'][];
 const isChartKind = (value: unknown): value is ChartConfig['kind'] => chartKinds.some(kind => kind === value);
+function recoveredCandlestick(value: unknown): ChartConfig['candlestick'] {
+    if (!record(value)) return undefined;
+    return {
+        ...(chartIndex(value.open) ? { open: value.open } : {}), ...(chartIndex(value.high) ? { high: value.high } : {}),
+        ...(chartIndex(value.low) ? { low: value.low } : {}), ...(chartIndex(value.close) ? { close: value.close } : {}),
+        ...(chartIndex(value.bid) ? { bid: value.bid } : {}),
+        ...(chartIndex(value.ask) ? { ask: value.ask } : {}),
+        ...(chartIndex(value.spread) ? { spread: value.spread } : {}),
+        ...(chartIndex(value.quoteActivity) ? { quoteActivity: value.quoteActivity } : {}),
+    };
+}
 
 /** Browser storage is untrusted input; preserve SQL while repairing optional metadata. */
 export function recoverDraft(value: unknown): Draft | undefined {
@@ -88,6 +99,7 @@ export function recoverDraft(value: unknown): Draft | undefined {
             x: chartIndex(chart.x) ? chart.x : 0,
             ...(chartIndex(chart.groupBy) ? { groupBy: chart.groupBy } : {}),
             ys: Array.isArray(chart.ys) ? chart.ys.filter(chartIndex) : [], title: text(chart.title, 'Query result'),
+            ...(recoveredCandlestick(chart.candlestick) ? { candlestick: recoveredCandlestick(chart.candlestick) } : {}),
         },
         runIds: [...new Set(strings(value.runIds).filter(v => id(v)))],
         activeRunId: id(value.activeRunId), scriptId: id(value.scriptId),

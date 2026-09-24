@@ -250,6 +250,33 @@ ORDER BY month`,
         chart: { kind: 'line', x: 0, ys: [1], title: 'EUR/USD monthly midpoint' },
     },
     {
+        id: 'forex-eur-usd-market-view', name: 'EUR/USD Pro Market View', category: 'clickhouse', dataset: 'Forex',
+        description: 'Build historical 15-minute midpoint candles with bid/ask, quote activity, and spread context.',
+        sql: `WITH (bid + ask) / 2 AS mid
+SELECT
+    toStartOfInterval(datetime, INTERVAL 15 MINUTE) AS time,
+    argMin(mid, datetime) AS open,
+    max(mid) AS high,
+    min(mid) AS low,
+    argMax(mid, datetime) AS close,
+    argMax(bid, datetime) AS best_bid,
+    argMax(ask, datetime) AS best_ask,
+    avg((ask - bid) / nullIf(mid, 0) * 10000) AS spread_bps,
+    count() AS quote_updates
+FROM forex.forex
+WHERE base = 'EUR'
+    AND quote = 'USD'
+    AND datetime >= toDateTime('2022-08-21 17:00:00')
+    AND datetime < toDateTime('2022-08-26 00:00:00')
+GROUP BY time
+ORDER BY time
+LIMIT 600`,
+        chart: {
+            kind: 'candlestick', x: 0, ys: [], title: 'EUR/USD Pro Market View',
+            candlestick: { open: 1, high: 2, low: 3, close: 4, bid: 5, ask: 6, spread: 7, quoteActivity: 8 },
+        },
+    },
+    {
         id: 'nyc-taxi-fare-quantiles', name: 'Taxi fare percentiles by hour', category: 'clickhouse', dataset: 'NYC Taxi',
         description: 'Compare median and 95th-percentile fares by weekday and pickup hour.',
         sql: `SELECT

@@ -526,6 +526,33 @@
     .chart-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
     .chart-controls label { display: grid; gap: 4px; color: var(--muted); font-size: 8px; }
     .chart-controls select { min-width: 100px; max-width: 150px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-raised); color: var(--text-soft); font-size: 9px; }
+    .market-chart { display: grid; min-width: 0; gap: 8px; margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: radial-gradient(ellipse at 52% 0, color-mix(in srgb, var(--accent) 5%, transparent), transparent 55%), var(--panel-raised); }
+    .market-chart-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 9px; }
+    .market-chart-badges, .market-range-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .market-chart-badges > span { padding: 5px 7px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--panel) 75%, transparent); color: var(--text-soft); font-size: 8px; }
+    .market-chart-badges > span:first-child { border-color: color-mix(in srgb, var(--green) 28%, var(--line)); color: var(--green); }
+    .market-range-presets button { min-height: 27px; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--muted); font-size: 8px; cursor: pointer; transition: border-color .15s ease, color .15s ease, background .15s ease; }
+    .market-range-presets button:hover, .market-range-presets button[aria-pressed="true"] { border-color: color-mix(in srgb, var(--accent) 46%, var(--line)); background: color-mix(in srgb, var(--accent) 9%, var(--panel)); color: var(--accent); }
+    .market-chart-canvas { min-width: 0; overflow-x: auto; border: 1px solid var(--line); border-radius: 9px; background: color-mix(in srgb, var(--panel) 82%, transparent); scrollbar-gutter: stable; }
+    .market-chart-canvas svg { display: block; width: 100%; min-width: 780px; height: auto; aspect-ratio: 1280 / 720; }
+    .market-pane-label { fill: var(--text-soft); font-family: var(--font-sans); font-size: 11px; font-weight: 650; letter-spacing: .02em; }
+    .market-pane-empty { fill: var(--muted); font-family: var(--font-sans); font-size: 10px; }
+    .market-candle { transition: opacity .12s ease; }
+    .market-candle:hover { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 56%, transparent)); }
+    .market-candle-body { stroke-width: .6; }
+    .market-axis path, .market-axis line { shape-rendering: crispEdges; }
+    .market-brush .overlay { cursor: crosshair; }
+    .market-brush .selection { cursor: grab; }
+    .market-crosshair { pointer-events: none; }
+    .market-crosshair circle { stroke: var(--panel); stroke-width: 2; }
+    .market-chart-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; color: var(--text-soft); font-size: 8px; }
+    .market-chart-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+    .market-chart-legend i { display: inline-block; width: 13px; height: 3px; border-radius: 3px; background: var(--green); }
+    .market-chart-legend .market-legend-bidask { background: var(--blue, #6699ff); }
+    .market-chart-legend .market-legend-activity { height: 8px; border-radius: 2px; background: var(--blue, #6699ff); opacity: .65; }
+    .market-chart-legend .market-legend-spread { background: var(--amber); }
+    .market-chart-legend .market-chart-summary { margin-left: auto; color: var(--muted); font-family: var(--font-mono); }
+    .market-chart-note { margin: 0; color: var(--muted); font-size: 8px; line-height: 1.5; }
     .chart-row-count-type { display: inline-flex; min-height: 28px; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--line); border-radius: 6px; color: var(--text-soft); font-size: 9px; }
     .chart-measures { display: flex; max-width: 280px; flex-wrap: wrap; align-items: center; gap: 5px 9px; min-width: 0; margin: 0; padding: 5px 7px; border: 1px solid var(--line); border-radius: 7px; }
     .chart-measures legend { padding: 0 3px; color: var(--muted); font-size: 8px; }

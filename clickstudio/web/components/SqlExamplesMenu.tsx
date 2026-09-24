@@ -27,6 +27,7 @@ function chartLabel(example: SqlExample, copy: Copy['common']) {
         case 'bar': return copy.exampleChartBar;
         case 'scatter': return copy.exampleChartScatter;
         case 'heatmap': return copy.exampleChartHeatmap;
+        case 'candlestick': return copy.exampleChartCandlestick;
         default: return copy.chart;
     }
 }

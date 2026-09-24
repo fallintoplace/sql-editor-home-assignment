@@ -38,7 +38,8 @@ export function sameSavedContent(draft: SaveableDraft, saved: QueryDocument): bo
         draft.activeRunId === saved.runId && draft.parentDocumentId === saved.parentDocumentId &&
         sameParameters(draft.parameters, saved.parameters) && sameArray(draft.dependencies, saved.dependencies) &&
         draft.chart.kind === saved.chart.kind && draft.chart.title === saved.chart.title && draft.chart.x === saved.chart.x && draft.chart.groupBy === saved.chart.groupBy &&
-        sameArray(draft.chart.ys, saved.chart.ys) && (draft.kind !== 'metric' || sameMetric(draft.metric, saved.metric));
+        sameArray(draft.chart.ys, saved.chart.ys) && JSON.stringify(draft.chart.candlestick ?? null) === JSON.stringify(saved.chart.candlestick ?? null) &&
+        (draft.kind !== 'metric' || sameMetric(draft.metric, saved.metric));
 }
 
 export function draftSaveStatus(draft: SaveableDraft, connectionId: string, saved?: QueryDocument,

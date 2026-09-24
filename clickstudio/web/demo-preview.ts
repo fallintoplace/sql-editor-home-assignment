@@ -398,6 +398,18 @@ function resultFor(run: Run, sequence: number): Result {
 function chartConfig(value: unknown): QueryDocument['chart'] {
     const chart = record(value);
     const chartIndex = (index: unknown): index is number => typeof index === 'number' && Number.isSafeInteger(index) && index >= 0 && index <= 499;
+    if (chart.kind === 'candlestick' && chartIndex(chart.x) && Array.isArray(chart.ys) && chart.ys.every(chartIndex) && typeof chart.title === 'string') {
+        const candle = record(chart.candlestick);
+        return {
+            kind: 'candlestick', x: chart.x, ys: chart.ys.filter(chartIndex), title: chart.title,
+            candlestick: {
+                ...(chartIndex(candle.open) ? { open: candle.open } : {}), ...(chartIndex(candle.high) ? { high: candle.high } : {}),
+                ...(chartIndex(candle.low) ? { low: candle.low } : {}), ...(chartIndex(candle.close) ? { close: candle.close } : {}),
+                ...(chartIndex(candle.bid) ? { bid: candle.bid } : {}), ...(chartIndex(candle.ask) ? { ask: candle.ask } : {}),
+                ...(chartIndex(candle.spread) ? { spread: candle.spread } : {}), ...(chartIndex(candle.quoteActivity) ? { quoteActivity: candle.quoteActivity } : {}),
+            },
+        };
+    }
     if ((chart.kind === 'table' || chart.kind === 'number' || chart.kind === 'line' || chart.kind === 'bar' || chart.kind === 'scatter' || chart.kind === 'heatmap') &&
         chartIndex(chart.x) && Array.isArray(chart.ys) && chart.ys.every(chartIndex) && typeof chart.title === 'string')
         return { kind: chart.kind, x: chart.x, ...(chartIndex(chart.groupBy) ? { groupBy: chart.groupBy } : {}), ys: chart.ys.filter(chartIndex), title: chart.title };

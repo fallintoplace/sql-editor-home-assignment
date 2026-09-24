@@ -1,4 +1,4 @@
-import type { ChartConfig, Column, Json, Result, Row } from './types.js';
+import type { CandlestickConfig, ChartConfig, Column, Json, Result, Row } from './types.js';
 export const MAX_CHART_SERIES = 20;
 export const MAX_CHART_POINTS = 5000;
 export const MAX_CHART_RENDER_POINTS = 240;
@@ -48,7 +48,7 @@ export interface RowCountSeries {
     points: RowCountPoint[];
 }
 
-function chartTimestamp(value: Json | undefined): number | null {
+export function chartTimestamp(value: Json | undefined): number | null {
     if (typeof value === 'number') {
         const timestamp = Math.abs(value) >= 1e12 ? value : value * 1000;
         return Number.isFinite(timestamp) ? timestamp : null;
@@ -61,6 +61,33 @@ function chartTimestamp(value: Json | undefined): number | null {
         : `${raw.includes('T') ? raw : raw.replace(' ', 'T')}${zoned ? '' : 'Z'}`;
     const timestamp = Date.parse(normalized);
     return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+export function recommendCandlestickConfig(columns: Column[]): { x: number; candlestick: CandlestickConfig } | undefined {
+    const numeric = (index: number) => index >= 0 && numericType(columns[index]?.type ?? '');
+    const namedIndex = (names: RegExp) => columns.findIndex(column => names.test(column.name.toLowerCase()));
+    const candle = {
+        open: namedIndex(/^open(?:_price)?$/),
+        high: namedIndex(/^high(?:_price)?$/),
+        low: namedIndex(/^low(?:_price)?$/),
+        close: namedIndex(/^close(?:_price)?$/),
+    };
+    const x = columns.findIndex(column => temporalType(column.type) || /^(?:time|timestamp|datetime|date)$/i.test(column.name));
+    if (x < 0 || !Object.values(candle).every(numeric)) return undefined;
+    const bid = namedIndex(/^(?:best_)?bid(?:_price)?$/);
+    const ask = namedIndex(/^(?:best_)?ask(?:_price)?$/);
+    const spread = namedIndex(/^spread(?:_bps)?$/);
+    const quoteActivity = namedIndex(/^(?:quote_updates|quote_activity|updates)$/);
+    return {
+        x,
+        candlestick: {
+            ...candle,
+            ...(numeric(bid) ? { bid } : {}),
+            ...(numeric(ask) ? { ask } : {}),
+            ...(numeric(spread) ? { spread } : {}),
+            ...(numeric(quoteActivity) ? { quoteActivity } : {}),
+        },
+    };
 }
 
 function selectTimeBucket(spanMs: number): TimeBucketUnit {
@@ -169,12 +196,16 @@ export function recommendChart(columns: Column[], rows: Row[]): {
     reason: string;
 } {
     const numeric = columns.flatMap((c, i) => numericType(c.type) ? [i] : []);
+    const candlestick = recommendCandlestickConfig(columns);
+    if (rows.length && candlestick) {
+        return { config: { kind: 'candlestick', x: candlestick.x, ys: [], title: 'Candlestick chart', candlestick: candlestick.candlestick }, reason: 'The result has a time column and open, high, low, and close measures.' };
+    }
     if (!numeric.length && rows.length) {
-        const time = columns.findIndex(column => temporalType(column.type));
-        if (time >= 0) {
-            const groupBy = columns.findIndex((_column, index) => index !== time && !temporalType(columns[index]!.type));
+        const temporal = columns.findIndex(column => temporalType(column.type));
+        if (temporal >= 0) {
+            const groupBy = columns.findIndex((_column, index) => index !== temporal && !temporalType(columns[index]!.type));
             const title = groupBy < 0 ? 'Rows over time' : `Rows over time by ${columns[groupBy]!.name}`;
-            return { config: { kind: 'line', x: time, ...(groupBy < 0 ? {} : { groupBy }), ys: [], title }, reason: 'Rows are counted in time buckets from the retained result; no aggregate query is sent.' };
+            return { config: { kind: 'line', x: temporal, ...(groupBy < 0 ? {} : { groupBy }), ys: [], title }, reason: 'Rows are counted in time buckets from the retained result; no aggregate query is sent.' };
         }
         if (columns.length)
             return { config: { kind: 'bar', x: 0, ys: [], title: `Rows by ${columns[0]!.name}` }, reason: 'Rows are counted by category from the retained result; no aggregate query is sent.' };

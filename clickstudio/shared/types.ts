@@ -277,13 +277,24 @@ export interface Script {
         status: 'pending' | 'skipped' | RunStatus;
     }[];
 }
-export type ChartKind = 'table' | 'number' | 'line' | 'bar' | 'scatter' | 'heatmap';
+export type ChartKind = 'table' | 'number' | 'line' | 'bar' | 'scatter' | 'heatmap' | 'candlestick';
+export interface CandlestickConfig {
+    open?: number;
+    high?: number;
+    low?: number;
+    close?: number;
+    bid?: number;
+    ask?: number;
+    spread?: number;
+    quoteActivity?: number;
+}
 export interface ChartConfig {
     kind: ChartKind;
     x: number;
     groupBy?: number;
     ys: number[];
     title: string;
+    candlestick?: CandlestickConfig;
 }
 export interface QueryDocument {
     id: string;

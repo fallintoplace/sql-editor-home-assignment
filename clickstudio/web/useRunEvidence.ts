@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { ProfilePipeline, QueryProfile, Result, ResultPage, Run, RunEvent } from '../shared/types';
+import type { ProfilePipeline, QueryProfile, Result, ResultPage, Run } from '../shared/types';
+import { parseRunEvent } from '../shared/run-wire';
 import { api, message } from './api';
 import { terminal } from './components/ui';
 import { useScopedValue } from './useScopedValue';
@@ -49,7 +50,8 @@ export function useRunEvidence({ activeRunId, connectionId, loadHistory, setErro
         stream.onopen = () => setEventState('live');
         stream.onmessage = event => {
             try {
-                const payload = JSON.parse(event.data) as RunEvent;
+                const parsed: unknown = JSON.parse(event.data);
+                const payload = parseRunEvent(parsed);
                 if (payload.run.id !== activeRunId || payload.run.connectionId !== connectionId) return;
                 setRunForRun(activeRunId, current => !current || current.sequence <= payload.sequence ? payload.run : current);
                 if (terminal(payload.run)) {

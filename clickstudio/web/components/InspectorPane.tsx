@@ -82,7 +82,7 @@ export function InspectorPane({ inspector, setInspector, connection, schema, sch
     const closeButton = drawer && <Button variant="ghost" className="icon-only" aria-label="Close inspector" onClick={onClose}><Icon name="close"/></Button>;
     const title = expert && inspector === 'schema' ? 'Tables' : expert && inspector === 'documents' ? 'Queries' : inspectorLabel(inspector);
 
-    return <aside className={cx('inspector-pane', expert && 'is-expert-browser', drawer && 'is-drawer animate-drawer')}>
+    return <aside className={cx('inspector-pane', expert && 'is-expert-browser', expert && (inspector === 'schema' || inspector === 'documents') && 'is-browser-tab-selected', drawer && 'is-drawer animate-drawer')}>
         <header className="inspector-header"><div><span className="eyebrow">{expert ? 'BROWSE' : 'WORKSPACE INSPECTOR'}</span><h2>{title}</h2></div>{closeButton}</header>
         {expert ? <nav className="inspector-tabs is-browser-tabs" aria-label="Workspace browser">
             <button type="button" aria-label="Tables" aria-pressed={inspector === 'schema'} onClick={() => setInspector('schema')}><Icon name="schema"/><span>Tables</span></button>

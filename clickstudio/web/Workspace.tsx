@@ -84,6 +84,9 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             ],
         };
     });
+    const [renamingTabId, setRenamingTabId] = useState<string>();
+    const [tabRenameValue, setTabRenameValue] = useState('');
+    const cancelTabRenameOnBlur = useRef(false);
     const workspaceRef = useRef(workspace);
     workspaceRef.current = workspace;
     const active = workspace.tabs.find(tab => tab.id === workspace.activeId) ?? workspace.tabs[0]!;
@@ -277,6 +280,26 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         setWorkspace(current => ({ ...current, tabs: current.tabs.map(draft => draft.id === id ? change(draft) : draft) }));
     }, []);
     const patch = useCallback((values: Partial<Draft>) => update(active.id, draft => ({ ...draft, ...values })), [active.id, update]);
+    const beginTabRename = (draft: Draft) => {
+        cancelTabRenameOnBlur.current = false;
+        setTabRenameValue(draft.name);
+        setRenamingTabId(draft.id);
+    };
+    const finishTabRename = (draftId: string, value: string, restoreFocus = false) => {
+        if (cancelTabRenameOnBlur.current) {
+            cancelTabRenameOnBlur.current = false;
+        } else {
+            const name = value.trim();
+            if (name) update(draftId, draft => draft.name === name ? draft : { ...draft, name });
+        }
+        setRenamingTabId(current => current === draftId ? undefined : current);
+        if (restoreFocus) window.requestAnimationFrame(() => document.getElementById(`document-tab-${draftId}`)?.focus());
+    };
+    const cancelTabRename = (draftId: string) => {
+        cancelTabRenameOnBlur.current = true;
+        setRenamingTabId(current => current === draftId ? undefined : current);
+        window.requestAnimationFrame(() => document.getElementById(`document-tab-${draftId}`)?.focus());
+    };
     const formatActiveSql = useCallback(async () => {
         const draftId = active.id, sourceSql = active.sql;
         const applyFallback = () => setWorkspace(current => current.activeId !== draftId ? current : ({ ...current,
@@ -624,8 +647,13 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
 
             <main className="workspace-main">
                 <div className="document-tabs" role="tablist" aria-label="SQL documents">
-                    {workspace.tabs.map((draft, index) => <div key={draft.id} id={`document-tab-${draft.id}`} className={cx('document-tab', draft.id === active.id && 'is-active')} role="tab" aria-selected={draft.id === active.id} aria-controls="sql-document-panel" tabIndex={draft.id === active.id ? 0 : -1} onClick={() => setWorkspace(current => ({ ...current, activeId: draft.id }))} onKeyDown={event => {
+                    {workspace.tabs.map((draft, index) => <div key={draft.id} id={`document-tab-${draft.id}`} className={cx('document-tab', draft.id === active.id && 'is-active')} role="tab" aria-label={draft.name} aria-selected={draft.id === active.id} aria-controls="sql-document-panel" tabIndex={draft.id === active.id ? 0 : -1} onClick={() => setWorkspace(current => ({ ...current, activeId: draft.id }))} onKeyDown={event => {
                         if (event.target !== event.currentTarget) return;
+                        if (event.key === 'F2') {
+                            event.preventDefault();
+                            beginTabRename(draft);
+                            return;
+                        }
                         if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault();
                             setWorkspace(current => ({ ...current, activeId: draft.id }));
@@ -642,7 +670,17 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         setWorkspace(current => ({ ...current, activeId: nextDraft.id }));
                         window.requestAnimationFrame(() => document.getElementById(`document-tab-${nextDraft.id}`)?.focus());
                     }}>
-                        <span className="document-tab-name">{draft.name}</span>{(() => {
+                        {renamingTabId === draft.id
+                            ? <input className="document-tab-rename" aria-label={`Rename ${draft.name}`} value={tabRenameValue} autoFocus onFocus={event => event.currentTarget.select()} onClick={event => event.stopPropagation()} onChange={event => setTabRenameValue(event.target.value)} onBlur={event => finishTabRename(draft.id, event.currentTarget.value)} onKeyDown={event => {
+                                if (event.key === 'Enter') {
+                                    event.preventDefault();
+                                    finishTabRename(draft.id, event.currentTarget.value, true);
+                                } else if (event.key === 'Escape') {
+                                    event.preventDefault();
+                                    cancelTabRename(draft.id);
+                                }
+                            }}/>
+                            : <span className="document-tab-name" title={`Double-click to rename ${draft.name} · F2`} onDoubleClick={event => { event.stopPropagation(); beginTabRename(draft); }}>{draft.name}</span>}{(() => {
                             const status = draftSaveStatus(draft, connection.id, documents.find(document => document.id === draft.serverId), {
                                 saving: Boolean(savingDraftIds[draft.id]), pending: !documentsLoaded, readError: documentsReadError,
                             });

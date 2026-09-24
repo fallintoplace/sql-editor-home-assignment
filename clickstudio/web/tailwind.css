@@ -289,6 +289,7 @@
     .editor-surface, .results-surface { position: relative; display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: 0 12px 36px #00000012, inset 0 1px #ffffff05; transition: border-color .2s ease, box-shadow .2s ease; }
     .panel-content { display: flex; min-width: 0; min-height: 0; flex: 1; flex-direction: column; }
     .panel-content[hidden] { display: none; }
+    .results-content-scrollable { overflow: auto; scrollbar-gutter: stable; }
     .editor-surface:focus-within { border-color: color-mix(in srgb, var(--accent) 48%, var(--line)); box-shadow: 0 12px 42px #00000012, 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent), inset 0 1px #ffffff08; }
     .editor-heading { display: flex; min-height: 54px; flex: none; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 15px; border-bottom: 1px solid var(--line); background: linear-gradient(105deg, color-mix(in srgb, var(--accent) 4%, var(--panel-raised)), var(--panel-raised) 52%, var(--panel)); }
     .editor-file-heading, .editor-heading-actions { display: flex; min-width: 0; align-items: center; gap: 11px; }
@@ -510,7 +511,14 @@
     .pipeline-graph-heading i { padding: 0 3px; color: var(--muted); font-style: normal; }
     .pipeline-graph-heading > small { color: var(--muted); font-size: 8px; text-align: right; }
     .pipeline-graph-warning { margin: 0; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--amber) 28%, var(--line)); border-radius: 7px; background: color-mix(in srgb, var(--amber) 7%, transparent); color: var(--amber); font-size: 8px; }
-    .pipeline-graph-scroll { max-width: 100%; border: 1px solid var(--line); border-radius: 9px; background: radial-gradient(ellipse at 50% 0, color-mix(in srgb, var(--accent) 4%, transparent), transparent 72%), var(--panel); scrollbar-gutter: stable; }
+    .pipeline-graph-controls { display: flex; align-items: center; justify-content: flex-end; gap: 3px; }
+    .pipeline-graph-controls button { display: inline-flex; min-width: 27px; min-height: 27px; align-items: center; justify-content: center; padding: 0 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text-soft); font: inherit; font-size: 10px; cursor: pointer; }
+    .pipeline-graph-controls button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: color-mix(in srgb, var(--accent) 7%, var(--panel)); color: var(--accent); }
+    .pipeline-graph-controls button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .pipeline-graph-controls button:disabled { cursor: not-allowed; opacity: .45; }
+    .pipeline-graph-controls .pipeline-zoom-fit { padding-inline: 9px; white-space: nowrap; }
+    .pipeline-graph-controls output { min-width: 42px; color: var(--text-soft); font-family: var(--font-mono); font-size: 8px; text-align: center; }
+    .pipeline-graph-scroll { max-width: 100%; max-height: clamp(150px, 56dvh, 540px); border: 1px solid var(--line); border-radius: 9px; background: radial-gradient(ellipse at 50% 0, color-mix(in srgb, var(--accent) 4%, transparent), transparent 72%), var(--panel); scrollbar-gutter: stable; }
     .pipeline-graph-svg { display: block; max-width: none; }
     .pipeline-graph-arrow { fill: var(--line-bright); }
     .pipeline-graph-edges path { fill: none; stroke: var(--line-bright); stroke-width: 1.5; }

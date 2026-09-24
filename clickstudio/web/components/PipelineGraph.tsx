@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useId, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useState, useId, useRef, type KeyboardEvent } from 'react';
 import { dagre } from 'd3-dag';
 import type { ProfilePipeline, ProfilePipelineNode } from '../../shared/types';
 import type { Copy } from '../i18n';
@@ -173,7 +173,14 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
 }) {
     const layout = useMemo(() => layoutPipeline(pipeline), [pipeline]);
     const [selectedId, setSelectedId] = useState<string | undefined>(pipeline.nodes[0]?.id);
-    useEffect(() => setSelectedId(pipeline.nodes[0]?.id), [pipeline]);
+    const [zoom, setZoom] = useState(1);
+    const graphViewport = useRef<HTMLDivElement>(null);
+    const graphWidth = Math.max(480, layout.width);
+    const graphHeight = Math.max(160, layout.height);
+    useEffect(() => {
+        setSelectedId(pipeline.nodes[0]?.id);
+        setZoom(1);
+    }, [pipeline]);
     const selected = pipeline.nodes.find(node => node.id === selectedId) ?? pipeline.nodes[0];
     const markerId = `pipeline-arrow-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
     const incomingCount = selected ? pipeline.edges.filter(edge => edge.target === selected.id).length : 0;
@@ -186,6 +193,14 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
         chooseNode(node);
+    };
+    const fitGraph = () => {
+        const viewport = graphViewport.current;
+        if (!viewport) return;
+        const availableWidth = Math.max(1, viewport.clientWidth - 24);
+        const availableHeight = Math.max(1, viewport.clientHeight - 24);
+        setZoom(Math.min(1, availableWidth / graphWidth, availableHeight / graphHeight));
+        viewport.scrollTo({ top: 0, left: 0 });
     };
 
     if (!pipeline.nodes.length) return <div className="pipeline-graph-empty">{graphKind === 'sql-flow' ? copy?.sqlFlowNoStages ?? 'No SQL stages were found in this statement.' : copy?.pipelineNoOutput ?? 'This pipeline did not return any operator nodes.'}</div>;
@@ -201,8 +216,15 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
             <small>{subheading ?? (pipeline.source === 'explain_pipeline' ? copy?.pipelineGraphDescription ?? 'Planned topology · runtime counters are run-level' : 'Estimated from SQL structure')}</small>
         </div>
         {pipeline.truncated && <p className="pipeline-graph-warning" role="status">{graphKind === 'sql-flow' ? copy?.sqlFlowTruncatedWarning ?? 'This query is large. The graph shows a bounded set of SQL stages.' : copy?.pipelineGraphTruncated ?? 'This plan is large. The graph shows a bounded set of operators.'}</p>}
-        <div className="pipeline-graph-scroll overflow-auto" role="region" aria-label={graphKind === 'sql-flow' ? copy?.sqlMap ?? 'Scrollable SQL flow graph' : 'Scrollable operator graph'}>
-            <svg className="pipeline-graph-svg" width={Math.max(480, layout.width)} height={Math.max(160, layout.height)} viewBox={`0 0 ${Math.max(480, layout.width)} ${Math.max(160, layout.height)}`} role="group" aria-label={graphKind === 'sql-flow' ? copy?.sqlFlowGraphHint ?? 'Click a stage to inspect it' : copy?.pipelineGraphHint ?? 'Click an operator to inspect it'}>
+        <div className="pipeline-graph-controls" role="group" aria-label={copy?.pipelineZoomControls ?? 'Graph zoom controls'}>
+            <button type="button" aria-label={copy?.pipelineZoomOut ?? 'Zoom out'} title={copy?.pipelineZoomOut ?? 'Zoom out'} disabled={zoom <= 0.02} onClick={() => setZoom(current => Math.max(0.02, current / 1.2))}>−</button>
+            <button type="button" className="pipeline-zoom-reset" aria-label={copy?.pipelineZoomReset ?? 'Reset zoom'} title={copy?.pipelineZoomReset ?? 'Reset zoom'} onClick={() => setZoom(1)}>100%</button>
+            <output aria-label={copy?.pipelineZoomLevel ?? 'Zoom level'}>{Math.round(zoom * 100)}%</output>
+            <button type="button" aria-label={copy?.pipelineZoomIn ?? 'Zoom in'} title={copy?.pipelineZoomIn ?? 'Zoom in'} disabled={zoom >= 2.5} onClick={() => setZoom(current => Math.min(2.5, current * 1.2))}>+</button>
+            <button type="button" className="pipeline-zoom-fit" aria-label={copy?.pipelineFit ?? 'Fit graph'} title={copy?.pipelineFit ?? 'Fit graph'} onClick={fitGraph}>{copy?.pipelineFit ?? 'Fit graph'}</button>
+        </div>
+        <div ref={graphViewport} className="pipeline-graph-scroll overflow-auto" role="region" aria-label={graphKind === 'sql-flow' ? copy?.sqlMap ?? 'Scrollable SQL flow graph' : 'Scrollable operator graph'}>
+            <svg className="pipeline-graph-svg" width={Math.round(graphWidth * zoom)} height={Math.round(graphHeight * zoom)} viewBox={`0 0 ${graphWidth} ${graphHeight}`} role="group" aria-label={graphKind === 'sql-flow' ? copy?.sqlFlowGraphHint ?? 'Click a stage to inspect it' : copy?.pipelineGraphHint ?? 'Click an operator to inspect it'}>
                 <defs><marker id={markerId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" className="pipeline-graph-arrow"/></marker></defs>
                 <g className="pipeline-graph-edges" aria-hidden="true">
                     {layout.edges.map((edge, index) => {

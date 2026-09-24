@@ -9,6 +9,8 @@ import { api, download, isFrontendDemoPreview, message, post } from './api';
 import { DEMO_PREVIEW_INITIAL_STARTERS, DEMO_PREVIEW_RUN_ID, DEMO_PREVIEW_SQL, DEMO_PREVIEW_STARTER_DOCUMENT_ID, demoPreviewStarterRunId, PLAYGROUND_PREVIEW_STARTER } from './demo-preview';
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { ImportWizard } from './components/ImportWizard';
+import { SqlExamplesMenu } from './components/SqlExamplesMenu';
+import { HelpExamplesButton } from './components/HelpExamplesButton';
 import { OverlayPortal } from './components/OverlayPortal';
 import { AssistantWorkflow } from './components/AssistantWorkflow';
 import { ChartView, InsightsView, ResultGrid } from './components/ResultViews';
@@ -23,6 +25,8 @@ import { useWorkspacePersistence } from './useWorkspacePersistence';
 import { useRunEvidence } from './useRunEvidence';
 import { useScriptExecution } from './useScriptExecution';
 import { useScopedValue } from './useScopedValue';
+import { sqlExamplesFor } from './sql-examples';
+import { localizeSqlExample } from './sql-examples-locales';
 import type { Copy, ExperienceLevel, Locale } from './i18n';
 import type { AssistantContext, BusyAction, Connected, Inspector, ResultsView, SpeechRecognitionLike } from './workspace-types';
 
@@ -110,6 +114,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [nativeParserStatus, setNativeParserStatus] = useState<NativeParserStatus>('loading');
     const [nativeParseSnapshot, setNativeParseSnapshot] = useState<NativeParseSnapshot>();
     const [schema, setSchema] = useState<Schema>();
+    const sqlExamples = useMemo(() => sqlExamplesFor(connection, schema), [connection, schema]);
     const [schemaLoading, setSchemaLoading] = useState(false);
     const [schemaError, setSchemaError] = useState('');
     const [documents, setDocuments] = useState<QueryDocument[]>([]);
@@ -130,6 +135,16 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [compactViewport, setCompactViewport] = useState(() => window.matchMedia('(max-width: 850px)').matches);
     const [importOpen, setImportOpen] = useState(false);
+    const [examplesOpen, setExamplesOpen] = useState(false);
+    const examplesOpenerRef = useRef<HTMLButtonElement | null>(null);
+    const openExamples = useCallback((opener: HTMLButtonElement) => {
+        examplesOpenerRef.current = opener;
+        setExamplesOpen(true);
+    }, []);
+    const closeExamples = useCallback((restoreFocus = true) => {
+        setExamplesOpen(false);
+        if (restoreFocus) window.requestAnimationFrame(() => examplesOpenerRef.current?.focus());
+    }, []);
     const [busy, setBusy] = useState<BusyAction>('');
     const [cancelling, setCancelling] = useState(false);
     const [error, setError] = useState('');
@@ -832,7 +847,21 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             return unsaved ? <span className="tab-unsaved" title={status.label} aria-hidden="true"/> : null;
                         })()}<button type="button" aria-label={`Close ${draft.name}`} onClick={event => { event.stopPropagation(); setWorkspace(current => closeDraft(current, draft.id)); }}>×</button>
                     </div>)}
-                    <button className="new-tab-button new-tab-labeled" type="button" aria-label={copy.common.newSql} title={copy.common.newSql} onClick={() => openNewDraft(newDraft())}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
+                    <button className="new-tab-button new-tab-labeled" type="button" aria-label={copy.common.newSql} title={copy.common.newSql} aria-haspopup="dialog" aria-expanded={examplesOpen} aria-controls="sql-examples-panel" onClick={event => openExamples(event.currentTarget)}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
+                    <SqlExamplesMenu open={examplesOpen} onOpen={openExamples} onClose={closeExamples} examples={sqlExamples} sourceLabel={connectionLabel} copy={copy.common} locale={locale} showTrigger={false} onOpenExample={example => {
+                        const name = example.category === 'schema'
+                            ? copy.common.examplePreviewTable.replace('{table}', example.name.replace(/^Preview /, ''))
+                            : localizeSqlExample(example, locale).name;
+                        const draft = newDraft(`${name}.sql`, example.sql);
+                        draft.chart = { ...example.chart, title: locale === 'en' ? example.chart.title : name, ys: [...example.chart.ys], ...(example.chart.candlestick ? { candlestick: { ...example.chart.candlestick } } : {}) };
+                        if (!openNewDraft(draft)) return false;
+                        window.requestAnimationFrame(() => editor.current?.focus());
+                        return true;
+                    }} onStartBlankSql={() => {
+                        if (!openNewDraft(newDraft())) return false;
+                        window.requestAnimationFrame(() => editor.current?.focus());
+                        return true;
+                    }}/>
                     {!!workspace.closedTabs?.length && <button className="new-tab-button reopen-tab-button" type="button" aria-label="Reopen closed tab" title="Reopen closed tab" onClick={() => {
                         if (workspaceRef.current.tabs.length >= MAX_TABS) { setError(`Close a tab before reopening another. This workspace supports ${MAX_TABS} open drafts.`); return; }
                         setWorkspace(current => reopenDraft(current));
@@ -936,6 +965,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             {drawerOpen && (experience === 'beginner' || compactViewport) && <OverlayPortal><><button className="drawer-backdrop" type="button" aria-label="Close panel" onClick={() => setDrawerOpen(false)}/><InspectorPane {...inspectorProps} drawer onClose={() => setDrawerOpen(false)} onInsert={value => { editor.current?.insert(value); setDrawerOpen(false); }} onOpenDocument={document => { openDocument(document); setDrawerOpen(false); }}/></></OverlayPortal>}
         </div>
         <ImportWizard open={importOpen} connectionId={connection.id} trusted={trusted} demoMode={demoMode} onClose={() => setImportOpen(false)} onImported={() => { void loadSchema(); setNotice('Import complete. The destination schema was refreshed.'); }}/>
-        <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} cancelling={cancelling} scriptRunning={script?.status === 'running'} copy={copy.common}/>
+        <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} cancelling={cancelling} scriptRunning={script?.status === 'running'} copy={copy.common} helpButton={<HelpExamplesButton copy={copy.common} open={examplesOpen} onOpen={openExamples}/>}/>
     </div>;
 }

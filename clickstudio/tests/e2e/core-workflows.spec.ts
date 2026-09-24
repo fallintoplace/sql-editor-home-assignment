@@ -1,6 +1,17 @@
 import { test, expect, type Page } from '@playwright/test';
 import { openBlankSql, openWorkspacePanel, runScript, runStatementButton, trust, trustCurrentConnection } from './helpers.js';
 
+declare global {
+    interface Window {
+        __nativeParserResult: unknown;
+        __parserParseCount?: number;
+        __delayNativeParser?: boolean;
+        __resolveDelayedNativeParse: () => void;
+        __pendingParserFormat?: number;
+        __failParserWorker: () => void;
+    }
+}
+
 async function replaceSql(page: Page, sql: string) {
     const editor = page.locator('.cm-content');
     await editor.click();
@@ -118,7 +129,7 @@ test('Native parser can be retried after a temporary worker failure', async ({ p
     await retry.click();
     await openWorkspacePanel(page, 'parser');
     await expect(page.getByText('Ready · local WebAssembly', { exact: true })).toBeVisible();
-    await expect.poll(() => page.evaluate(() => Number((window as any).__parserParseCount ?? 0))).toBeGreaterThan(0);
+    await expect.poll(() => page.evaluate(() => Number(window.__parserParseCount ?? 0))).toBeGreaterThan(0);
 });
 
 test('Advanced parser inspector shows native AST, UTF-8 semantic highlights, and expected tokens', async ({ page }) => {
@@ -143,7 +154,7 @@ test('Advanced parser inspector shows native AST, UTF-8 semantic highlights, and
 
     const invalidSql = 'SELECT 1 +';
     await page.evaluate(() => {
-        (window as any).__nativeParserResult = {
+        window.__nativeParserResult = {
             error: { message: 'Syntax error', begin: 10, end: 10, expected: ['FROM', 'WHERE', 'GROUP BY'] },
         };
     });
@@ -159,24 +170,24 @@ test('A delayed native parse cannot replace parser details for newer SQL', async
     const newResult = { ast: { type: 'NewStatement' }, highlights: [{ begin: 7, end: 13, type: 'function' }] };
     await page.addInitScript(parserWorkerStub('ready', oldResult));
     await page.goto('/');
-    await expect.poll(() => page.evaluate(() => Number((window as any).__parserParseCount ?? 0))).toBeGreaterThan(0);
+    await expect.poll(() => page.evaluate(() => Number(window.__parserParseCount ?? 0))).toBeGreaterThan(0);
 
-    await page.evaluate(() => { (window as any).__delayNativeParser = true; });
+    await page.evaluate(() => { window.__delayNativeParser = true; });
     await replaceSql(page, oldSql);
-    await expect.poll(() => page.evaluate(() => Boolean((window as any).__resolveDelayedNativeParse))).toBe(true);
+    await expect.poll(() => page.evaluate(() => Boolean(window.__resolveDelayedNativeParse))).toBe(true);
     await page.evaluate(() => {
-        (window as any).__nativeParserResult = {
+        window.__nativeParserResult = {
             ast: { type: 'NewStatement' },
             highlights: [{ begin: 7, end: 13, type: 'function' }],
         };
-        (window as any).__delayNativeParser = false;
+        window.__delayNativeParser = false;
     });
     await replaceSql(page, newSql);
     await expect(page.locator('.cm-native-function')).toHaveText('new_fn');
     await openWorkspacePanel(page, 'parser');
     await expect(page.getByText('NewStatement', { exact: true })).toBeVisible();
 
-    await page.evaluate(() => (window as any).__resolveDelayedNativeParse());
+    await page.evaluate(() => window.__resolveDelayedNativeParse());
     await expect(page.getByText('NewStatement', { exact: true })).toBeVisible();
     await expect(page.getByText('OldStatement', { exact: true })).toHaveCount(0);
 });
@@ -188,9 +199,9 @@ test('Failed async formatting does not overwrite edits typed while it was pendin
     await openWorkspacePanel(page, 'parser');
     await expect(page.getByText('Ready · local WebAssembly', { exact: true })).toBeVisible();
     await page.getByRole('group', { name: 'Format SQL' }).getByRole('button', { name: 'WASM', exact: true }).click();
-    await expect.poll(() => page.evaluate(() => Boolean((window as any).__pendingParserFormat))).toBe(true);
+    await expect.poll(() => page.evaluate(() => Boolean(window.__pendingParserFormat))).toBe(true);
     await replaceSql(page, 'select new_value from new_table');
-    await page.evaluate(() => (window as any).__failParserWorker());
+    await page.evaluate(() => window.__failParserWorker());
     await expect(page.locator('.cm-content')).toContainText('new_value');
     await expect(page.locator('.cm-content')).not.toContainText('old_value');
 });

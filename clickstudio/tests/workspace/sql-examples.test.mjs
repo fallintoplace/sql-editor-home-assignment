@@ -15,6 +15,38 @@ test('SQL example catalogs match the selected Playground or fixture source', () 
     assert.equal(new Set(fixtures.map(example => example.id)).size, fixtures.length);
 });
 
+test('Playground examples use ClickHouse-owned datasets with chart-ready result shapes', () => {
+    const examples = sqlExamplesFor({ id: 'playground', dataSource: 'clickhouse' });
+    const byId = new Map(examples.map(example => [example.id, example]));
+    const cases = [
+        ['hackernews-daily-pulse', 'Hacker News', 'line', 'FROM hackernews.hackernews'],
+        ['nyc-taxi-weekly-rhythm', 'NYC Taxi', 'heatmap', 'FROM nyc_taxi.trips_small'],
+        ['nyc-taxi-fare-distance', 'NYC Taxi', 'scatter', 'FROM nyc_taxi.trips_small'],
+        ['bluesky-activity-by-hour', 'Bluesky', 'heatmap', 'FROM bluesky.events_per_hour_of_day'],
+        ['stock-jnj-history', 'Stock sample', 'line', 'FROM stock.stock'],
+    ];
+
+    for (const [id, dataset, kind, table] of cases) {
+        const example = byId.get(id);
+        assert.ok(example, `missing ${id}`);
+        assert.equal(example.dataset, dataset);
+        assert.equal(example.chart.kind, kind);
+        assert.ok(example.sql.includes(table), `${id} should query ${table}`);
+        assert.match(example.sql, /^SELECT\b/);
+    }
+
+    assert.deepEqual(byId.get('hackernews-daily-pulse')?.chart.ys, [1, 2]);
+    for (const id of ['nyc-taxi-weekly-rhythm', 'bluesky-activity-by-hour']) {
+        const chart = byId.get(id)?.chart;
+        assert.ok(chart?.kind === 'heatmap');
+        assert.notEqual(chart.x, chart.groupBy);
+        assert.ok(chart.groupBy !== undefined && !chart.ys.includes(chart.groupBy));
+        assert.ok(!chart.ys.includes(chart.x));
+    }
+    assert.match(byId.get('nyc-taxi-fare-distance')?.sql ?? '', /LIMIT 240\s*$/);
+    assert.match(byId.get('stock-jnj-history')?.description ?? '', /historical/i);
+});
+
 test('SQL examples use safe generic queries until a real connection schema is available', () => {
     const connection = { id: 'production', dataSource: 'clickhouse' };
     const generic = sqlExamplesFor(connection);

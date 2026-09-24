@@ -50,7 +50,7 @@ for (const [field, change] of Object.entries({
         assert.equal(draftSaveStatus(draft(saved(), { [field]: change }), 'demo', saved()).state, 'changed');
     });
 }
-for (const [field, value] of Object.entries({ title: 'Different title', x: 1, ys: [2, 1] })) {
+for (const [field, value] of Object.entries({ title: 'Different title', x: 1, groupBy: 2, ys: [2, 1] })) {
     test(`Chart ${field} participates in saved-state comparison`, () => {
         const d = draft(); d.chart = { ...d.chart, [field]: value };
         assert.equal(sameSavedContent(d, saved()), false);

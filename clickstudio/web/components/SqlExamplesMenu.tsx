@@ -40,7 +40,7 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, onOpenExample }: 
         return examples.filter(example => {
             if (category !== 'all' && example.category !== category) return false;
             if (!term) return true;
-            return `${example.name} ${example.description} ${example.sql}`.toLocaleLowerCase().includes(term);
+            return `${example.name} ${example.dataset ?? ''} ${example.description} ${example.sql}`.toLocaleLowerCase().includes(term);
         });
     }, [category, examples, search]);
     const selected = filteredExamples.find(example => example.id === selectedId) ?? filteredExamples[0];
@@ -124,11 +124,11 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, onOpenExample }: 
                     }}>
                         <span className="sql-example-option-title">{example.name}</span>
                         <span className="sql-example-option-description">{example.description}</span>
-                        <span className="sql-example-option-category">{categoryLabel(example.category, copy)}</span>
+                        <span className="sql-example-option-category">{example.dataset ?? categoryLabel(example.category, copy)}</span>
                     </button>)}
                 </div>
                 {selected && <article className="sql-example-preview">
-                    <div className="sql-example-preview-heading"><div><span className="eyebrow">{categoryLabel(selected.category, copy)}</span><h3>{selected.name}.sql</h3></div><span className="sql-example-readonly">SQL</span></div>
+                    <div className="sql-example-preview-heading"><div><span className="eyebrow">{selected.dataset ?? categoryLabel(selected.category, copy)}</span><h3>{selected.name}.sql</h3></div><span className="sql-example-readonly">SQL</span></div>
                     <p>{selected.description}</p>
                     <pre><code>{selected.sql}</code></pre>
                     <Button variant="primary" className="sql-example-open" onClick={() => { if (onOpenExample(selected)) { setOpen(false); triggerRef.current?.focus(); } }}><Icon name="plus"/>{copy.openInNewSql}</Button>

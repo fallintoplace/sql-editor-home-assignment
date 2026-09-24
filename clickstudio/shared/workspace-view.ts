@@ -37,7 +37,7 @@ export function sameSavedContent(draft: SaveableDraft, saved: QueryDocument): bo
     return draft.name === saved.name && draft.sql === saved.sql && draft.kind === saved.kind &&
         draft.activeRunId === saved.runId && draft.parentDocumentId === saved.parentDocumentId &&
         sameParameters(draft.parameters, saved.parameters) && sameArray(draft.dependencies, saved.dependencies) &&
-        draft.chart.kind === saved.chart.kind && draft.chart.title === saved.chart.title && draft.chart.x === saved.chart.x &&
+        draft.chart.kind === saved.chart.kind && draft.chart.title === saved.chart.title && draft.chart.x === saved.chart.x && draft.chart.groupBy === saved.chart.groupBy &&
         sameArray(draft.chart.ys, saved.chart.ys) && (draft.kind !== 'metric' || sameMetric(draft.metric, saved.metric));
 }
 

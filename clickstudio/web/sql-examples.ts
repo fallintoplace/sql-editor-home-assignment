@@ -8,6 +8,7 @@ export type SqlExample = {
     id: string;
     name: string;
     description: string;
+    dataset?: string;
     category: SqlExampleCategory;
     sql: string;
     chart: ChartConfig;
@@ -16,12 +17,12 @@ export type SqlExample = {
 const playgroundExamples: SqlExample[] = [
     {
         id: 'github-recent-events', name: 'Recent GitHub events', category: 'basics',
-        description: 'Inspect real events, repositories, actors, and timestamps.', sql: PLAYGROUND_STARTER_SQL,
+        description: 'Inspect real events, repositories, actors, and timestamps.', dataset: 'GitHub', sql: PLAYGROUND_STARTER_SQL,
         chart: { kind: 'table', x: 0, ys: [], title: 'GitHub events' },
     },
     {
         id: 'github-daily-activity', name: 'Daily activity', category: 'timeSeries',
-        description: 'Compare event volume and active actors over the last 30 days.',
+        description: 'Compare event volume and active actors over the last 30 days.', dataset: 'GitHub',
         sql: `SELECT
     toDate(created_at) AS day,
     count() AS events,
@@ -34,7 +35,7 @@ ORDER BY day`,
     },
     {
         id: 'github-top-star-events', name: 'Repositories getting starred', category: 'aggregation',
-        description: 'Rank repositories by recent GitHub star events.',
+        description: 'Rank repositories by recent GitHub star events.', dataset: 'GitHub',
         sql: `SELECT
     repo_name,
     count() AS star_events
@@ -49,7 +50,7 @@ LIMIT 10`,
     },
     {
         id: 'github-pr-contributors', name: 'PR contributors by month', category: 'clickhouse',
-        description: 'Count distinct contributors to ClickHouse pull request activity.',
+        description: 'Count distinct contributors to ClickHouse pull request activity.', dataset: 'GitHub',
         sql: `SELECT
     toStartOfMonth(created_at) AS month,
     uniq(actor_login) AS contributors
@@ -64,7 +65,7 @@ ORDER BY month`,
     },
     {
         id: 'github-release-cadence', name: 'ClickHouse release cadence', category: 'timeSeries',
-        description: 'See how the project release pace changes by year.',
+        description: 'See how the project release pace changes by year.', dataset: 'GitHub',
         sql: `SELECT
     toStartOfYear(created_at) AS year,
     count() AS releases
@@ -78,7 +79,7 @@ ORDER BY year`,
     },
     {
         id: 'github-issues-mentioning-clickhouse', name: 'Issues mentioning ClickHouse', category: 'aggregation',
-        description: 'Track issue titles mentioning ClickHouse across repositories.',
+        description: 'Track issue titles mentioning ClickHouse across repositories.', dataset: 'GitHub',
         sql: `SELECT
     toStartOfMonth(created_at) AS month,
     count() AS issues,
@@ -90,6 +91,72 @@ WHERE event_type = 'IssuesEvent'
 GROUP BY month
 ORDER BY month`,
         chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Issues mentioning ClickHouse' },
+    },
+    {
+        id: 'hackernews-daily-pulse', name: 'Stories and comments', category: 'timeSeries', dataset: 'Hacker News',
+        description: 'Compare daily stories and comments from the last 90 days.',
+        sql: `SELECT
+    toDate(time) AS day,
+    countIf(type = 'story') AS stories,
+    countIf(type = 'comment') AS comments
+FROM hackernews.hackernews
+WHERE time >= now() - INTERVAL 90 DAY
+GROUP BY day
+ORDER BY day`,
+        chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Hacker News activity' },
+    },
+    {
+        id: 'nyc-taxi-weekly-rhythm', name: 'Taxi trips by weekday and hour', category: 'timeSeries', dataset: 'NYC Taxi',
+        description: 'Find rush-hour patterns across the week in a 168-cell heatmap.',
+        sql: `SELECT
+    toDayOfWeek(pickup_datetime) AS weekday,
+    toHour(pickup_datetime) AS hour,
+    count() AS trips
+FROM nyc_taxi.trips_small
+GROUP BY weekday, hour
+ORDER BY weekday, hour`,
+        chart: { kind: 'heatmap', x: 1, groupBy: 0, ys: [2], title: 'Taxi pickups by weekday and hour' },
+    },
+    {
+        id: 'nyc-taxi-fare-distance', name: 'Fare vs. trip distance', category: 'aggregation', dataset: 'NYC Taxi',
+        description: 'Explore how trip distance relates to the metered fare.',
+        sql: `SELECT
+    trip_distance,
+    fare_amount
+FROM nyc_taxi.trips_small
+WHERE trip_distance > 0 AND fare_amount > 0
+ORDER BY trip_id
+LIMIT 240`,
+        chart: { kind: 'scatter', x: 0, ys: [1], title: 'Fare by trip distance' },
+    },
+    {
+        id: 'bluesky-activity-by-hour', name: 'Bluesky activity by hour', category: 'timeSeries', dataset: 'Bluesky',
+        description: 'Compare posts, likes, and reposts across the day using ClickHouse hourly rollups.',
+        sql: `SELECT
+    event,
+    hour_of_day,
+    sum(count) AS events
+FROM bluesky.events_per_hour_of_day
+WHERE event IN ('app.bsky.feed.post', 'app.bsky.feed.like', 'app.bsky.feed.repost')
+GROUP BY event, hour_of_day
+ORDER BY event, hour_of_day`,
+        chart: { kind: 'heatmap', x: 1, groupBy: 0, ys: [2], title: 'Bluesky events by hour' },
+    },
+    {
+        id: 'stock-jnj-history', name: 'Johnson & Johnson price history', category: 'timeSeries', dataset: 'Stock sample',
+        description: 'Plot 180 historical trading sessions from the sample stock table.',
+        sql: `SELECT
+    date,
+    price
+FROM (
+    SELECT date, price
+    FROM stock.stock
+    WHERE symbol = 'JNJ'
+    ORDER BY date DESC
+    LIMIT 180
+)
+ORDER BY date`,
+        chart: { kind: 'line', x: 0, ys: [1], title: 'JNJ historical price' },
     },
 ];
 

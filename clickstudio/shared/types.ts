@@ -277,10 +277,11 @@ export interface Script {
         status: 'pending' | 'skipped' | RunStatus;
     }[];
 }
-export type ChartKind = 'table' | 'number' | 'line' | 'bar';
+export type ChartKind = 'table' | 'number' | 'line' | 'bar' | 'scatter' | 'heatmap';
 export interface ChartConfig {
     kind: ChartKind;
     x: number;
+    groupBy?: number;
     ys: number[];
     title: string;
 }

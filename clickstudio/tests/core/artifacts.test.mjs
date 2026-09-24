@@ -10,17 +10,40 @@ async function ready() {
     return { ...f, a, r, doc };
 }
 test('Optimistic revisions cannot silently overwrite concurrent edits', async () => { const f = await ready(); f.a.save(owner, { ...f.doc, baseRevision: 1, sql: 'SELECT 3' }, f.doc.id); assert.throws(() => f.a.save(owner, { ...f.doc, baseRevision: 1, sql: 'SELECT 4' }, f.doc.id), { code: 'REVISION_CONFLICT' }); });
-test('Unsupported legacy chart types normalize to table and unknown types are rejected', async () => {
+test('Legacy chart types normalize to table and unknown types are rejected', async () => {
     const f = await ready();
     const saved = f.a.save(owner, { name: 'legacy.sql', connectionId: 'local', sql: 'SELECT 1', chart: { kind: 'pie', x: 0, ys: [0], title: 'Legacy' } });
     assert.equal(saved.chart.kind, 'table');
-    assert.throws(() => f.a.save(owner, { name: 'invalid.sql', connectionId: 'local', sql: 'SELECT 1', chart: { kind: 'heatmap', x: 0, ys: [0], title: 'Invalid' } }), { code: 'CHART_CONFIG' });
+    assert.throws(() => f.a.save(owner, { name: 'invalid.sql', connectionId: 'local', sql: 'SELECT 1', chart: { kind: 'unknown', x: 0, ys: [0], title: 'Invalid' } }), { code: 'CHART_CONFIG' });
     const stored = f.store.get('documents', f.doc.id);
     stored.chart.kind = 'area';
     f.store.put('documents', stored.id, stored);
     assert.equal(f.a.get(owner, stored.id).chart.kind, 'table');
     assert.equal(f.a.list(owner).find(document => document.id === stored.id).chart.kind, 'table');
     assert.equal(f.a.revisions(owner, stored.id)[0].chart.kind, 'table');
+});
+test('Scatter and heatmap chart settings survive document saves and revision reads', async () => {
+    const f = await ready();
+    const configs = [
+        { kind: 'scatter', x: 0, ys: [1], title: 'Fare by distance' },
+        { kind: 'heatmap', x: 1, groupBy: 0, ys: [2], title: 'Trips by weekday and hour' },
+    ];
+    for (const [index, chart] of configs.entries()) {
+        const document = f.a.save(owner, { name: `chart-${index}.sql`, connectionId: 'local', sql: 'SELECT 1', chart });
+        assert.deepEqual(document.chart, chart);
+        assert.deepEqual(f.a.get(owner, document.id, 1).chart, chart);
+        assert.deepEqual(f.a.revisions(owner, document.id)[0].chart, chart);
+    }
+});
+test('Heatmap group-by metadata rejects negative, fractional, unsafe and out-of-range indexes', async () => {
+    const f = await ready();
+    for (const groupBy of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1, 500, '0']) {
+        assert.throws(() => f.a.save(owner, { name: `invalid-${String(groupBy)}.sql`, connectionId: 'local', sql: 'SELECT 1',
+            chart: { kind: 'heatmap', x: 1, groupBy, ys: [2], title: 'Invalid' } }), /groupBy must be an integer/);
+    }
+    const withoutGroup = f.a.save(owner, { name: 'unconfigured-heatmap.sql', connectionId: 'local', sql: 'SELECT 1',
+        chart: { kind: 'heatmap', x: 0, ys: [1], title: 'Configure axes in chart view' } });
+    assert.equal(withoutGroup.chart.groupBy, undefined);
 });
 test('Restoring history creates a new draft without deleting query history', async () => { const f = await ready(); f.a.save(owner, { ...f.doc, baseRevision: 1, sql: 'SELECT 3' }, f.doc.id); const restored = f.a.restoreRevision(owner, f.doc.id, 1, 2); assert.equal(restored.revision, 3); assert.equal(restored.sql, f.doc.sql); assert.equal(f.runs.list(owner).length, 1); });
 test('A published result remains immutable when the draft changes', async () => { const f = await ready(), p = f.a.publish(owner, f.doc.id, 1); f.a.save(owner, { ...f.doc, baseRevision: 1, sql: 'SELECT 3' }, f.doc.id); assert.equal(f.a.published(owner, p.id).document.sql, f.doc.sql); assert.equal(f.a.published(owner, p.id).revision, 1); });

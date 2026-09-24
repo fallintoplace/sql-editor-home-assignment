@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { displayValue, recommendChart, chartNumber, numericType, filterRows, sampleChartRows, MAX_CHART_RENDER_POINTS } from '../../shared/results';
 import type { ProfilePipeline, QueryProfile, Result, ResultPage, Run } from '../../shared/types';
 import type { Draft } from '../workspace-state';
@@ -10,7 +10,25 @@ const chartKindOptions = [
     { value: 'number', label: 'Number' },
     { value: 'line', label: 'Line' },
     { value: 'bar', label: 'Bar' },
+    { value: 'scatter', label: 'Scatter' },
+    { value: 'heatmap', label: 'Heatmap' },
 ] as const satisfies readonly { value: Draft['chart']['kind']; label: string }[];
+const chartColors = ['var(--accent)', 'var(--green)', 'var(--amber)', 'var(--red)', 'var(--violet)'] as const;
+const seriesColor = (index: number) => chartColors[index % chartColors.length]!;
+type ChartPoint = { label: string; value: number | null; index: number };
+
+function splitChartSegments(points: ChartPoint[]) {
+    const segments: ChartPoint[][] = [];
+    let current: ChartPoint[] = [];
+    for (const point of points) {
+        if (point.value === null) {
+            if (current.length) segments.push(current);
+            current = [];
+        } else current.push(point);
+    }
+    if (current.length) segments.push(current);
+    return segments;
+}
 
 export function ResultGrid({ run, page, pageIndex, loading, onPage }: { run: Run; page?: ResultPage; pageIndex: number; loading: boolean; onPage: (page: number) => void }) {
     const [filter, setFilter] = useState('');
@@ -31,55 +49,150 @@ export function ResultGrid({ run, page, pageIndex, loading, onPage }: { run: Run
 
 export function ChartView({ result, loading, chart, onChart }: { result?: Result; loading: boolean; chart: Draft['chart']; onChart: (chart: Draft['chart']) => void }) {
     if (loading || !result) return <div className="result-loading"><span className="loading-orbit"/><span>Preparing a chart from retained rows…</span></div>;
+    if (!result.columns.length) return <div className="chart-empty">This result has no columns to chart.</div>;
     const suggestion = recommendChart(result.columns, result.rows);
-    const xIndex = Math.min(chart.x, Math.max(0, result.columns.length - 1));
     const numericIndexes = result.columns.flatMap((column, index) => numericType(column.type) ? [index] : []);
-    const yIndex = chart.ys.find(index => numericIndexes.includes(index)) ?? suggestion.config.ys.find(index => numericIndexes.includes(index)) ?? numericIndexes[0] ?? 0;
-    const sampledRows = sampleChartRows(result.rows, MAX_CHART_RENDER_POINTS);
-    const points = sampledRows.map((row, index) => ({ label: displayValue(row[xIndex]), value: chartNumber(row[yIndex]), index }));
-    const values = points.flatMap(point => point.value === null ? [] : [point.value]);
+    const chartKind = chart.kind === 'table'
+        ? (suggestion.config.kind === 'table' ? 'bar' : suggestion.config.kind)
+        : chart.kind;
+    const configuredMeasures = [...new Set(chart.ys.filter(index => numericIndexes.includes(index)))];
+    const suggestedMeasure = suggestion.config.ys.find(index => numericIndexes.includes(index)) ?? numericIndexes[0];
+    const initialMeasure = configuredMeasures[0] ?? suggestedMeasure ?? 0;
+    const validChartIndex = (index: number | undefined) => Number.isSafeInteger(index) && index! >= 0 && index! < result.columns.length;
+    const initialGroupBy = chart.groupBy !== undefined && validChartIndex(chart.groupBy) && chart.groupBy !== chart.x && chart.groupBy !== initialMeasure
+        ? chart.groupBy
+        : result.columns.findIndex((_column, index) => index !== chart.x && index !== initialMeasure);
+    const allowedX = (index: number) => chartKind === 'scatter'
+        ? numericIndexes.includes(index) && index !== initialMeasure
+        : chartKind === 'heatmap'
+            ? index !== initialMeasure && index !== initialGroupBy
+            : index !== initialMeasure;
+    const fallbackX = result.columns.findIndex((_column, index) => allowedX(index));
+    const xIndex = validChartIndex(chart.x) && allowedX(chart.x)
+        ? chart.x
+        : fallbackX >= 0 ? fallbackX : 0;
+    const candidateGroupBy = chartKind === 'heatmap'
+        ? chart.groupBy !== undefined && validChartIndex(chart.groupBy) && chart.groupBy !== xIndex && chart.groupBy !== initialMeasure
+            ? chart.groupBy
+            : result.columns.findIndex((_column, index) => index !== xIndex && index !== initialMeasure)
+        : -1;
+    const groupByIndex = candidateGroupBy >= 0 ? candidateGroupBy : undefined;
+    const availableMeasures = numericIndexes.filter(index => index !== xIndex && index !== groupByIndex);
+    const usableConfiguredMeasures = configuredMeasures.filter(index => availableMeasures.includes(index));
+    const defaultMeasure = availableMeasures.includes(suggestedMeasure ?? -1) ? suggestedMeasure! : availableMeasures[0] ?? 0;
+    const selectedMeasures = usableConfiguredMeasures.length ? usableConfiguredMeasures : [defaultMeasure];
+    const measureIndexes = chartKind === 'line' || chartKind === 'bar' ? selectedMeasures : selectedMeasures.slice(0, 1);
+    const yIndex = measureIndexes[0] ?? 0;
+    const chartRows = chartKind === 'heatmap' ? result.rows : sampleChartRows(result.rows, MAX_CHART_RENDER_POINTS);
+    const plotSeries = measureIndexes.map((columnIndex, seriesIndex) => ({
+        columnIndex,
+        color: seriesColor(seriesIndex),
+        points: chartRows.map((row, index) => ({ label: displayValue(row[xIndex]), value: chartNumber(row[columnIndex]), index })),
+    }));
+    const values = plotSeries.flatMap(series => series.points.flatMap(point => point.value === null ? [] : [point.value]));
     const min = Math.min(0, ...values), max = Math.max(0, ...values), range = max - min || 1;
     const plotTop = 40, plotBottom = 190, zeroY = plotBottom - ((0 - min) / range) * (plotBottom - plotTop);
     const y = (value: number) => plotBottom - ((value - min) / range) * (plotBottom - plotTop);
-    const x = (index: number) => 32 + index * (700 / Math.max(1, points.length - 1));
-    const chartKind = chart.kind === 'number' ? 'number' : chart.kind === 'line' ? 'line' : 'bar';
-    const rowSummary = sampledRows.length < result.rows.length
-        ? `${sampledRows.length.toLocaleString()} sampled rows from ${result.rows.length.toLocaleString()} retained rows`
-        : `${values.length.toLocaleString()} plotted points from ${result.rows.length.toLocaleString()} retained rows`;
-    const segments: typeof points[] = [];
-    let segment: typeof points = [];
-    for (const point of points) {
-        if (point.value === null) {
-            if (segment.length) segments.push(segment);
-            segment = [];
-        } else segment.push(point);
+    const x = (index: number) => 32 + index * (700 / Math.max(1, chartRows.length - 1));
+    const rowSummary = chartRows.length < result.rows.length
+        ? `${chartRows.length.toLocaleString()} sampled rows from ${result.rows.length.toLocaleString()} retained rows`
+        : `${chartRows.length.toLocaleString()} retained rows across ${measureIndexes.length} measure${measureIndexes.length === 1 ? '' : 's'}`;
+    const barWidth = Math.max(1, Math.min(28, (680 / Math.max(1, chartRows.length)) * .68 / measureIndexes.length));
+    const heatmapRows = chartKind === 'heatmap' && groupByIndex !== undefined
+        ? result.rows.map(row => ({ xLabel: displayValue(row[xIndex]), yLabel: displayValue(row[groupByIndex]), value: chartNumber(row[yIndex]) }))
+        : [];
+    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+    const heatmapXLabels = [...new Set(heatmapRows.map(row => row.xLabel))].sort(collator.compare);
+    const heatmapYLabels = [...new Set(heatmapRows.map(row => row.yLabel))].sort(collator.compare);
+    const heatmapCells = new Map<string, number>();
+    const heatmapPresent = new Set<string>();
+    for (const cell of heatmapRows) {
+        const key = `${cell.yLabel}\u0000${cell.xLabel}`;
+        heatmapPresent.add(key);
+        if (cell.value !== null) heatmapCells.set(key, (heatmapCells.get(key) ?? 0) + cell.value);
     }
-    if (segment.length) segments.push(segment);
-    const barWidth = Math.max(1, Math.min(28, (680 / Math.max(1, points.length)) * .68));
+    const heatmapMaximum = Math.max(0, ...heatmapCells.values());
+    const heatmapTooLarge = heatmapXLabels.length * heatmapYLabels.length > 1_200;
+    const compactNumber = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
+    const scatterPoints = chartRows.map(row => ({ x: chartNumber(row[xIndex]), y: chartNumber(row[yIndex]), label: displayValue(row[xIndex]) }))
+        .filter((point): point is { x: number; y: number; label: string } => point.x !== null && point.y !== null);
+    const scatterMinX = Math.min(...scatterPoints.map(point => point.x), 0);
+    const scatterMaxX = Math.max(...scatterPoints.map(point => point.x), 0);
+    const scatterMinY = Math.min(...scatterPoints.map(point => point.y), 0);
+    const scatterMaxY = Math.max(...scatterPoints.map(point => point.y), 0);
+    const scatterRangeX = scatterMaxX - scatterMinX || 1;
+    const scatterRangeY = scatterMaxY - scatterMinY || 1;
+    const scatterX = (value: number) => 32 + ((value - scatterMinX) / scatterRangeX) * 700;
+    const scatterY = (value: number) => plotBottom - ((value - scatterMinY) / scatterRangeY) * (plotBottom - plotTop);
     return <div className="chart-workspace animate-enter">
-        <div className="chart-title-row"><div><span className="eyebrow">VISUAL EXPLORATION</span><h3>{chart.title || result.columns[yIndex]?.name || 'Query result'}</h3><p>{suggestion.reason} Long results are evenly sampled for display.</p></div><div className="chart-controls">
-            {chartKind !== 'number' && <label>X axis<select value={xIndex} onChange={event => onChart({ ...chart, x: Number(event.target.value) })}>{result.columns.map((column, index) => <option value={index} key={index}>{column.name}</option>)}</select></label>}
-            <label>Measure<select value={yIndex} onChange={event => onChart({ ...chart, ys: [Number(event.target.value)] })}>{result.columns.map((column, index) => <option value={index} key={index} disabled={!numericType(column.type)}>{column.name}</option>)}</select></label>
-            <label>Type<select value={chartKind} onChange={event => { const option = chartKindOptions.find(candidate => candidate.value === event.target.value); if (option) onChart({ ...chart, kind: option.value }); }}>{chartKindOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <div className="chart-title-row"><div><span className="eyebrow">VISUAL EXPLORATION</span><h3>{chart.title || result.columns[yIndex]?.name || 'Query result'}</h3><p>{suggestion.reason} {chartKind === 'heatmap' ? 'Cells come from returned rows; missing groups are left blank.' : 'Long results are evenly sampled for display.'}</p></div><div className="chart-controls">
+            {chartKind !== 'number' && <label>{chartKind === 'scatter' ? 'X measure' : 'X axis'}<select value={xIndex} onChange={event => {
+                const nextX = Number(event.target.value);
+                const nextGroupCandidate = chartKind === 'heatmap' && nextX === groupByIndex ? result.columns.findIndex((_column, index) => index !== nextX && index !== yIndex) : groupByIndex;
+                const nextGroupBy = nextGroupCandidate !== undefined && nextGroupCandidate >= 0 ? nextGroupCandidate : undefined;
+                onChart({ ...chart, x: nextX, groupBy: nextGroupBy, ys: measureIndexes.filter(index => index !== nextX && index !== nextGroupBy) });
+            }}>{result.columns.map((column, index) => <option value={index} key={index} disabled={chartKind === 'scatter' ? !numericIndexes.includes(index) || index === yIndex : index === yIndex || index === groupByIndex}>{column.name}</option>)}</select></label>}
+            {chartKind === 'heatmap' && <label>Y axis<select value={groupByIndex ?? -1} onChange={event => onChart({ ...chart, groupBy: Number(event.target.value) })}>{result.columns.map((column, index) => <option value={index} key={index} disabled={index === xIndex || index === yIndex}>{column.name}</option>)}</select></label>}
+            {chartKind === 'line' || chartKind === 'bar'
+                ? <fieldset className="chart-measures"><legend>Measures</legend>{availableMeasures.map(index => <label key={index}><input type="checkbox" checked={measureIndexes.includes(index)} disabled={measureIndexes.length === 1 && measureIndexes.includes(index)} onChange={event => {
+                    const next = event.target.checked ? [...measureIndexes, index] : measureIndexes.filter(value => value !== index);
+                    onChart({ ...chart, ys: next.slice(0, 5) });
+                }}/><span style={{ '--series-color': seriesColor(Math.max(0, measureIndexes.indexOf(index))) } as CSSProperties}/>{result.columns[index]?.name}</label>)}</fieldset>
+                : <label>Measure<select value={yIndex} onChange={event => onChart({ ...chart, ys: [Number(event.target.value)] })}>{numericIndexes.map(index => <option value={index} key={index} disabled={index === xIndex || index === groupByIndex}>{result.columns[index]?.name}</option>)}</select></label>}
+            <label>Type<select value={chartKind} onChange={event => {
+                const option = chartKindOptions.find(candidate => candidate.value === event.target.value);
+                if (!option) return;
+                const nextGroupBy = option.value === 'heatmap' ? groupByIndex ?? result.columns.findIndex((_column, index) => index !== xIndex && index !== yIndex) : undefined;
+                onChart({ ...chart, kind: option.value, groupBy: nextGroupBy !== undefined && nextGroupBy >= 0 ? nextGroupBy : undefined, ys: option.value === 'line' || option.value === 'bar' ? measureIndexes : [yIndex] });
+            }}>{chartKindOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
         </div></div>
         {chartKind === 'number' ? result.rows.length !== 1 ? <div className="chart-empty">Number view needs one retained row. Choose Line or Bar for multiple rows.</div> : !numericType(result.columns[yIndex]?.type ?? '') ? <div className="chart-empty">Choose a numeric result column to show one value.</div> : <div className="chart-number-card"><span className="eyebrow">SINGLE VALUE</span><strong>{displayValue(result.rows[0]?.[yIndex])}</strong><span>{result.columns[yIndex]?.name}</span><small>1 retained row · exact result value</small></div>
-            : !values.length ? <div className="chart-empty">Choose a numeric result column to plot.</div> : <div className="chart-canvas"><div className="chart-axis-labels"><span>{max.toLocaleString()}</span><span>{((min + max) / 2).toLocaleString()}</span><span>{min.toLocaleString()}</span></div>
-            <svg viewBox="0 0 760 230" role="img" aria-label={`${chartKind} chart of ${result.columns[yIndex]?.name}`}>
-                <defs><linearGradient id="chart-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="var(--accent)" stopOpacity=".28"/><stop offset="100%" stopColor="var(--accent)" stopOpacity="0"/></linearGradient></defs>
-                {[40, 115, 190].map(value => <line key={value} x1="32" x2="732" y1={value} y2={value} className="chart-gridline"/>)}
-                <line x1="32" x2="732" y1={zeroY} y2={zeroY} className="chart-zero-line"/>
-                {chartKind === 'line' ? <>
-                    {segments.filter(pointsInSegment => pointsInSegment.length > 1).map((pointsInSegment, index) => <polygon key={`area-${index}`} points={`${x(pointsInSegment[0]!.index)},${zeroY} ${pointsInSegment.map(point => `${x(point.index)},${y(point.value!)}`).join(' ')} ${x(pointsInSegment.at(-1)!.index)},${zeroY}`} fill="url(#chart-fill)"/>)}
-                    {segments.map((pointsInSegment, index) => <polyline key={`line-${index}`} points={pointsInSegment.map(point => `${x(point.index)},${y(point.value!)}`).join(' ')} className="chart-line"/>)}
-                    {points.filter(point => point.value !== null).map(point => <circle key={point.index} cx={x(point.index)} cy={y(point.value!)} r="3.5" className="chart-point"/>)}
-                </> : points.flatMap(point => {
-                    if (point.value === null) return [];
-                    const valueY = y(point.value), top = Math.min(zeroY, valueY), height = Math.max(1, Math.abs(valueY - zeroY));
-                    return [<rect key={point.index} x={x(point.index) - barWidth / 2} y={top} width={barWidth} height={height} rx="3" className="chart-bar" style={{ animationDelay: `${point.index * 20}ms` }}/>];
-                })}
-            </svg><div className="chart-x-labels"><span>{points[0]?.label}</span><span>{points[Math.floor(points.length / 2)]?.label}</span><span>{points.at(-1)?.label}</span></div>
-        </div>}
-        <div className="chart-footer"><span><span className="chart-legend-dot"/>{result.columns[yIndex]?.name}</span><span>{chartKind === 'number' ? result.rows.length === 1 ? '1 value' : `${result.rows.length.toLocaleString()} retained rows` : rowSummary} <i>·</i> {result.completeness === 'truncated' ? 'retained prefix' : 'complete result'}</span></div>
+            : chartKind === 'heatmap'
+                ? heatmapTooLarge ? <div className="chart-empty">This result has too many row and column labels for a readable heatmap. Group it into a smaller grid first.</div>
+                    : !heatmapRows.length || groupByIndex === undefined ? <div className="chart-empty">Heatmap needs two dimensions and one numeric measure.</div>
+                        : <div className="heatmap-scroll"><table className="heatmap-grid" aria-label={`${result.columns[yIndex]?.name} by ${result.columns[groupByIndex]?.name} and ${result.columns[xIndex]?.name}`}>
+                            <thead><tr><th className="heatmap-corner" scope="col">{result.columns[groupByIndex]?.name} / {result.columns[xIndex]?.name}</th>
+                            {heatmapXLabels.map(label => <th className="heatmap-axis-label" scope="col" key={`x-${label}`}>{label}</th>)}</tr></thead>
+                            <tbody>{heatmapYLabels.map(yLabel => <tr key={`y-${yLabel}`}><th className="heatmap-axis-label heatmap-row-label" scope="row" title={yLabel}>{yLabel}</th>{heatmapXLabels.map(xLabel => {
+                                const key = `${yLabel}\u0000${xLabel}`;
+                                const value = heatmapCells.get(key);
+                                const hasRow = heatmapPresent.has(key);
+                                const missing = !hasRow;
+                                const cellDescription = missing ? result.completeness === 'truncated' ? 'not retained' : 'no returned row' : value === undefined ? 'null measure' : value.toLocaleString();
+                                const plotted = value ?? 0;
+                                const intensity = heatmapMaximum > 0 ? plotted / heatmapMaximum : 0;
+                                const displayNumber = value === undefined ? '·' : compactNumber.format(value);
+                                return <td className="heatmap-cell" key={`${yLabel}-${xLabel}`} title={`${result.columns[groupByIndex]?.name}: ${yLabel} · ${result.columns[xIndex]?.name}: ${xLabel} · ${result.columns[yIndex]?.name}: ${cellDescription}`} aria-label={`${yLabel}, ${xLabel}: ${cellDescription}`} style={{ backgroundColor: missing || value === undefined ? 'var(--panel)' : `color-mix(in srgb, var(--accent) ${Math.round(intensity * 78)}%, var(--panel-raised))`, color: intensity > .55 ? 'var(--accent-ink)' : 'var(--text-soft)' }}>{missing ? '·' : displayNumber}</td>;
+                            })}</tr>)}</tbody>
+                        </table><div className="heatmap-caption">{result.columns[yIndex]?.name} · {heatmapYLabels.length} rows × {heatmapXLabels.length} columns · {result.completeness === 'truncated' ? 'blank cells may be outside the retained result' : 'blank cells had no returned group'}</div></div>
+                : chartKind === 'scatter' && !numericIndexes.some(index => index !== xIndex && index !== yIndex) ? <div className="chart-empty">Scatter needs two numeric columns. Choose another result or use Line or Bar.</div>
+                    : !values.length ? <div className="chart-empty">Choose a numeric measure to plot.</div>
+                    : <div className="chart-canvas"><div className="chart-axis-labels"><span>{max.toLocaleString()}</span><span>{((min + max) / 2).toLocaleString()}</span><span>{min.toLocaleString()}</span></div>
+                        <svg viewBox="0 0 760 230" role="img" aria-label={`${chartKind} chart comparing ${result.columns[xIndex]?.name} and ${result.columns[yIndex]?.name}`}>
+                            {[40, 115, 190].map(value => <line key={value} x1="32" x2="732" y1={value} y2={value} className="chart-gridline"/>)}
+                            {chartKind !== 'scatter' && <line x1="32" x2="732" y1={zeroY} y2={zeroY} className="chart-zero-line"/>}
+                            {chartKind === 'scatter' ? scatterPoints.map((point, index) => <circle key={index} cx={scatterX(point.x)} cy={scatterY(point.y)} r="3.5" className="chart-point" style={{ fill: seriesColor(0), stroke: seriesColor(0) }}><title>{`${result.columns[xIndex]?.name}: ${point.x} · ${result.columns[yIndex]?.name}: ${point.y}`}</title></circle>)
+                                : chartKind === 'line' ? plotSeries.map(series => {
+                                    const segments = splitChartSegments(series.points);
+                                    return <g key={series.columnIndex} style={{ '--series-color': series.color } as CSSProperties}>
+                                        {segments.filter(points => points.length > 1).map((points, index) => <polygon key={`area-${index}`} points={`${x(points[0]!.index)},${zeroY} ${points.map(point => `${x(point.index)},${y(point.value!)}`).join(' ')} ${x(points.at(-1)!.index)},${zeroY}`} className="chart-area-fill"/>)}
+                                        {segments.map((points, index) => <polyline key={`line-${index}`} points={points.map(point => `${x(point.index)},${y(point.value!)}`).join(' ')} className="chart-line"/>)}
+                                        {series.points.filter(point => point.value !== null).map(point => <circle key={point.index} cx={x(point.index)} cy={y(point.value!)} r="3.5" className="chart-point"/>)}</g>;
+                                }) : plotSeries.flatMap((series, seriesIndex) => series.points.flatMap(point => {
+                                    if (point.value === null) return [];
+                                    const valueY = y(point.value), top = Math.min(zeroY, valueY), height = Math.max(1, Math.abs(valueY - zeroY));
+                                    const groupOffset = (seriesIndex - (plotSeries.length - 1) / 2) * barWidth;
+                                    return [<rect key={`${series.columnIndex}-${point.index}`} x={x(point.index) + groupOffset - barWidth / 2} y={top} width={barWidth} height={height} rx="3" className="chart-bar" style={{ '--series-color': series.color, animationDelay: `${point.index * 20}ms` } as CSSProperties}/>];
+                                }))}
+                        </svg><div className="chart-x-labels">{chartKind === 'scatter'
+                            ? <><span>{scatterMinX.toLocaleString()}</span><span>{((scatterMinX + scatterMaxX) / 2).toLocaleString()}</span><span>{scatterMaxX.toLocaleString()}</span></>
+                            : <><span>{plotSeries[0]?.points[0]?.label}</span><span>{plotSeries[0]?.points[Math.floor((plotSeries[0]?.points.length ?? 1) / 2)]?.label}</span><span>{plotSeries[0]?.points.at(-1)?.label}</span></>}</div>
+                    </div>}
+        <div className="chart-footer"><span className="chart-legend">{chartKind === 'heatmap'
+            ? <><span className="chart-legend-dot"/>{result.columns[yIndex]?.name}</>
+            : chartKind === 'line' || chartKind === 'bar'
+                ? measureIndexes.map((index, seriesIndex) => <span key={index}><span className="chart-legend-dot" style={{ backgroundColor: seriesColor(seriesIndex) }}/>{result.columns[index]?.name}</span>)
+                : <><span className="chart-legend-dot" style={{ backgroundColor: seriesColor(0) }}/>{result.columns[yIndex]?.name}</>}</span><span>{chartKind === 'number' ? result.rows.length === 1 ? '1 value' : `${result.rows.length.toLocaleString()} retained rows` : chartKind === 'heatmap' ? `${heatmapCells.size.toLocaleString()} populated cells from ${result.rows.length.toLocaleString()} rows` : chartKind === 'scatter' ? `${scatterPoints.length.toLocaleString()} plotted points` : rowSummary} <i>·</i> {result.completeness === 'truncated' ? 'retained prefix' : 'complete result'}</span></div>
     </div>;
 }
 

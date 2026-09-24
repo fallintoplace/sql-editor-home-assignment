@@ -259,11 +259,12 @@ export class ArtifactService {
 export function parseChart(value: unknown): ChartConfig {
     if (value === undefined)
         return { kind: 'table', x: 0, ys: [], title: 'Query result' };
-    const v = record(value), supportedKinds = ['table', 'number', 'line', 'bar'];
-    const legacyKinds = ['area', 'stacked', 'pie', 'scatter'];
+    const v = record(value), supportedKinds = ['table', 'number', 'line', 'bar', 'scatter', 'heatmap'];
+    const legacyKinds = ['area', 'stacked', 'pie'];
     requireThat(supportedKinds.includes(String(v.kind)) || legacyKinds.includes(String(v.kind)), 400, 'CHART_CONFIG', 'Invalid chart kind');
     requireThat(Array.isArray(v.ys) && v.ys.length <= MAX_CHART_SERIES, 400, 'CHART_CONFIG', 'Invalid chart series');
-    return { kind: supportedKinds.includes(String(v.kind)) ? v.kind as ChartConfig['kind'] : 'table', x: integer(v.x, 'x', 0, 499), ys: v.ys.map(y => integer(y, 'y', 0, 499)), title: text(v.title, 'chart title', 200, true) };
+    const groupBy = v.groupBy === undefined ? undefined : integer(v.groupBy, 'groupBy', 0, 499);
+    return { kind: supportedKinds.includes(String(v.kind)) ? v.kind as ChartConfig['kind'] : 'table', x: integer(v.x, 'x', 0, 499), ...(groupBy === undefined ? {} : { groupBy }), ys: v.ys.map(y => integer(y, 'y', 0, 499)), title: text(v.title, 'chart title', 200, true) };
 }
 function parseMetric(value: unknown): MetricContract {
     const v = record(value, 'metric contract'), timezone = text(v.timezone, 'timezone', 100);

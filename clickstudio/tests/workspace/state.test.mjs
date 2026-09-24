@@ -52,9 +52,23 @@ test('Malformed optional metadata cannot crash a restored SQL draft', () => {
     assert.equal(draft.checkpoints[0].to, 8);
 });
 
-test('Legacy unsupported chart kinds recover to the table view', () => {
-    const draft = { ...newDraft('Legacy.sql', 'SELECT 1'), chart: { kind: 'scatter', x: 0, ys: [0], title: 'Old chart' } };
-    assert.equal(recover('key', read(workspace(draft))).tabs[0].chart.kind, 'table');
+test('Scatter and heatmap chart settings survive workspace recovery', () => {
+    const charts = [
+        { kind: 'scatter', x: 0, ys: [1], title: 'Fare by distance' },
+        { kind: 'heatmap', x: 1, groupBy: 0, ys: [2], title: 'Trips by weekday and hour' },
+    ];
+    for (const chart of charts) {
+        const draft = { ...newDraft('Chart.sql', 'SELECT 1'), chart };
+        assert.deepEqual(recover('key', read(workspace(draft))).tabs[0].chart, chart);
+    }
+});
+
+test('Invalid heatmap group-by metadata is discarded without losing the rest of the chart', () => {
+    for (const groupBy of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, 500, '1']) {
+        const draft = { ...newDraft('Chart.sql', 'SELECT 1'), chart: { kind: 'heatmap', x: 0, groupBy, ys: [2], title: 'Recoverable' } };
+        const recovered = recover('key', read(workspace(draft))).tabs[0].chart;
+        assert.deepEqual(recovered, { kind: 'heatmap', x: 0, ys: [2], title: 'Recoverable' });
+    }
 });
 
 test('One invalid tab does not reset valid sibling drafts', () => {

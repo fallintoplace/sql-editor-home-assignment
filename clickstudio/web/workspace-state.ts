@@ -67,7 +67,7 @@ const strings = (value: unknown): string[] => Array.isArray(value) ? value.filte
 const position = (value: unknown, length: number) => typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(length, Math.trunc(value))) : 0;
 const index = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 const revision = (value: unknown) => index(value) && value > 0 ? value : undefined;
-const chartKinds = ['table', 'number', 'line', 'bar'] as const satisfies readonly ChartConfig['kind'][];
+const chartKinds = ['table', 'number', 'line', 'bar', 'scatter', 'heatmap'] as const satisfies readonly ChartConfig['kind'][];
 const isChartKind = (value: unknown): value is ChartConfig['kind'] => chartKinds.some(kind => kind === value);
 
 /** Browser storage is untrusted input; preserve SQL while repairing optional metadata. */
@@ -85,6 +85,7 @@ export function recoverDraft(value: unknown): Draft | undefined {
         chart: {
             kind: isChartKind(chart.kind) ? chart.kind : 'table',
             x: index(chart.x) ? chart.x : 0,
+            ...(index(chart.groupBy) ? { groupBy: chart.groupBy } : {}),
             ys: Array.isArray(chart.ys) ? chart.ys.filter(index) : [], title: text(chart.title, 'Query result'),
         },
         runIds: [...new Set(strings(value.runIds).filter(v => id(v)))],

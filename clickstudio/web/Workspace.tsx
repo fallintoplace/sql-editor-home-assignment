@@ -26,6 +26,7 @@ import { useRunEvidence } from './useRunEvidence';
 import { useScriptExecution } from './useScriptExecution';
 import { useScopedValue } from './useScopedValue';
 import { sqlExamplesFor } from './sql-examples';
+import { localizeSqlExample } from './sql-examples-locales';
 import type { Copy, ExperienceLevel, Locale } from './i18n';
 import type { AssistantContext, BusyAction, Connected, Inspector, ResultsView, SpeechRecognitionLike } from './workspace-types';
 
@@ -846,9 +847,12 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         })()}<button type="button" aria-label={`Close ${draft.name}`} onClick={event => { event.stopPropagation(); setWorkspace(current => closeDraft(current, draft.id)); }}>×</button>
                     </div>)}
                     <button className="new-tab-button new-tab-labeled" type="button" aria-label="New SQL tab" title="New SQL tab" onClick={() => openNewDraft(newDraft())}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
-                    <SqlExamplesMenu open={examplesOpen} onOpen={openExamples} onClose={closeExamples} examples={sqlExamples} sourceLabel={connectionLabel} copy={copy.common} onOpenExample={example => {
-                        const draft = newDraft(`${example.name}.sql`, example.sql);
-                        draft.chart = { ...example.chart, ys: [...example.chart.ys] };
+                    <SqlExamplesMenu open={examplesOpen} onOpen={openExamples} onClose={closeExamples} examples={sqlExamples} sourceLabel={connectionLabel} copy={copy.common} locale={locale} onOpenExample={example => {
+                        const name = example.category === 'schema'
+                            ? copy.common.examplePreviewTable.replace('{table}', example.name.replace(/^Preview /, ''))
+                            : localizeSqlExample(example, locale).name;
+                        const draft = newDraft(`${name}.sql`, example.sql);
+                        draft.chart = { ...example.chart, title: locale === 'en' ? example.chart.title : name, ys: [...example.chart.ys] };
                         if (!openNewDraft(draft)) return false;
                         window.requestAnimationFrame(() => editor.current?.focus());
                         return true;

@@ -158,6 +158,133 @@ FROM (
 ORDER BY date`,
         chart: { kind: 'line', x: 0, ys: [1], title: 'JNJ historical price' },
     },
+    {
+        id: 'pypi-package-downloads', name: 'Package downloads by month', category: 'timeSeries', dataset: 'PyPI',
+        description: 'Compare monthly downloads of pandas, Polars, and ClickHouse Python drivers.',
+        sql: `SELECT
+    month,
+    project,
+    sum(count) AS downloads
+FROM pypi.pypi_downloads_per_month
+WHERE month >= addMonths(toStartOfMonth(today()), -17)
+    AND project IN ('clickhouse-connect', 'clickhouse-driver', 'pandas', 'polars')
+GROUP BY month, project
+ORDER BY month, project
+LIMIT 100`,
+        chart: { kind: 'heatmap', x: 0, groupBy: 1, ys: [2], title: 'Monthly package downloads' },
+    },
+    {
+        id: 'stackoverflow-qa-volume', name: 'Stack Overflow Q&A volume', category: 'timeSeries', dataset: 'Stack Overflow',
+        description: 'See how monthly question and answer counts changed in the archive.',
+        sql: `SELECT
+    toStartOfMonth(CreationDate) AS month,
+    countIf(PostTypeId = 'Question') AS questions,
+    countIf(PostTypeId = 'Answer') AS answers
+FROM stackoverflow.posts
+WHERE CreationDate >= toDateTime('2020-01-01 00:00:00')
+    AND CreationDate < toDateTime('2024-04-01 00:00:00')
+GROUP BY month
+ORDER BY month
+LIMIT 100`,
+        chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Monthly Stack Overflow Q&A' },
+    },
+    {
+        id: 'uk-house-prices-by-county', name: 'UK house prices by county', category: 'aggregation', dataset: 'UK property data',
+        description: 'Rank counties by median sale price since 2020.',
+        sql: `SELECT
+    county,
+    quantile(0.5)(price) AS median_price,
+    count() AS sales
+FROM uk.uk_price_paid
+WHERE date >= toDate('2020-01-01')
+    AND price > 0
+GROUP BY county
+HAVING sales >= 1000
+ORDER BY median_price DESC
+LIMIT 12`,
+        chart: { kind: 'bar', x: 0, ys: [1], title: 'Median sale price by county' },
+    },
+    {
+        id: 'imdb-ratings-by-year', name: 'Movie ratings by year', category: 'aggregation', dataset: 'IMDb',
+        description: 'Compare average IMDb ratings across movie release years.',
+        sql: `SELECT
+    year,
+    round(avg(rank), 2) AS average_rating
+FROM imdb.movies
+WHERE year >= 1980
+    AND rank > 0
+GROUP BY year
+ORDER BY year
+LIMIT 200`,
+        chart: { kind: 'scatter', x: 0, ys: [1], title: 'Average movie rating by year' },
+    },
+    {
+        id: 'noaa-central-park-weather', name: 'New York weather patterns', category: 'timeSeries', dataset: 'NOAA weather',
+        description: 'Explore monthly weather types recorded at Central Park from 2018 to 2022.',
+        sql: `SELECT
+    toStartOfMonth(date) AS month,
+    weatherType,
+    count() AS observations
+FROM noaa.noaa
+WHERE station_id = 'USW00094728'
+    AND date >= toDate('2018-01-01')
+    AND date < toDate('2023-01-01')
+GROUP BY month, weatherType
+ORDER BY month, weatherType
+LIMIT 240`,
+        chart: { kind: 'heatmap', x: 0, groupBy: 1, ys: [2], title: 'Central Park weather by month' },
+    },
+    {
+        id: 'forex-eur-usd-monthly', name: 'EUR/USD monthly midpoint', category: 'timeSeries', dataset: 'Forex',
+        description: 'Follow historical monthly average bid/ask midpoints for EUR/USD.',
+        sql: `SELECT
+    toStartOfMonth(datetime) AS month,
+    round(avg((bid + ask) / 2), 5) AS midpoint
+FROM forex.forex
+WHERE base = 'EUR'
+    AND quote = 'USD'
+    AND datetime >= toDateTime('2019-01-01 00:00:00')
+    AND datetime < toDateTime('2023-01-01 00:00:00')
+GROUP BY month
+ORDER BY month`,
+        chart: { kind: 'line', x: 0, ys: [1], title: 'EUR/USD monthly midpoint' },
+    },
+    {
+        id: 'nyc-taxi-fare-quantiles', name: 'Taxi fare percentiles by hour', category: 'clickhouse', dataset: 'NYC Taxi',
+        description: 'Compare median and 95th-percentile fares by weekday and pickup hour.',
+        sql: `SELECT
+    toDayOfWeek(pickup_datetime) AS weekday,
+    toHour(pickup_datetime) AS hour,
+    quantile(0.50)(fare_amount) AS median_fare,
+    quantile(0.95)(fare_amount) AS p95_fare
+FROM nyc_taxi.trips_small
+WHERE trip_distance > 0
+    AND fare_amount > 0
+    AND fare_amount < 200
+GROUP BY weekday, hour
+ORDER BY weekday, hour`,
+        chart: { kind: 'heatmap', x: 1, groupBy: 0, ys: [2], title: 'Taxi fare percentiles by hour' },
+    },
+    {
+        id: 'github-rolling-activity', name: 'GitHub activity with a rolling average', category: 'clickhouse', dataset: 'GitHub',
+        description: 'Smooth daily ClickHouse repository activity with a seven-day window.',
+        sql: `WITH daily AS (
+    SELECT
+        toDate(created_at) AS day,
+        count() AS events
+    FROM github.events
+    WHERE repo_name = 'ClickHouse/ClickHouse'
+        AND created_at >= now() - INTERVAL 90 DAY
+    GROUP BY day
+)
+SELECT
+    day,
+    events,
+    round(avg(events) OVER (ORDER BY day ROWS BETWEEN 6 PRECEDING AND CURRENT ROW), 1) AS seven_day_average
+FROM daily
+ORDER BY day`,
+        chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Daily GitHub events and seven-day average' },
+    },
 ];
 
 const demoStarterDetails: Record<string, Pick<SqlExample, 'description' | 'category'>> = {

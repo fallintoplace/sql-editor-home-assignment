@@ -1,4 +1,4 @@
-import type { Connection, Principal } from '../shared/types';
+import type { Connection, Principal } from '../shared/types.js';
 
 export type Connected = Connection & { trusted: boolean };
 export type Session = { principal: Principal | null; requiresLogin: boolean; demo: boolean };

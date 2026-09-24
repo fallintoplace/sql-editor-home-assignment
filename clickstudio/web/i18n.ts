@@ -1,4 +1,4 @@
-import type { SelectOption } from './workspace-types';
+import type { SelectOption } from './workspace-types.js';
 
 export type Locale = 'en' | 'de' | 'es' | 'nl' | 'zh' | 'ru';
 export type Theme = 'click-dark' | 'click-light';
@@ -49,7 +49,16 @@ export interface Copy {
         exampleAggregation: string;
         exampleTimeSeries: string;
         exampleClickHouse: string;
+        exampleCharts: string;
         exampleSchema: string;
+        exampleChartTable: string;
+        exampleChartNumber: string;
+        exampleChartLine: string;
+        exampleChartBar: string;
+        exampleChartScatter: string;
+        exampleChartHeatmap: string;
+        examplePreviewTable: string;
+        exampleReadRows: string;
         searchExamples: string;
         noExamplesFound: string;
         openInNewSql: string;
@@ -168,7 +177,16 @@ const english: Copy = {
         exampleAggregation: 'Aggregations',
         exampleTimeSeries: 'Time series',
         exampleClickHouse: 'ClickHouse',
+        exampleCharts: 'Charts',
         exampleSchema: 'Your tables',
+        exampleChartTable: 'Table',
+        exampleChartNumber: 'Number',
+        exampleChartLine: 'Line chart',
+        exampleChartBar: 'Bar chart',
+        exampleChartScatter: 'Scatter chart',
+        exampleChartHeatmap: 'Heatmap',
+        examplePreviewTable: 'Preview {table}',
+        exampleReadRows: 'Read up to 50 rows from this table.',
         searchExamples: 'Search examples',
         noExamplesFound: 'No examples match your search.',
         openInNewSql: 'Open in new SQL',
@@ -271,6 +289,35 @@ const translations: Record<Exclude<Locale, 'en'>, LocalizedCopy> = {
     },
 };
 
+const exampleCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common'],
+    'exampleCharts' | 'exampleChartTable' | 'exampleChartNumber' | 'exampleChartLine' | 'exampleChartBar' | 'exampleChartScatter' | 'exampleChartHeatmap' | 'examplePreviewTable' | 'exampleReadRows'>> = {
+    de: {
+        exampleCharts: 'Diagramme', exampleChartTable: 'Tabelle', exampleChartNumber: 'Zahl', exampleChartLine: 'Liniendiagramm',
+        exampleChartBar: 'Balkendiagramm', exampleChartScatter: 'Streudiagramm', exampleChartHeatmap: 'Heatmap',
+        examplePreviewTable: 'Vorschau: {table}', exampleReadRows: 'Bis zu 50 Zeilen aus dieser Tabelle lesen.',
+    },
+    es: {
+        exampleCharts: 'Gráficos', exampleChartTable: 'Tabla', exampleChartNumber: 'Número', exampleChartLine: 'Gráfico de líneas',
+        exampleChartBar: 'Gráfico de barras', exampleChartScatter: 'Gráfico de dispersión', exampleChartHeatmap: 'Mapa de calor',
+        examplePreviewTable: 'Vista previa: {table}', exampleReadRows: 'Leer hasta 50 filas de esta tabla.',
+    },
+    nl: {
+        exampleCharts: 'Grafieken', exampleChartTable: 'Tabel', exampleChartNumber: 'Getal', exampleChartLine: 'Lijndiagram',
+        exampleChartBar: 'Staafdiagram', exampleChartScatter: 'Spreidingsdiagram', exampleChartHeatmap: 'Heatmap',
+        examplePreviewTable: 'Voorbeeld van {table}', exampleReadRows: 'Lees maximaal 50 rijen uit deze tabel.',
+    },
+    zh: {
+        exampleCharts: '图表', exampleChartTable: '表格', exampleChartNumber: '数值', exampleChartLine: '折线图',
+        exampleChartBar: '柱状图', exampleChartScatter: '散点图', exampleChartHeatmap: '热力图',
+        examplePreviewTable: '预览：{table}', exampleReadRows: '读取此表最多 50 行。',
+    },
+    ru: {
+        exampleCharts: 'Графики', exampleChartTable: 'Таблица', exampleChartNumber: 'Число', exampleChartLine: 'Линейный график',
+        exampleChartBar: 'Столбчатая диаграмма', exampleChartScatter: 'Диаграмма рассеяния', exampleChartHeatmap: 'Тепловая карта',
+        examplePreviewTable: 'Просмотр: {table}', exampleReadRows: 'Прочитать до 50 строк из этой таблицы.',
+    },
+};
+
 export const localeOptions = [
     { value: 'en', label: 'English' },
     { value: 'de', label: 'Deutsch' },
@@ -306,7 +353,7 @@ export function getCopy(locale: Locale): Copy {
     return {
         app: mergeSection(english.app, translated),
         auth: mergeSection(english.auth, translated),
-        common: mergeSection(english.common, translated),
+        common: { ...mergeSection(english.common, translated), ...exampleCommonTranslations[locale] },
         chart: mergeSection(english.chart, translated),
     };
 }

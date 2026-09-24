@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PLAYGROUND_STARTER_SQL } from '../../.workspace-build/web/playground.js';
 import { sqlExamplesFor } from '../../.workspace-build/web/sql-examples.js';
+import { hasSqlExampleTranslation, localizeSqlExample } from '../../.workspace-build/web/sql-examples-locales.js';
 
 test('SQL example catalogs match the selected Playground or fixture source', () => {
     const playground = sqlExamplesFor({ id: 'playground', dataSource: 'clickhouse' });
@@ -45,6 +46,63 @@ test('Playground examples use ClickHouse-owned datasets with chart-ready result 
     }
     assert.match(byId.get('nyc-taxi-fare-distance')?.sql ?? '', /LIMIT 240\s*$/);
     assert.match(byId.get('stock-jnj-history')?.description ?? '', /historical/i);
+});
+
+test('new Playground examples have unique read-only queries and valid chart column indexes', () => {
+    const examples = sqlExamplesFor({ id: 'playground', dataSource: 'clickhouse' });
+    const byId = new Map(examples.map(example => [example.id, example]));
+    const cases = [
+        ['pypi-package-downloads', 'PyPI', 'heatmap', 'FROM pypi.pypi_downloads_per_month', 3, [2], 0, 1],
+        ['stackoverflow-qa-volume', 'Stack Overflow', 'line', 'FROM stackoverflow.posts', 3, [1, 2], 0],
+        ['uk-house-prices-by-county', 'UK property data', 'bar', 'FROM uk.uk_price_paid', 3, [1], 0],
+        ['imdb-ratings-by-year', 'IMDb', 'scatter', 'FROM imdb.movies', 2, [1], 0],
+        ['noaa-central-park-weather', 'NOAA weather', 'heatmap', 'FROM noaa.noaa', 3, [2], 0, 1],
+        ['forex-eur-usd-monthly', 'Forex', 'line', 'FROM forex.forex', 2, [1], 0],
+        ['nyc-taxi-fare-quantiles', 'NYC Taxi', 'heatmap', 'FROM nyc_taxi.trips_small', 4, [2], 1, 0],
+        ['github-rolling-activity', 'GitHub', 'line', 'FROM github.events', 3, [1, 2], 0],
+    ];
+
+    for (const [id, dataset, kind, table, columnCount, measures, x, groupBy] of cases) {
+        const example = byId.get(id);
+        assert.ok(example, `missing ${id}`);
+        assert.equal(example.dataset, dataset);
+        assert.equal(example.chart.kind, kind);
+        assert.equal(example.chart.x, x);
+        assert.deepEqual(example.chart.ys, measures);
+        if (groupBy === undefined) assert.equal(example.chart.groupBy, undefined);
+        else assert.equal(example.chart.groupBy, groupBy);
+        assert.ok(example.sql.includes(table), `${id} should query ${table}`);
+        assert.match(example.sql, /^(?:SELECT|WITH)\b/);
+        assert.doesNotMatch(example.sql, /\b(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|OPTIMIZE|KILL)\b/i);
+        assert.ok([example.chart.x, ...example.chart.ys, ...(example.chart.groupBy === undefined ? [] : [example.chart.groupBy])]
+            .every(index => Number.isInteger(index) && index >= 0 && index < columnCount));
+    }
+
+    assert.equal(new Set(examples.map(example => example.id)).size, examples.length);
+    assert.match(byId.get('pypi-package-downloads')?.sql ?? '', /LIMIT 100\s*$/);
+    assert.match(byId.get('stackoverflow-qa-volume')?.sql ?? '', /LIMIT 100\s*$/);
+    assert.match(byId.get('uk-house-prices-by-county')?.sql ?? '', /LIMIT 12\s*$/);
+    assert.match(byId.get('imdb-ratings-by-year')?.sql ?? '', /LIMIT 200\s*$/);
+    assert.match(byId.get('noaa-central-park-weather')?.sql ?? '', /LIMIT 240\s*$/);
+});
+
+test('curated, fixture, and generic SQL examples have localized titles and descriptions', () => {
+    const catalogs = [
+        sqlExamplesFor({ id: 'playground', dataSource: 'clickhouse' }),
+        sqlExamplesFor({ id: 'demo', dataSource: 'fixture' }),
+        sqlExamplesFor({ id: 'production', dataSource: 'clickhouse' }),
+    ];
+    const examples = [...new Map(catalogs.flat().map(example => [example.id, example])).values()];
+    const locales = ['de', 'es', 'nl', 'zh', 'ru'];
+
+    for (const example of examples) {
+        for (const locale of locales) {
+            assert.ok(hasSqlExampleTranslation(example.id, locale), `${example.id} is missing ${locale} copy`);
+            const localized = localizeSqlExample(example, locale);
+            assert.ok(localized.name.trim().length > 0);
+            assert.ok(localized.description.trim().length > 0);
+        }
+    }
 });
 
 test('SQL examples use safe generic queries until a real connection schema is available', () => {

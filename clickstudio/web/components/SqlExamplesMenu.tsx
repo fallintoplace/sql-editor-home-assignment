@@ -1,26 +1,52 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Copy } from '../i18n';
+import type { Copy, Locale } from '../i18n';
 import type { SqlExample, SqlExampleCategory } from '../sql-examples';
+import { localizeSqlExample } from '../sql-examples-locales';
 import { OverlayPortal } from './OverlayPortal';
 import { Button, Icon, cx } from './ui';
 
-type CategoryFilter = SqlExampleCategory | 'all';
+type CategoryFilter = SqlExampleCategory | 'charts' | 'all';
 
-const categories: CategoryFilter[] = ['all', 'basics', 'aggregation', 'timeSeries', 'clickhouse', 'schema'];
+const categories: CategoryFilter[] = ['all', 'basics', 'aggregation', 'timeSeries', 'charts', 'clickhouse', 'schema'];
 
 function categoryLabel(category: CategoryFilter, copy: Copy['common']) {
     if (category === 'all') return copy.allExamples;
     if (category === 'basics') return copy.exampleBasics;
     if (category === 'aggregation') return copy.exampleAggregation;
     if (category === 'timeSeries') return copy.exampleTimeSeries;
+    if (category === 'charts') return copy.exampleCharts;
     if (category === 'clickhouse') return copy.exampleClickHouse;
     return copy.exampleSchema;
 }
 
-export function SqlExamplesMenu({ examples, sourceLabel, copy, open, onOpen, onClose, onOpenExample }: {
+function chartLabel(example: SqlExample, copy: Copy['common']) {
+    switch (example.chart.kind) {
+        case 'table': return copy.exampleChartTable;
+        case 'number': return copy.exampleChartNumber;
+        case 'line': return copy.exampleChartLine;
+        case 'bar': return copy.exampleChartBar;
+        case 'scatter': return copy.exampleChartScatter;
+        case 'heatmap': return copy.exampleChartHeatmap;
+        default: return copy.chart;
+    }
+}
+
+function exampleText(example: SqlExample, locale: Locale, copy: Copy['common']) {
+    if (example.category === 'schema') {
+        const tableName = example.name.replace(/^Preview /, '');
+        return {
+            name: copy.examplePreviewTable.replace('{table}', tableName),
+            description: copy.exampleReadRows,
+        };
+    }
+    return localizeSqlExample(example, locale);
+}
+
+export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onOpen, onClose, onOpenExample }: {
     examples: SqlExample[];
     sourceLabel: string;
     copy: Copy['common'];
+    locale: Locale;
     open: boolean;
     onOpen: (opener: HTMLButtonElement) => void;
     onClose: (restoreFocus?: boolean) => void;
@@ -36,13 +62,17 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, open, onOpen, onC
     const filteredExamples = useMemo(() => {
         const term = search.trim().toLocaleLowerCase();
         return examples.filter(example => {
-            if (category !== 'all' && example.category !== category) return false;
+            if (category === 'charts' && example.chart.kind === 'table') return false;
+            if (category !== 'all' && category !== 'charts' && example.category !== category) return false;
             if (!term) return true;
-            return [example.name, example.dataset ?? '', example.description, example.sql].join(' ').toLocaleLowerCase().includes(term);
+            const localized = exampleText(example, locale, copy);
+            return [example.name, localized.name, example.dataset ?? '', example.description, localized.description, example.sql].join(' ').toLocaleLowerCase().includes(term);
         });
-    }, [category, examples, search]);
+    }, [category, copy, examples, locale, search]);
     const selected = filteredExamples.find(example => example.id === selectedId) ?? filteredExamples[0];
-    const availableCategories = categories.filter(value => value === 'all' || examples.some(example => example.category === value));
+    const availableCategories = categories.filter(value => value === 'all' || (value === 'charts'
+        ? examples.some(example => example.chart.kind !== 'table')
+        : examples.some(example => example.category === value)));
 
     useEffect(() => {
         if (selected && selected.id !== selectedId) setSelectedId(selected.id);
@@ -130,14 +160,17 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, open, onOpen, onC
                             setSelectedId(nextExample.id);
                             optionRefs.current.get(nextExample.id)?.focus();
                         }}>
-                            <span className="sql-example-option-title">{example.name}</span>
-                            <span className="sql-example-option-description">{example.description}</span>
-                            <span className="sql-example-option-category">{example.dataset ?? categoryLabel(example.category, copy)}</span>
+                            <span className="sql-example-option-title">{exampleText(example, locale, copy).name}</span>
+                            <span className="sql-example-option-description">{exampleText(example, locale, copy).description}</span>
+                            <span className="sql-example-option-meta">
+                                <span className="sql-example-option-category">{example.dataset ?? categoryLabel(example.category, copy)}</span>
+                                <span className="sql-example-chart-kind">{chartLabel(example, copy)}</span>
+                            </span>
                         </button>)}
                     </div>
                     {selected && <article className="sql-example-preview">
-                        <div className="sql-example-preview-heading"><div><span className="eyebrow">{selected.dataset ?? categoryLabel(selected.category, copy)}</span><h3>{selected.name}.sql</h3></div><span className="sql-example-readonly">SQL</span></div>
-                        <p>{selected.description}</p>
+                        <div className="sql-example-preview-heading"><div><span className="eyebrow">{selected.dataset ?? categoryLabel(selected.category, copy)}</span><h3>{exampleText(selected, locale, copy).name}.sql</h3></div><span className="sql-example-readonly">{chartLabel(selected, copy)}</span></div>
+                        <p>{exampleText(selected, locale, copy).description}</p>
                         <pre><code>{selected.sql}</code></pre>
                         <Button variant="primary" className="sql-example-open" onClick={() => { if (onOpenExample(selected)) onClose(false); }}><Icon name="plus"/>{copy.openInNewSql}</Button>
                     </article>}

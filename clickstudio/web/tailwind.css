@@ -252,7 +252,9 @@
     .sql-example-option.is-selected { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); background: color-mix(in srgb, var(--accent) 7%, var(--panel)); }
     .sql-example-option-title { overflow: hidden; color: var(--text); font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
     .sql-example-option-description { grid-column: 1 / -1; color: var(--muted); font-size: 9px; line-height: 1.4; }
+    .sql-example-option-meta { display: flex; min-width: 0; grid-column: 1 / -1; align-items: center; gap: 5px; }
     .sql-example-option-category { align-self: center; padding: 3px 6px; border: 1px solid var(--line); border-radius: 99px; color: var(--muted); font-size: 8px; white-space: nowrap; }
+    .sql-example-chart-kind { padding: 3px 6px; border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line)); border-radius: 99px; background: color-mix(in srgb, var(--accent) 5%, transparent); color: var(--text-soft); font-size: 8px; white-space: nowrap; }
     .sql-example-preview { display: flex; min-width: 0; min-height: 0; flex-direction: column; gap: 9px; padding: 16px; overflow: auto; }
     .sql-example-preview-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
     .sql-example-preview-heading h3 { overflow-wrap: anywhere; margin: 4px 0 0; font-size: 14px; font-weight: 750; }
@@ -978,7 +980,7 @@
     .sql-examples-list { max-height: 30dvh; flex: none; gap: 3px; padding: 7px; border-right: 0; border-bottom: 1px solid var(--line); }
     .sql-example-preview { flex: 1; }
     .sql-example-option { padding: 8px 7px; }
-    .sql-example-option-category { grid-column: 1 / -1; justify-self: start; }
+    .sql-example-option-meta { flex-wrap: wrap; }
     .sql-example-preview pre { font-size: 8px; }
     .help-examples-button { width: 29px; min-height: 29px; padding: 0; }
     .help-examples-button span { display: none; }

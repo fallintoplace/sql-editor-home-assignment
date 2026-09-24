@@ -54,3 +54,30 @@ test('Playground examples preview real SQL and open a draft without executing it
     await expect(page.locator('.execution-bar code')).toHaveCount(0);
     expect(exampleSqlRequests).toEqual([]);
 });
+
+test('Charts filter opens a localized chart example in a new SQL tab without executing it', async ({ page }) => {
+    const exampleSqlRequests: string[] = [];
+    page.on('request', request => {
+        const requestText = `${request.url()}\n${request.postData() ?? ''}`;
+        if (new URL(request.url()).hostname === 'sql-clickhouse.clickhouse.com' && requestText.includes('toStartOfMonth(datetime) AS month'))
+            exampleSqlRequests.push(requestText);
+    });
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Examples', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'SQL examples', exact: true });
+    await dialog.getByRole('button', { name: 'Charts', exact: true }).click();
+
+    const forexExample = dialog.getByRole('option', { name: /EUR\/USD monthly midpoint/ });
+    await expect(forexExample).toBeVisible();
+    await forexExample.click();
+    await expect(dialog.locator('.sql-example-preview')).toContainText('Forex');
+    await expect(dialog.locator('.sql-example-preview code')).toContainText('FROM forex.forex');
+    await expect(dialog.locator('.sql-example-readonly')).toHaveText('Line chart');
+    await dialog.getByRole('button', { name: 'Open in new SQL', exact: true }).click();
+
+    await expect(page.getByRole('tab', { name: 'EUR/USD monthly midpoint.sql', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.cm-content')).toContainText('FROM forex.forex');
+    await expect(page.locator('.execution-bar .execution-ready-state')).toHaveText('Ready');
+    expect(exampleSqlRequests).toEqual([]);
+});

@@ -1,0 +1,110 @@
+import type { ApiError, Column, Limits, Progress, Run, RunEvent, RunStatus } from './types.js';
+
+const runStatuses = [
+    'queued', 'running', 'succeeded', 'truncated', 'failed', 'cancelled', 'timed_out', 'interrupted',
+] as const satisfies readonly RunStatus[];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isSafeInteger(value: unknown): value is number {
+    return typeof value === 'number' && Number.isSafeInteger(value);
+}
+
+function isOptionalString(value: unknown): value is string | undefined {
+    return value === undefined || typeof value === 'string';
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+    return isRecord(value) && Object.values(value).every(item => typeof item === 'string');
+}
+
+function isColumn(value: unknown): value is Column {
+    return isRecord(value) && typeof value.name === 'string' && typeof value.type === 'string';
+}
+
+function isLimits(value: unknown): value is Limits {
+    return isRecord(value)
+        && isSafeInteger(value.rows)
+        && isSafeInteger(value.bytes)
+        && isSafeInteger(value.seconds)
+        && isSafeInteger(value.memory)
+        && isSafeInteger(value.threads);
+}
+
+function isProgress(value: unknown): value is Progress {
+    return isRecord(value)
+        && typeof value.readRows === 'string'
+        && typeof value.readBytes === 'string'
+        && isFiniteNumber(value.elapsedMs)
+        && isOptionalString(value.memory);
+}
+
+function isApiError(value: unknown): value is ApiError {
+    return isRecord(value)
+        && typeof value.code === 'string'
+        && typeof value.message === 'string'
+        && isOptionalString(value.remediation)
+        && (value.position === undefined || isFiniteNumber(value.position));
+}
+
+function isRunStatus(value: unknown): value is RunStatus {
+    return typeof value === 'string' && runStatuses.some(status => status === value);
+}
+
+export function isRun(value: unknown): value is Run {
+    if (!isRecord(value))
+        return false;
+    return (value.dataSource === 'clickhouse' || value.dataSource === 'fixture')
+        && typeof value.id === 'string'
+        && typeof value.queryId === 'string'
+        && typeof value.owner === 'string'
+        && typeof value.connectionId === 'string'
+        && isOptionalString(value.documentId)
+        && typeof value.sql === 'string'
+        && (value.sourceFrom === undefined || isSafeInteger(value.sourceFrom))
+        && (value.sourceTo === undefined || isSafeInteger(value.sourceTo))
+        && (value.kind === 'query' || value.kind === 'explain' || value.kind === 'pipeline')
+        && isStringRecord(value.parameters)
+        && isLimits(value.limits)
+        && isStringRecord(value.tags)
+        && isOptionalString(value.parentRunId)
+        && isRunStatus(value.status)
+        && typeof value.createdAt === 'string'
+        && isOptionalString(value.startedAt)
+        && isOptionalString(value.finishedAt)
+        && isFiniteNumber(value.elapsedMs)
+        && isFiniteNumber(value.rowCount)
+        && isFiniteNumber(value.bytes)
+        && Array.isArray(value.columns)
+        && value.columns.every(isColumn)
+        && (value.progress === undefined || isProgress(value.progress))
+        && Array.isArray(value.warnings)
+        && value.warnings.every(warning => typeof warning === 'string')
+        && (value.error === undefined || isApiError(value.error))
+        && isSafeInteger(value.sequence)
+        && isOptionalString(value.resultExpiresAt)
+        && (value.resultState === 'pending' || value.resultState === 'reopenable' || value.resultState === 'expired' || value.resultState === 'unavailable')
+        && typeof value.requestedBy === 'string'
+        && typeof value.executedAs === 'string'
+        && isRecord(value.permissionSnapshot)
+        && value.permissionSnapshot.readonly === true
+        && typeof value.permissionSnapshot.role === 'string'
+        && value.retryPolicy === 'never'
+        && isOptionalString(value.traceId)
+        && isOptionalString(value.serverVersion);
+}
+
+export function parseRunEvent(value: unknown): RunEvent {
+    if (!isRecord(value)
+        || !isSafeInteger(value.sequence)
+        || (value.type !== 'state' && value.type !== 'progress')
+        || !isRun(value.run))
+        throw new Error('Invalid run event');
+    return { sequence: value.sequence, type: value.type, run: value.run };
+}

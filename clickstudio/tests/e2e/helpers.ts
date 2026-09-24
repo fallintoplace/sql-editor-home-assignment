@@ -1,9 +1,21 @@
 import { expect, type Page } from '@playwright/test';
 
+export const runStatementButton = (page: Page) => page.getByTestId('run-statement');
+
+export async function openBlankSql(page: Page) {
+    await page.getByTestId('new-sql').click();
+    await page.getByTestId('blank-sql').click();
+}
+
+export async function openWorkspacePanel(page: Page, panel: string) {
+    await page.getByTestId('workspace-panels').click();
+    await page.getByTestId(`workspace-panel-${panel}`).click();
+}
+
 export async function trust(page: Page) {
     await page.goto('/');
     await trustCurrentConnection(page);
-    await expect(page.getByRole('button', { name: 'Run statement', exact: true })).toBeEnabled();
+    await expect(runStatementButton(page)).toBeEnabled();
 }
 
 export async function trustCurrentConnection(page: Page) {

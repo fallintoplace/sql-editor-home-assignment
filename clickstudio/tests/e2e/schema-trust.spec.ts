@@ -30,7 +30,7 @@ async function mockLiveWorkspace(page: Page, respondToSchema: (route: Route) => 
     await page.route('**/api/runs**', route => route.fulfill({ json: [] }));
     await page.route('**/api/documents**', route => route.fulfill({ json: [] }));
     await page.goto('/');
-    await expect(page.getByRole('button', { name: 'Run statement', exact: true })).toBeEnabled();
+    await expect(page.getByTestId('run-statement')).toBeEnabled();
     return { get schemaRequests() { return schemaRequests; } };
 }
 
@@ -107,7 +107,7 @@ test('Schema inspector shows ClickHouse keys, storage, indexes, and dictionaries
     await expect(page.getByText('campaign_lookup', { exact: true })).toBeVisible();
     await expect(page.getByText('18.2K entries')).toBeVisible();
 
-    const search = page.getByRole('textbox', { name: 'Search tables, columns, and dictionaries…' });
+    const search = page.getByTestId('schema-search');
     await search.fill('tenant_bloom');
     await expect(page.locator('.schema-table')).toHaveCount(1);
     await search.fill('campaign_lookup');

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { runScript, trust, trustCurrentConnection } from './helpers.js';
+import { openBlankSql, openWorkspacePanel, runScript, runStatementButton, trust, trustCurrentConnection } from './helpers.js';
 
 async function replaceSql(page: Page, sql: string) {
     const editor = page.locator('.cm-content');
@@ -15,7 +15,7 @@ async function runQuery(page: Page) {
         const request = response.request();
         return request.method() === 'POST' && new URL(response.url()).pathname === '/api/runs';
     });
-    await page.getByRole('button', { name: 'Run statement', exact: true }).click();
+    await runStatementButton(page).click();
     const run = await (await runResponse).json() as { queryId: string };
     await expect(page.locator('.execution-bar code')).toHaveText(run.queryId);
     const results = page.getByRole('region', { name: 'Query results', exact: true });
@@ -65,11 +65,10 @@ test('Run evidence stays with its draft through tab and mode switches', async ({
     const results = await runQuery(page);
     const firstQueryId = await page.locator('.execution-bar code').innerText();
 
-    await page.getByRole('button', { name: 'New SQL', exact: true }).click();
-    await page.getByRole('dialog', { name: 'SQL examples', exact: true }).getByRole('button', { name: 'Blank SQL', exact: true }).click();
+    await openBlankSql(page);
     const secondResults = page.getByRole('region', { name: 'Query results', exact: true });
     await expect(secondResults.getByRole('table', { name: 'Retained query rows' })).toHaveCount(0);
-    await expect(page.locator('.execution-bar .execution-ready-state')).toHaveText('Ready');
+    await expect(page.locator('.execution-bar')).toHaveAttribute('data-run-status', 'ready');
     await expect(page.locator('.execution-bar code')).toHaveCount(0);
 
     await runQuery(page);
@@ -96,18 +95,18 @@ test('Query and result panels collapse to their headings', async ({ page }) => {
     const queryPanel = page.locator('.editor-surface');
     const resultsPanel = results;
 
-    await page.getByRole('button', { name: 'Collapse SQL query', exact: true }).click();
+    await page.locator('button[aria-controls="sql-editor-content"]').click();
     await expect(page.locator('#sql-editor-content')).toBeHidden();
     await expect.poll(async () => (await queryPanel.boundingBox())?.height ?? 0).toBeLessThan(80);
     await expect(results.getByRole('table', { name: 'Retained query rows' })).toBeVisible();
 
-    await page.getByRole('button', { name: 'Collapse Query results', exact: true }).click();
+    await page.locator('button[aria-controls="query-results-content"]').click();
     await expect(page.locator('#query-results-content')).toBeHidden();
     await expect.poll(async () => (await resultsPanel.boundingBox())?.height ?? 0).toBeLessThan(80);
 
-    await page.getByRole('button', { name: 'Expand SQL query', exact: true }).click();
+    await page.locator('button[aria-controls="sql-editor-content"]').click();
     await expect(page.locator('#sql-editor-content')).toBeVisible();
-    await page.getByRole('button', { name: 'Expand Query results', exact: true }).click();
+    await page.locator('button[aria-controls="query-results-content"]').click();
     await expect(page.locator('#query-results-content')).toBeVisible();
 });
 
@@ -117,8 +116,7 @@ test('Native parser can be retried after a temporary worker failure', async ({ p
     const retry = page.getByRole('button', { name: 'Retry parser', exact: true });
     await expect(retry).toBeVisible();
     await retry.click();
-    await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'ClickHouse parser', exact: true }).click();
+    await openWorkspacePanel(page, 'parser');
     await expect(page.getByText('Ready · local WebAssembly', { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => Number((window as any).__parserParseCount ?? 0))).toBeGreaterThan(0);
 });
@@ -138,8 +136,7 @@ test('Advanced parser inspector shows native AST, UTF-8 semantic highlights, and
     await replaceSql(page, sql);
     await expect(page.locator('.cm-native-function')).toHaveText('uniqExact');
 
-    await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'ClickHouse parser', exact: true }).click();
+    await openWorkspacePanel(page, 'parser');
     await expect(page.getByText('SelectWithUnionQuery', { exact: true })).toBeVisible();
     await page.getByText('View native AST', { exact: true }).click();
     await expect(page.getByText(/"type": "SelectWithUnionQuery"/)).toBeVisible();
@@ -176,8 +173,7 @@ test('A delayed native parse cannot replace parser details for newer SQL', async
     });
     await replaceSql(page, newSql);
     await expect(page.locator('.cm-native-function')).toHaveText('new_fn');
-    await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'ClickHouse parser', exact: true }).click();
+    await openWorkspacePanel(page, 'parser');
     await expect(page.getByText('NewStatement', { exact: true })).toBeVisible();
 
     await page.evaluate(() => (window as any).__resolveDelayedNativeParse());
@@ -189,8 +185,7 @@ test('Failed async formatting does not overwrite edits typed while it was pendin
     await page.addInitScript(parserWorkerStub('ready'));
     await trust(page);
     await replaceSql(page, 'select old_value from old_table');
-    await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'ClickHouse parser', exact: true }).click();
+    await openWorkspacePanel(page, 'parser');
     await expect(page.getByText('Ready · local WebAssembly', { exact: true })).toBeVisible();
     await page.getByRole('group', { name: 'Format SQL' }).getByRole('button', { name: 'WASM', exact: true }).click();
     await expect.poll(() => page.evaluate(() => Boolean((window as any).__pendingParserFormat))).toBe(true);
@@ -209,7 +204,7 @@ test('Connection switches keep run evidence isolated and recover each connection
     await picker.click();
     await page.getByRole('dialog', { name: 'Connection details' }).getByRole('button', { name: /Another sample/ }).click();
     await expect.poll(() => new URL(page.url()).searchParams.get('connection')).toBe('demo-second');
-    await expect(page.locator('.execution-bar .execution-ready-state')).toHaveText('Ready');
+    await expect(page.locator('.execution-bar')).toHaveAttribute('data-run-status', 'ready');
     await expect(page.locator('.execution-bar code')).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Query results', exact: true }).getByRole('table', { name: 'Retained query rows' })).toHaveCount(0);
     await page.reload();
@@ -240,8 +235,8 @@ test('Insights compare one run with its ClickHouse pipeline evidence', async ({ 
     await expect(queryPlan).toContainText('EXPLAIN PIPELINE');
     await expect(queryPlan).toContainText('ReadFromFixture');
     const graph = queryPlan.getByRole('region', { name: 'Scrollable operator graph' });
-    await expect(graph.getByRole('button', { name: 'Inspect operator Resize 2 → 1' })).toBeVisible();
-    await graph.getByRole('button', { name: 'Inspect operator Resize 2 → 1' }).click();
+    await expect(graph.locator('[data-node-id]').filter({ hasText: 'Resize 2 → 1' })).toBeVisible();
+    await graph.locator('[data-node-id]').filter({ hasText: 'Resize 2 → 1' }).click();
     await expect(queryPlan.locator('.pipeline-node-inspector')).toContainText('Resize 2 → 1');
     await expect(page.locator('.execution-bar code')).toHaveText(startedRun.queryId);
 });
@@ -270,7 +265,7 @@ test('Refreshing a pipeline selects the first operator in the new graph', async 
     await load.click();
     await firstLoad;
     const graph = section.getByRole('region', { name: 'Scrollable operator graph' });
-    await graph.getByRole('button', { name: 'Inspect operator First output', exact: true }).click();
+    await graph.locator('[data-node-id="output"]').click();
     await expect(section.locator('.pipeline-node-inspector')).toContainText('First output');
 
     const refresh = section.getByRole('button', { name: 'Refresh pipeline', exact: true });
@@ -278,8 +273,8 @@ test('Refreshing a pipeline selects the first operator in the new graph', async 
     await refresh.click();
     await refreshed;
     await expect(section.locator('.pipeline-node-inspector')).toContainText('Next reader');
-    await expect(graph.getByRole('button', { name: 'Inspect operator Next reader', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await expect(graph.getByRole('button', { name: 'Inspect operator Next output', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    await expect(graph.locator('[data-node-id="source"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(graph.locator('[data-node-id="output"]')).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('Result filtering searches only the visible retained page without mutating the run', async ({ page }) => {
@@ -487,8 +482,7 @@ test('Refreshing run history replaces the visible list with the latest response'
     };
     await page.route(/\/api\/runs\?connectionId=demo$/, route => route.fulfill({ json: refreshed ? [run] : [] }));
     await trust(page);
-    await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Runs', exact: true }).click();
+    await openWorkspacePanel(page, 'history');
     await expect(page.getByText('No runs yet')).toBeVisible();
     refreshed = true;
     await page.getByRole('button', { name: /Refresh/ }).click();
@@ -507,7 +501,7 @@ test('A late AI context preview cannot attach to an edited question', async ({ p
     });
     await trust(page);
     await page.getByText('Compact', { exact: true }).click();
-    await page.getByRole('button', { name: 'Ask AI', exact: true }).click();
+    await page.getByTestId('open-ai').click();
     const question = page.getByRole('textbox', { name: 'Describe your data question', exact: true });
     await question.fill('Show the old question');
     await page.getByRole('button', { name: 'Review context', exact: true }).click();
@@ -615,11 +609,11 @@ test('Selecting an earlier script statement stops automatic following while late
 test('Cancelling a long-running query reaches a terminal cancelled state', async ({ page }) => {
     await trust(page);
     await replaceSql(page, 'SELECT fixture_slow');
-    await page.getByRole('button', { name: 'Run statement', exact: true }).click();
+    await runStatementButton(page).click();
     const cancel = page.locator('.execution-bar').getByRole('button', { name: 'Cancel', exact: true });
     await expect(cancel).toBeVisible();
     await cancel.click();
-    await expect(page.locator('.execution-bar')).toContainText('Cancelled', { timeout: 10000 });
+    await expect(page.locator('.execution-bar')).toHaveAttribute('data-run-status', 'cancelled', { timeout: 10000 });
 });
 
 test('Cancellation stays available while execution profile loading is pending', async ({ page }) => {
@@ -630,7 +624,7 @@ test('Cancellation stays available while execution profile loading is pending', 
     await trust(page);
     await replaceSql(page, 'SELECT fixture_slow');
     const started = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/runs');
-    await page.getByRole('button', { name: 'Run statement', exact: true }).click();
+    await runStatementButton(page).click();
     const run = await (await started).json() as { id: string };
     const cancel = page.locator('.execution-bar').getByRole('button', { name: 'Cancel', exact: true });
     await expect(cancel).toBeVisible();
@@ -641,7 +635,7 @@ test('Cancellation stays available while execution profile loading is pending', 
     const cancelled = page.waitForResponse(response => new URL(response.url()).pathname === `/api/runs/${run.id}/cancel`);
     await cancel.click();
     await cancelled;
-    await expect(page.locator('.execution-bar')).toContainText('Cancelled', { timeout: 10000 });
+    await expect(page.locator('.execution-bar')).toHaveAttribute('data-run-status', 'cancelled', { timeout: 10000 });
 });
 
 test('A query and its local draft recover after reload without rerunning', async ({ page }) => {

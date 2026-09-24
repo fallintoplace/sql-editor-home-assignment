@@ -17,6 +17,11 @@ export type SqlExample = {
 
 const playgroundExamples: SqlExample[] = [
     {
+        id: 'github-recent-events', name: 'Recent GitHub events', category: 'openSource',
+        description: 'Inspect real events, repositories, actors, and timestamps.', dataset: 'GitHub', sql: PLAYGROUND_STARTER_SQL,
+        chart: { kind: 'table', x: 0, ys: [], title: 'GitHub events' },
+    },
+    {
         id: 'amazon-customer-review-health', name: 'Amazon Customer Review Health', category: 'business', dataset: 'Amazon Reviews', featuredOrder: 1,
         description: 'Compare negative, neutral, and positive review share across high-volume product categories.',
         sql: `SELECT
@@ -79,11 +84,6 @@ WHERE PostTypeId = 'Question'
 GROUP BY quarter
 ORDER BY quarter`,
         chart: { kind: 'line', x: 0, ys: [1, 2, 3, 4], title: 'Quarterly technology question volume' },
-    },
-    {
-        id: 'github-recent-events', name: 'Recent GitHub events', category: 'openSource',
-        description: 'Inspect real events, repositories, actors, and timestamps.', dataset: 'GitHub', sql: PLAYGROUND_STARTER_SQL,
-        chart: { kind: 'table', x: 0, ys: [], title: 'GitHub events' },
     },
     {
         id: 'github-daily-activity', name: 'Daily activity', category: 'openSource',

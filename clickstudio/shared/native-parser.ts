@@ -56,6 +56,19 @@ export interface NativeFormatResult {
     error?: NativeParseError;
 }
 
+export type NativeParserRequest =
+    | { id: number; kind: 'parseMany'; sql: string[] }
+    | { id: number; kind: 'formatMany'; sql: string[] };
+export type NativeParserReply =
+    | { id: number; kind: 'parseMany'; ok: true; results: NativeParseResult[] }
+    | { id: number; kind: 'formatMany'; ok: true; results: NativeFormatResult[] }
+    | { id: number; kind: NativeParserRequest['kind']; ok: false; message: string };
+export type NativeParserWorkerStatus = {
+    kind: 'status';
+    status: Exclude<NativeParserStatus, 'loading'>;
+    reason?: string;
+};
+
 export interface NativeDiagnostic {
     from: number;
     to: number;

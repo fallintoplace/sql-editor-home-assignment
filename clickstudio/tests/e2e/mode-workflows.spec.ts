@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { trust, trustCurrentConnection } from './helpers.js';
+import { openWorkspacePanel, trust, trustCurrentConnection } from './helpers.js';
 
 const generatedSql = 'SELECT day, events FROM demo.events ORDER BY day';
 

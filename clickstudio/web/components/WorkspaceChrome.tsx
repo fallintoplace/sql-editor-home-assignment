@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import type { Run, Script } from '../../shared/types';
 import { Button, cx, formatBytes, formatCount, Icon, Status, terminal } from './ui';
 import type { IconName } from './ui';
@@ -55,7 +54,7 @@ export function ScriptResults({ script, runs, activeRunId, onSelectRun, onCancel
     </section>;
 }
 
-export function ExecutionBar({ run, eventState, onCancel, cancelling, scriptRunning, helpButton, copy }: { run?: Run; eventState: RunEventState; onCancel: () => void; cancelling: boolean; scriptRunning: boolean; helpButton: ReactNode; copy: Copy['common'] }) {
+export function ExecutionBar({ run, eventState, onCancel, cancelling, scriptRunning, copy }: { run?: Run; eventState: RunEventState; onCancel: () => void; cancelling: boolean; scriptRunning: boolean; copy: Copy['common'] }) {
     const progress = run?.progress;
     const executionInProgress = Boolean(run && (!terminal(run) || scriptRunning));
     const elapsedMs = run ? terminal(run) ? Math.round(run.elapsedMs) : Math.max(0, Math.round(progress?.elapsedMs ?? run.elapsedMs)) : undefined;
@@ -84,7 +83,6 @@ export function ExecutionBar({ run, eventState, onCancel, cancelling, scriptRunn
         <div className="execution-right">
             {run && <code title={run.queryId}>{run.queryId}</code>}
             {run && (scriptRunning || !terminal(run)) && <Button variant="danger" className="cancel-execution" onClick={onCancel} disabled={cancelling}>{cancelling ? 'Cancelling…' : scriptRunning ? `${copy.cancel} ${copy.runScript.toLowerCase()}` : copy.cancel}</Button>}
-            {helpButton}
         </div>
         {executionInProgress && <span className="execution-progress-line"/>}
     </footer>;

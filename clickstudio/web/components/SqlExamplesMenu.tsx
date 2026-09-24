@@ -49,7 +49,7 @@ function exampleText(example: SqlExample, locale: Locale, copy: Copy['common']) 
     return localizeSqlExample(example, locale);
 }
 
-export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onOpen, onClose, onOpenExample, onStartBlankSql }: {
+export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onOpen, onClose, onOpenExample }: {
     examples: SqlExample[];
     sourceLabel: string;
     copy: Copy['common'];
@@ -58,7 +58,6 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onO
     onOpen: (opener: HTMLButtonElement) => void;
     onClose: (restoreFocus?: boolean) => void;
     onOpenExample: (example: SqlExample) => boolean;
-    onStartBlankSql: () => boolean;
 }) {
     const panelRef = useRef<HTMLElement>(null);
     const searchRef = useRef<HTMLInputElement>(null);
@@ -154,10 +153,7 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onO
             <section ref={panelRef} id="sql-examples-panel" className="sql-examples-panel" role="dialog" aria-modal="true" aria-labelledby="sql-examples-title" tabIndex={-1}>
                 <header className="sql-examples-header">
                     <div><span className="eyebrow">{sourceLabel}</span><h2 id="sql-examples-title">{copy.sqlExamples}</h2><p>{copy.examplesHint}</p></div>
-                    <div className="sql-examples-header-actions">
-                        <Button variant="secondary" className="sql-example-blank" onClick={() => { if (onStartBlankSql()) onClose(false); }}><Icon name="plus"/>{copy.startBlankSql}</Button>
-                        <button type="button" className="sql-examples-close" aria-label={copy.closeExamples} title={copy.closeExamples} onClick={() => onClose()}><Icon name="close"/></button>
-                    </div>
+                    <button type="button" className="sql-examples-close" aria-label={copy.closeExamples} title={copy.closeExamples} onClick={() => onClose()}><Icon name="close"/></button>
                 </header>
                 <div className="sql-examples-toolbar">
                     <div className="sql-example-categories" role="group" aria-label={copy.exampleCategories}>

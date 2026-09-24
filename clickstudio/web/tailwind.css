@@ -217,23 +217,20 @@
     .new-tab-button { display: grid; width: 31px; height: 31px; flex: none; align-self: center; place-items: center; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; transition: .18s ease; }
     .new-tab-button:hover { border-color: var(--line); background: var(--panel); color: var(--accent); }
     .new-tab-button svg { width: 16px; height: 16px; }
-    .new-tab-labeled, .sql-examples-trigger { display: inline-flex; width: auto; min-width: max-content; gap: 6px; padding: 0 9px; font-size: 10px; font-weight: 650; }
+    .new-tab-labeled { display: inline-flex; width: auto; min-width: max-content; gap: 6px; padding: 0 9px; font-size: 10px; font-weight: 650; }
     .new-tab-labeled { border-color: var(--line); background: color-mix(in srgb, var(--panel) 74%, transparent); color: var(--text-soft); }
-    .new-tab-labeled:hover, .sql-examples-trigger[aria-expanded="true"] { border-color: color-mix(in srgb, var(--accent) 42%, var(--line)); background: color-mix(in srgb, var(--accent) 8%, var(--panel)); color: var(--accent); }
-    .new-tab-labeled span, .sql-examples-trigger span { white-space: nowrap; }
-    .new-tab-labeled svg, .sql-examples-trigger svg { width: 14px; height: 14px; }
+    .new-tab-labeled:hover { border-color: color-mix(in srgb, var(--accent) 42%, var(--line)); background: color-mix(in srgb, var(--accent) 8%, var(--panel)); color: var(--accent); }
+    .new-tab-labeled span { white-space: nowrap; }
+    .new-tab-labeled svg { width: 14px; height: 14px; }
     .sql-examples-menu { position: relative; display: flex; flex: none; align-self: center; }
     .sql-examples-trigger { color: var(--muted); }
-    .sql-examples-trigger:focus-visible, .new-tab-labeled:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .new-tab-labeled:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .sql-examples-backdrop { position: fixed; z-index: var(--z-overlay-backdrop); inset: 0; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, var(--page) 74%, transparent); backdrop-filter: blur(5px); animation: examplesBackdrop .16s ease-out both; }
     .sql-examples-panel { position: relative; z-index: var(--z-dialog); display: flex; width: min(980px, calc(100vw - 48px)); height: min(720px, calc(100dvh - 48px)); min-width: 0; min-height: 240px; max-height: calc(100dvh - 48px); flex-direction: column; overflow: hidden; border: 1px solid var(--line-bright); border-radius: 15px; background: var(--panel-raised); color: var(--text); box-shadow: 0 22px 70px #00000055, 0 4px 16px #00000028; animation: examplesReveal .14s ease-out both; }
     .sql-examples-header { display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 17px 18px 13px; border-bottom: 1px solid var(--line); background: linear-gradient(110deg, color-mix(in srgb, var(--accent) 7%, var(--panel-raised)), var(--panel-raised) 70%); }
     .sql-examples-header .eyebrow, .sql-example-preview-heading .eyebrow { display: block; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
     .sql-examples-header h2 { margin: 4px 0 3px; font-size: 16px; font-weight: 750; letter-spacing: -.02em; }
     .sql-examples-header p, .sql-example-preview > p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
-    .sql-examples-header-actions { display: flex; flex: none; align-items: center; gap: 8px; }
-    .sql-example-blank { display: inline-flex; min-height: 30px; align-items: center; gap: 6px; padding: 0 9px; font-size: 9px; }
-    .sql-example-blank svg { width: 13px; height: 13px; }
     .sql-examples-close { display: grid; width: 29px; height: 29px; flex: none; place-items: center; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
     .sql-examples-close:hover { border-color: var(--line); background: var(--panel); color: var(--text); }
     .sql-examples-close:focus-visible, .sql-example-category:focus-visible, .sql-example-option:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -820,10 +817,6 @@
     .drawer-backdrop { position: fixed; z-index: var(--z-overlay-backdrop); inset: 68px 0 0; border: 0; background: #0008; animation: fadeIn .18s ease both; backdrop-filter: blur(2px); }
     .execution-bar { position: relative; z-index: var(--z-execution-bar); display: flex; min-height: 43px; flex: none; align-items: center; justify-content: space-between; gap: 18px; overflow: hidden; padding: 5px 17px; border-top: 1px solid var(--line-bright); background: color-mix(in srgb, var(--panel-raised) 93%, transparent); box-shadow: 0 -10px 28px #0002; }
     .execution-bar.is-running { border-top-color: color-mix(in srgb, var(--accent) 37%, var(--line)); }
-    .help-examples-button { display: inline-flex; min-height: 27px; flex: none; align-items: center; justify-content: center; gap: 6px; padding: 0 8px; border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line-bright)); border-radius: 6px; background: transparent; color: var(--text); font-size: 9px; font-weight: 700; white-space: nowrap; cursor: pointer; transition: border-color .16s ease, background .16s ease, color .16s ease; }
-    .help-examples-button:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 11%, var(--panel-raised)); color: var(--accent); }
-    .help-examples-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-    .help-examples-button svg { width: 16px; height: 16px; color: var(--accent); }
     .execution-state, .execution-telemetry, .execution-right { display: flex; align-items: center; gap: 11px; }
     .execution-ready-state { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 9px; white-space: nowrap; }
     .execution-ready-state .status-light { width: 6px; height: 6px; }
@@ -986,7 +979,6 @@
     .editor-mode-label { gap: 6px; font-size: 8px; }
     .editor-footer { font-size: 7px; }
     .execution-bar { min-height: 40px; flex-wrap: wrap; gap: 7px 12px; padding: 6px 10px; }
-    .help-examples-button { min-height: 27px; }
     .execution-telemetry { justify-content: flex-start; }
     .execution-right code { max-width: 90px; }
     .toast-stack { right: 10px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); width: calc(100vw - 20px); }
@@ -999,7 +991,7 @@
 }
 
 @media (max-width: 560px) {
-    .new-tab-labeled, .sql-examples-trigger { gap: 4px; padding-inline: 7px; font-size: 9px; }
+    .new-tab-labeled { gap: 4px; padding-inline: 7px; font-size: 9px; }
     .sql-examples-backdrop { padding: 8px; }
     .sql-examples-panel { width: calc(100vw - 16px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); }
     .sql-examples-header { padding: 13px 12px 10px; }
@@ -1012,8 +1004,6 @@
     .sql-example-option { padding: 8px 7px; }
     .sql-example-option-meta { flex-wrap: wrap; }
     .sql-example-preview pre { font-size: 8px; }
-    .help-examples-button { width: 29px; min-height: 29px; padding: 0; }
-    .help-examples-button span { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

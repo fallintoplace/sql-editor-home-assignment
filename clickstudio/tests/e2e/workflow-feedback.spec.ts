@@ -99,7 +99,7 @@ test('Refreshing run history shows the latest run without executing SQL', async 
     await page.route(url => url.pathname === '/api/runs' && url.searchParams.has('connectionId'), route => route.fulfill({ json: refresh ? [historyRun()] : [] }));
     await trust(page);
     await page.getByRole('navigation', { name: 'Workspace browser', exact: true }).getByRole('button', { name: 'More workspace panels', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Run history', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Runs', exact: true }).click();
     const pane = page.locator('.inspector-pane');
     await expect(pane.getByText('No runs yet', { exact: true })).toBeVisible();
     refresh = true;

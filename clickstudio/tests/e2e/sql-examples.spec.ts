@@ -15,7 +15,7 @@ test('SQL examples open in a new tab without changing or running the current que
     await page.getByRole('button', { name: 'Collapse SQL query', exact: true }).click();
     await expect(page.locator('#sql-editor-content')).toBeHidden();
 
-    await page.getByRole('button', { name: 'Examples', exact: true }).click();
+    await page.getByRole('button', { name: 'New SQL', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'SQL examples', exact: true });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText('Sample data', { exact: true })).toBeVisible();
@@ -41,7 +41,7 @@ test('SQL examples open in a new tab without changing or running the current que
 
 test('SQL examples search handles no matches and Escape restores focus', async ({ page }) => {
     await trust(page);
-    const trigger = page.getByRole('button', { name: 'Examples', exact: true });
+    const trigger = page.getByRole('button', { name: 'New SQL', exact: true });
     await trigger.click();
     const dialog = page.getByRole('dialog', { name: 'SQL examples', exact: true });
     const search = dialog.getByRole('searchbox', { name: 'Search examples', exact: true });

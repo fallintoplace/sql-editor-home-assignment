@@ -36,7 +36,7 @@ test('Playground examples preview real SQL and open a draft without executing it
             exampleSqlRequests.push(requestText);
     });
     await page.goto('/');
-    await page.getByRole('button', { name: 'Examples', exact: true }).click();
+    await page.getByRole('button', { name: 'New SQL', exact: true }).click();
 
     const dialog = page.getByRole('dialog', { name: 'SQL examples', exact: true });
     await expect(dialog).toBeVisible();
@@ -64,7 +64,7 @@ test('Charts filter opens a localized chart example in a new SQL tab without exe
     });
 
     await page.goto('/');
-    await page.getByRole('button', { name: 'Examples', exact: true }).click();
+    await page.getByRole('button', { name: 'New SQL', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'SQL examples', exact: true });
     await dialog.getByRole('button', { name: 'Charts', exact: true }).click();
 

@@ -26,8 +26,10 @@ test('A no-match row filter stays local and can be cleared without rerunning SQL
 
 test('SQL document tabs support arrow and Home/End keyboard navigation', async ({ page }) => {
     await trust(page);
-    await page.getByRole('button', { name: 'New SQL tab', exact: true }).click();
-    await page.getByRole('button', { name: 'New SQL tab', exact: true }).click();
+    await page.getByRole('button', { name: 'New SQL', exact: true }).click();
+    await page.getByRole('dialog', { name: 'SQL examples', exact: true }).getByRole('button', { name: 'Blank SQL', exact: true }).click();
+    await page.getByRole('button', { name: 'New SQL', exact: true }).click();
+    await page.getByRole('dialog', { name: 'SQL examples', exact: true }).getByRole('button', { name: 'Blank SQL', exact: true }).click();
     const tabs = page.getByRole('tablist', { name: 'SQL documents' }).getByRole('tab');
     await expect(tabs).toHaveCount(3);
     await tabs.first().focus();

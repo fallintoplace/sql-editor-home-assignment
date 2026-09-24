@@ -21,7 +21,7 @@ test('Run, chart, save and reload preserve the same execution evidence', async (
     await trust(page);
     await page.getByRole('button', { name: 'Run statement', exact: true }).click();
     const results = page.getByRole('region', { name: 'Query results' });
-    await expect(results.getByText('succeeded', { exact: true })).toBeVisible();
+    await expect(results.getByText('Succeeded', { exact: true })).toBeVisible();
     await expect(results.getByRole('cell', { name: '2026-01-01', exact: true })).toBeVisible();
     const queryId = await page.locator('.execution-bar code').innerText();
     await results.getByRole('tab', { name: 'Chart', exact: true }).click();
@@ -30,7 +30,7 @@ test('Run, chart, save and reload preserve the same execution evidence', async (
     await expect(page.locator('.draft-status')).toHaveText('Saved r1');
     await page.reload();
     const recovered = page.getByRole('region', { name: 'Query results' });
-    await expect(recovered.getByText('succeeded', { exact: true })).toBeVisible();
+    await expect(recovered.getByText('Succeeded', { exact: true })).toBeVisible();
     await expect(recovered.getByRole('cell', { name: '2026-01-01', exact: true })).toBeVisible();
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
     expect(runs()).toBe(1);
@@ -39,7 +39,7 @@ test('Run, chart, save and reload preserve the same execution evidence', async (
 test('Switching connections never reuses another connection\'s result', async ({ page }) => {
     await trust(page);
     await page.getByRole('button', { name: 'Run statement', exact: true }).click();
-    await expect(page.getByRole('region', { name: 'Query results' }).getByText('succeeded', { exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Query results' }).getByText('Succeeded', { exact: true })).toBeVisible();
     await switchConnection(page, 'Another sample');
     await trustCurrentConnection(page);
     await expect(page.getByRole('region', { name: 'Query results' })).toHaveCount(0);
@@ -59,7 +59,7 @@ test('Closing and reopening a result tab does not execute SQL again', async ({ p
     await page.getByRole('textbox', { name: 'value:UInt64', exact: true }).fill('9007199254740993');
     await page.getByRole('button', { name: 'Run statement', exact: true }).click();
     const results = page.getByRole('region', { name: 'Query results' });
-    await expect(results.getByText('succeeded', { exact: true })).toBeVisible();
+    await expect(results.getByText('Succeeded', { exact: true })).toBeVisible();
     const queryId = await page.locator('.execution-bar code').innerText();
     await page.getByRole('button', { name: 'Close Recoverable.sql', exact: true }).click();
     await expect(results).toHaveCount(0);

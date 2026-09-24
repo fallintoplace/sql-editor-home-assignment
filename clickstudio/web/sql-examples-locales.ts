@@ -1,5 +1,5 @@
 import type { Locale } from './i18n.js';
-import type { SqlExample } from './sql-examples.js';
+import type { SqlExample, SqlExampleCategory } from './sql-examples.js';
 
 type ExampleText = Pick<SqlExample, 'name' | 'description'>;
 type Translation = readonly [name: string, description: string];
@@ -197,10 +197,26 @@ const translations: Record<Exclude<Locale, 'en'>, Record<string, Translation>> =
     },
 };
 
+type SqlExampleCategoryFilter = SqlExampleCategory | 'featured';
+type CategoryTranslations = Partial<Record<SqlExampleCategoryFilter, string>>;
+
+const categoryTranslations: Record<Exclude<Locale, 'en'>, CategoryTranslations> = {
+    de: { featured: 'Highlights', markets: 'Märkte', cities: 'Städte', openSource: 'Open Source', internet: 'Internet', datasets: 'Datensätze' },
+    es: { featured: 'Destacados', markets: 'Mercados', cities: 'Ciudades', openSource: 'Código abierto', internet: 'Internet', datasets: 'Conjuntos de datos' },
+    nl: { featured: 'Uitgelicht', markets: 'Markten', cities: 'Steden', openSource: 'Open source', internet: 'Internet', datasets: 'Datasets' },
+    zh: { featured: '精选', markets: '市场', cities: '城市', openSource: '开源', internet: '互联网', datasets: '数据集' },
+    ru: { featured: 'Избранное', markets: 'Рынки', cities: 'Города', openSource: 'Open Source', internet: 'Интернет', datasets: 'Наборы данных' },
+};
+
 export function localizeSqlExample(example: SqlExample, locale: Locale): ExampleText {
     if (locale === 'en') return { name: example.name, description: example.description };
     const translation = translations[locale]?.[example.id];
     return translation ? { name: translation[0], description: translation[1] } : { name: example.name, description: example.description };
+}
+
+export function localizeSqlExampleCategory(category: SqlExampleCategoryFilter, locale: Locale, fallback: string): string {
+    if (locale === 'en') return fallback;
+    return categoryTranslations[locale][category] ?? fallback;
 }
 
 export function hasSqlExampleTranslation(exampleId: string, locale: Exclude<Locale, 'en'>): boolean {

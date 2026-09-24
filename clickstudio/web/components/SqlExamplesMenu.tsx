@@ -1,16 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Copy, Locale } from '../i18n';
 import type { SqlExample, SqlExampleCategory } from '../sql-examples';
-import { localizeSqlExample } from '../sql-examples-locales';
+import { localizeSqlExample, localizeSqlExampleCategory } from '../sql-examples-locales';
 import { OverlayPortal } from './OverlayPortal';
 import { Button, Icon, cx } from './ui';
 
-type CategoryFilter = SqlExampleCategory | 'charts' | 'all';
+type CategoryFilter = SqlExampleCategory | 'charts' | 'all' | 'featured';
 
-const categories: CategoryFilter[] = ['all', 'basics', 'aggregation', 'timeSeries', 'charts', 'clickhouse', 'schema'];
+const categories: CategoryFilter[] = ['featured', 'markets', 'cities', 'openSource', 'internet', 'datasets', 'clickhouse', 'charts', 'all', 'basics', 'aggregation', 'timeSeries', 'schema'];
 
-function categoryLabel(category: CategoryFilter, copy: Copy['common']) {
+function categoryLabel(category: CategoryFilter, copy: Copy['common'], locale: Locale) {
     if (category === 'all') return copy.allExamples;
+    if (category === 'featured') return localizeSqlExampleCategory(category, locale, 'Featured');
+    if (category === 'markets') return localizeSqlExampleCategory(category, locale, 'Markets');
+    if (category === 'cities') return localizeSqlExampleCategory(category, locale, 'Cities');
+    if (category === 'openSource') return localizeSqlExampleCategory(category, locale, 'Open source');
+    if (category === 'internet') return localizeSqlExampleCategory(category, locale, 'Internet');
+    if (category === 'datasets') return localizeSqlExampleCategory(category, locale, 'Datasets');
     if (category === 'basics') return copy.exampleBasics;
     if (category === 'aggregation') return copy.exampleAggregation;
     if (category === 'timeSeries') return copy.exampleTimeSeries;
@@ -56,24 +62,32 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onO
     const panelRef = useRef<HTMLElement>(null);
     const searchRef = useRef<HTMLInputElement>(null);
     const optionRefs = useRef(new Map<string, HTMLButtonElement>());
+    const featuredExamples = useMemo(() => examples
+        .filter(example => example.featuredOrder !== undefined)
+        .sort((left, right) => left.featuredOrder! - right.featuredOrder!), [examples]);
+    const defaultExample = featuredExamples[0] ?? examples[0];
     const [search, setSearch] = useState('');
-    const [category, setCategory] = useState<CategoryFilter>('all');
-    const [selectedId, setSelectedId] = useState(examples[0]?.id ?? '');
+    const [category, setCategory] = useState<CategoryFilter>(featuredExamples.length ? 'featured' : 'all');
+    const [selectedId, setSelectedId] = useState(defaultExample?.id ?? '');
 
     const filteredExamples = useMemo(() => {
         const term = search.trim().toLocaleLowerCase();
-        return examples.filter(example => {
+        const candidates = category === 'featured' ? featuredExamples : examples;
+        return candidates.filter(example => {
             if (category === 'charts' && example.chart.kind === 'table') return false;
-            if (category !== 'all' && category !== 'charts' && example.category !== category) return false;
+            if (category !== 'all' && category !== 'charts' && category !== 'featured' && example.category !== category) return false;
             if (!term) return true;
             const localized = exampleText(example, locale, copy);
             return [example.name, localized.name, example.dataset ?? '', example.description, localized.description, example.sql].join(' ').toLocaleLowerCase().includes(term);
         });
-    }, [category, copy, examples, locale, search]);
+    }, [category, copy, examples, featuredExamples, locale, search]);
     const selected = filteredExamples.find(example => example.id === selectedId) ?? filteredExamples[0];
-    const availableCategories = categories.filter(value => value === 'all' || (value === 'charts'
-        ? examples.some(example => example.chart.kind !== 'table')
-        : examples.some(example => example.category === value)));
+    const availableCategories = categories.filter(value => {
+        if (value === 'all') return true;
+        if (value === 'featured') return featuredExamples.length > 0;
+        if (value === 'charts') return examples.some(example => example.chart.kind !== 'table');
+        return examples.some(example => example.category === value);
+    });
 
     useEffect(() => {
         if (selected && selected.id !== selectedId) setSelectedId(selected.id);
@@ -82,8 +96,8 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onO
     useEffect(() => {
         if (!open) return;
         setSearch('');
-        setCategory('all');
-        setSelectedId(examples[0]?.id ?? '');
+        setCategory(featuredExamples.length ? 'featured' : 'all');
+        setSelectedId(defaultExample?.id ?? '');
 
         const previousOverflow = document.body.style.overflow;
         const appRoot = document.getElementById('root');
@@ -125,7 +139,7 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onO
             document.body.style.overflow = previousOverflow;
             if (appRoot) appRoot.inert = previousInert;
         };
-    }, [open, onClose]);
+    }, [defaultExample?.id, featuredExamples.length, open, onClose]);
 
     return <>
         <div className="sql-examples-menu">
@@ -143,7 +157,7 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onO
                 </header>
                 <div className="sql-examples-toolbar">
                     <div className="sql-example-categories" role="group" aria-label={copy.exampleCategories}>
-                        {availableCategories.map(value => <button key={value} type="button" className={cx('sql-example-category', category === value && 'is-active')} aria-pressed={category === value} onClick={() => setCategory(value)}>{categoryLabel(value, copy)}</button>)}
+                        {availableCategories.map(value => <button key={value} type="button" className={cx('sql-example-category', category === value && 'is-active')} aria-pressed={category === value} onClick={() => setCategory(value)}>{categoryLabel(value, copy, locale)}</button>)}
                     </div>
                     <label className="sql-example-search"><Icon name="search"/><input ref={searchRef} type="search" aria-label={copy.searchExamples} placeholder={copy.searchExamples} value={search} onChange={event => setSearch(event.target.value)}/></label>
                 </div>
@@ -164,13 +178,13 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onO
                             <span className="sql-example-option-title">{exampleText(example, locale, copy).name}</span>
                             <span className="sql-example-option-description">{exampleText(example, locale, copy).description}</span>
                             <span className="sql-example-option-meta">
-                                <span className="sql-example-option-category">{example.dataset ?? categoryLabel(example.category, copy)}</span>
+                                <span className="sql-example-option-category">{example.dataset ?? categoryLabel(example.category, copy, locale)}</span>
                                 <span className="sql-example-chart-kind">{chartLabel(example, copy)}</span>
                             </span>
                         </button>)}
                     </div>
                     {selected && <article className="sql-example-preview">
-                        <div className="sql-example-preview-heading"><div><span className="eyebrow">{selected.dataset ?? categoryLabel(selected.category, copy)}</span><h3>{exampleText(selected, locale, copy).name}.sql</h3></div><span className="sql-example-readonly">{chartLabel(selected, copy)}</span></div>
+                        <div className="sql-example-preview-heading"><div><span className="eyebrow">{selected.dataset ?? categoryLabel(selected.category, copy, locale)}</span><h3>{exampleText(selected, locale, copy).name}.sql</h3></div><span className="sql-example-readonly">{chartLabel(selected, copy)}</span></div>
                         <p>{exampleText(selected, locale, copy).description}</p>
                         <pre><code>{selected.sql}</code></pre>
                         <Button variant="primary" className="sql-example-open" onClick={() => { if (onOpenExample(selected)) onClose(false); }}><Icon name="plus"/>{copy.openInNewSql}</Button>

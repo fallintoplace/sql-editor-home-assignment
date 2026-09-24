@@ -2,7 +2,7 @@ import type { ChartConfig, Connection, Schema } from '../shared/types.js';
 import { DEMO_PREVIEW_STARTERS } from './demo-preview.js';
 import { PLAYGROUND_CONNECTION_ID, PLAYGROUND_STARTER_SQL } from './playground.js';
 
-export type SqlExampleCategory = 'basics' | 'aggregation' | 'timeSeries' | 'clickhouse' | 'schema';
+export type SqlExampleCategory = 'basics' | 'aggregation' | 'timeSeries' | 'clickhouse' | 'schema' | 'markets' | 'cities' | 'openSource' | 'internet' | 'datasets';
 
 export type SqlExample = {
     id: string;
@@ -12,16 +12,17 @@ export type SqlExample = {
     category: SqlExampleCategory;
     sql: string;
     chart: ChartConfig;
+    featuredOrder?: number;
 };
 
 const playgroundExamples: SqlExample[] = [
     {
-        id: 'github-recent-events', name: 'Recent GitHub events', category: 'basics',
+        id: 'github-recent-events', name: 'Recent GitHub events', category: 'openSource',
         description: 'Inspect real events, repositories, actors, and timestamps.', dataset: 'GitHub', sql: PLAYGROUND_STARTER_SQL,
         chart: { kind: 'table', x: 0, ys: [], title: 'GitHub events' },
     },
     {
-        id: 'github-daily-activity', name: 'Daily activity', category: 'timeSeries',
+        id: 'github-daily-activity', name: 'Daily activity', category: 'openSource',
         description: 'Compare event volume and active actors over the last 30 days.', dataset: 'GitHub',
         sql: `SELECT
     toDate(created_at) AS day,
@@ -34,7 +35,7 @@ ORDER BY day`,
         chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Daily GitHub activity' },
     },
     {
-        id: 'github-top-star-events', name: 'Repositories getting starred', category: 'aggregation',
+        id: 'github-top-star-events', name: 'Repositories getting starred', category: 'openSource',
         description: 'Rank repositories by recent GitHub star events.', dataset: 'GitHub',
         sql: `SELECT
     repo_name,
@@ -64,7 +65,7 @@ ORDER BY month`,
         chart: { kind: 'line', x: 0, ys: [1], title: 'Monthly PR contributors' },
     },
     {
-        id: 'github-release-cadence', name: 'ClickHouse release cadence', category: 'timeSeries',
+        id: 'github-release-cadence', name: 'ClickHouse release cadence', category: 'openSource',
         description: 'See how the project release pace changes by year.', dataset: 'GitHub',
         sql: `SELECT
     toStartOfYear(created_at) AS year,
@@ -78,7 +79,7 @@ ORDER BY year`,
         chart: { kind: 'bar', x: 0, ys: [1], title: 'Releases per year' },
     },
     {
-        id: 'github-issues-mentioning-clickhouse', name: 'Issues mentioning ClickHouse', category: 'aggregation',
+        id: 'github-issues-mentioning-clickhouse', name: 'Issues mentioning ClickHouse', category: 'openSource',
         description: 'Track issue titles mentioning ClickHouse across repositories.', dataset: 'GitHub',
         sql: `SELECT
     toStartOfMonth(created_at) AS month,
@@ -93,7 +94,7 @@ ORDER BY month`,
         chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Issues mentioning ClickHouse' },
     },
     {
-        id: 'hackernews-daily-pulse', name: 'Stories and comments', category: 'timeSeries', dataset: 'Hacker News',
+        id: 'hackernews-daily-pulse', name: 'Stories and comments', category: 'internet', dataset: 'Hacker News',
         description: 'Compare daily stories and comments from the last 90 days.',
         sql: `SELECT
     toDate(time) AS day,
@@ -106,7 +107,7 @@ ORDER BY day`,
         chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Hacker News activity' },
     },
     {
-        id: 'nyc-taxi-weekly-rhythm', name: 'Taxi trips by weekday and hour', category: 'timeSeries', dataset: 'NYC Taxi',
+        id: 'nyc-taxi-weekly-rhythm', name: 'Taxi trips by weekday and hour', category: 'cities', dataset: 'NYC Taxi', featuredOrder: 2,
         description: 'Find rush-hour patterns across the week in a 168-cell heatmap.',
         sql: `SELECT
     toDayOfWeek(pickup_datetime) AS weekday,
@@ -118,7 +119,7 @@ ORDER BY weekday, hour`,
         chart: { kind: 'heatmap', x: 1, groupBy: 0, ys: [2], title: 'Taxi pickups by weekday and hour' },
     },
     {
-        id: 'nyc-taxi-fare-distance', name: 'Fare vs. trip distance', category: 'aggregation', dataset: 'NYC Taxi',
+        id: 'nyc-taxi-fare-distance', name: 'Fare vs. trip distance', category: 'cities', dataset: 'NYC Taxi', featuredOrder: 3,
         description: 'Explore how trip distance relates to the metered fare.',
         sql: `SELECT
     trip_distance,
@@ -130,7 +131,7 @@ LIMIT 240`,
         chart: { kind: 'scatter', x: 0, ys: [1], title: 'Fare by trip distance' },
     },
     {
-        id: 'bluesky-activity-by-hour', name: 'Bluesky activity by hour', category: 'timeSeries', dataset: 'Bluesky',
+        id: 'bluesky-activity-by-hour', name: 'Bluesky activity by hour', category: 'internet', dataset: 'Bluesky',
         description: 'Compare posts, likes, and reposts across the day using ClickHouse hourly rollups.',
         sql: `SELECT
     event,
@@ -143,7 +144,7 @@ ORDER BY event, hour_of_day`,
         chart: { kind: 'heatmap', x: 1, groupBy: 0, ys: [2], title: 'Bluesky events by hour' },
     },
     {
-        id: 'stock-jnj-history', name: 'Johnson & Johnson price history', category: 'timeSeries', dataset: 'Stock sample',
+        id: 'stock-jnj-history', name: 'Johnson & Johnson price history', category: 'markets', dataset: 'Stock sample',
         description: 'Plot 180 historical trading sessions from the sample stock table.',
         sql: `SELECT
     date,
@@ -159,7 +160,7 @@ ORDER BY date`,
         chart: { kind: 'line', x: 0, ys: [1], title: 'JNJ historical price' },
     },
     {
-        id: 'pypi-package-downloads', name: 'Package downloads by month', category: 'timeSeries', dataset: 'PyPI',
+        id: 'pypi-package-downloads', name: 'Package downloads by month', category: 'datasets', dataset: 'PyPI',
         description: 'Compare monthly downloads of pandas, Polars, and ClickHouse Python drivers.',
         sql: `SELECT
     month,
@@ -174,7 +175,7 @@ LIMIT 100`,
         chart: { kind: 'heatmap', x: 0, groupBy: 1, ys: [2], title: 'Monthly package downloads' },
     },
     {
-        id: 'stackoverflow-qa-volume', name: 'Stack Overflow Q&A volume', category: 'timeSeries', dataset: 'Stack Overflow',
+        id: 'stackoverflow-qa-volume', name: 'Stack Overflow Q&A volume', category: 'internet', dataset: 'Stack Overflow',
         description: 'See how monthly question and answer counts changed in the archive.',
         sql: `SELECT
     toStartOfMonth(CreationDate) AS month,
@@ -189,7 +190,7 @@ LIMIT 100`,
         chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Monthly Stack Overflow Q&A' },
     },
     {
-        id: 'uk-house-prices-by-county', name: 'UK house prices by county', category: 'aggregation', dataset: 'UK property data',
+        id: 'uk-house-prices-by-county', name: 'UK house prices by county', category: 'datasets', dataset: 'UK property data',
         description: 'Rank counties by median sale price since 2020.',
         sql: `SELECT
     county,
@@ -205,7 +206,7 @@ LIMIT 12`,
         chart: { kind: 'bar', x: 0, ys: [1], title: 'Median sale price by county' },
     },
     {
-        id: 'imdb-ratings-by-year', name: 'Movie ratings by year', category: 'aggregation', dataset: 'IMDb',
+        id: 'imdb-ratings-by-year', name: 'Movie ratings by year', category: 'datasets', dataset: 'IMDb',
         description: 'Compare average IMDb ratings across movie release years.',
         sql: `SELECT
     year,
@@ -219,7 +220,7 @@ LIMIT 200`,
         chart: { kind: 'scatter', x: 0, ys: [1], title: 'Average movie rating by year' },
     },
     {
-        id: 'noaa-central-park-weather', name: 'New York weather patterns', category: 'timeSeries', dataset: 'NOAA weather',
+        id: 'noaa-central-park-weather', name: 'New York weather patterns', category: 'datasets', dataset: 'NOAA weather',
         description: 'Explore monthly weather types recorded at Central Park from 2018 to 2022.',
         sql: `SELECT
     toStartOfMonth(date) AS month,
@@ -235,7 +236,7 @@ LIMIT 240`,
         chart: { kind: 'heatmap', x: 0, groupBy: 1, ys: [2], title: 'Central Park weather by month' },
     },
     {
-        id: 'forex-eur-usd-monthly', name: 'EUR/USD monthly midpoint', category: 'timeSeries', dataset: 'Forex',
+        id: 'forex-eur-usd-monthly', name: 'EUR/USD monthly midpoint', category: 'markets', dataset: 'Forex',
         description: 'Follow historical monthly average bid/ask midpoints for EUR/USD.',
         sql: `SELECT
     toStartOfMonth(datetime) AS month,
@@ -250,7 +251,7 @@ ORDER BY month`,
         chart: { kind: 'line', x: 0, ys: [1], title: 'EUR/USD monthly midpoint' },
     },
     {
-        id: 'forex-eur-usd-market-view', name: 'EUR/USD Pro Market View', category: 'clickhouse', dataset: 'Forex',
+        id: 'forex-eur-usd-market-view', name: 'EUR/USD Pro Market View', category: 'markets', dataset: 'Forex', featuredOrder: 1,
         description: 'Build historical 15-minute midpoint candles with bid/ask, quote activity, and spread context.',
         sql: `WITH (bid + ask) / 2 AS mid
 SELECT
@@ -293,7 +294,7 @@ ORDER BY weekday, hour`,
         chart: { kind: 'heatmap', x: 1, groupBy: 0, ys: [2], title: 'Taxi fare percentiles by hour' },
     },
     {
-        id: 'github-rolling-activity', name: 'GitHub activity with a rolling average', category: 'clickhouse', dataset: 'GitHub',
+        id: 'github-rolling-activity', name: 'GitHub activity with a rolling average', category: 'clickhouse', dataset: 'GitHub', featuredOrder: 4,
         description: 'Smooth daily ClickHouse repository activity with a seven-day window.',
         sql: `WITH daily AS (
     SELECT

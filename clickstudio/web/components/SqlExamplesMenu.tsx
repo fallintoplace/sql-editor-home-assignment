@@ -49,17 +49,15 @@ function exampleText(example: SqlExample, locale: Locale, copy: Copy['common']) 
     return localizeSqlExample(example, locale);
 }
 
-export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onOpen, onClose, onOpenExample, onStartBlankSql, showTrigger = true }: {
+export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onClose, onOpenExample, onStartBlankSql }: {
     examples: SqlExample[];
     sourceLabel: string;
     copy: Copy['common'];
     locale: Locale;
     open: boolean;
-    onOpen: (opener: HTMLButtonElement) => void;
     onClose: (restoreFocus?: boolean) => void;
     onOpenExample: (example: SqlExample) => boolean;
     onStartBlankSql: () => boolean;
-    showTrigger?: boolean;
 }) {
     const panelRef = useRef<HTMLElement>(null);
     const searchRef = useRef<HTMLInputElement>(null);
@@ -144,11 +142,6 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onO
     }, [defaultExample?.id, featuredExamples.length, open, onClose]);
 
     return <>
-        {showTrigger && <div className="sql-examples-menu">
-            <button type="button" className="new-tab-button sql-examples-trigger" aria-haspopup="dialog" aria-expanded={open} aria-controls="sql-examples-panel" title={copy.examples} onClick={event => onOpen(event.currentTarget)}>
-                <Icon name="examples"/><span>{copy.examples}</span>
-            </button>
-        </div>}
         {open && <OverlayPortal><div className="sql-examples-backdrop" onClick={event => {
             if (event.target === event.currentTarget) onClose();
         }}>

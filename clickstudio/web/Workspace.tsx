@@ -848,7 +848,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         })()}<button type="button" aria-label={`Close ${draft.name}`} onClick={event => { event.stopPropagation(); setWorkspace(current => closeDraft(current, draft.id)); }}>×</button>
                     </div>)}
                     <button className="new-tab-button new-tab-labeled" type="button" aria-label={copy.common.newSql} title={copy.common.newSql} aria-haspopup="dialog" aria-expanded={examplesOpen} aria-controls="sql-examples-panel" onClick={event => openExamples(event.currentTarget)}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
-                    <SqlExamplesMenu open={examplesOpen} onOpen={openExamples} onClose={closeExamples} examples={sqlExamples} sourceLabel={connectionLabel} copy={copy.common} locale={locale} showTrigger={false} onOpenExample={example => {
+                    <SqlExamplesMenu open={examplesOpen} onClose={closeExamples} examples={sqlExamples} sourceLabel={connectionLabel} copy={copy.common} locale={locale} onOpenExample={example => {
                         const name = example.category === 'schema'
                             ? copy.common.examplePreviewTable.replace('{table}', example.name.replace(/^Preview /, ''))
                             : localizeSqlExample(example, locale).name;

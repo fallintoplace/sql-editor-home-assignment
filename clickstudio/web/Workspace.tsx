@@ -10,6 +10,7 @@ import { DEMO_PREVIEW_INITIAL_STARTERS, DEMO_PREVIEW_RUN_ID, DEMO_PREVIEW_SQL, D
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { ImportWizard } from './components/ImportWizard';
 import { SqlExamplesMenu } from './components/SqlExamplesMenu';
+import { HelpExamplesButton } from './components/HelpExamplesButton';
 import { OverlayPortal } from './components/OverlayPortal';
 import { AssistantWorkflow } from './components/AssistantWorkflow';
 import { ChartView, InsightsView, ResultGrid } from './components/ResultViews';
@@ -133,6 +134,16 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [compactViewport, setCompactViewport] = useState(() => window.matchMedia('(max-width: 850px)').matches);
     const [importOpen, setImportOpen] = useState(false);
+    const [examplesOpen, setExamplesOpen] = useState(false);
+    const examplesOpenerRef = useRef<HTMLButtonElement | null>(null);
+    const openExamples = useCallback((opener: HTMLButtonElement) => {
+        examplesOpenerRef.current = opener;
+        setExamplesOpen(true);
+    }, []);
+    const closeExamples = useCallback((restoreFocus = true) => {
+        setExamplesOpen(false);
+        if (restoreFocus) window.requestAnimationFrame(() => examplesOpenerRef.current?.focus());
+    }, []);
     const [busy, setBusy] = useState<BusyAction>('');
     const [cancelling, setCancelling] = useState(false);
     const [error, setError] = useState('');
@@ -835,7 +846,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         })()}<button type="button" aria-label={`Close ${draft.name}`} onClick={event => { event.stopPropagation(); setWorkspace(current => closeDraft(current, draft.id)); }}>×</button>
                     </div>)}
                     <button className="new-tab-button new-tab-labeled" type="button" aria-label="New SQL tab" title="New SQL tab" onClick={() => openNewDraft(newDraft())}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
-                    <SqlExamplesMenu examples={sqlExamples} sourceLabel={connectionLabel} copy={copy.common} onOpenExample={example => {
+                    <SqlExamplesMenu open={examplesOpen} onOpen={openExamples} onClose={closeExamples} examples={sqlExamples} sourceLabel={connectionLabel} copy={copy.common} onOpenExample={example => {
                         const draft = newDraft(`${example.name}.sql`, example.sql);
                         draft.chart = { ...example.chart, ys: [...example.chart.ys] };
                         if (!openNewDraft(draft)) return false;
@@ -946,5 +957,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         </div>
         <ImportWizard open={importOpen} connectionId={connection.id} trusted={trusted} demoMode={demoMode} onClose={() => setImportOpen(false)} onImported={() => { void loadSchema(); setNotice('Import complete. The destination schema was refreshed.'); }}/>
         {run && <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} cancelling={cancelling} scriptRunning={script?.status === 'running'}/>}
+        <HelpExamplesButton copy={copy.common} open={examplesOpen} executionBarVisible={Boolean(run)} onOpen={openExamples}/>
     </div>;
 }

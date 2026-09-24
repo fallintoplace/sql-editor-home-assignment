@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AssistantAction, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Result, Run, RunKind, Schema, Script } from '../shared/types';
+import type { ApiError, AssistantAction, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Result, Run, RunKind, Schema, Script } from '../shared/types';
 import { DEFAULT_LIMITS } from '../shared/types';
 import { parseExplainPlan } from '../shared/explain-plan';
 import { parsePipelineResult } from '../shared/profile';
@@ -7,7 +7,7 @@ import { filterSchemaTables, indexSchemaColumns } from '../shared/schema-browser
 import { exportCsv, recommendChart } from '../shared/results';
 import { matchesDraft } from '../shared/evidence';
 import { formatSql, hasSqlComments, parameterNames, selectedStatement, splitSql } from '../shared/sql';
-import { api, download, isFrontendDemoPreview, message, post } from './api';
+import { api, download, isFrontendDemoPreview, message, post, RequestError } from './api';
 import { DEMO_PREVIEW_INITIAL_STARTERS, DEMO_PREVIEW_RUN_ID, DEMO_PREVIEW_SQL, DEMO_PREVIEW_STARTER_DOCUMENT_ID, demoPreviewStarterRunId, PLAYGROUND_PREVIEW_STARTER } from './demo-preview';
 import { PLAYGROUND_CONNECTION_ID } from './playground';
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
@@ -33,6 +33,7 @@ import { useScriptExecution } from './useScriptExecution';
 import { useScopedValue } from './useScopedValue';
 import { sqlExamplesFor, type SqlExample } from './sql-examples';
 import { localizeSqlExample } from './sql-examples-locales';
+import { sqlErrorRangeInDraft, type SqlErrorRange } from './sql-error';
 import type { Copy, ExperienceLevel, Locale } from './i18n';
 import type { AssistantContext, BusyAction, Connected, Inspector, ResultsView, SpeechRecognitionLike } from './workspace-types';
 
@@ -42,6 +43,15 @@ function safeSelectedStatement(sql: string, from: number, to: number) {
 }
 function safeStatementCount(sql: string) {
     try { return splitSql(sql).length; } catch { return undefined; }
+}
+type FailedQueryError = { draftId: string; draftSql: string; statementSql: string; sourceFrom: number; error: ApiError };
+function apiErrorDetail(error: unknown): ApiError {
+    if (error instanceof RequestError) return error.detail;
+    const candidate = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : undefined;
+    return {
+        code: typeof candidate?.code === 'string' ? candidate.code : 'EXECUTION_FAILED',
+        message: typeof candidate?.message === 'string' ? candidate.message : message(error),
+    };
 }
 function assistantContextKey(connectionId: string, draftId: string, sql: string, parameters: Record<string, string>, runId: string | undefined, includeResult: boolean, action: AssistantAction, question: string) {
     return JSON.stringify({ connectionId, draftId, sql, parameters: Object.entries(parameters).sort(([left], [right]) => left.localeCompare(right)), runId, includeResult, action, question });
@@ -155,6 +165,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [busy, setBusy] = useState<BusyAction>('');
     const [cancelling, setCancelling] = useState(false);
     const [error, setError] = useState('');
+    const [failedQueryError, setFailedQueryError] = useState<FailedQueryError>();
     const [notice, setNotice] = useState('');
     const [search, setSearch] = useState('');
     const [assistantAction, setAssistantAction] = useState<AssistantAction>('generate');
@@ -573,7 +584,14 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             else patch({ scriptId: created.id });
             setView('results');
         } else {
-            const created = await post<Run>('/runs', payload);
+            setFailedQueryError(undefined);
+            let created: Run;
+            try {
+                created = await post<Run>('/runs', payload);
+            } catch (caught) {
+                if (statement) setFailedQueryError({ draftId: active.id, draftSql: active.sql, statementSql: statement.sql, sourceFrom: statement.from, error: apiErrorDetail(caught) });
+                throw caught;
+            }
             setRunForRun(created.id, created, true);
             setPage(0); setView(kind === 'plan' ? 'plan' : kind === 'pipeline' ? 'pipeline' : 'results');
             patch({ activeRunId: created.id, scriptId: undefined, runIds: [...new Set([...active.runIds, created.id])] });
@@ -771,6 +789,15 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const runSourceSql = run && run.sourceFrom !== undefined && run.sourceTo !== undefined && run.sourceTo <= active.sql.length
         ? active.sql.slice(run.sourceFrom, run.sourceTo)
         : safeSelectedStatement(active.sql, active.from, active.to)?.sql;
+    const selectedRunStatement = safeSelectedStatement(active.sql, active.from, active.to);
+    const runErrorContext = run?.error && (run.sql === active.sql || run.sql === selectedRunStatement?.sql)
+        ? { draftId: active.id, draftSql: active.sql, statementSql: run.sql, sourceFrom: run.sourceFrom ?? (run.sql === active.sql ? 0 : selectedRunStatement?.from ?? 0), error: run.error }
+        : undefined;
+    const requestErrorContext = failedQueryError?.draftId === active.id && failedQueryError.draftSql === active.sql ? failedQueryError : undefined;
+    const editorErrorContext = requestErrorContext ?? runErrorContext;
+    const editorErrorRange: SqlErrorRange | undefined = editorErrorContext
+        ? sqlErrorRangeInDraft(active.sql, editorErrorContext.statementSql, editorErrorContext.sourceFrom, editorErrorContext.error)
+        : undefined;
     const staleResult = Boolean(run && (!runSourceSql || run.connectionId !== connection.id || !matchesDraft(run, runSourceSql, active.parameters)));
     const columnsByTable = useMemo(() => indexSchemaColumns(schema?.columns ?? []), [schema]);
     const filteredTables = useMemo(() => filterSchemaTables(schema?.tables ?? [], columnsByTable, search), [schema, columnsByTable, search]);
@@ -1020,7 +1047,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             </div>
                         </div>
                         {experience === 'beginner' && (!trusted || (!demoMode && !connection.manifest)) && <div className="beginner-connection-notice" role="status"><span>{demoMode ? 'Start the sample workspace to run this query.' : !connection.manifest ? trusted ? 'Retest this connection to refresh its feature checks.' : 'Test this connection to discover its ClickHouse features.' : 'Trust this connection to run SQL.'}</span><Button variant="secondary" className="toolbar-small" onClick={() => void (!demoMode && !connection.manifest ? testConnectionActionRef.current() : trustActionRef.current())}>{demoMode ? 'Start exploring' : !connection.manifest ? trusted ? 'Retest connection' : 'Test connection' : 'Trust connection'}</Button></div>}
-                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} nativeParserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} copy={copy.common} error={run?.error && (run.sql === active.sql || run.sql === safeSelectedStatement(active.sql, active.from, active.to)?.sql) ? run.error : undefined} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus} onNativeParseSnapshot={snapshot => setNativeParseSnapshot(snapshot)}/></div>
+                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} nativeParserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} copy={copy.common} error={editorErrorContext?.error} errorRange={editorErrorRange} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus} onNativeParseSnapshot={snapshot => setNativeParseSnapshot(snapshot)}/></div>
                         {unsupportedParameters
                             ? <div className="callout mt-3" role="status">{connection.manifest?.parameters.reason ?? 'Query parameters are unavailable on this connection.'} Replace placeholders with SQL literals to run this query.</div>
                             : parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => patch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}

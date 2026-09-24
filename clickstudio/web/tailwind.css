@@ -366,6 +366,8 @@
     .sql-editor .cm-tooltip-autocomplete ul li[aria-selected] { background: color-mix(in srgb, var(--accent) 16%, var(--panel)); color: var(--text); }
     .sql-editor .cm-diagnostic-error { border-bottom-color: var(--red); }
     .sql-editor .cm-lint-marker-error { filter: saturate(.8); }
+    .sql-editor .cm-server-error-line { background: color-mix(in srgb, var(--red) 6%, transparent) !important; }
+    .sql-editor .cm-server-error-token { border-radius: 2px; background: color-mix(in srgb, var(--red) 11%, transparent); text-decoration: underline wavy var(--red); text-underline-offset: 3px; }
     .sql-hover { max-width: 430px; padding: 9px 11px; color: var(--text-soft); font-family: var(--font-mono); font-size: 10px; }
     .parameters-row { display: flex; flex: none; flex-wrap: wrap; align-items: end; gap: 11px; padding: 10px 14px; border-top: 1px solid var(--line); background: color-mix(in srgb, var(--panel-raised) 65%, transparent); }
     .parameters-label { display: grid; min-width: 130px; gap: 3px; margin-right: auto; }

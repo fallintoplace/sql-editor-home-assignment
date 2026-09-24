@@ -8,6 +8,7 @@ import { autocompletion, ifNotIn, nextSnippetField, prevSnippetField, type Compl
 import { sql, SQLDialect } from '@codemirror/lang-sql';
 import { setDiagnostics } from '@codemirror/lint';
 import type { ApiError, Schema } from '../../shared/types';
+import type { SqlErrorRange } from '../sql-error';
 import { nativeDiagnosticForStatement, nativeHighlightRanges, type NativeDiagnostic, type NativeHighlightType, type NativeParseSnapshot, type NativeParseStatement, type NativeParserStatus } from '../../shared/native-parser';
 import { hasSqlComments, quoteIdentifier } from '../../shared/sql';
 import { activeStatementIndex, CLICKHOUSE_KEYWORDS, completionTarget, matchingNames, tableAliases as aliasesFor } from '../../shared/editor-tools';
@@ -32,6 +33,18 @@ const nativeDecorations = StateField.define<DecorationSet>({
         for (const effect of transaction.effects) {
             if (effect.is(setNativeDecorations))
                 value = effect.value;
+        }
+        return value;
+    },
+    provide: field => EditorView.decorations.from(field),
+});
+const setServerErrorDecorations = StateEffect.define<DecorationSet>();
+const serverErrorDecorations = StateField.define<DecorationSet>({
+    create: () => Decoration.none,
+    update: (value, transaction) => {
+        if (transaction.docChanged) value = Decoration.none;
+        for (const effect of transaction.effects) {
+            if (effect.is(setServerErrorDecorations)) value = effect.value;
         }
         return value;
     },
@@ -154,6 +167,7 @@ interface Props {
     parserStatus: NativeParserStatus;
     copy: Copy['common'];
     error?: ApiError;
+    errorRange?: SqlErrorRange;
     onChange: (value: string) => void;
     onSelection: (from: number, to: number) => void;
     onRun: (script: boolean) => void;
@@ -171,15 +185,25 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
         if (!editor)
             return;
         const diagnostics = nativeDiagnostics.current.map(item => ({ ...item, severity: 'error' as const, source: 'ClickHouse native parser' }));
-        const position = current.current.error?.position;
-        if (position !== undefined)
-            diagnostics.push({ from: Math.min(position, editor.state.doc.length), to: Math.min(position + 1, editor.state.doc.length), severity: 'error', message: current.current.error!.message, source: 'ClickHouse server' });
+        const errorRange = current.current.errorRange;
+        const position = errorRange?.from ?? current.current.error?.position;
+        const from = position === undefined ? undefined : Math.max(0, Math.min(position, editor.state.doc.length));
+        const to = from === undefined ? undefined : Math.max(from, Math.min(errorRange?.to ?? from + 1, editor.state.doc.length));
+        if (from !== undefined && to !== undefined) {
+            diagnostics.push({ from, to, severity: 'error', message: current.current.error?.message ?? 'ClickHouse reported an error here.', source: 'ClickHouse server' });
+            const decorations = from < editor.state.doc.length
+                ? [Decoration.line({ class: 'cm-server-error-line' }).range(editor.state.doc.lineAt(from).from), ...(to > from ? [Decoration.mark({ class: 'cm-server-error-token' }).range(from, to)] : [])]
+                : [];
+            editor.dispatch({ effects: setServerErrorDecorations.of(Decoration.set(decorations, true)) });
+        } else {
+            editor.dispatch({ effects: setServerErrorDecorations.of(Decoration.none) });
+        }
         editor.dispatch(setDiagnostics(editor.state, diagnostics));
     }, []);
     const languageExtension = () => sql({ dialect: clickhouse, schema: schemaIndex.codeMirror });
     const themeExtension = () => EditorView.theme({ '&': { height: '100%', backgroundColor: 'var(--panel)', color: 'var(--text)' }, '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Consolas, monospace', fontSize: '13px' }, '.cm-gutters': { backgroundColor: 'var(--panel)', color: 'var(--muted)', border: 'none' }, '.cm-content': { minHeight: '220px' }, '.cm-cursor': { borderLeftColor: 'var(--text)' }, '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: 'var(--editor-selection)' } }, { dark: current.current.dark });
     useEffect(() => { if (!element.current)
-        return; const p = current.current; const editor = new EditorView({ parent: element.current, state: EditorState.create({ doc: p.value, selection: { anchor: Math.min(p.from, p.value.length), head: Math.min(p.to, p.value.length) }, extensions: [tools.current.of(sqlEditorTools(p.copy)), nativeDecorations, sqlMapHighlight, lineNumbers(), history(), drawSelection(), highlightActiveLine(), rectangularSelection(), bracketMatching(), foldGutter(), highlightSelectionMatches(), syntaxHighlighting(defaultHighlightStyle), autocompletion({ override: [ifNotIn(['QuotedIdentifier', 'String', 'LineComment', 'BlockComment'], context => completionSource(context, schemaIndexRef.current))] }), hoverTooltip((view, pos) => { const word = view.state.wordAt(pos); if (!word)
+        return; const p = current.current; const editor = new EditorView({ parent: element.current, state: EditorState.create({ doc: p.value, selection: { anchor: Math.min(p.from, p.value.length), head: Math.min(p.to, p.value.length) }, extensions: [tools.current.of(sqlEditorTools(p.copy)), nativeDecorations, serverErrorDecorations, sqlMapHighlight, lineNumbers(), history(), drawSelection(), highlightActiveLine(), rectangularSelection(), bracketMatching(), foldGutter(), highlightSelectionMatches(), syntaxHighlighting(defaultHighlightStyle), autocompletion({ override: [ifNotIn(['QuotedIdentifier', 'String', 'LineComment', 'BlockComment'], context => completionSource(context, schemaIndexRef.current))] }), hoverTooltip((view, pos) => { const word = view.state.wordAt(pos); if (!word)
                 return null; const label = view.state.sliceDoc(word.from, word.to), info = hoverInfo(schemaIndexRef.current, current.current.value, label); if (!info)
                 return null; return { pos: word.from, end: word.to, above: true, create: () => { const dom = document.createElement('div'); dom.className = 'sql-hover'; dom.textContent = info; return { dom }; } }; }), language.current.of(languageExtension()), theme.current.of(themeExtension()), EditorState.allowMultipleSelections.of(true), EditorView.contentAttributes.of({ 'aria-label': 'SQL editor', 'spellcheck': 'false' }), keymap.of([{ key: 'Tab', run: nextSnippetField, shift: prevSnippetField }, { key: 'Mod-Enter', run: () => { current.current.onRun(false); return true; } }, { key: 'Mod-Shift-Enter', run: () => { current.current.onRun(true); return true; } }, ...defaultKeymap, ...historyKeymap, ...searchKeymap, ...foldKeymap, indentWithTab]), EditorView.updateListener.of(update => { if (update.docChanged)
                     current.current.onChange(update.state.doc.toString()); if (update.selectionSet) {
@@ -246,7 +270,7 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
         v.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true }); }, [props.from, props.to]);
     useEffect(() => { view.current?.dispatch({ effects: language.current.reconfigure(languageExtension()) }); }, [schemaIndex]);
     useEffect(() => { view.current?.dispatch({ effects: theme.current.reconfigure(themeExtension()) }); }, [props.dark]);
-    useEffect(() => applyDiagnostics(), [props.error, applyDiagnostics]);
+    useEffect(() => applyDiagnostics(), [props.error, props.errorRange, applyDiagnostics]);
     useImperativeHandle(ref, () => ({
         insert: text => { const v = view.current; if (v) {
             v.dispatch(v.state.replaceSelection(text));

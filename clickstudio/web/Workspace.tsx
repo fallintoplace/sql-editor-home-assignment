@@ -609,6 +609,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         onRefreshHistory: () => void loadHistory(),
         onInsert: (value: string) => editor.current?.insert(value),
         onOpenImport: () => setImportOpen(true),
+        onExportResult: () => void exportCurrentCsv(),
+        exportDisabled: run?.resultState !== 'reopenable',
         onOpenRun: openRun,
         onOpenDocument: openDocument,
         onLoadProfile: () => void perform(loadProfile, 'save'),
@@ -757,7 +759,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             <div className="results-title"><span className="results-mark"><Icon name="chart"/></span><div><span className="eyebrow">WORKSPACE OUTPUT</span><h2>{copy.common.results}</h2></div>{run && <Status run={run}/>}</div>
                             <div className="results-actions">
                                 <div className="results-tabs" role="tablist" aria-label="Result views">{(experience === 'beginner' ? ['results', 'chart'] as const : ['results', 'chart', 'insights'] as const).map(tab => <button key={tab} role="tab" aria-selected={visibleResultsView === tab} type="button" onClick={() => { setView(tab); if (tab === 'chart') void perform(loadSnapshot, 'save'); if (tab === 'insights') void perform(loadProfile, 'save'); }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : copy.common.insights}{tab === 'chart' && snapshot && <span className="suggested-dot"/>}</button>)}</div>
-                                {run?.resultState === 'reopenable' && <Button variant="ghost" className="toolbar-small" onClick={() => void exportCurrentCsv()}>Export <Icon name="chevron"/></Button>}
                             </div>
                         </div>
                         {staleResult && <div className="result-provenance" aria-live="polite"><span className="status-light is-warning"/><span><strong>Result from previous execution</strong><small>SQL or bound parameters changed since this run. Rerun to refresh the result.</small></span></div>}

@@ -30,6 +30,8 @@ export type InspectorPaneProps = {
     onRefreshHistory: () => void;
     onInsert: (value: string) => void;
     onOpenImport: () => void;
+    onExportResult: () => void;
+    exportDisabled: boolean;
     onOpenRun: (run: Run) => void;
     onOpenDocument: (document: QueryDocument) => void;
     onLoadProfile: () => void;
@@ -77,7 +79,7 @@ const inspectorTabs = [
     { id: 'assistant', icon: 'assistant' },
 ] as const satisfies readonly { id: Inspector; icon: IconName }[];
 
-export function InspectorPane({ inspector, setInspector, connection, schema, schemaLoading, schemaError, search, setSearch, tables, columnsByTable, history, documents, run, profile, pipeline, onRefreshSchema, onRefreshHistory, onInsert, onOpenImport, onOpenRun, onOpenDocument, onLoadProfile, onLoadPipeline, onOpenGraph, connectionId, sql, trusted, runId, onRefreshDocuments, assistantAction, onAssistantAction, assistantQuestion, onAssistantQuestion, assistantContext, assistantProposal, assistantBusy, assistantError, nativeParserEnabled, nativeParserStatus, nativeParseSnapshot, onRetryParser, includeResult, onIncludeResult, onVoiceInput, voiceListening, voiceError, onPreview, onRequestProposal, onDecideProposal, onRunQuery, runDisabled, expert = false, drawer = false, onClose }: InspectorPaneProps) {
+export function InspectorPane({ inspector, setInspector, connection, schema, schemaLoading, schemaError, search, setSearch, tables, columnsByTable, history, documents, run, profile, pipeline, onRefreshSchema, onRefreshHistory, onInsert, onOpenImport, onExportResult, exportDisabled, onOpenRun, onOpenDocument, onLoadProfile, onLoadPipeline, onOpenGraph, connectionId, sql, trusted, runId, onRefreshDocuments, assistantAction, onAssistantAction, assistantQuestion, onAssistantQuestion, assistantContext, assistantProposal, assistantBusy, assistantError, nativeParserEnabled, nativeParserStatus, nativeParseSnapshot, onRetryParser, includeResult, onIncludeResult, onVoiceInput, voiceListening, voiceError, onPreview, onRequestProposal, onDecideProposal, onRunQuery, runDisabled, expert = false, drawer = false, onClose }: InspectorPaneProps) {
     const visibleDocuments = documents.filter(document => document.connectionId === connectionId && !document.deletedAt);
     const closeButton = drawer && <Button variant="ghost" className="icon-only" aria-label="Close inspector" onClick={onClose}><Icon name="close"/></Button>;
     const title = expert && inspector === 'schema' ? 'Tables' : expert && inspector === 'documents' ? 'Queries' : inspectorLabel(inspector);
@@ -95,7 +97,7 @@ export function InspectorPane({ inspector, setInspector, connection, schema, sch
         <div className="inspector-content">
             {inspector === 'schema' && <section className="inspector-section">
                 <div className="inspector-search"><Icon name="search"/><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search tables, columns, and dictionaries…" aria-label="Search schema"/></div>
-                <div className="schema-heading"><span>{tables.length} TABLES</span><div className="flex items-center gap-1.5"><Button variant="ghost" className="toolbar-small" onClick={onOpenImport}>Import data</Button><Button variant="ghost" className="toolbar-small" onClick={onRefreshSchema} disabled={schemaLoading || !trusted}>{schemaLoading ? 'Loading…' : 'Refresh'}</Button></div></div>
+                <div className="schema-heading"><span>{tables.length} TABLES</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshSchema} disabled={schemaLoading || !trusted}>{schemaLoading ? 'Loading…' : 'Refresh'}</Button></div>
                 {schemaError && <div className="callout callout-error">{schemaError}</div>}
                 {schema?.metadataWarnings?.map(warning => <div className="schema-metadata-warning" key={warning}>{warning}</div>)}
                 {!trusted && <div className="inspector-empty"><Icon name="lock"/><strong>Schema is private</strong><p>Trust the connection to inspect tables and columns.</p></div>}
@@ -124,7 +126,7 @@ export function InspectorPane({ inspector, setInspector, connection, schema, sch
             {inspector === 'pipeline' && <PipelineView run={run} profile={profile} pipeline={pipeline} onLoad={onLoadPipeline} onOpenGraph={onOpenGraph} available={connection.manifest?.pipeline.available !== false} unavailableReason={connection.manifest?.pipeline.available === false ? connection.manifest.pipeline.reason : undefined}/>}
             {inspector === 'assistant' && <AssistantWorkflow mode={expert ? 'expert' : 'beginner'} sql={sql} action={assistantAction} onActionChange={onAssistantAction} question={assistantQuestion} onQuestionChange={onAssistantQuestion} context={assistantContext} proposal={assistantProposal} busy={assistantBusy} error={assistantError} trusted={trusted} runId={runId} includeResult={includeResult} onIncludeResult={onIncludeResult} onVoiceInput={onVoiceInput} voiceListening={voiceListening} voiceError={voiceError} onPreview={onPreview} onRequestProposal={onRequestProposal} onDecideProposal={onDecideProposal} onRunQuery={onRunQuery} runDisabled={runDisabled}/>}
         </div>
-        <footer className="inspector-footer"><span className="connection-readonly"><Icon name="lock"/> Read only</span><span>{connection.name} <i>·</i> {connection.database}</span></footer>
+        <footer className="inspector-footer"><div className="inspector-footer-actions"><Button variant="secondary" className="toolbar-small" onClick={onOpenImport}>Import</Button><Button variant="secondary" className="toolbar-small" onClick={onExportResult} disabled={exportDisabled}>Export</Button></div><div className="inspector-footer-meta"><span className="connection-readonly"><Icon name="lock"/> Read only</span><span title={`${connection.name} · ${connection.database}`}>{connection.name} <i>·</i> {connection.database}</span></div></footer>
     </aside>;
 }
 

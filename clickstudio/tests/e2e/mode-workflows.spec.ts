@@ -157,7 +157,7 @@ test('Advanced editor, insights, pipeline and AI copilot stay read-only until a 
     await openWorkspacePanel(page, 'pipeline');
     await expect(page.locator('.pipeline-stage').first()).toBeVisible();
     await page.getByRole('button', { name: 'Open operator graph in Insights', exact: true }).click();
-    await expect(results.getByRole('region', { name: 'Execution plan graph' })).toBeVisible();
+    await expect(results.getByRole('region', { name: 'Scrollable operator graph', exact: true })).toBeVisible();
     await page.getByTestId('open-ai').click();
     await page.locator('.assistant-panel select').selectOption('performance');
     await page.locator('.assistant-panel textarea').fill('Why is this query slow?');

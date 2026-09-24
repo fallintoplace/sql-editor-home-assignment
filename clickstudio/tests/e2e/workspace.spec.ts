@@ -63,7 +63,8 @@ test('Closing and reopening a result tab does not execute SQL again', async ({ p
     const queryId = await page.locator('.execution-bar code').innerText();
     await page.getByRole('button', { name: 'Close Recoverable.sql', exact: true }).click();
     await expect(results).toHaveCount(0);
-    await page.getByRole('button', { name: 'Reopen closed tab', exact: true }).click();
+    await page.getByRole('button', { name: 'Restore', exact: true }).click();
+    await page.getByRole('menu', { name: 'Recently closed SQL tabs', exact: true }).getByRole('menuitem', { name: /Recoverable\.sql/ }).click();
     await expect(page.getByRole('textbox', { name: 'SQL document name', exact: true })).toHaveValue('Recoverable.sql');
     await expect(page.getByRole('textbox', { name: 'value:UInt64', exact: true })).toHaveValue('9007199254740993');
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);

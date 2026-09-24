@@ -42,6 +42,10 @@ const translations: Record<Exclude<Locale, 'en'>, Record<string, Translation>> =
         'clickhouse-server-version': ['ClickHouse-Version', 'Die ClickHouse-Version dieser Verbindung abfragen.'],
         'clickhouse-server-time': ['Serverzeit', 'Die aktuelle Zeit vom ClickHouse-Server lesen.'],
         'clickhouse-numbers': ['Zahlenreihe erzeugen', 'Mit der numbers-Tabellenfunktion eine kleine Ergebnismenge erstellen.'],
+        'amazon-customer-review-health': ['Amazon-Kundenfeedback', 'Negative, neutrale und positive Bewertungsanteile in stark bewerteten Produktkategorien vergleichen.'],
+        'otel-service-latency-slo': ['Service-Latenz-SLO', 'p50-, p95- und p99-Latenz von Frontend-Server-Spans in der letzten Telemetriestunde verfolgen.'],
+        'ontime-flight-delay-operations': ['Flugbetrieb und Verspätungen', 'Saisonale Abflugverspätungen über neun Jahre US-Flugbetrieb erkennen.'],
+        'stackoverflow-technology-trends': ['Technologietrends für Entwickler', 'Quartalsweise Fragen zu Python, JavaScript, Java und Rust als Signal für Entwicklerinteresse vergleichen.'],
     },
     es: {
         'github-recent-events': ['Eventos recientes de GitHub', 'Explora eventos reales, repositorios, usuarios y fechas.'],
@@ -80,6 +84,10 @@ const translations: Record<Exclude<Locale, 'en'>, Record<string, Translation>> =
         'clickhouse-server-version': ['Versión de ClickHouse', 'Consulta la versión de ClickHouse de esta conexión.'],
         'clickhouse-server-time': ['Hora del servidor', 'Lee la hora actual del servidor ClickHouse.'],
         'clickhouse-numbers': ['Generar una serie numérica', 'Usa la función de tabla numbers para crear un resultado pequeño.'],
+        'amazon-customer-review-health': ['Salud de reseñas de Amazon', 'Compara la proporción de reseñas negativas, neutras y positivas entre categorías de gran volumen.'],
+        'otel-service-latency-slo': ['SLO de latencia del servicio', 'Sigue la latencia p50, p95 y p99 de spans de servidor del frontend durante la última hora.'],
+        'ontime-flight-delay-operations': ['Operaciones y retrasos de vuelos', 'Detecta el riesgo estacional de retrasos de salida en nueve años de vuelos de EE. UU.'],
+        'stackoverflow-technology-trends': ['Tendencias tecnológicas para desarrolladores', 'Compara por trimestre preguntas sobre Python, JavaScript, Java y Rust como señal de interés.'],
     },
     nl: {
         'github-recent-events': ['Recente GitHub-gebeurtenissen', 'Bekijk echte gebeurtenissen, repositories, gebruikers en tijdstempels.'],
@@ -118,6 +126,10 @@ const translations: Record<Exclude<Locale, 'en'>, Record<string, Translation>> =
         'clickhouse-server-version': ['ClickHouse-versie', 'Controleer welke ClickHouse-versie deze verbinding gebruikt.'],
         'clickhouse-server-time': ['Servertijd', 'Lees de huidige tijd van de ClickHouse-server.'],
         'clickhouse-numbers': ['Getallenreeks genereren', 'Gebruik de numbers-tabel functie voor een kleine resultatenset.'],
+        'amazon-customer-review-health': ['Gezondheid van Amazon-reviews', 'Vergelijk negatieve, neutrale en positieve reviewaandelen voor productcategorieën met veel reviews.'],
+        'otel-service-latency-slo': ['Service-latentie-SLO', 'Volg p50-, p95- en p99-latentie van frontend-server-spans over het laatste uur telemetrie.'],
+        'ontime-flight-delay-operations': ['Vluchtvertragingen in operatie', 'Vind seizoenspatronen in vertrekvertragingen over negen jaar Amerikaanse vluchten.'],
+        'stackoverflow-technology-trends': ['Technologietrends voor developers', 'Vergelijk per kwartaal vragen over Python, JavaScript, Java en Rust als signaal van developerinteresse.'],
     },
     zh: {
         'github-recent-events': ['近期 GitHub 事件', '查看真实事件、仓库、用户和时间戳。'],
@@ -156,6 +168,10 @@ const translations: Record<Exclude<Locale, 'en'>, Record<string, Translation>> =
         'clickhouse-server-version': ['ClickHouse 版本', '查看此连接所使用的 ClickHouse 版本。'],
         'clickhouse-server-time': ['服务器时间', '读取 ClickHouse 服务器当前时间。'],
         'clickhouse-numbers': ['生成数字序列', '使用 numbers 表函数创建一个小型结果集。'],
+        'amazon-customer-review-health': ['Amazon 客户评论健康度', '比较高评论量商品类别中负面、中性和正面评论的占比。'],
+        'otel-service-latency-slo': ['服务延迟 SLO', '跟踪最近一小时前端服务端 Span 的 p50、p95 和 p99 延迟。'],
+        'ontime-flight-delay-operations': ['航班延误运营分析', '查看九年美国航班运营中的季节性起飞延误风险。'],
+        'stackoverflow-technology-trends': ['开发者技术趋势', '按季度比较 Python、JavaScript、Java 和 Rust 问题量，作为开发者关注度信号。'],
     },
     ru: {
         'github-recent-events': ['Недавние события GitHub', 'Просмотр реальных событий, репозиториев, пользователей и времени.'],
@@ -194,6 +210,10 @@ const translations: Record<Exclude<Locale, 'en'>, Record<string, Translation>> =
         'clickhouse-server-version': ['Версия ClickHouse', 'Узнать версию ClickHouse для этого подключения.'],
         'clickhouse-server-time': ['Время сервера', 'Получить текущее время с сервера ClickHouse.'],
         'clickhouse-numbers': ['Создать последовательность чисел', 'Создать небольшой результат с помощью табличной функции numbers.'],
+        'amazon-customer-review-health': ['Качество отзывов Amazon', 'Сравнение долей негативных, нейтральных и позитивных отзывов в популярных категориях товаров.'],
+        'otel-service-latency-slo': ['SLO задержки сервиса', 'Отслеживание p50, p95 и p99 задержки серверных span фронтенда за последний час телеметрии.'],
+        'ontime-flight-delay-operations': ['Операционные задержки рейсов', 'Поиск сезонного риска задержек вылета за девять лет полётов в США.'],
+        'stackoverflow-technology-trends': ['Технологические тренды разработчиков', 'Сравнение квартального числа вопросов о Python, JavaScript, Java и Rust как сигнала интереса разработчиков.'],
     },
 };
 
@@ -201,11 +221,11 @@ type SqlExampleCategoryFilter = SqlExampleCategory | 'featured';
 type CategoryTranslations = Partial<Record<SqlExampleCategoryFilter, string>>;
 
 const categoryTranslations: Record<Exclude<Locale, 'en'>, CategoryTranslations> = {
-    de: { featured: 'Highlights', markets: 'Märkte', cities: 'Städte', openSource: 'Open Source', internet: 'Internet', datasets: 'Datensätze' },
-    es: { featured: 'Destacados', markets: 'Mercados', cities: 'Ciudades', openSource: 'Código abierto', internet: 'Internet', datasets: 'Conjuntos de datos' },
-    nl: { featured: 'Uitgelicht', markets: 'Markten', cities: 'Steden', openSource: 'Open source', internet: 'Internet', datasets: 'Datasets' },
-    zh: { featured: '精选', markets: '市场', cities: '城市', openSource: '开源', internet: '互联网', datasets: '数据集' },
-    ru: { featured: 'Избранное', markets: 'Рынки', cities: 'Города', openSource: 'Open Source', internet: 'Интернет', datasets: 'Наборы данных' },
+    de: { featured: 'Highlights', business: 'Business', observability: 'Observability', operations: 'Betrieb', engineering: 'Engineering', markets: 'Märkte', cities: 'Städte', openSource: 'Open Source', internet: 'Internet', datasets: 'Datensätze' },
+    es: { featured: 'Destacados', business: 'Negocio', observability: 'Observabilidad', operations: 'Operaciones', engineering: 'Ingeniería', markets: 'Mercados', cities: 'Ciudades', openSource: 'Código abierto', internet: 'Internet', datasets: 'Conjuntos de datos' },
+    nl: { featured: 'Uitgelicht', business: 'Bedrijf', observability: 'Observability', operations: 'Operations', engineering: 'Engineering', markets: 'Markten', cities: 'Steden', openSource: 'Open source', internet: 'Internet', datasets: 'Datasets' },
+    zh: { featured: '精选', business: '业务', observability: '可观测性', operations: '运维', engineering: '工程', markets: '市场', cities: '城市', openSource: '开源', internet: '互联网', datasets: '数据集' },
+    ru: { featured: 'Избранное', business: 'Бизнес', observability: 'Наблюдаемость', operations: 'Операции', engineering: 'Инженерия', markets: 'Рынки', cities: 'Города', openSource: 'Open Source', internet: 'Интернет', datasets: 'Наборы данных' },
 };
 
 export function localizeSqlExample(example: SqlExample, locale: Locale): ExampleText {

@@ -7,11 +7,15 @@ import { Button, Icon, cx } from './ui';
 
 type CategoryFilter = SqlExampleCategory | 'charts' | 'all' | 'featured';
 
-const categories: CategoryFilter[] = ['featured', 'markets', 'cities', 'openSource', 'internet', 'datasets', 'clickhouse', 'charts', 'all', 'basics', 'aggregation', 'timeSeries', 'schema'];
+const categories: CategoryFilter[] = ['featured', 'business', 'observability', 'operations', 'engineering', 'markets', 'cities', 'openSource', 'internet', 'datasets', 'clickhouse', 'charts', 'all', 'basics', 'aggregation', 'timeSeries', 'schema'];
 
 function categoryLabel(category: CategoryFilter, copy: Copy['common'], locale: Locale) {
     if (category === 'all') return copy.allExamples;
     if (category === 'featured') return localizeSqlExampleCategory(category, locale, 'Featured');
+    if (category === 'business') return localizeSqlExampleCategory(category, locale, 'Business');
+    if (category === 'observability') return localizeSqlExampleCategory(category, locale, 'Observability');
+    if (category === 'operations') return localizeSqlExampleCategory(category, locale, 'Operations');
+    if (category === 'engineering') return localizeSqlExampleCategory(category, locale, 'Engineering');
     if (category === 'markets') return localizeSqlExampleCategory(category, locale, 'Markets');
     if (category === 'cities') return localizeSqlExampleCategory(category, locale, 'Cities');
     if (category === 'openSource') return localizeSqlExampleCategory(category, locale, 'Open source');

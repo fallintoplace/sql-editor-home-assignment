@@ -2,7 +2,7 @@ import type { ChartConfig, Connection, Schema } from '../shared/types.js';
 import { DEMO_PREVIEW_STARTERS } from './demo-preview.js';
 import { PLAYGROUND_CONNECTION_ID, PLAYGROUND_STARTER_SQL } from './playground.js';
 
-export type SqlExampleCategory = 'basics' | 'aggregation' | 'timeSeries' | 'clickhouse' | 'schema' | 'markets' | 'cities' | 'openSource' | 'internet' | 'datasets';
+export type SqlExampleCategory = 'basics' | 'aggregation' | 'timeSeries' | 'clickhouse' | 'schema' | 'business' | 'observability' | 'operations' | 'engineering' | 'markets' | 'cities' | 'openSource' | 'internet' | 'datasets';
 
 export type SqlExample = {
     id: string;
@@ -16,6 +16,70 @@ export type SqlExample = {
 };
 
 const playgroundExamples: SqlExample[] = [
+    {
+        id: 'amazon-customer-review-health', name: 'Amazon Customer Review Health', category: 'business', dataset: 'Amazon Reviews', featuredOrder: 1,
+        description: 'Compare negative, neutral, and positive review share across high-volume product categories.',
+        sql: `SELECT
+    product_category,
+    round(100.0 * countIf(star_rating <= 2) / count(), 1) AS negative_pct,
+    round(100.0 * countIf(star_rating = 3) / count(), 1) AS neutral_pct,
+    round(100.0 * countIf(star_rating >= 4) / count(), 1) AS positive_pct,
+    count() AS reviews
+FROM amazon.amazon_reviews
+WHERE product_category != ''
+GROUP BY product_category
+HAVING reviews >= 100000
+ORDER BY negative_pct DESC
+LIMIT 12`,
+        chart: { kind: 'bar', x: 0, ys: [1, 2, 3], title: 'Customer review health by category' },
+    },
+    {
+        id: 'otel-service-latency-slo', name: 'Service Latency SLO', category: 'observability', dataset: 'OpenTelemetry', featuredOrder: 2,
+        description: 'Track frontend p50, p95, and p99 server-span latency over the latest hour of telemetry.',
+        sql: `WITH (SELECT max(Timestamp) FROM otel_v2.otel_traces) AS latest
+SELECT
+    toStartOfMinute(Timestamp) AS minute,
+    round(quantileTDigest(0.50)(Duration) / 1000000, 2) AS p50_ms,
+    round(quantileTDigest(0.95)(Duration) / 1000000, 2) AS p95_ms,
+    round(quantileTDigest(0.99)(Duration) / 1000000, 2) AS p99_ms
+FROM otel_v2.otel_traces
+WHERE ServiceName = 'frontend'
+    AND SpanKind IN ('Server', 'SPAN_KIND_SERVER')
+    AND Timestamp >= latest - INTERVAL 60 MINUTE
+GROUP BY minute
+ORDER BY minute`,
+        chart: { kind: 'line', x: 0, ys: [1, 2, 3], title: 'Frontend latency percentiles' },
+    },
+    {
+        id: 'ontime-flight-delay-operations', name: 'Flight Delay Operations', category: 'operations', dataset: 'US flights', featuredOrder: 3,
+        description: 'Spot seasonal departure-delay risk across nine years of US flight operations.',
+        sql: `SELECT
+    Year AS year,
+    Month AS month,
+    round(100.0 * countIf(DepDelay > 10) / count(), 1) AS delayed_pct
+FROM ontime.ontime
+WHERE Year BETWEEN 2000 AND 2008
+GROUP BY year, month
+ORDER BY year, month`,
+        chart: { kind: 'heatmap', x: 1, groupBy: 0, ys: [2], title: 'Departure delay rate by month' },
+    },
+    {
+        id: 'stackoverflow-technology-trends', name: 'Developer Technology Trends', category: 'engineering', dataset: 'Stack Overflow', featuredOrder: 4,
+        description: 'Compare quarterly question volume for Python, JavaScript, Java, and Rust as a developer-interest signal.',
+        sql: `SELECT
+    toStartOfQuarter(CreationDate) AS quarter,
+    countIf(Tags LIKE '%<python>%') AS python,
+    countIf(Tags LIKE '%<javascript>%') AS javascript,
+    countIf(Tags LIKE '%<java>%') AS java,
+    countIf(Tags LIKE '%<rust>%') AS rust
+FROM stackoverflow.posts
+WHERE PostTypeId = 'Question'
+    AND CreationDate >= toDateTime('2018-01-01 00:00:00')
+    AND CreationDate < toDateTime('2024-04-01 00:00:00')
+GROUP BY quarter
+ORDER BY quarter`,
+        chart: { kind: 'line', x: 0, ys: [1, 2, 3, 4], title: 'Quarterly technology question volume' },
+    },
     {
         id: 'github-recent-events', name: 'Recent GitHub events', category: 'openSource',
         description: 'Inspect real events, repositories, actors, and timestamps.', dataset: 'GitHub', sql: PLAYGROUND_STARTER_SQL,
@@ -107,7 +171,7 @@ ORDER BY day`,
         chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Hacker News activity' },
     },
     {
-        id: 'nyc-taxi-weekly-rhythm', name: 'Taxi trips by weekday and hour', category: 'cities', dataset: 'NYC Taxi', featuredOrder: 2,
+        id: 'nyc-taxi-weekly-rhythm', name: 'Taxi trips by weekday and hour', category: 'cities', dataset: 'NYC Taxi', featuredOrder: 6,
         description: 'Find rush-hour patterns across the week in a 168-cell heatmap.',
         sql: `SELECT
     toDayOfWeek(pickup_datetime) AS weekday,
@@ -119,7 +183,7 @@ ORDER BY weekday, hour`,
         chart: { kind: 'heatmap', x: 1, groupBy: 0, ys: [2], title: 'Taxi pickups by weekday and hour' },
     },
     {
-        id: 'nyc-taxi-fare-distance', name: 'Fare vs. trip distance', category: 'cities', dataset: 'NYC Taxi', featuredOrder: 3,
+        id: 'nyc-taxi-fare-distance', name: 'Fare vs. trip distance', category: 'cities', dataset: 'NYC Taxi', featuredOrder: 7,
         description: 'Explore how trip distance relates to the metered fare.',
         sql: `SELECT
     trip_distance,
@@ -251,7 +315,7 @@ ORDER BY month`,
         chart: { kind: 'line', x: 0, ys: [1], title: 'EUR/USD monthly midpoint' },
     },
     {
-        id: 'forex-eur-usd-market-view', name: 'EUR/USD Pro Market View', category: 'markets', dataset: 'Forex', featuredOrder: 1,
+        id: 'forex-eur-usd-market-view', name: 'EUR/USD Pro Market View', category: 'markets', dataset: 'Forex', featuredOrder: 5,
         description: 'Build historical 15-minute midpoint candles with bid/ask, quote activity, and spread context.',
         sql: `WITH (bid + ask) / 2 AS mid
 SELECT
@@ -294,7 +358,7 @@ ORDER BY weekday, hour`,
         chart: { kind: 'heatmap', x: 1, groupBy: 0, ys: [2], title: 'Taxi fare percentiles by hour' },
     },
     {
-        id: 'github-rolling-activity', name: 'GitHub activity with a rolling average', category: 'clickhouse', dataset: 'GitHub', featuredOrder: 4,
+        id: 'github-rolling-activity', name: 'GitHub activity with a rolling average', category: 'clickhouse', dataset: 'GitHub', featuredOrder: 8,
         description: 'Smooth daily ClickHouse repository activity with a seven-day window.',
         sql: `WITH daily AS (
     SELECT

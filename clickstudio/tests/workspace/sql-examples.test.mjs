@@ -52,6 +52,10 @@ test('new Playground examples have unique read-only queries and valid chart colu
     const examples = sqlExamplesFor({ id: 'playground', dataSource: 'clickhouse' });
     const byId = new Map(examples.map(example => [example.id, example]));
     const cases = [
+        ['amazon-customer-review-health', 'Amazon Reviews', 'bar', 'FROM amazon.amazon_reviews', 5, [1, 2, 3], 0],
+        ['otel-service-latency-slo', 'OpenTelemetry', 'line', 'FROM otel_v2.otel_traces', 4, [1, 2, 3], 0],
+        ['ontime-flight-delay-operations', 'US flights', 'heatmap', 'FROM ontime.ontime', 3, [2], 1, 0],
+        ['stackoverflow-technology-trends', 'Stack Overflow', 'line', 'FROM stackoverflow.posts', 5, [1, 2, 3, 4], 0],
         ['pypi-package-downloads', 'PyPI', 'heatmap', 'FROM pypi.pypi_downloads_per_month', 3, [2], 0, 1],
         ['stackoverflow-qa-volume', 'Stack Overflow', 'line', 'FROM stackoverflow.posts', 3, [1, 2], 0],
         ['uk-house-prices-by-county', 'UK property data', 'bar', 'FROM uk.uk_price_paid', 3, [1], 0],
@@ -84,6 +88,27 @@ test('new Playground examples have unique read-only queries and valid chart colu
     assert.match(byId.get('uk-house-prices-by-county')?.sql ?? '', /LIMIT 12\s*$/);
     assert.match(byId.get('imdb-ratings-by-year')?.sql ?? '', /LIMIT 200\s*$/);
     assert.match(byId.get('noaa-central-park-weather')?.sql ?? '', /LIMIT 240\s*$/);
+});
+
+
+test('Featured Playground examples lead with enterprise workflows', () => {
+    const examples = sqlExamplesFor({ id: 'playground', dataSource: 'clickhouse' });
+    const featured = examples
+        .filter(example => example.featuredOrder !== undefined)
+        .sort((left, right) => left.featuredOrder - right.featuredOrder);
+
+    assert.deepEqual(featured.slice(0, 4).map(example => example.id), [
+        'amazon-customer-review-health',
+        'otel-service-latency-slo',
+        'ontime-flight-delay-operations',
+        'stackoverflow-technology-trends',
+    ]);
+    assert.deepEqual(featured.slice(0, 4).map(example => example.category), [
+        'business',
+        'observability',
+        'operations',
+        'engineering',
+    ]);
 });
 
 test('curated, fixture, and generic SQL examples have localized titles and descriptions', () => {

@@ -585,6 +585,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         changed: 'Unsaved changes', conflict: 'Newer revision available', deleted: 'Saved file in trash', unavailable: 'Save status unavailable',
     } as const)[saveStatus.state];
     const visibleResultsView = experience === 'beginner' && view === 'insights' ? 'results' : view;
+    const snapshotChart = snapshot ? recommendChart(snapshot.columns, snapshot.rows) : undefined;
     const openDocument = (document: QueryDocument) => {
         addDraft(draftFromDocument(document));
     };
@@ -766,7 +767,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             setPage(0); setView('results');
                         }} onCancel={() => void cancel()} cancelDisabled={cancelling}/>}
                         {run && visibleResultsView === 'results' && <ResultGrid key={run.id} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/>}
-                        {run && visibleResultsView === 'chart' && <ChartView result={snapshot} loading={!snapshot && run.resultState === 'reopenable'} chart={active.chart} onChart={chart => patch({ chart })}/>}
+                        {run && visibleResultsView === 'chart' && snapshotChart?.config.kind === 'table' ? <div className="chart-table-fallback"><div className="chart-table-notice" role="status">This result has no numeric measure to chart, so the typed table is shown.</div><ResultGrid key={`${run.id}-chart-table`} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/></div> : run && visibleResultsView === 'chart' && <ChartView result={snapshot} loading={!snapshot && run.resultState === 'reopenable'} chart={active.chart} onChart={chart => patch({ chart })}/>}
                         {run && visibleResultsView === 'insights' && <InsightsView run={run} profile={profile} pipeline={pipeline} pipelineAvailable={Boolean(trusted && connection.manifest?.pipeline.available)} onLoad={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} loading={busy === 'save'}/>}
                     </section>}
                 </div>

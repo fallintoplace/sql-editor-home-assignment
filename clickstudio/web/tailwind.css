@@ -446,6 +446,8 @@
     .chart-footer i { padding: 0 4px; font-style: normal; }
     .chart-legend-dot { width: 7px; height: 7px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent); }
     .chart-empty { display: grid; min-height: 150px; place-items: center; color: var(--muted); font-size: 10px; }
+    .chart-table-fallback { display: flex; min-width: 0; min-height: 0; flex: 1; flex-direction: column; }
+    .chart-table-notice { flex: none; padding: 8px 14px; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 9px; }
     .chart-number-card { display: grid; min-height: 180px; justify-items: center; align-content: center; gap: 7px; margin-top: 12px; padding: 20px; border: 1px solid var(--line); border-radius: 11px; background: radial-gradient(ellipse at 50% 0, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%), var(--panel-raised); }
     .chart-number-card > strong { max-width: 100%; overflow: hidden; color: var(--text); font-family: var(--font-mono); font-size: clamp(28px, 5vw, 48px); font-weight: 650; letter-spacing: -.055em; text-overflow: ellipsis; white-space: nowrap; }
     .chart-number-card > span:not(.eyebrow) { color: var(--text-soft); font-size: 10px; }

@@ -155,7 +155,7 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onC
                 </header>
                 <div className="sql-examples-toolbar">
                     <div className="sql-example-categories" role="group" aria-label={copy.exampleCategories}>
-                        {availableCategories.map(value => <button key={value} type="button" className={cx('sql-example-category', category === value && 'is-active')} aria-pressed={category === value} onClick={() => setCategory(value)}>{categoryLabel(value, copy, locale)}</button>)}
+                        {availableCategories.map(value => <button key={value} data-testid={`sql-example-category-${value}`} type="button" className={cx('sql-example-category', category === value && 'is-active')} aria-pressed={category === value} onClick={() => setCategory(value)}>{categoryLabel(value, copy, locale)}</button>)}
                     </div>
                     <label className="sql-example-search"><Icon name="search"/><input ref={searchRef} data-testid="sql-example-search" type="search" aria-label={copy.searchExamples} placeholder={copy.searchExamples} value={search} onChange={event => setSearch(event.target.value)}/></label>
                 </div>

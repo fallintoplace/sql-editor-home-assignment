@@ -30,7 +30,8 @@ test('SQL examples open in a new tab without changing or running the current que
     await expect(page.locator('.cm-content')).toContainText('FROM events');
     await expect(page.locator('#sql-editor-content')).toBeVisible();
     await expect(page.locator('.cm-content')).toBeFocused();
-    await expect(page.locator('.execution-bar')).toHaveCount(0);
+    await expect(page.locator('.execution-bar .execution-ready-state')).toHaveText('Ready');
+    await expect(page.locator('.execution-bar code')).toHaveCount(0);
     expect(originalName).not.toBeNull();
     await page.getByRole('tab', { name: originalName!, exact: true }).click();
     await expect.poll(() => page.locator('.cm-content').evaluate(element => (element as HTMLElement).innerText)).toBe(originalSql);

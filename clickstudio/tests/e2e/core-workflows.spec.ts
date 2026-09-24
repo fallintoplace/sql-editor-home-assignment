@@ -68,7 +68,8 @@ test('Run evidence stays with its draft through tab and mode switches', async ({
     await page.getByRole('button', { name: 'New SQL tab' }).click();
     const secondResults = page.getByRole('region', { name: 'Query results', exact: true });
     await expect(secondResults.getByRole('table', { name: 'Retained query rows' })).toHaveCount(0);
-    await expect(page.locator('.execution-bar')).toHaveCount(0);
+    await expect(page.locator('.execution-bar .execution-ready-state')).toHaveText('Ready');
+    await expect(page.locator('.execution-bar code')).toHaveCount(0);
 
     await runQuery(page);
     const secondQueryId = await page.locator('.execution-bar code').innerText();
@@ -207,7 +208,8 @@ test('Connection switches keep run evidence isolated and recover each connection
     await picker.click();
     await page.getByRole('dialog', { name: 'Connection details' }).getByRole('button', { name: /Another sample/ }).click();
     await expect.poll(() => new URL(page.url()).searchParams.get('connection')).toBe('demo-second');
-    await expect(page.locator('.execution-bar')).toHaveCount(0);
+    await expect(page.locator('.execution-bar .execution-ready-state')).toHaveText('Ready');
+    await expect(page.locator('.execution-bar code')).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Query results', exact: true }).getByRole('table', { name: 'Retained query rows' })).toHaveCount(0);
     await page.reload();
     await expect(page.locator('.connection-trigger')).toContainText('Another sample');

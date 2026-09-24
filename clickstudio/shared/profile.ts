@@ -2,7 +2,9 @@ import type { ProfileInsight, ProfilePipeline, ProfilePipelineNodeKind, ProfileS
 
 type EvidenceRow = Record<string, unknown>;
 
-const rows = (value: unknown): EvidenceRow[] => Array.isArray(value) ? value.filter(row => Boolean(row) && typeof row === 'object') as EvidenceRow[] : [];
+const isEvidenceRow = (value: unknown): value is EvidenceRow =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+const rows = (value: unknown): EvidenceRow[] => Array.isArray(value) ? value.filter(isEvidenceRow) : [];
 const field = (row: EvidenceRow | undefined, key: string) => row?.[key];
 const numberValue = (input: unknown) => {
     const number = typeof input === 'number' ? input : typeof input === 'string' && input.trim() ? Number(input) : NaN;

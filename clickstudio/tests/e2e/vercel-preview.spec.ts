@@ -41,7 +41,7 @@ test('Playground examples preview real SQL and open a draft without executing it
     const dialog = page.getByRole('dialog', { name: 'SQL examples', exact: true });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText('ClickHouse Playground', { exact: true })).toBeVisible();
-    await dialog.getByRole('button', { name: 'Time series', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Open source', exact: true }).click();
     const dailyActivity = dialog.getByRole('option', { name: /Daily activity/ });
     await expect(dailyActivity).toBeVisible();
     await dailyActivity.click();

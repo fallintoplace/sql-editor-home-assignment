@@ -63,9 +63,16 @@ export interface NativeDiagnostic {
 }
 
 const encoder = new TextEncoder();
-const nativeHighlightTypes = new Set<NativeHighlightType>([
+const nativeHighlightTypes = [
     'keyword', 'identifier', 'function', 'alias', 'substitution', 'number', 'string', 'string_escape', 'string_metacharacter',
-]);
+] as const satisfies readonly NativeHighlightType[];
+
+function isNativeHighlightType(value: unknown): value is NativeHighlightType {
+    return typeof value === 'string' && nativeHighlightTypes.some(type => type === value);
+}
+function isOffset(value: unknown): value is number {
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -88,11 +95,10 @@ function parseNativeError(value: unknown): NativeParseError | undefined {
 }
 
 function parseNativeHighlight(value: unknown): NativeHighlight | undefined {
-    if (!isRecord(value) || !Number.isInteger(value.begin) || !Number.isInteger(value.end)
-        || (value.begin as number) < 0 || (value.end as number) <= (value.begin as number)
-        || typeof value.type !== 'string' || !nativeHighlightTypes.has(value.type as NativeHighlightType))
+    if (!isRecord(value) || !isOffset(value.begin) || !isOffset(value.end)
+        || value.end <= value.begin || !isNativeHighlightType(value.type))
         return undefined;
-    return { begin: value.begin as number, end: value.end as number, type: value.type as NativeHighlightType };
+    return { begin: value.begin, end: value.end, type: value.type };
 }
 
 export function parseNativeParseResult(value: unknown): NativeParseResult {

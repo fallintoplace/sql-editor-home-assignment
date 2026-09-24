@@ -6,7 +6,7 @@ const themes = [
 ] as const;
 
 function themeOption(page: Page, value: string) {
-    const label = value === 'click-dark' ? '🌙' : '☀️';
+    const label = value === 'click-dark' ? 'Dark theme' : 'Light theme';
     return page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: label });
 }
 
@@ -14,7 +14,7 @@ for (const theme of themes) test(`${theme.value} applies its palette and survive
     await page.goto('/');
     const option = themeOption(page, theme.value);
     await expect(option).toBeVisible();
-    await page.getByRole('radiogroup', { name: 'Theme' }).getByText(theme.value === 'click-dark' ? '🌙' : '☀️', { exact: true }).click();
+    await option.click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme.value);
 
     const palette = await page.locator('html').evaluate(element => ({

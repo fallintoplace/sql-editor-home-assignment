@@ -72,7 +72,7 @@ test('Result export downloads the complete retained CSV from the server', async 
 for (const theme of ['light', 'dark']) test(`Retained results stay within a 390px ${theme} viewport`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');
-    await page.getByRole('radiogroup', { name: 'Theme' }).getByText(theme === 'dark' ? '🌙' : '☀️', { exact: true }).click();
+    await page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: theme === 'dark' ? 'Dark theme' : 'Light theme' }).click();
     await trust(page);
     const results = await run(page);
     await expect(results.getByRole('table', { name: 'Retained query rows' })).toBeVisible();

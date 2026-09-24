@@ -160,12 +160,12 @@ function App() {
             <div className="topbar-preferences">
                 <SelectControl label={copy.app.language} value={locale} options={localeOptions} onChange={setLocale}/>
                 <div className="experience-switch theme-switch">
-                    <RadioGroup className="navbar-mode-control" value={theme} onValueChange={value => {
-                        if (value === 'click-dark' || value === 'click-light') setTheme(value);
-                    }} aria-label={copy.app.theme} inline orientation="horizontal" dir="end">
-                        {themeOptions.map(option => <RadioGroup.Item key={option.value} value={option.value} className={`navbar-mode-option theme-mode-option ${theme === option.value ? 'is-active' : ''}`} label={option.label} aria-label={option.value === 'click-dark' ? 'Dark theme' : 'Light theme'} title={option.value === 'click-dark' ? 'Dark theme' : 'Light theme'}/>
-                        )}
-                    </RadioGroup>
+                    <div className="theme-mode-control" role="radiogroup" aria-label={copy.app.theme}>
+                        {themeOptions.map(option => <label key={option.value} className={`theme-mode-option ${theme === option.value ? 'is-active' : ''}`} title={option.label}>
+                            <input type="radio" name="clickstudio-theme" value={option.value} checked={theme === option.value} aria-label={option.label} onChange={() => setTheme(option.value)}/>
+                            <Icon name={option.value === 'click-dark' ? 'moon' : 'sun'} className="theme-mode-icon"/>
+                        </label>)}
+                    </div>
                 </div>
             </div>
         </header>

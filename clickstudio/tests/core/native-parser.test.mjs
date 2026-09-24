@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { nativeDiagnosticForStatement, nativeHighlightRanges, parseNativeParseResult, sourcePositionFromUtf8ByteOffset, utf8ByteOffsetToUtf16Index } from '../../.core-build/shared/native-parser.js';
+import { explainPrefixLength, sqlForRunKind } from '../../.core-build/shared/explain-plan.js';
 
 const bytes = value => new TextEncoder().encode(value).length;
 
@@ -11,16 +12,20 @@ test('UTF-8 parser offsets map to JavaScript UTF-16 indices', () => {
     assert.equal(utf8ByteOffsetToUtf16Index(value, bytes(beforeEmoji + '🙂')), (beforeEmoji + '🙂').length);
 });
 
-test('ClickHouse byte offsets map to source positions after Unicode and EXPLAIN prefixes', () => {
-    const sql = "SELECT 'é你好🙂' FORM events";
-    const failingPrefix = "SELECT 'é你好🙂' FORM";
-    const explainPrefix = 'EXPLAIN PIPELINE\n';
-    const sourceFrom = 25;
-    assert.equal(
-        sourcePositionFromUtf8ByteOffset(sql, bytes(explainPrefix + failingPrefix), sourceFrom, sourceFrom + sql.length, bytes(explainPrefix)),
-        sourceFrom + failingPrefix.length,
-    );
-});
+for (const kind of ['explain', 'plan', 'pipeline']) {
+    test(`ClickHouse ${kind} byte offsets map to Unicode SQL positions`, () => {
+        const sql = "SELECT 'é你好🙂' FORM events";
+        const failingPrefix = "SELECT 'é你好🙂' FORM";
+        const wrapped = sqlForRunKind(sql, kind);
+        const explainPrefix = wrapped.slice(0, wrapped.length - sql.length);
+        const sourceFrom = 25;
+        assert.equal(explainPrefixLength(kind), bytes(explainPrefix));
+        assert.equal(
+            sourcePositionFromUtf8ByteOffset(sql, bytes(explainPrefix + failingPrefix), sourceFrom, sourceFrom + sql.length, explainPrefixLength(kind)),
+            sourceFrom + failingPrefix.length,
+        );
+    });
+}
 
 test('ClickHouse byte offsets clamp to the selected statement source range', () => {
     assert.equal(sourcePositionFromUtf8ByteOffset('SELECT 1', 0, 12, 20), 12);

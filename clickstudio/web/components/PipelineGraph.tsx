@@ -188,21 +188,21 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
         chooseNode(node);
     };
 
-    if (!pipeline.nodes.length) return <div className="pipeline-graph-empty">{graphKind === 'sql-flow' ? copy?.sqlFlowNoStages ?? 'No SQL stages were found in this statement.' : 'This pipeline did not return any operator nodes.'}</div>;
+    if (!pipeline.nodes.length) return <div className="pipeline-graph-empty">{graphKind === 'sql-flow' ? copy?.sqlFlowNoStages ?? 'No SQL stages were found in this statement.' : copy?.pipelineNoOutput ?? 'This pipeline did not return any operator nodes.'}</div>;
 
     const terminology = graphKind === 'sql-flow'
         ? { graph: copy?.sqlMap ?? 'SQL flow graph', item: copy?.sqlFlowStages ?? 'stages', selected: copy?.sqlFlowSelectedStage ?? 'Selected stage', action: copy?.sqlFlowInspectStage ?? 'Inspect stage', details: copy?.sqlFlowStageDetails ?? 'Selected stage details' }
-        : { graph: 'Execution plan graph', item: copy?.sqlFlowOperators ?? 'operators', selected: 'Selected operator', action: 'Inspect operator', details: 'Selected operator details' };
+        : { graph: copy?.pipelineGraph ?? 'Execution plan graph', item: copy?.sqlFlowOperators ?? 'operators', selected: copy?.selectedOperator ?? 'Selected operator', action: copy?.inspectOperator ?? 'Inspect operator', details: copy?.selectedOperatorDetails ?? 'Selected operator details' };
     const connectionLabel = graphKind === 'sql-flow' ? copy?.sqlFlowConnections ?? 'connections' : 'connections';
 
-    return <section className="pipeline-graph-card grid gap-3 rounded-xl border p-3" aria-label={terminology.graph}>
+    return <div className="pipeline-graph-card grid gap-3 rounded-xl border p-3" role="group" aria-label={terminology.graph}>
         <div className="pipeline-graph-heading">
             <div><span className="eyebrow">{heading ?? (pipeline.source === 'explain_pipeline' ? 'CLICKHOUSE OPERATOR PLAN' : 'ESTIMATED QUERY SHAPE')}</span><strong>{pipeline.nodes.length.toLocaleString()} {terminology.item} <i>·</i> {pipeline.edges.length.toLocaleString()} {connectionLabel}</strong></div>
-            <small>{subheading ?? (pipeline.source === 'explain_pipeline' ? 'Planned topology · runtime counters are run-level' : 'Estimated from SQL structure')}</small>
+            <small>{subheading ?? (pipeline.source === 'explain_pipeline' ? copy?.pipelineGraphDescription ?? 'Planned topology · runtime counters are run-level' : 'Estimated from SQL structure')}</small>
         </div>
-        {pipeline.truncated && <p className="pipeline-graph-warning" role="status">{graphKind === 'sql-flow' ? copy?.sqlFlowTruncatedWarning ?? 'This query is large. The graph shows a bounded set of SQL stages.' : 'This plan is large. The graph shows a bounded set of operators.'}</p>}
+        {pipeline.truncated && <p className="pipeline-graph-warning" role="status">{graphKind === 'sql-flow' ? copy?.sqlFlowTruncatedWarning ?? 'This query is large. The graph shows a bounded set of SQL stages.' : copy?.pipelineGraphTruncated ?? 'This plan is large. The graph shows a bounded set of operators.'}</p>}
         <div className="pipeline-graph-scroll overflow-auto" role="region" aria-label={graphKind === 'sql-flow' ? copy?.sqlMap ?? 'Scrollable SQL flow graph' : 'Scrollable operator graph'}>
-            <svg className="pipeline-graph-svg" width={Math.max(480, layout.width)} height={Math.max(160, layout.height)} viewBox={`0 0 ${Math.max(480, layout.width)} ${Math.max(160, layout.height)}`} role="group" aria-label={graphKind === 'sql-flow' ? copy?.sqlFlowGraphHint ?? 'Click a stage to inspect it' : 'Click an operator to inspect it'}>
+            <svg className="pipeline-graph-svg" width={Math.max(480, layout.width)} height={Math.max(160, layout.height)} viewBox={`0 0 ${Math.max(480, layout.width)} ${Math.max(160, layout.height)}`} role="group" aria-label={graphKind === 'sql-flow' ? copy?.sqlFlowGraphHint ?? 'Click a stage to inspect it' : copy?.pipelineGraphHint ?? 'Click an operator to inspect it'}>
                 <defs><marker id={markerId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" className="pipeline-graph-arrow"/></marker></defs>
                 <g className="pipeline-graph-edges" aria-hidden="true">
                     {layout.edges.map((edge, index) => {
@@ -214,27 +214,28 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
                     const label = graphKind === 'sql-flow' ? sqlFlowNodeLabel(node, copy) : node.label;
                     const lines = labelLines(label);
                     const active = selected?.id === node.id;
+                    const status = graphKind === 'execution' && node.status === 'planned' ? copy?.plannedStatus ?? node.status : node.status;
                     return <g key={node.id} role="button" tabIndex={0} aria-label={`${terminology.action} ${label}`} aria-pressed={active} data-node-id={node.id} className={`pipeline-graph-node pipeline-node-${node.kind}${active ? ' is-selected' : ''}`} transform={`translate(${x - nodeWidth / 2} ${y - nodeHeight / 2})`} onClick={() => chooseNode(node)} onKeyDown={event => onNodeKeyDown(event, node)}>
                         <title>{label}</title>
                         <rect width={nodeWidth} height={nodeHeight} rx="11"/>
                         <text className="pipeline-node-kind" x="14" y="19">{(graphKind === 'sql-flow' ? sqlFlowNodeKind(node.kind, copy) : node.kind).toUpperCase()}</text>
                         {lines.map((line, index) => <text className="pipeline-node-label" key={index} x="14" y={43 + index * 15}>{line}</text>)}
                         {node.parallelism !== undefined && <text className="pipeline-node-parallel" x={nodeWidth - 12} y="20" textAnchor="end">× {node.parallelism}</text>}
-                        <text className="pipeline-node-status" x={nodeWidth - 12} y={nodeHeight - 11} textAnchor="end">{graphKind === 'sql-flow' ? sqlFlowNodeStatus(node.status, copy) : node.status}</text>
+                        <text className="pipeline-node-status" x={nodeWidth - 12} y={nodeHeight - 11} textAnchor="end">{graphKind === 'sql-flow' ? sqlFlowNodeStatus(node.status, copy) : status}</text>
                     </g>;
                 })}
             </svg>
         </div>
         {selected && <div className="pipeline-node-inspector" aria-live="polite" aria-label={terminology.details}>
-            <div className="pipeline-node-inspector-main"><span className="eyebrow">{terminology.selected.toUpperCase()}</span><strong>{graphKind === 'sql-flow' ? sqlFlowNodeLabel(selected, copy) : selected.label}</strong><small>{graphKind === 'sql-flow' ? sqlFlowNodeKind(selected.kind, copy) : selected.kind} <i>·</i> {graphKind === 'sql-flow' ? sqlFlowNodeStatus(selected.status, copy) : selected.status}</small>{sqlFlowNodeDetail(selected, graphKind === 'sql-flow' ? copy : undefined) && sqlFlowNodeDetail(selected, graphKind === 'sql-flow' ? copy : undefined) !== selected.label && <p>{sqlFlowNodeDetail(selected, graphKind === 'sql-flow' ? copy : undefined)}</p>}</div>
+            <div className="pipeline-node-inspector-main"><span className="eyebrow">{terminology.selected.toUpperCase()}</span><strong>{graphKind === 'sql-flow' ? sqlFlowNodeLabel(selected, copy) : selected.label}</strong><small>{graphKind === 'sql-flow' ? sqlFlowNodeKind(selected.kind, copy) : selected.kind} <i>·</i> {graphKind === 'sql-flow' ? sqlFlowNodeStatus(selected.status, copy) : selected.status === 'planned' ? copy?.plannedStatus ?? selected.status : selected.status}</small>{sqlFlowNodeDetail(selected, graphKind === 'sql-flow' ? copy : undefined) && sqlFlowNodeDetail(selected, graphKind === 'sql-flow' ? copy : undefined) !== selected.label && <p>{sqlFlowNodeDetail(selected, graphKind === 'sql-flow' ? copy : undefined)}</p>}</div>
             <div className="pipeline-node-facts">
-                {selected.parallelism !== undefined && <span><small>Parallelism</small><strong>{selected.parallelism.toLocaleString()}</strong></span>}
-                <span><small>{graphKind === 'sql-flow' ? copy?.sqlFlowInputs ?? 'Inputs' : 'Inputs'}</small><strong>{incomingCount}</strong></span>
-                <span><small>{graphKind === 'sql-flow' ? copy?.sqlFlowOutputs ?? 'Outputs' : 'Outputs'}</small><strong>{outgoingCount}</strong></span>
-                {selected.durationMs !== undefined && <span><small>Run duration</small><strong>{Math.round(selected.durationMs)} ms</strong></span>}
-                {selected.rows !== undefined && <span><small>Run rows</small><strong>{Number(selected.rows).toLocaleString()}</strong></span>}
-                {selected.bytes !== undefined && <span><small>Run bytes</small><strong>{selected.bytes}</strong></span>}
+                {selected.parallelism !== undefined && <span><small>{copy?.parallelism ?? 'Parallelism'}</small><strong>{selected.parallelism.toLocaleString()}</strong></span>}
+                <span><small>{graphKind === 'sql-flow' ? copy?.sqlFlowInputs ?? 'Inputs' : copy?.pipelineInputs ?? 'Inputs'}</small><strong>{incomingCount}</strong></span>
+                <span><small>{graphKind === 'sql-flow' ? copy?.sqlFlowOutputs ?? 'Outputs' : copy?.pipelineOutputs ?? 'Outputs'}</small><strong>{outgoingCount}</strong></span>
+                {selected.durationMs !== undefined && <span><small>{copy?.pipelineRunDuration ?? 'Run duration'}</small><strong>{Math.round(selected.durationMs)} ms</strong></span>}
+                {selected.rows !== undefined && <span><small>{copy?.pipelineRunRows ?? 'Run rows'}</small><strong>{Number(selected.rows).toLocaleString()}</strong></span>}
+                {selected.bytes !== undefined && <span><small>{copy?.pipelineRunBytes ?? 'Run bytes'}</small><strong>{selected.bytes}</strong></span>}
             </div>
         </div>}
-    </section>;
+    </div>;
 }

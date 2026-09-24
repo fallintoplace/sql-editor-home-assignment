@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildQueryProfile } from '../../.core-build/shared/profile.js';
+import { buildQueryProfile, parsePipelineResult } from '../../.core-build/shared/profile.js';
 
 const run = {
     id: 'run-1', queryId: 'query-1', sql: 'SELECT count() FROM events', elapsedMs: 17,
@@ -61,4 +61,28 @@ test('large native plans are explicitly bounded for the UI', () => {
     assert.equal(result.nodes.length, 240);
     assert.equal(result.truncated, true);
     assert.match(result.notice, /bounded to 240 operators/);
+});
+
+test('pipeline result graph parses processor topology without inventing run measurements', () => {
+    const result = parsePipelineResult([
+        'digraph {',
+        '  n0[label="ReadFromMergeTree_0"];',
+        '  n1[label="FilterTransform_1"];',
+        '  n2[label="AggregatingTransform_2"];',
+        '  n0 -> n1;',
+        '  n1 -> n2;',
+        '}',
+    ]);
+    assert.ok(result);
+    assert.equal(result.source, 'explain_pipeline');
+    assert.deepEqual(result.nodes.map(node => node.label), ['ReadFromMergeTree_0', 'FilterTransform_1', 'AggregatingTransform_2']);
+    assert.deepEqual(result.edges.map(({ source, target }) => [source, target]), [['n0', 'n1'], ['n1', 'n2']]);
+    assert.ok(result.nodes.every(node => node.status === 'planned'));
+    assert.ok(result.nodes.every(node => node.durationMs === undefined && node.rows === undefined && node.bytes === undefined));
+    assert.match(result.notice, /Per-node runtime counters are not available/);
+});
+
+test('pipeline result graph declines empty and unrelated output', () => {
+    assert.equal(parsePipelineResult([]), undefined);
+    assert.equal(parsePipelineResult(['EXPLAIN PIPELINE returned plain text']), undefined);
 });

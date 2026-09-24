@@ -3,7 +3,7 @@ import type { Connection, Principal } from '../shared/types.js';
 export type Connected = Connection & { trusted: boolean };
 export type Session = { principal: Principal | null; requiresLogin: boolean; demo: boolean };
 export type Inspector = 'schema' | 'history' | 'documents' | 'revisions' | 'details' | 'profile' | 'pipeline' | 'parser' | 'assistant';
-export type ResultsView = 'results' | 'chart' | 'insights' | 'sqlmap';
+export type ResultsView = 'results' | 'chart' | 'insights' | 'sqlmap' | 'plan' | 'pipeline';
 export type BusyAction = 'run' | 'script' | 'save' | '';
 export type RunEventState = 'idle' | 'live' | 'reconnecting';
 export type SelectOption<Value extends string> = { value: Value; label: string };

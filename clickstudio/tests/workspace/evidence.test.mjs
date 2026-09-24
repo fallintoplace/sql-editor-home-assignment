@@ -43,7 +43,7 @@ test('Changed SQL, exact parameters and connection fail preflight', () => {
     assert.match(publicationIssue(completed, { ...draft, connectionId: 'other' }), /different draft or connection/);
 });
 
-for (const kind of ['explain', 'pipeline']) {
+for (const kind of ['explain', 'plan', 'pipeline']) {
     test(`${kind} output is not publishable query evidence`, () => {
         assert.match(publicationIssue({ ...completed, kind }, draft), /query itself/);
     });

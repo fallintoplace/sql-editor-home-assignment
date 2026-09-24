@@ -1,5 +1,6 @@
 import { DEFAULT_LIMITS, type ChartConfig, type Connection, type QueryDocument, type Result, type ResultPage, type Run, type Schema, type SchemaColumn, type Script } from '../shared/types.js';
 import { splitSql } from '../shared/sql.js';
+import { sqlForRunKind } from '../shared/explain-plan.js';
 import { isResult, isRun } from '../shared/run-wire.js';
 import { loadPlaygroundSchema, PLAYGROUND_CONNECTION, PLAYGROUND_CONNECTION_ID, PLAYGROUND_STARTER_ID, PLAYGROUND_STARTER_NAME, PLAYGROUND_STARTER_SQL, queryPlayground } from './playground.js';
 
@@ -388,10 +389,14 @@ function resultFor(run: Run, sequence: number): Result {
     const preview = previewRowsFor(run.sql);
     const columns = run.kind === 'query'
         ? preview.columns
-        : [{ name: run.kind === 'explain' ? 'explain' : 'pipeline', type: 'String' }];
+        : [{ name: 'explain', type: 'String' }];
     const resultRows = run.kind === 'query'
         ? preview.rows
-        : [[run.kind === 'explain' ? `Sample plan for run ${sequence}. SQL is not evaluated.` : 'digraph { read -> filter -> aggregate -> output }']];
+        : [[run.kind === 'plan'
+            ? JSON.stringify([{ Plan: { 'Node Type': 'Expression', 'Node Id': 'Expression_2', Description: 'Sample plan only; SQL is not evaluated.', Plans: [{ 'Node Type': 'ReadFromFixture', 'Node Id': 'ReadFromFixture_0' }] } }])
+            : run.kind === 'pipeline'
+                ? 'digraph { read [label="ReadFromFixture"]; filter [label="FilterTransform × 2"]; output [label="Output"]; read -> filter; filter -> output; }'
+                : `Sample index analysis for run ${sequence}. SQL is not evaluated.`]];
     return {
         runId: run.id, queryId: run.queryId, columns, rows: resultRows,
         completeness: 'complete', createdAt: now(), expiresAt: expiresAt(),
@@ -441,7 +446,7 @@ function makeRun(id: string, sql: string, kind: Run['kind'], sequence: number, p
     const preview = previewRowsFor(sql);
     const columns = kind === 'query'
         ? preview.columns
-        : [{ name: kind === 'explain' ? 'explain' : 'pipeline', type: 'String' }];
+        : [{ name: 'explain', type: 'String' }];
     const resultRows = kind === 'query' ? preview.rows.length : 1;
     return {
         dataSource: 'fixture', id, queryId, owner, connectionId: 'demo', sql, kind, parameters,
@@ -648,16 +653,12 @@ export class DemoPreviewApi {
         if (parts[0] === 'connections' && parts[1] === PLAYGROUND_CONNECTION_ID && parts[2] === 'import-targets') return [];
 
         if (pathname === '/runs' && method === 'POST') {
-            const requestedKind = body.kind === 'explain' || body.kind === 'pipeline' ? body.kind : 'query';
+            const requestedKind = body.kind === 'explain' || body.kind === 'plan' || body.kind === 'pipeline' ? body.kind : 'query';
             const parameters = record(body.parameters) as Record<string, string>;
             if (body.connectionId === PLAYGROUND_CONNECTION_ID) {
                 if (Object.keys(parameters).length) throw new Error('Remove query parameters before running SQL on ClickHouse Playground.');
                 const sql = typeof body.sql === 'string' ? body.sql : '';
-                const executionSql = requestedKind === 'explain'
-                    ? `EXPLAIN indexes = 1\n${sql}`
-                    : requestedKind === 'pipeline'
-                        ? `EXPLAIN PIPELINE\n${sql}`
-                        : sql;
+                const executionSql = sqlForRunKind(sql, requestedKind);
                 const response = await queryPlayground(executionSql, options.signal);
                 const finishedAt = now();
                 const startedAt = new Date(Date.now() - response.elapsedMs).toISOString();

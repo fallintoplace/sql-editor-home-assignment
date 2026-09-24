@@ -110,8 +110,10 @@ export class RunService {
             mustOwn(principal, document.owner);
             requireThat(document.connectionId === conn.id, 409, 'CONNECTION_MISMATCH', 'The document belongs to another connection');
         }
-        if (request.kind === 'explain' || request.kind === 'pipeline') {
-            const capability = request.kind === 'explain' ? conn.manifest?.explain : conn.manifest?.pipeline;
+        if (request.kind === 'explain' || request.kind === 'plan' || request.kind === 'pipeline') {
+            const capability = request.kind === 'explain' ? conn.manifest?.explain
+                : request.kind === 'plan' ? conn.manifest?.explainPlan ?? conn.manifest?.explain
+                    : conn.manifest?.pipeline;
             requireThat(capability?.available, 409, 'CAPABILITY_UNAVAILABLE', capability?.reason ?? 'Test the connection before using EXPLAIN');
         }
         return conn;

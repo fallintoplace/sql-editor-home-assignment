@@ -24,6 +24,7 @@ export type Capability = {
     available: boolean;
     reason?: string;
 };
+export type RunKind = 'query' | 'explain' | 'plan' | 'pipeline';
 export interface Manifest {
     version: 1;
     serverVersion: string;
@@ -32,6 +33,7 @@ export interface Manifest {
     progress: Capability;
     cancellation: Capability;
     explain: Capability;
+    explainPlan?: Capability;
     /** Running EXPLAIN PIPELINE as a query is separate from loading structured pipeline evidence. */
     explainPipeline?: Capability;
     pipeline: Capability;
@@ -124,7 +126,7 @@ export interface RunRequest {
     connectionId: string;
     documentId?: string;
     sql: string;
-    kind?: 'query' | 'explain' | 'pipeline';
+    kind?: RunKind;
     parameters?: Record<string, string>;
     limits?: Partial<Limits>;
     tags?: Record<string, string>;
@@ -149,7 +151,7 @@ export interface Run {
     sql: string;
     sourceFrom?: number;
     sourceTo?: number;
-    kind: 'query' | 'explain' | 'pipeline';
+    kind: RunKind;
     parameters: Record<string, string>;
     limits: Limits;
     tags: Record<string, string>;

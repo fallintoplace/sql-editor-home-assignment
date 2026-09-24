@@ -1,5 +1,6 @@
 import { DEFAULT_LIMITS, type Column, type Connection, type Json, type Row, type Schema } from '../shared/types.js';
 import { lexSql, splitSql } from '../shared/sql.js';
+import { sqlForRunKind } from '../shared/explain-plan.js';
 import { ClickHouseError, createClient } from '@clickhouse/client-web';
 
 export const PLAYGROUND_CONNECTION_ID = 'playground';
@@ -46,6 +47,7 @@ export const PLAYGROUND_CONNECTION: Connection & { trusted: boolean } = {
         progress: capability(false, 'The public Playground does not expose query progress to this browser connection.'),
         cancellation: capability(false, 'Closing the request cannot confirm that ClickHouse stopped the query.'),
         explain: capability(true),
+        explainPlan: capability(true),
         explainPipeline: capability(true),
         pipeline: capability(false, 'The public Playground returns pipeline text, but structured pipeline profiling is unavailable in this browser connection.'),
         queryLog: capability(false, 'Query-log profiling is not enabled in this browser preview.'),

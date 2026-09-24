@@ -35,6 +35,11 @@ test('run event decoder preserves valid live events', () => {
     assert.equal(event.run.id, 'run-1');
 });
 
+test('run event decoder preserves an EXPLAIN PLAN run kind', () => {
+    const event = parseRunEvent({ sequence: 3, type: 'progress', run: { ...run, kind: 'plan' } });
+    assert.equal(event.run.kind, 'plan');
+});
+
 test('run event decoder rejects malformed run payloads', () => {
     assert.throws(
         () => parseRunEvent({ sequence: 4, type: 'progress', run: { ...run, limits: { rows: '5000' } } }),

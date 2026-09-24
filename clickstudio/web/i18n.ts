@@ -83,7 +83,32 @@ export interface Copy {
         runActionRemoveParameters: string;
         playgroundScriptUnavailable: string;
         explain: string;
+        explainPlan: string;
         explainPipeline: string;
+        logicalPlan: string;
+        logicalPlanDescription: string;
+        planUnknownStep: string;
+        planDepthLimit: string;
+        pipelineGraph: string;
+        pipelineGraphDescription: string;
+        pipelineGraphHint: string;
+        pipelineGraphTruncated: string;
+        pipelineInputs: string;
+        pipelineOutputs: string;
+        pipelineRunDuration: string;
+        pipelineRunRows: string;
+        pipelineRunBytes: string;
+        planNodeCount: string;
+        planProperties: string;
+        planNoOutput: string;
+        planLoading: string;
+        planTruncated: string;
+        pipelineNoOutput: string;
+        selectedOperator: string;
+        inspectOperator: string;
+        selectedOperatorDetails: string;
+        parallelism: string;
+        plannedStatus: string;
         askAi: string;
         running: string;
         selectQuery: string;
@@ -358,8 +383,33 @@ const english: Copy = {
         sqlMap: 'SQL map',
         visualizeSqlStructure: 'Visualize SQL structure',
         runScript: 'Run script', runActionTrustRequired: 'Trust this connection before running SQL.', runActionWait: 'Wait for the current operation to finish.', runActionRemoveParameters: 'Remove query parameters before running this action.', playgroundScriptUnavailable: 'The public Playground accepts one read-only statement per request. Run script is unavailable here.',
-        explain: 'EXPLAIN',
+        explain: 'EXPLAIN INDEXES',
+        explainPlan: 'EXPLAIN PLAN',
         explainPipeline: 'EXPLAIN PIPELINE',
+        logicalPlan: 'Logical query plan',
+        logicalPlanDescription: 'ClickHouse optimizer steps before execution. This view shows no runtime measurements.',
+        planUnknownStep: 'Unknown step',
+        planDepthLimit: 'Plan depth limit reached',
+        pipelineGraph: 'ClickHouse pipeline',
+        pipelineGraphDescription: 'Planned processor topology from EXPLAIN PIPELINE. Runtime is shown separately.',
+        pipelineGraphHint: 'Select an operator to inspect its details.',
+        pipelineGraphTruncated: 'This plan is large. The graph shows a bounded set of operators.',
+        pipelineInputs: 'Inputs',
+        pipelineOutputs: 'Outputs',
+        pipelineRunDuration: 'Run duration',
+        pipelineRunRows: 'Run rows',
+        pipelineRunBytes: 'Run bytes',
+        planNodeCount: '{count} steps',
+        planProperties: 'properties',
+        planNoOutput: 'ClickHouse did not return a JSON plan. Open Results to inspect the raw output.',
+        planLoading: 'Loading the retained plan…',
+        planTruncated: 'This plan is large. Some steps or details are hidden to keep the view responsive.',
+        pipelineNoOutput: 'No pipeline graph was returned. Open Results to inspect the raw output.',
+        selectedOperator: 'Selected operator',
+        inspectOperator: 'Inspect operator',
+        selectedOperatorDetails: 'Selected operator details',
+        parallelism: 'Parallelism',
+        plannedStatus: 'planned',
         askAi: 'Ask AI',
         running: 'Running…',
         selectQuery: 'Select query',
@@ -656,6 +706,83 @@ const workspaceCommonTranslations: Record<Exclude<Locale, 'en'>, WorkspaceCommon
     },
 };
 
+const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common'],
+    'explain' | 'explainPlan' | 'logicalPlan' | 'logicalPlanDescription' | 'planUnknownStep' | 'planDepthLimit' | 'pipelineGraph' | 'pipelineGraphDescription' |
+    'pipelineGraphHint' | 'pipelineGraphTruncated' | 'pipelineInputs' | 'pipelineOutputs' | 'pipelineRunDuration' | 'pipelineRunRows' | 'pipelineRunBytes' |
+    'planNodeCount' | 'planProperties' | 'planNoOutput' | 'planLoading' | 'planTruncated' | 'pipelineNoOutput' |
+    'selectedOperator' | 'inspectOperator' | 'selectedOperatorDetails' | 'parallelism' | 'plannedStatus'>> = {
+    de: {
+        explain: 'EXPLAIN INDEXES', explainPlan: 'EXPLAIN PLAN', logicalPlan: 'Logischer Abfrageplan',
+        logicalPlanDescription: 'ClickHouse-Optimierungsschritte vor der Ausführung. Diese Ansicht zeigt keine Laufzeitmessungen.',
+        pipelineGraph: 'ClickHouse-Pipeline', pipelineGraphDescription: 'Geplante Prozessortopologie aus EXPLAIN PIPELINE. Laufzeitdaten werden separat angezeigt.',
+        planUnknownStep: 'Unbekannter Schritt', planDepthLimit: 'Tiefenlimit des Plans erreicht',
+        pipelineGraphHint: 'Operator auswählen, um Details anzuzeigen.', pipelineGraphTruncated: 'Der Plan ist groß. Das Diagramm zeigt eine begrenzte Anzahl von Operatoren.',
+        pipelineInputs: 'Eingaben', pipelineOutputs: 'Ausgaben', pipelineRunDuration: 'Ausführungsdauer', pipelineRunRows: 'Ausgeführte Zeilen', pipelineRunBytes: 'Ausgeführte Bytes',
+        planNodeCount: '{count} Schritte', planProperties: 'Eigenschaften',
+        planNoOutput: 'ClickHouse hat keinen JSON-Plan zurückgegeben. Unter Ergebnisse finden Sie die rohe Ausgabe.',
+        planLoading: 'Gespeicherten Plan laden…', planTruncated: 'Der Plan ist groß. Einige Schritte oder Details sind ausgeblendet, damit die Ansicht reaktionsschnell bleibt.',
+        pipelineNoOutput: 'Es wurde kein Pipeline-Diagramm zurückgegeben. Unter Ergebnisse finden Sie die rohe Ausgabe.',
+        selectedOperator: 'Ausgewählter Operator', inspectOperator: 'Operator ansehen', selectedOperatorDetails: 'Details des ausgewählten Operators',
+        parallelism: 'Parallelität', plannedStatus: 'geplant',
+    },
+    es: {
+        explain: 'EXPLAIN INDEXES', explainPlan: 'EXPLAIN PLAN', logicalPlan: 'Plan lógico de consulta',
+        logicalPlanDescription: 'Pasos del optimizador de ClickHouse antes de ejecutar. Esta vista no muestra medidas de ejecución.',
+        pipelineGraph: 'Pipeline de ClickHouse', pipelineGraphDescription: 'Topología planificada de procesadores de EXPLAIN PIPELINE. El tiempo de ejecución se muestra aparte.',
+        planUnknownStep: 'Paso desconocido', planDepthLimit: 'Se alcanzó el límite de profundidad del plan',
+        pipelineGraphHint: 'Selecciona un operador para ver sus detalles.', pipelineGraphTruncated: 'El plan es grande. El gráfico muestra un número limitado de operadores.',
+        pipelineInputs: 'Entradas', pipelineOutputs: 'Salidas', pipelineRunDuration: 'Duración de ejecución', pipelineRunRows: 'Filas de ejecución', pipelineRunBytes: 'Bytes de ejecución',
+        planNodeCount: '{count} pasos', planProperties: 'propiedades',
+        planNoOutput: 'ClickHouse no devolvió un plan JSON. Abre Resultados para ver la salida sin procesar.',
+        planLoading: 'Cargando el plan conservado…', planTruncated: 'El plan es grande. Se ocultan algunos pasos o detalles para mantener la vista ágil.',
+        pipelineNoOutput: 'No se devolvió un gráfico del pipeline. Abre Resultados para ver la salida sin procesar.',
+        selectedOperator: 'Operador seleccionado', inspectOperator: 'Inspeccionar operador', selectedOperatorDetails: 'Detalles del operador seleccionado',
+        parallelism: 'Paralelismo', plannedStatus: 'planificado',
+    },
+    nl: {
+        explain: 'EXPLAIN INDEXES', explainPlan: 'EXPLAIN PLAN', logicalPlan: 'Logisch queryplan',
+        logicalPlanDescription: 'ClickHouse-optimalisatiestappen vóór uitvoering. Deze weergave toont geen runtimemetingen.',
+        pipelineGraph: 'ClickHouse-pipeline', pipelineGraphDescription: 'Geplande processortopologie uit EXPLAIN PIPELINE. Runtime wordt apart getoond.',
+        planUnknownStep: 'Onbekende stap', planDepthLimit: 'Dieptelimiet van het plan bereikt',
+        pipelineGraphHint: 'Selecteer een operator om details te bekijken.', pipelineGraphTruncated: 'Dit plan is groot. De grafiek toont een beperkt aantal operators.',
+        pipelineInputs: 'Invoer', pipelineOutputs: 'Uitvoer', pipelineRunDuration: 'Uitvoertijd', pipelineRunRows: 'Uitvoerrijen', pipelineRunBytes: 'Uitvoerbytes',
+        planNodeCount: '{count} stappen', planProperties: 'eigenschappen',
+        planNoOutput: 'ClickHouse heeft geen JSON-plan teruggegeven. Open Resultaten voor de ruwe uitvoer.',
+        planLoading: 'Bewaard plan laden…', planTruncated: 'Dit plan is groot. Enkele stappen of details zijn verborgen om de weergave snel te houden.',
+        pipelineNoOutput: 'Er is geen pipelinegrafiek teruggegeven. Open Resultaten voor de ruwe uitvoer.',
+        selectedOperator: 'Geselecteerde operator', inspectOperator: 'Operator bekijken', selectedOperatorDetails: 'Details van geselecteerde operator',
+        parallelism: 'Parallellisme', plannedStatus: 'gepland',
+    },
+    zh: {
+        explain: 'EXPLAIN INDEXES', explainPlan: 'EXPLAIN PLAN', logicalPlan: '逻辑查询计划',
+        logicalPlanDescription: 'ClickHouse 执行前的优化步骤。此视图不显示运行时测量数据。',
+        pipelineGraph: 'ClickHouse 执行管线', pipelineGraphDescription: '来自 EXPLAIN PIPELINE 的计划处理器拓扑。运行时数据单独显示。',
+        planUnknownStep: '未知步骤', planDepthLimit: '已达到计划深度上限',
+        pipelineGraphHint: '选择算子以查看详情。', pipelineGraphTruncated: '计划较大，图中仅显示有限数量的算子。',
+        pipelineInputs: '输入', pipelineOutputs: '输出', pipelineRunDuration: '运行时长', pipelineRunRows: '运行行数', pipelineRunBytes: '运行字节数',
+        planNodeCount: '{count} 个步骤', planProperties: '属性',
+        planNoOutput: 'ClickHouse 未返回 JSON 计划。打开“结果”查看原始输出。',
+        planLoading: '正在加载保留的计划…', planTruncated: '计划内容较多。为保持视图流畅，部分步骤或详情已隐藏。',
+        pipelineNoOutput: '未返回执行管线图。打开“结果”查看原始输出。',
+        selectedOperator: '已选算子', inspectOperator: '查看算子', selectedOperatorDetails: '已选算子详情',
+        parallelism: '并行度', plannedStatus: '计划中',
+    },
+    ru: {
+        explain: 'EXPLAIN INDEXES', explainPlan: 'EXPLAIN PLAN', logicalPlan: 'Логический план запроса',
+        logicalPlanDescription: 'Шаги оптимизатора ClickHouse до выполнения. Здесь не показываются показатели выполнения.',
+        pipelineGraph: 'Конвейер ClickHouse', pipelineGraphDescription: 'Планируемая топология процессоров из EXPLAIN PIPELINE. Показатели выполнения отображаются отдельно.',
+        planUnknownStep: 'Неизвестный шаг', planDepthLimit: 'Достигнута предельная глубина плана',
+        pipelineGraphHint: 'Выберите оператор, чтобы посмотреть сведения.', pipelineGraphTruncated: 'План большой. На графе показано ограниченное число операторов.',
+        pipelineInputs: 'Входы', pipelineOutputs: 'Выходы', pipelineRunDuration: 'Время выполнения', pipelineRunRows: 'Строки выполнения', pipelineRunBytes: 'Байты выполнения',
+        planNodeCount: '{count} шагов', planProperties: 'свойства',
+        planNoOutput: 'ClickHouse не вернул JSON-план. Откройте «Результаты», чтобы увидеть исходный вывод.',
+        planLoading: 'Загрузка сохранённого плана…', planTruncated: 'План большой. Часть шагов или подробностей скрыта для быстрой работы интерфейса.',
+        pipelineNoOutput: 'Граф конвейера не вернулся. Откройте «Результаты», чтобы увидеть исходный вывод.',
+        selectedOperator: 'Выбранный оператор', inspectOperator: 'Изучить оператор', selectedOperatorDetails: 'Сведения о выбранном операторе',
+        parallelism: 'Параллелизм', plannedStatus: 'план',
+    },
+};
+
 export const localeOptions = [
     { value: 'en', label: 'English' },
     { value: 'de', label: 'Deutsch' },
@@ -691,7 +818,7 @@ export function getCopy(locale: Locale): Copy {
     return {
         app: mergeSection(english.app, translated),
         auth: mergeSection(english.auth, translated),
-        common: { ...mergeSection(english.common, translated), ...exampleCommonTranslations[locale], ...workspaceCommonTranslations[locale] },
+        common: { ...mergeSection(english.common, translated), ...exampleCommonTranslations[locale], ...workspaceCommonTranslations[locale], ...explainCommonTranslations[locale] },
         chart: mergeSection(english.chart, translated),
     };
 }

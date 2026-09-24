@@ -7,6 +7,7 @@ import { collectCompactStream } from '../core/compact-stream.js';
 import type { QueryDriver } from '../core/runs.js';
 import type { ImportDriver } from '../core/imports.js';
 import { splitSql } from '../shared/sql.js';
+import { explainPrefixLength, sqlForRunKind } from '../shared/explain-plan.js';
 import { sourcePositionFromUtf8ByteOffset } from '../shared/native-parser.js';
 import { quotedTable } from '../core/imports.js';
 import { publicProfile, redactor, type Config, type Profile } from './config.js';
@@ -61,9 +62,10 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
         catch (error) {
             return { available: false, reason: error instanceof Error ? error.message : 'Not permitted' };
         } };
-        const [schema, progress, queryLog, documentation, explain, pipeline] = await Promise.all([
+        const [schema, progress, queryLog, documentation, explain, explainPlan, pipeline] = await Promise.all([
             probe('SELECT name FROM system.columns LIMIT 1'), probe('SELECT query_id FROM system.processes LIMIT 0'), probe('SELECT query_id FROM system.query_log LIMIT 0'),
-            probe("SELECT name, description FROM system.documentation WHERE type = 'System Table' LIMIT 0"), probe('EXPLAIN SELECT 1'), probe('EXPLAIN PIPELINE graph = 1, compact = 0 SELECT 1'),
+            probe("SELECT name, description FROM system.documentation WHERE type = 'System Table' LIMIT 0"), probe('EXPLAIN indexes = 1 SELECT 1'),
+            probe('EXPLAIN PLAN json = 1, indexes = 1, description = 1 SELECT 1'), probe('EXPLAIN PIPELINE graph = 1, compact = 0 SELECT 1'),
         ]);
         // KILL of a random, nonexistent own query checks cancellation permission without touching a real query.
         let cancellation: Manifest['cancellation'];
@@ -75,7 +77,7 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
         catch {
             cancellation = { available: false, reason: 'Own-query cancellation is not permitted; transport abort and server deadline still apply.' };
         }
-        const manifest: Manifest = { version: 1, serverVersion: version, testedAt: new Date().toISOString(), schema, progress, queryLog, documentation, explain, pipeline, cancellation,
+        const manifest: Manifest = { version: 1, serverVersion: version, testedAt: new Date().toISOString(), schema, progress, queryLog, documentation, explain, explainPlan, pipeline, cancellation,
             import: { available: Boolean(this.profile(id).writer), reason: this.profile(id).writer ? 'Explicit allowlisted import identity configured' : 'Configure a separate writer and target allowlist to enable imports' }, scripts: { available: true }, parameters: { available: true } };
         this.manifests.set(id, manifest);
         return this.connection({ id: 'local-owner', role: 'owner' }, id);
@@ -237,7 +239,7 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
     async execute(run: Run, signal: AbortSignal, progress: (p: Progress) => void) {
         let timer: ReturnType<typeof setInterval> | undefined, polling = false;
         const statement = splitSql(run.sql)[0]!.sql;
-        const sql = run.kind === 'explain' ? `EXPLAIN indexes = 1\n${statement}` : run.kind === 'pipeline' ? `EXPLAIN PIPELINE\n${statement}` : statement;
+        const sql = sqlForRunKind(statement, run.kind);
         if (this.manifests.get(run.connectionId)?.progress.available)
             timer = setInterval(() => {
                 if (polling || signal.aborted)
@@ -267,7 +269,7 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
                 throw signal.reason;
             const failure = this.safeError(error);
             if (failure.position !== undefined && run.sourceFrom !== undefined && run.sourceTo !== undefined) {
-                const prefix = run.kind === 'explain' ? 'EXPLAIN indexes = 1\n'.length : run.kind === 'pipeline' ? 'EXPLAIN PIPELINE\n'.length : 0;
+                const prefix = explainPrefixLength(run.kind);
                 const position = sourcePositionFromUtf8ByteOffset(statement, failure.position, run.sourceFrom, run.sourceTo, prefix);
                 throw new AppError(failure.status, failure.code, failure.message, failure.remediation, position);
             }

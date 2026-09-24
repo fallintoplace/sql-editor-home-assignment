@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AssistantAction, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Result, Run, Schema, Script } from '../shared/types';
+import type { AssistantAction, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Result, Run, RunKind, Schema, Script } from '../shared/types';
 import { DEFAULT_LIMITS } from '../shared/types';
+import { parseExplainPlan } from '../shared/explain-plan';
+import { parsePipelineResult } from '../shared/profile';
 import { filterSchemaTables, indexSchemaColumns } from '../shared/schema-browser';
 import { exportCsv, recommendChart } from '../shared/results';
 import { matchesDraft } from '../shared/evidence';
@@ -16,6 +18,8 @@ import { RestoreSqlMenu } from './components/RestoreSqlMenu';
 import { OverlayPortal } from './components/OverlayPortal';
 import { AssistantWorkflow } from './components/AssistantWorkflow';
 import { ChartView, InsightsView, ResultGrid } from './components/ResultViews';
+import { ExplainPlanView } from './components/ExplainPlanView';
+import { PipelineGraph } from './components/PipelineGraph';
 import { SqlFlowView } from './components/SqlFlowView';
 import { InspectorPane, type InspectorPaneProps } from './components/InspectorPane';
 import { Button, cx, Icon, Status, terminal } from './components/ui';
@@ -169,7 +173,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         try { return parameterNames(active.sql); } catch { return []; }
     }, [active.sql]);
     const unsupportedParameters = parameters.length > 0 && connection.manifest?.parameters.available === false;
-    const runActionTitle = (capability: { available: boolean; reason?: string } | undefined, action: 'script' | 'explain' | 'explain-pipeline') => {
+    const runActionTitle = (capability: { available: boolean; reason?: string } | undefined, action: 'script' | 'explain' | 'explain-plan' | 'explain-pipeline') => {
         if (!trusted) return copy.common.runActionTrustRequired;
         if (busy) return copy.common.runActionWait;
         if (unsupportedParameters) return copy.common.runActionRemoveParameters;
@@ -536,7 +540,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         return true;
     };
 
-    const execute = (wholeScript = false, kind: 'query' | 'explain' | 'pipeline' = 'query') => perform(async () => {
+    const execute = (wholeScript = false, kind: RunKind = 'query') => perform(async () => {
         if (!trusted) throw new Error('Review and trust this read only connection before running SQL.');
         if (wholeScript && connection.manifest?.scripts.available === false)
             throw new Error(connection.manifest.scripts.reason ?? 'Scripts are unavailable on this connection.');
@@ -544,6 +548,9 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             throw new Error(connection.manifest?.parameters.reason ?? 'Query parameters are unavailable on this connection.');
         if (kind === 'explain' && connection.manifest?.explain.available === false)
             throw new Error(connection.manifest.explain.reason ?? 'EXPLAIN is unavailable on this connection.');
+        const explainPlan = connection.manifest?.explainPlan ?? connection.manifest?.explain;
+        if (kind === 'plan' && explainPlan?.available === false)
+            throw new Error(explainPlan.reason ?? 'EXPLAIN PLAN is unavailable on this connection.');
         const explainPipeline = connection.manifest?.explainPipeline ?? connection.manifest?.pipeline;
         if (kind === 'pipeline' && explainPipeline?.available === false)
             throw new Error(explainPipeline.reason ?? 'EXPLAIN PIPELINE is unavailable on this connection.');
@@ -568,7 +575,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         } else {
             const created = await post<Run>('/runs', payload);
             setRunForRun(created.id, created, true);
-            setPage(0); setView('results');
+            setPage(0); setView(kind === 'plan' ? 'plan' : kind === 'pipeline' ? 'pipeline' : 'results');
             patch({ activeRunId: created.id, scriptId: undefined, runIds: [...new Set([...active.runIds, created.id])] });
             editor.current?.focus();
         }
@@ -611,7 +618,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         draft.activeRunId = selected.id;
         draft.runIds = [selected.id];
         if (!addDraft(draft)) return;
-        setView('results'); setDrawerOpen(false); setNotice(`Opened retained run ${selected.queryId}. No query was rerun.`);
+        setView(selected.kind === 'plan' ? 'plan' : selected.kind === 'pipeline' ? 'pipeline' : 'results'); setDrawerOpen(false); setNotice(`Opened retained run ${selected.queryId}. No query was rerun.`);
     };
 
     const saveDraft = async () => perform(async () => {
@@ -676,7 +683,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     }, 'save');
 
     const loadSnapshot = useCallback(async () => {
-        if (!activeRunId || snapshot || !run || run.resultState !== 'reopenable') return;
+        if (!activeRunId || snapshot?.runId === activeRunId || !run || run.resultState !== 'reopenable') return;
         const runId = activeRunId;
         const full = await api<Result>(`/runs/${encodeURIComponent(runId)}/snapshot`);
         setSnapshotForRun(runId, full);
@@ -695,6 +702,11 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             setExampleChartRunId(current => current === exampleChartRunId ? undefined : current);
         });
     }, [activeRunId, exampleChartRunId, loadSnapshot, run, setError, snapshot?.runId]);
+
+    useEffect(() => {
+        if (!run || (view !== 'plan' && view !== 'pipeline') || !terminal(run) || run.resultState !== 'reopenable' || snapshot?.runId === run.id) return;
+        void loadSnapshot().catch(caught => setError(message(caught)));
+    }, [loadSnapshot, run, setError, snapshot?.runId, view]);
 
     const exportCurrentCsv = async () => {
         if (!run) return;
@@ -770,10 +782,23 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const sqlMapStatement = safeSelectedStatement(active.sql, active.from, active.from);
     const sqlMapParseStatement = sqlMapStatement && nativeParseSnapshot?.statements.find(statement =>
         statement.from === sqlMapStatement.from && statement.to === sqlMapStatement.to && active.sql.slice(statement.from, statement.to) === statement.sql);
-    const resultTabs: readonly ResultsView[] = experience === 'beginner'
-        ? ['results', 'chart', 'sqlmap']
-        : ['results', 'chart', 'sqlmap', 'insights'];
-    const snapshotChart = snapshot ? recommendChart(snapshot.columns, snapshot.rows) : undefined;
+    const resultTabs: readonly ResultsView[] = run?.kind === 'plan'
+        ? ['results', 'plan']
+        : run?.kind === 'pipeline'
+            ? ['results', 'pipeline']
+            : experience === 'beginner' ? ['results', 'chart', 'sqlmap'] : ['results', 'chart', 'sqlmap', 'insights'];
+    const retainedSnapshot = run && snapshot?.runId === run.id ? snapshot : undefined;
+    const explainPlan = run?.kind === 'plan' ? parseExplainPlan(retainedSnapshot?.rows[0]?.[0]) : undefined;
+    const pipelineResult = run?.kind === 'pipeline' && retainedSnapshot
+        ? parsePipelineResult(retainedSnapshot.rows.map(row => row[0]).filter((value): value is string => typeof value === 'string'))
+        : undefined;
+    const resultsTitle = visibleResultsView === 'sqlmap' ? copy.common.sqlStructure
+        : visibleResultsView === 'plan' ? copy.common.logicalPlan
+            : visibleResultsView === 'pipeline' ? copy.common.pipelineGraph : copy.common.results;
+    const resultsEyebrow = visibleResultsView === 'sqlmap' ? copy.common.queryVisualization : copy.common.workspaceOutput;
+    const resultsPanelLabel = visibleResultsView === 'sqlmap' ? copy.common.sqlStructure
+        : visibleResultsView === 'plan' || visibleResultsView === 'pipeline' ? resultsTitle : copy.common.queryResults;
+    const snapshotChart = retainedSnapshot ? recommendChart(retainedSnapshot.columns, retainedSnapshot.rows) : undefined;
     const openDocument = (document: QueryDocument) => {
         addDraft(draftFromDocument(document));
     };
@@ -984,6 +1009,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                     <RunActionGroup copy={copy.common} runLabel={copy.common.runStatement} running={busy === 'run' || busy === 'script'} disabled={!trusted || Boolean(busy) || unsupportedParameters} onRun={() => void execute()} actions={[
                                         { id: 'script', label: copy.common.runScript, disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.scripts.available, title: runActionTitle(connection.manifest?.scripts, 'script'), onSelect: () => void execute(true) },
                                         { id: 'explain', label: copy.common.explain, disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.explain.available, title: runActionTitle(connection.manifest?.explain, 'explain'), onSelect: () => void execute(false, 'explain') },
+                                        { id: 'explain-plan', label: copy.common.explainPlan, disabled: !trusted || Boolean(busy) || unsupportedParameters || !(connection.manifest?.explainPlan ?? connection.manifest?.explain)?.available, title: runActionTitle(connection.manifest?.explainPlan ?? connection.manifest?.explain, 'explain-plan'), onSelect: () => void execute(false, 'plan') },
                                         { id: 'explain-pipeline', label: copy.common.explainPipeline, disabled: !trusted || Boolean(busy) || unsupportedParameters || !(connection.manifest?.explainPipeline ?? connection.manifest?.pipeline)?.available, title: runActionTitle(connection.manifest?.explainPipeline ?? connection.manifest?.pipeline, 'explain-pipeline'), onSelect: () => void execute(false, 'pipeline') },
                                     ]}/>
                                 </> : <>
@@ -1002,25 +1028,37 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         </div>
                     </section>
 
-                    {(run || visibleResultsView === 'sqlmap') && <section className={cx('results-surface', experience === 'expert' && 'results-expert', resultsCollapsed && 'is-collapsed')} aria-label={visibleResultsView === 'sqlmap' ? copy.common.sqlStructure : copy.common.queryResults}>
+                    {(run || visibleResultsView === 'sqlmap') && <section className={cx('results-surface', experience === 'expert' && 'results-expert', resultsCollapsed && 'is-collapsed')} aria-label={resultsPanelLabel}>
                         <div className="results-header">
-                            <div className="results-title"><span className="results-mark"><Icon name={visibleResultsView === 'sqlmap' ? 'pipeline' : 'chart'}/></span><div><span className="eyebrow">{visibleResultsView === 'sqlmap' ? copy.common.queryVisualization : copy.common.workspaceOutput}</span><h2>{visibleResultsView === 'sqlmap' ? copy.common.sqlStructure : copy.common.results}</h2></div>{run && visibleResultsView !== 'sqlmap' && <Status run={run} copy={copy.common}/>}</div>
+                            <div className="results-title">
+                                <span className="results-mark"><Icon name={visibleResultsView === 'sqlmap' || visibleResultsView === 'pipeline' ? 'pipeline' : 'chart'}/></span>
+                                <div><span className="eyebrow">{resultsEyebrow}</span><h2>{resultsTitle}</h2></div>
+                                {run && visibleResultsView !== 'sqlmap' && <Status run={run} copy={copy.common}/>}
+                            </div>
                             <div className="results-actions">
-                                {run && <div className="results-tabs" role="tablist" aria-label={copy.common.workspaceOutput}>{resultTabs.map(tab => <button key={tab} role="tab" aria-selected={visibleResultsView === tab} type="button" onClick={() => { setView(tab); if (tab === 'chart') void perform(loadSnapshot, 'save'); if (tab === 'insights') void perform(loadProfile, 'save'); }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : tab === 'sqlmap' ? copy.common.sqlMap : copy.common.insights}{tab === 'chart' && snapshot && <span className="suggested-dot"/>}</button>)}</div>}
-                                <Button variant="ghost" className="panel-collapse-button" aria-label={`${resultsCollapsed ? copy.common.expand : copy.common.collapse} ${visibleResultsView === 'sqlmap' ? copy.common.sqlStructure : copy.common.queryResults}`} aria-expanded={!resultsCollapsed} aria-controls="query-results-content" title={resultsCollapsed ? copy.common.expandOutput : copy.common.collapseOutput} onClick={() => setResultsCollapsed(value => !value)}><Icon className="panel-toggle-icon" name="chevron"/></Button>
+                                {run && <div className="results-tabs" role="tablist" aria-label={copy.common.workspaceOutput}>{resultTabs.map(tab => <button key={tab} role="tab" aria-selected={visibleResultsView === tab} type="button" onClick={() => {
+                                    setView(tab);
+                                    if (tab === 'chart' || tab === 'plan' || tab === 'pipeline') void perform(loadSnapshot, 'save');
+                                    if (tab === 'insights') void perform(loadProfile, 'save');
+                                }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : tab === 'sqlmap' ? copy.common.sqlMap : tab === 'plan' ? copy.common.logicalPlan : tab === 'pipeline' ? copy.common.pipelineGraph : copy.common.insights}{tab === 'chart' && retainedSnapshot && <span className="suggested-dot"/>}</button>)}</div>}
+                                <Button variant="ghost" className="panel-collapse-button" aria-label={`${resultsCollapsed ? copy.common.expand : copy.common.collapse} ${resultsPanelLabel}`} aria-expanded={!resultsCollapsed} aria-controls="query-results-content" title={resultsCollapsed ? copy.common.expandOutput : copy.common.collapseOutput} onClick={() => setResultsCollapsed(value => !value)}><Icon className="panel-toggle-icon" name="chevron"/></Button>
                             </div>
                         </div>
                         <div id="query-results-content" className="panel-content results-content" hidden={resultsCollapsed}>
-                        {visibleResultsView === 'sqlmap' && <SqlFlowView copy={copy.common} sql={sqlMapStatement?.sql ?? active.sql} sourceOffset={sqlMapStatement?.from ?? 0} parseResult={sqlMapParseStatement?.result} parserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} parseDurationMs={nativeParseSnapshot?.elapsedMs} onRevealRange={(from, to) => editor.current?.revealRange(from, to)}/>}
-                        {visibleResultsView !== 'sqlmap' && staleResult && <div className="result-provenance" aria-live="polite"><span className="status-light is-warning"/><span><strong>Result from previous execution</strong><small>SQL or bound parameters changed since this run. Rerun to refresh the result.</small></span></div>}
-                        {visibleResultsView === 'results' && script && <ScriptResults script={script} runs={history} activeRunId={run?.id} onSelectRun={runId => {
-                            if (active.scriptId) scriptFollowRef.current = { scriptId: active.scriptId, enabled: false };
-                            update(active.id, draft => ({ ...draft, activeRunId: runId }));
-                            setPage(0); setView('results');
-                        }} onCancel={() => void cancel()} cancelDisabled={cancelling}/>}
-                        {run && visibleResultsView === 'results' && <ResultGrid key={run.id} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/>}
-                        {run && visibleResultsView === 'chart' && snapshotChart?.config.kind === 'table' ? <div className="chart-table-fallback"><div className="chart-table-notice" role="status">{copy.chart.fallbackNoMeasure}</div><ResultGrid key={`${run.id}-chart-table`} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/></div> : run && visibleResultsView === 'chart' && <ChartView result={snapshot} loading={!snapshot && run.resultState === 'reopenable'} chart={active.chart} onChart={chart => patch({ chart })} copy={copy} locale={locale}/>}
-                        {run && visibleResultsView === 'insights' && <InsightsView run={run} profile={profile} pipeline={pipeline} pipelineAvailable={Boolean(trusted && connection.manifest?.pipeline.available)} onLoad={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} loading={busy === 'save'}/>}
+                            {visibleResultsView === 'sqlmap' && <SqlFlowView copy={copy.common} sql={sqlMapStatement?.sql ?? active.sql} sourceOffset={sqlMapStatement?.from ?? 0} parseResult={sqlMapParseStatement?.result} parserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} parseDurationMs={nativeParseSnapshot?.elapsedMs} onRevealRange={(from, to) => editor.current?.revealRange(from, to)}/>}
+                            {visibleResultsView !== 'sqlmap' && staleResult && <div className="result-provenance" aria-live="polite"><span className="status-light is-warning"/><span><strong>Result from previous execution</strong><small>SQL or bound parameters changed since this run. Rerun to refresh the result.</small></span></div>}
+                            {visibleResultsView === 'results' && script && <ScriptResults script={script} runs={history} activeRunId={run?.id} onSelectRun={runId => {
+                                if (active.scriptId) scriptFollowRef.current = { scriptId: active.scriptId, enabled: false };
+                                update(active.id, draft => ({ ...draft, activeRunId: runId }));
+                                setPage(0); setView('results');
+                            }} onCancel={() => void cancel()} cancelDisabled={cancelling}/>}
+                            {run && visibleResultsView === 'results' && <ResultGrid key={run.id} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/>}
+                            {run && visibleResultsView === 'plan' && <ExplainPlanView plan={explainPlan} loading={!retainedSnapshot && run.resultState === 'reopenable'} copy={copy.common}/>}
+                            {run && visibleResultsView === 'pipeline' && (pipelineResult
+                                ? <PipelineGraph pipeline={pipelineResult} copy={copy.common} heading={copy.common.pipelineGraph} subheading={copy.common.pipelineGraphDescription}/>
+                                : <div className="pipeline-graph-empty" role="status">{copy.common.pipelineNoOutput}</div>)}
+                            {run && visibleResultsView === 'chart' && snapshotChart?.config.kind === 'table' ? <div className="chart-table-fallback"><div className="chart-table-notice" role="status">{copy.chart.fallbackNoMeasure}</div><ResultGrid key={`${run.id}-chart-table`} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/></div> : run && visibleResultsView === 'chart' && <ChartView result={retainedSnapshot} loading={!retainedSnapshot && run.resultState === 'reopenable'} chart={active.chart} onChart={chart => patch({ chart })} copy={copy} locale={locale}/>}
+                            {run && visibleResultsView === 'insights' && <InsightsView run={run} profile={profile} pipeline={pipeline} pipelineAvailable={Boolean(trusted && connection.manifest?.pipeline.available)} onLoad={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} loading={busy === 'save'}/>}
                         </div>
                     </section>}
                 </div>

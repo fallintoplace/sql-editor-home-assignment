@@ -72,5 +72,7 @@ test('Unknown limit cannot exploit prototype', () => assert.throws(() => limits(
 test('Unsafe JSON integers reject rather than lose precision', () => assert.throws(() => validateJson(JSON.parse('{"id":18446744073709551615}'))));
 test('Int64 encoded as a string remains lossless', () => assert.equal(validateJson({ id: '18446744073709551615' }).id, '18446744073709551615'));
 test('Request tags cannot smuggle arbitrary secret fields', () => assert.throws(() => runRequest({ clientRequestId: 'a', connectionId: 'local', sql: 'SELECT 1', tags: { password: 'x' } })));
+test('EXPLAIN PLAN is an accepted run kind', () => assert.equal(runRequest({ clientRequestId: 'plan-1', connectionId: 'local', sql: 'SELECT 1', kind: 'plan' }).kind, 'plan'));
+test('Unknown explain run kinds are rejected', () => assert.throws(() => runRequest({ clientRequestId: 'plan-2', connectionId: 'local', sql: 'SELECT 1', kind: 'explain-json' }), { code: 'INVALID_KIND' }));
 for (const experience of ['beginner', 'expert'])
     test(`Workspace mode ${experience} is a valid query tag`, () => assert.equal(runRequest({ clientRequestId: 'a', connectionId: 'local', sql: 'SELECT 1', tags: { workspace: 'clickstudio', experience } }).tags.experience, experience));

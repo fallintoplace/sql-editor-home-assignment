@@ -538,6 +538,37 @@
     .pipeline-node-facts small { color: var(--muted); font-size: 7px; }
     .pipeline-node-facts strong { color: var(--text-soft); font-family: var(--font-mono); font-size: 9px; }
     .pipeline-graph-empty { padding: 13px; border: 1px dashed var(--line-bright); border-radius: 8px; color: var(--muted); font-size: 9px; text-align: center; }
+    .explain-plan-view { display: grid; min-width: 0; min-height: 0; flex: 1; align-content: start; gap: 10px; overflow: auto; padding: 12px; }
+    .explain-plan-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: linear-gradient(115deg, color-mix(in srgb, var(--accent) 7%, var(--panel-raised)), var(--panel-raised) 68%); }
+    .explain-plan-mark { display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line)); border-radius: 9px; background: color-mix(in srgb, var(--accent) 8%, var(--panel)); color: var(--accent); font-family: var(--font-mono); font-size: 10px; font-weight: 750; }
+    .explain-plan-heading h3 { margin: 0 0 4px; color: var(--text); font-size: 13px; font-weight: 700; }
+    .explain-plan-heading p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
+    .explain-plan-heading > strong { padding: 6px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--text-soft); font-family: var(--font-mono); font-size: 8px; white-space: nowrap; }
+    .explain-plan-tree, .explain-plan-tree ul { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+    .explain-plan-node, .explain-plan-leaf { min-width: 0; border: 1px solid var(--line); border-radius: 9px; background: color-mix(in srgb, var(--panel) 84%, transparent); }
+    .explain-plan-node > details > summary { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 10px 11px; cursor: pointer; list-style: none; }
+    .explain-plan-node > details > summary::-webkit-details-marker, .explain-plan-property > summary::-webkit-details-marker { display: none; }
+    .explain-plan-node > details > summary::before { width: 7px; color: var(--accent); content: '▸'; font-size: 10px; }
+    .explain-plan-node > details[open] > summary::before { content: '▾'; }
+    .explain-plan-step-type { min-width: 0; color: var(--text); font-family: var(--font-mono); font-size: 10px; font-weight: 700; overflow-wrap: anywhere; }
+    .explain-plan-node summary code, .explain-plan-leaf code { overflow: hidden; margin-left: auto; color: var(--muted); font-family: var(--font-mono); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+    .explain-plan-node-body { display: grid; gap: 8px; padding: 0 10px 10px 25px; }
+    .explain-plan-node-body > p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.55; }
+    .explain-plan-node-body > ul { padding-left: 12px; border-left: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line)); }
+    .explain-plan-properties { display: grid; gap: 5px; }
+    .explain-plan-property { min-width: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+    .explain-plan-property > summary { display: grid; grid-template-columns: 8px minmax(85px, .45fr) minmax(0, 1fr); align-items: start; gap: 9px; padding: 6px 8px; color: var(--text-soft); font-size: 8px; list-style: none; }
+    .explain-plan-property > summary { cursor: pointer; }
+    .explain-plan-property > summary::before { color: var(--accent); content: '+'; font-family: var(--font-mono); }
+    .explain-plan-property[open] > summary::before { content: '−'; }
+    .explain-plan-property > summary > span, .explain-plan-property.is-scalar > span { overflow-wrap: anywhere; font-weight: 650; }
+    .explain-plan-property > summary > small { color: var(--muted); text-align: right; }
+    .explain-plan-property.is-scalar { display: grid; grid-template-columns: minmax(85px, .45fr) minmax(0, 1fr); align-items: start; gap: 9px; padding: 6px 8px; color: var(--text-soft); font-size: 8px; }
+    .explain-plan-property code { overflow-wrap: anywhere; color: var(--text-soft); font-family: var(--font-mono); font-size: 8px; }
+    .explain-plan-property pre { max-height: 260px; overflow: auto; margin: 0; padding: 8px; border-top: 1px solid var(--line); color: var(--muted); font-family: var(--font-mono); font-size: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .explain-plan-leaf { display: flex; min-height: 37px; align-items: center; gap: 9px; padding: 8px 10px; }
+    .explain-plan-leaf::before { width: 7px; color: var(--green); content: '•'; font-size: 14px; }
+    .explain-plan-leaf > strong { min-width: 0; color: var(--text); font-family: var(--font-mono); font-size: 9px; overflow-wrap: anywhere; }
     .profile-note { color: var(--muted); font-size: 9px; line-height: 1.6; }
     .chart-title-row { flex-wrap: wrap; }
     .chart-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }

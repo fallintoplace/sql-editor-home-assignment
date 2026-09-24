@@ -3,7 +3,7 @@ import { AppError, requireThat } from './errors.js';
 
 type RunKind = NonNullable<RunRequest['kind']>;
 const LIMIT_KEYS = ['rows', 'bytes', 'seconds', 'memory', 'threads'] satisfies readonly (keyof Limits)[];
-const RUN_KINDS = ['query', 'explain', 'pipeline'] as const satisfies readonly RunKind[];
+const RUN_KINDS = ['query', 'explain', 'plan', 'pipeline'] as const satisfies readonly RunKind[];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === 'object' && !Array.isArray(value);

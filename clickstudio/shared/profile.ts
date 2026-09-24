@@ -145,7 +145,7 @@ function tokenizeDot(source: string): { tokens: DotToken[]; truncated: boolean }
     return { tokens, truncated: source.length > input.length };
 }
 
-function parsePipelineDot(raw: readonly string[], profile: ProfileSummary): ProfilePipeline | undefined {
+function parsePipelineDot(raw: readonly string[], profile?: ProfileSummary): ProfilePipeline | undefined {
     const source = raw.join('\n');
     if (!/\bdigraph\b[\s\S]*\{/i.test(source))
         return undefined;
@@ -206,8 +206,8 @@ function parsePipelineDot(raw: readonly string[], profile: ProfileSummary): Prof
             detail: label.trim(),
             status: 'planned',
             ...(parallelism ? { parallelism: Number(parallelism) } : {}),
-            ...(measured && kind === 'read' ? { rows: profile.readRows, bytes: profile.readBytes } : {}),
-            ...(measured && kind === 'output' ? { durationMs: profile.durationMs, rows: String(profile.resultRows), bytes: profile.resultBytes } : {}),
+            ...(measured && kind === 'read' && profile ? { rows: profile.readRows, bytes: profile.readBytes } : {}),
+            ...(measured && kind === 'output' && profile ? { durationMs: profile.durationMs, rows: String(profile.resultRows), bytes: profile.resultBytes } : {}),
         };
         if (nodes.size >= MAX_PIPELINE_GRAPH_NODES) {
             capped = true;
@@ -349,4 +349,8 @@ export function buildQueryProfile(run: Run, evidence: unknown, options: {
         traceUrl: options.traceUrl,
         notice: options.notice,
     };
+}
+
+export function parsePipelineResult(raw: readonly string[]): ProfilePipeline | undefined {
+    return parsePipelineDot(raw, undefined);
 }

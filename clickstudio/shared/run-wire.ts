@@ -79,7 +79,7 @@ export function isRun(value: unknown): value is Run {
         && typeof value.sql === 'string'
         && (value.sourceFrom === undefined || isSafeInteger(value.sourceFrom))
         && (value.sourceTo === undefined || isSafeInteger(value.sourceTo))
-        && (value.kind === 'query' || value.kind === 'explain' || value.kind === 'pipeline')
+        && (value.kind === 'query' || value.kind === 'explain' || value.kind === 'plan' || value.kind === 'pipeline')
         && isStringRecord(value.parameters)
         && isLimits(value.limits)
         && isStringRecord(value.tags)

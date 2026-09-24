@@ -18,17 +18,43 @@ test('Advanced mode gives the editor the full work area before the first run', a
     await expect(page.getByRole('button', { name: 'Run statement', exact: true })).toBeVisible();
 });
 
-test('Run script and explain actions stay visible beside the primary Run button', async ({ page }) => {
+test('Run, script, and explain actions stay visible beside the primary Run button', async ({ page }) => {
     await trust(page);
     const actions = page.getByRole('group', { name: 'Run actions', exact: true });
     const runScript = actions.getByRole('button', { name: /^Run script/ });
     await expect(actions.getByRole('button', { name: 'Run statement', exact: true })).toBeVisible();
     await expect(runScript).toBeVisible();
-    await expect(actions.getByRole('button', { name: 'EXPLAIN', exact: true })).toBeVisible();
+    await expect(actions.getByRole('button', { name: 'EXPLAIN INDEXES', exact: true })).toBeVisible();
+    await expect(actions.getByRole('button', { name: 'EXPLAIN PLAN', exact: true })).toBeVisible();
     await expect(actions.getByRole('button', { name: 'EXPLAIN PIPELINE', exact: true })).toBeVisible();
     await expect(runScript).toBeEnabled();
     await runScript.focus();
     await expect(runScript).toBeFocused();
+});
+
+test('EXPLAIN PLAN opens a structured tree and keeps the raw result available', async ({ page }) => {
+    await trust(page);
+    await page.getByTestId('run-action-explain-plan').click();
+
+    const plan = page.getByRole('region', { name: 'Logical query plan', exact: true });
+    await expect(plan).toContainText('Expression');
+    await expect(plan).toContainText('ReadFromFixture');
+    await expect(plan).toContainText('Fixture only; the SQL was not evaluated.');
+
+    await page.getByRole('tab', { name: 'Results', exact: true }).click();
+    await expect(page.getByRole('table', { name: 'Retained query rows' })).toBeVisible();
+});
+
+test('EXPLAIN PIPELINE opens an interactive ClickHouse operator graph', async ({ page }) => {
+    await trust(page);
+    await page.getByTestId('run-action-explain-pipeline').click();
+
+    const graph = page.getByRole('region', { name: 'Scrollable operator graph', exact: true });
+    const filter = graph.locator('[data-node-id]').filter({ hasText: 'FilterTransform' });
+    await expect(filter).toBeVisible();
+    await filter.click();
+    await expect(page.locator('.pipeline-node-inspector')).toContainText('FilterTransform');
+    await expect(page.locator('.pipeline-node-inspector')).toContainText('planned');
 });
 
 test('Advanced panels stay reachable through Ask AI and More', async ({ page }) => {

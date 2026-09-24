@@ -1,4 +1,5 @@
-import type { ChartConfig, MetricContract, QueryDocument } from '../shared/types.js';
+import type { ChartConfig, QueryDocument } from '../shared/types.js';
+import type { SaveableDraft } from '../shared/workspace-view.js';
 export const SAMPLE_SQL = "SELECT\n    toDate('2026-01-01') + number AS day,\n    (number + 1) * 10 AS events\nFROM numbers(7)\nORDER BY day";
 export interface Checkpoint {
     id: string;
@@ -9,25 +10,15 @@ export interface Checkpoint {
     to: number;
     parentRevision?: number;
 }
-export interface Draft {
+/** Saved fields follow the shared document contract; only browser state lives here. */
+export interface Draft extends SaveableDraft {
     id: string;
-    name: string;
-    sql: string;
-    serverId?: string;
-    baseRevision?: number;
-    parameters: Record<string, string>;
-    chart: ChartConfig;
     runIds: string[];
-    activeRunId?: string;
     scriptId?: string;
     parentRunId?: string;
-    parentDocumentId?: string;
     checkpoints: Checkpoint[];
     from: number;
     to: number;
-    kind: 'query' | 'snippet' | 'metric';
-    metric?: MetricContract;
-    dependencies: string[];
 }
 export interface WorkspaceState {
     version: 1;
@@ -63,7 +54,8 @@ const record = (value: unknown): value is Record<string, unknown> =>
     value !== null && typeof value === 'object' && !Array.isArray(value);
 const text = (value: unknown, fallback = '') => typeof value === 'string' ? value : fallback;
 const id = (value: unknown) => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,200}$/.test(value) ? value : undefined;
-const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+const array = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
+const strings = (value: unknown): string[] => array(value).filter((v): v is string => typeof v === 'string');
 const position = (value: unknown, length: number) => typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(length, Math.trunc(value))) : 0;
 const index = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 const chartIndex = (value: unknown): value is number => index(value) && value <= 499;
@@ -88,6 +80,7 @@ export function recoverDraft(value: unknown): Draft | undefined {
         return undefined;
     const draft = newDraft(text(value.name, 'Recovered.sql'), value.sql);
     const chart = record(value.chart) ? value.chart : {};
+    const candlestick = recoveredCandlestick(chart.candlestick);
     const metric = record(value.metric) ? value.metric : undefined;
     const from = position(value.from, draft.sql.length), to = position(value.to, draft.sql.length);
     return {
@@ -98,8 +91,8 @@ export function recoverDraft(value: unknown): Draft | undefined {
             kind: isChartKind(chart.kind) ? chart.kind : 'table',
             x: chartIndex(chart.x) ? chart.x : 0,
             ...(chartIndex(chart.groupBy) ? { groupBy: chart.groupBy } : {}),
-            ys: Array.isArray(chart.ys) ? chart.ys.filter(chartIndex) : [], title: text(chart.title, 'Query result'),
-            ...(recoveredCandlestick(chart.candlestick) ? { candlestick: recoveredCandlestick(chart.candlestick) } : {}),
+            ys: array(chart.ys).filter(chartIndex), title: text(chart.title, 'Query result'),
+            ...(candlestick ? { candlestick } : {}),
         },
         runIds: [...new Set(strings(value.runIds).filter(v => id(v)))],
         activeRunId: id(value.activeRunId), scriptId: id(value.scriptId),
@@ -112,7 +105,7 @@ export function recoverDraft(value: unknown): Draft | undefined {
             sourceColumns: strings(metric.sourceColumns),
         } : undefined,
         dependencies: strings(value.dependencies).filter(v => id(v)),
-        checkpoints: (Array.isArray(value.checkpoints) ? value.checkpoints : []).flatMap((point): Checkpoint[] => {
+        checkpoints: array(value.checkpoints).flatMap((point): Checkpoint[] => {
             if (!record(point) || typeof point.sql !== 'string' || point.sql.length > 200000)
                 return [];
             const a = position(point.from, point.sql.length), b = position(point.to, point.sql.length);
@@ -127,7 +120,7 @@ export function recover(key: string, storage?: Pick<Storage, 'getItem'>): Worksp
         const value: unknown = JSON.parse((storage ?? localStorage).getItem(key) ?? 'null');
         if (record(value) && value.version === 1 && (Array.isArray(value.tabs) || Array.isArray(value.closedTabs))) {
             const seen = new Set<string>();
-            const recoverTabs = (input: unknown[], limit: number) => {
+            const recoverTabs = (input: readonly unknown[], limit: number) => {
                 const recovered: Draft[] = [];
                 for (const value of input) {
                     const draft = recoverDraft(value);
@@ -140,8 +133,8 @@ export function recover(key: string, storage?: Pick<Storage, 'getItem'>): Worksp
                 }
                 return recovered;
             };
-            const storedTabs = Array.isArray(value.tabs) ? value.tabs : [];
-            const storedClosed = Array.isArray(value.closedTabs) ? value.closedTabs : [];
+            const storedTabs = array(value.tabs);
+            const storedClosed = array(value.closedTabs);
             const tabs = recoverTabs(storedTabs, MAX_TABS);
             const closedTabs = recoverTabs(storedClosed, MAX_CLOSED_TABS);
             const incomplete = !Array.isArray(value.tabs) || tabs.length !== storedTabs.length ||

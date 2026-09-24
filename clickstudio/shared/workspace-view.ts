@@ -1,4 +1,4 @@
-import { HARD_LIMITS, type Limits, type MetricContract, type QueryDocument, type Run, type RunStatus } from './types.js';
+import { HARD_LIMITS, type CandlestickConfig, type ChartConfig, type Limits, type MetricContract, type QueryDocument, type Run, type RunStatus } from './types.js';
 import { sameParameters } from './evidence.js';
 
 /** Match the server's numeric bounds. Connection limits are defaults, not ceilings. */
@@ -32,13 +32,22 @@ function sameMetric(left?: MetricContract, right?: MetricContract): boolean {
         sameArray(left.dimensions, right.dimensions) && sameArray(left.sourceColumns, right.sourceColumns);
 }
 
+function sameCandlestick(left?: CandlestickConfig, right?: CandlestickConfig): boolean {
+    if (!left || !right) return left === right;
+    return left.open === right.open && left.high === right.high && left.low === right.low && left.close === right.close &&
+        left.bid === right.bid && left.ask === right.ask && left.spread === right.spread && left.quoteActivity === right.quoteActivity;
+}
+function sameChart(left: ChartConfig, right: ChartConfig): boolean {
+    return left.kind === right.kind && left.title === right.title && left.x === right.x && left.groupBy === right.groupBy &&
+        sameArray(left.ys, right.ys) && sameCandlestick(left.candlestick, right.candlestick);
+}
+
 /** Compare saved content, not selection, checkpoints, object insertion order or review metadata. */
 export function sameSavedContent(draft: SaveableDraft, saved: QueryDocument): boolean {
     return draft.name === saved.name && draft.sql === saved.sql && draft.kind === saved.kind &&
         draft.activeRunId === saved.runId && draft.parentDocumentId === saved.parentDocumentId &&
         sameParameters(draft.parameters, saved.parameters) && sameArray(draft.dependencies, saved.dependencies) &&
-        draft.chart.kind === saved.chart.kind && draft.chart.title === saved.chart.title && draft.chart.x === saved.chart.x && draft.chart.groupBy === saved.chart.groupBy &&
-        sameArray(draft.chart.ys, saved.chart.ys) && JSON.stringify(draft.chart.candlestick ?? null) === JSON.stringify(saved.chart.candlestick ?? null) &&
+        sameChart(draft.chart, saved.chart) &&
         (draft.kind !== 'metric' || sameMetric(draft.metric, saved.metric));
 }
 

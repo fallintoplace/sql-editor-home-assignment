@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import type { QueryDocument, Run } from '../../shared/types';
-import { trust } from './helpers.js';
+import { openWorkspacePanel, trust } from './helpers.js';
 
 async function replaceSql(page: Page, sql: string) {
     await page.locator('.cm-content').click();
@@ -38,7 +38,7 @@ test('Reopening and saving a metric keeps its saved contract and dependency', as
     await page.getByRole('button', { name: /Daily revenue/ }).click();
     await expect(page.locator('.cm-content')).toContainText(savedDocument.sql);
     await expect(page.locator('.execution-bar code')).toHaveText(savedRun.queryId);
-    await page.getByRole('button', { name: 'Save revision', exact: true }).click();
+    await page.getByTestId('save-query').click();
     await expect.poll(() => savePayload).toBeDefined();
     expect(savePayload).toMatchObject({
         baseRevision: 4, parameters: savedDocument.parameters, chart: savedDocument.chart, runId: savedDocument.runId,
@@ -49,7 +49,7 @@ test('Reopening and saving a metric keeps its saved contract and dependency', as
 test('Saving a query updates its revision status and later edits are marked unsaved', async ({ page }) => {
     await trust(page);
     await replaceSql(page, 'SELECT 111');
-    await page.getByRole('button', { name: 'Save revision', exact: true }).click();
+    await page.getByTestId('save-query').click();
     await expect(page.locator('.draft-status')).toHaveText('Saved r1');
     await replaceSql(page, 'SELECT 222');
     await expect(page.locator('.draft-status')).toHaveText('Unsaved changes');
@@ -68,7 +68,7 @@ test('Editing during a delayed save leaves the newer SQL marked unsaved', async 
     await trust(page);
     try {
         await replaceSql(page, 'SELECT 111');
-        await page.getByRole('button', { name: 'Save revision', exact: true }).click();
+        await page.getByTestId('save-query').click();
         await expect(page.locator('.draft-status')).toHaveText('Saving…');
         await replaceSql(page, 'SELECT 222');
         release();
@@ -98,8 +98,7 @@ test('Refreshing run history shows the latest run without executing SQL', async 
     });
     await page.route(url => url.pathname === '/api/runs' && url.searchParams.has('connectionId'), route => route.fulfill({ json: refresh ? [historyRun()] : [] }));
     await trust(page);
-    await page.getByRole('navigation', { name: 'Workspace browser', exact: true }).getByRole('button', { name: 'More workspace panels', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Runs', exact: true }).click();
+    await openWorkspacePanel(page, 'history');
     const pane = page.locator('.inspector-pane');
     await expect(pane.getByText('No runs yet', { exact: true })).toBeVisible();
     refresh = true;

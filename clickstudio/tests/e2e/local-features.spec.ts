@@ -23,7 +23,7 @@ async function resultPage(page: Page, transform: (result: Result) => Result) {
     });
 }
 async function run(page: Page) {
-    await page.getByRole('button', { name: 'Run statement', exact: true }).click();
+    await page.getByTestId('run-statement').click();
     const results = page.getByRole('region', { name: 'Query results', exact: true });
     await expect(results.getByRole('table', { name: 'Retained query rows' })).toBeVisible();
     return results;

@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
+import { openWorkspacePanel } from './helpers.js';
 
 test('Static Vercel preview loads the native parser and exports retained sample results', async ({ page }) => {
     const wasmResponsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/assets/clickhouse-parser.wasm');
@@ -10,8 +11,7 @@ test('Static Vercel preview loads the native parser and exports retained sample 
     expect(wasmResponse.headers()['content-type']).toMatch(/^application\/wasm/);
     expect(Array.from((await wasmResponse.body()).subarray(0, 4))).toEqual([0, 97, 115, 109]);
 
-    await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'ClickHouse parser', exact: true }).click();
+    await openWorkspacePanel(page, 'parser');
     await expect(page.getByText('Ready · local WebAssembly')).toBeVisible();
     await expect(page.getByText('Valid ClickHouse SQL')).toBeVisible();
 
@@ -36,21 +36,21 @@ test('Playground examples preview real SQL and open a draft without executing it
             exampleSqlRequests.push(requestText);
     });
     await page.goto('/');
-    await page.getByRole('button', { name: 'New SQL', exact: true }).click();
+    await page.getByTestId('new-sql').click();
 
     const dialog = page.getByRole('dialog', { name: 'SQL examples', exact: true });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText('ClickHouse Playground', { exact: true })).toBeVisible();
-    await dialog.getByRole('button', { name: 'Open source', exact: true }).click();
-    const dailyActivity = dialog.getByRole('option', { name: /Daily activity/ });
+    await dialog.getByTestId('sql-example-category-openSource').click();
+    const dailyActivity = dialog.getByTestId('sql-example-github-daily-activity');
     await expect(dailyActivity).toBeVisible();
     await dailyActivity.click();
     await expect(dialog.locator('.sql-example-preview code')).toContainText('FROM github.events');
-    await dialog.getByRole('button', { name: 'Open in new SQL', exact: true }).click();
+    await dialog.getByTestId('open-sql-example').click();
 
     await expect(page.getByRole('tab', { name: 'Daily activity.sql', exact: true })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('.cm-content')).toContainText('FROM github.events');
-    await expect(page.locator('.execution-bar .execution-ready-state')).toHaveText('Ready');
+    await expect(page.locator('.execution-bar')).toHaveAttribute('data-run-status', 'ready');
     await expect(page.locator('.execution-bar code')).toHaveCount(0);
     expect(exampleSqlRequests).toEqual([]);
 });
@@ -64,20 +64,20 @@ test('Charts filter opens a localized chart example in a new SQL tab without exe
     });
 
     await page.goto('/');
-    await page.getByRole('button', { name: 'New SQL', exact: true }).click();
+    await page.getByTestId('new-sql').click();
     const dialog = page.getByRole('dialog', { name: 'SQL examples', exact: true });
-    await dialog.getByRole('button', { name: 'Charts', exact: true }).click();
+    await dialog.getByTestId('sql-example-category-charts').click();
 
-    const forexExample = dialog.getByRole('option', { name: /EUR\/USD monthly midpoint/ });
+    const forexExample = dialog.getByTestId('sql-example-forex-eur-usd-monthly');
     await expect(forexExample).toBeVisible();
     await forexExample.click();
     await expect(dialog.locator('.sql-example-preview')).toContainText('Forex');
     await expect(dialog.locator('.sql-example-preview code')).toContainText('FROM forex.forex');
     await expect(dialog.locator('.sql-example-readonly')).toHaveText('Line chart');
-    await dialog.getByRole('button', { name: 'Open in new SQL', exact: true }).click();
+    await dialog.getByTestId('open-sql-example').click();
 
     await expect(page.getByRole('tab', { name: 'EUR/USD monthly midpoint.sql', exact: true })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('.cm-content')).toContainText('FROM forex.forex');
-    await expect(page.locator('.execution-bar .execution-ready-state')).toHaveText('Ready');
+    await expect(page.locator('.execution-bar')).toHaveAttribute('data-run-status', 'ready');
     expect(exampleSqlRequests).toEqual([]);
 });

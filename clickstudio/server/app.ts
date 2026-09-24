@@ -282,9 +282,9 @@ export function createApp(config: Config, overrides: {
     const errors: ErrorRequestHandler = (error, _req, res, _next) => { if (res.headersSent) {
         res.end();
         return;
-    } const parsed = asError(error); const tooLarge = (error as {
-        type?: string;
-    })?.type === 'entity.too.large'; res.status(tooLarge ? 413 : error instanceof AppError ? error.status : error instanceof SyntaxError ? 400 : 500).json({ error: { ...parsed, message: redact(parsed.message) }, requestId: res.locals.requestId }); };
+    } const parsed = asError(error);
+    const tooLarge = error !== null && typeof error === 'object' && 'type' in error && error.type === 'entity.too.large';
+    res.status(tooLarge ? 413 : error instanceof AppError ? error.status : error instanceof SyntaxError ? 400 : 500).json({ error: { ...parsed, message: redact(parsed.message) }, requestId: res.locals.requestId }); };
     app.use(errors);
     return { app, store, runs, artifacts, ai, voice, imports, monitors, driver, close: async () => { await runs.close(); await driver.close(); } };
 }

@@ -190,7 +190,7 @@ test('Failed async formatting does not overwrite edits typed while it was pendin
     await page.getByRole('button', { name: 'More workspace panels', exact: true }).click();
     await page.getByRole('menuitem', { name: 'ClickHouse parser', exact: true }).click();
     await expect(page.getByText('Ready · local WebAssembly', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Format', exact: true }).click();
+    await page.getByRole('group', { name: 'Format SQL' }).getByRole('button', { name: 'WASM', exact: true }).click();
     await expect.poll(() => page.evaluate(() => Boolean((window as any).__pendingParserFormat))).toBe(true);
     await replaceSql(page, 'select new_value from new_table');
     await page.evaluate(() => (window as any).__failParserWorker());

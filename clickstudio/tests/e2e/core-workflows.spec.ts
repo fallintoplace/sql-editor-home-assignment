@@ -341,11 +341,9 @@ test('Charts keep NULL missing and plot nullable negative values from zero', asy
     const results = await runQuery(page);
     await results.getByRole('tab', { name: 'Chart', exact: true }).click();
     await expect(results.locator('.chart-canvas svg[role="img"]')).toBeVisible();
-    const measure = results.getByLabel('Measure');
-    await expect(measure.locator('option', { hasText: 'value' })).toBeEnabled();
-    await expect(results.locator('.chart-footer')).toContainText('2 plotted points');
-    await measure.selectOption('1');
-    await results.getByLabel('Type').selectOption('bar');
+    const measure = results.getByRole('group', { name: 'Measures' }).getByLabel('value');
+    await expect(measure).toBeChecked();
+    await expect(results.locator('.chart-footer')).toContainText('3 retained rows across 1 measure');
     const bars = results.locator('.chart-bar');
     await expect(bars).toHaveCount(2);
     expect(Number(await bars.nth(0).getAttribute('y'))).toBeCloseTo(100, 0);
@@ -373,7 +371,7 @@ test('Charts sample the full retained range and report the sampled row count', a
     expect(Number(await results.locator('.chart-bar').last().getAttribute('y'))).toBeCloseTo(40, 0);
 });
 
-test('Single-row numeric results render as a number and expose only supported chart types', async ({ page }) => {
+test('Single-row numeric results render as a number and expose supported chart types', async ({ page }) => {
     await page.route('**/api/runs/*/snapshot', async route => {
         const response = await route.fetch();
         const result = await response.json();
@@ -388,7 +386,48 @@ test('Single-row numeric results render as a number and expose only supported ch
     const results = await runQuery(page);
     await results.getByRole('tab', { name: 'Chart', exact: true }).click();
     await expect(results.locator('.chart-number-card')).toContainText('42');
-    await expect(results.getByLabel('Type').locator('option')).toHaveText(['Number', 'Line', 'Bar']);
+    await expect(results.getByLabel('Type').locator('option')).toHaveText(['Number', 'Line', 'Bar', 'Scatter', 'Heatmap']);
+});
+
+test('Scatter charts plot the selected numeric axes', async ({ page }) => {
+    await page.route('**/api/runs/*/snapshot', async route => {
+        const response = await route.fetch();
+        const result = await response.json();
+        await route.fulfill({ response, json: {
+            ...result,
+            columns: [{ name: 'distance', type: 'Float64' }, { name: 'fare', type: 'Float64' }],
+            rows: [[1.2, 8.5], [2.4, 12], [5.1, 19.75]],
+            completeness: 'complete',
+        } });
+    });
+    await trust(page);
+    const results = await runQuery(page);
+    await results.getByRole('tab', { name: 'Chart', exact: true }).click();
+    await results.getByLabel('Type').selectOption('scatter');
+    await expect(results.locator('.chart-canvas svg[role="img"]')).toHaveAttribute('aria-label', /scatter chart/);
+    await expect(results.locator('.chart-point')).toHaveCount(3);
+    await expect(results.getByLabel('X measure').locator('option:enabled')).toHaveCount(1);
+    await expect(results.locator('.chart-footer')).toContainText('3 plotted points');
+});
+
+test('Heatmaps retain observed groups and leave missing cells blank', async ({ page }) => {
+    await page.route('**/api/runs/*/snapshot', async route => {
+        const response = await route.fetch();
+        const result = await response.json();
+        await route.fulfill({ response, json: {
+            ...result,
+            columns: [{ name: 'weekday', type: 'String' }, { name: 'hour', type: 'DateTime' }, { name: 'trips', type: 'UInt64' }],
+            rows: [['Mon', '2026-09-21 00:00:00', 5], ['Mon', '2026-09-21 01:00:00', 8], ['Tue', '2026-09-21 00:00:00', 3]],
+            completeness: 'complete',
+        } });
+    });
+    await trust(page);
+    const results = await runQuery(page);
+    await results.getByRole('tab', { name: 'Chart', exact: true }).click();
+    await results.getByLabel('Type').selectOption('heatmap');
+    await expect(results.locator('.heatmap-grid')).toBeVisible();
+    await expect(results.locator('.heatmap-cell[aria-label="Tue, 2026-09-21 01:00:00: no returned row"]')).toBeVisible();
+    await expect(results.locator('.heatmap-caption')).toContainText('blank cells had no returned group');
 });
 
 test('A delayed chart snapshot cannot update the draft after selecting another script result', async ({ page }) => {

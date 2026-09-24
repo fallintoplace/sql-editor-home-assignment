@@ -40,7 +40,7 @@ function App() {
     const isPlayground = Boolean(session?.demo && connection?.id === 'playground');
     const otherConnections = connection ? connections.filter(item => item.id !== connection.id && (hasPreviewSourceSwitcher || !session?.demo || experience === 'expert')) : [];
     const sourceChoices = hasPreviewSourceSwitcher
-        ? connections.filter(item => item.id === 'demo' || item.id === 'playground')
+        ? connections.filter(item => item.id === 'demo' || item.id === 'playground').sort((left, right) => left.id === 'playground' ? -1 : right.id === 'playground' ? 1 : 0)
         : otherConnections;
     const dark = themeAppearance[theme].dark;
     const selectConnection = useCallback((id: string) => {
@@ -69,7 +69,9 @@ function App() {
         if (next.principal) {
             const profiles = await api<Connected[]>('/connections');
             setConnections(profiles);
-            setConnectionId(current => profiles.some(item => item.id === current) ? current : profiles[0]?.id ?? '');
+            setConnectionId(current => profiles.some(item => item.id === current)
+                ? current
+                : profiles.find(item => next.demo && item.id === 'playground')?.id ?? profiles[0]?.id ?? '');
         }
     }, []);
 

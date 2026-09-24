@@ -231,6 +231,9 @@
     .sql-examples-header .eyebrow, .sql-example-preview-heading .eyebrow { display: block; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
     .sql-examples-header h2 { margin: 4px 0 3px; font-size: 16px; font-weight: 750; letter-spacing: -.02em; }
     .sql-examples-header p, .sql-example-preview > p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+    .sql-examples-header-actions { display: flex; flex: none; align-items: center; gap: 8px; }
+    .sql-example-blank { display: inline-flex; min-height: 30px; align-items: center; gap: 6px; padding: 0 9px; font-size: 9px; }
+    .sql-example-blank svg { width: 13px; height: 13px; }
     .sql-examples-close { display: grid; width: 29px; height: 29px; flex: none; place-items: center; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--muted); cursor: pointer; }
     .sql-examples-close:hover { border-color: var(--line); background: var(--panel); color: var(--text); }
     .sql-examples-close:focus-visible, .sql-example-category:focus-visible, .sql-example-option:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

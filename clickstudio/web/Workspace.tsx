@@ -847,7 +847,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             return unsaved ? <span className="tab-unsaved" title={status.label} aria-hidden="true"/> : null;
                         })()}<button type="button" aria-label={`Close ${draft.name}`} onClick={event => { event.stopPropagation(); setWorkspace(current => closeDraft(current, draft.id)); }}>×</button>
                     </div>)}
-                    <button className="new-tab-button new-tab-labeled" type="button" aria-label="New SQL tab" title="New SQL tab" onClick={() => openNewDraft(newDraft())}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
+                    <button className="new-tab-button new-tab-labeled" type="button" aria-label={copy.common.newSql} title={copy.common.newSql} aria-haspopup="dialog" aria-expanded={examplesOpen} aria-controls="sql-examples-panel" onClick={event => openExamples(event.currentTarget)}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
                     <SqlExamplesMenu open={examplesOpen} onOpen={openExamples} onClose={closeExamples} examples={sqlExamples} sourceLabel={connectionLabel} copy={copy.common} locale={locale} onOpenExample={example => {
                         const name = example.category === 'schema'
                             ? copy.common.examplePreviewTable.replace('{table}', example.name.replace(/^Preview /, ''))
@@ -855,6 +855,10 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         const draft = newDraft(`${name}.sql`, example.sql);
                         draft.chart = { ...example.chart, title: locale === 'en' ? example.chart.title : name, ys: [...example.chart.ys], ...(example.chart.candlestick ? { candlestick: { ...example.chart.candlestick } } : {}) };
                         if (!openNewDraft(draft)) return false;
+                        window.requestAnimationFrame(() => editor.current?.focus());
+                        return true;
+                    }} onStartBlankSql={() => {
+                        if (!openNewDraft(newDraft())) return false;
                         window.requestAnimationFrame(() => editor.current?.focus());
                         return true;
                     }}/>

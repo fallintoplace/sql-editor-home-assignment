@@ -49,7 +49,7 @@ function parserWorkerStub(initialStatus: 'ready' | 'unavailable', initialResult:
             postMessage(request) {
                 if (request.kind === 'parseMany') {
                     window.__parserParseCount = (window.__parserParseCount || 0) + 1;
-                    const reply = { id: request.id, ok: true, results: request.sql.map(() => window.__nativeParserResult) };
+                    const reply = { id: request.id, kind: 'parseMany', ok: true, results: request.sql.map(() => window.__nativeParserResult) };
                     if (window.__delayNativeParser) window.__resolveDelayedNativeParse = () => this.dispatchEvent(new MessageEvent('message', { data: reply }));
                     else queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', { data: reply })));
                 }

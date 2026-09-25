@@ -36,6 +36,12 @@ export function useWorkspaceData({
     const historyRequestRef = useRef(0);
     const documentsRequestRef = useRef(0);
     const revisionsRequestRef = useRef(0);
+    const invalidateRequests = useCallback(() => {
+        schemaRequestRef.current++;
+        historyRequestRef.current++;
+        documentsRequestRef.current++;
+        revisionsRequestRef.current++;
+    }, []);
 
     const loadHistory = useCallback(async () => {
         const requestId = ++historyRequestRef.current;
@@ -132,12 +138,9 @@ export function useWorkspaceData({
         const interval = window.setInterval(() => { void loadHistory().catch(() => undefined); }, 15000);
         return () => {
             window.clearInterval(interval);
-            schemaRequestRef.current++;
-            historyRequestRef.current++;
-            documentsRequestRef.current++;
-            revisionsRequestRef.current++;
+            invalidateRequests();
         };
-    }, [loadDocuments, loadHistory, loadSchema, setError, trusted]);
+    }, [invalidateRequests, loadDocuments, loadHistory, loadSchema, setError, trusted]);
 
     return {
         schema,

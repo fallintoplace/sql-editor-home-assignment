@@ -30,6 +30,7 @@ import { draftSaveStatus, rememberRunIds, sameSavedContent } from '../shared/wor
 import type { NativeParseSnapshot, NativeParserStatus } from '../shared/native-parser';
 import { useWorkspacePersistence } from './useWorkspacePersistence';
 import { useRunEvidence } from './useRunEvidence';
+import { useResultSnapshot } from './useResultSnapshot';
 import { useScriptExecution } from './useScriptExecution';
 import { useScopedValue } from './useScopedValue';
 import { sqlExamplesFor, type SqlExample } from './sql-examples';
@@ -322,7 +323,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const trustedRef = useRef(trusted);
     trustedRef.current = trusted;
     const schemaRequestRef = useRef(0), historyRequestRef = useRef(0), documentsRequestRef = useRef(0), revisionsRequestRef = useRef(0);
-    const snapshotRequestRef = useRef(new Map<string, Promise<Result>>());
     const invalidateWorkspaceRequests = useCallback(() => {
         schemaRequestRef.current++;
         historyRequestRef.current++;
@@ -806,25 +806,14 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         await loadDocumentRevisions(restored.id);
     }, 'save');
 
-    const loadSnapshot = useCallback(async () => {
-        if (!activeRunId || snapshot?.runId === activeRunId || !run || run.resultState !== 'reopenable') return;
-        const runId = activeRunId;
-        let request = snapshotRequestRef.current.get(runId);
-        if (!request) {
-            request = api<Result>(`/runs/${encodeURIComponent(runId)}/snapshot`);
-            snapshotRequestRef.current.set(runId, request);
-        }
-        try {
-            const full = await request;
-            setSnapshotForRun(runId, full);
+    const loadSnapshot = useResultSnapshot({
+        activeRunId, run, snapshot, setSnapshotForRun,
+        onSnapshot: (runId, full) => {
             if (activeRunIdRef.current !== runId || workspaceRef.current.activeId !== active.id) return;
             const suggestion = recommendChart(full.columns, full.rows);
             if (active.chart.kind === 'table' && suggestion.config.kind !== 'table') patch({ chart: suggestion.config });
-        } finally {
-            if (snapshotRequestRef.current.get(runId) === request)
-                snapshotRequestRef.current.delete(runId);
-        }
-    }, [active.chart.kind, active.id, activeRunId, patch, run, setSnapshotForRun, snapshot]);
+        },
+    });
 
     useEffect(() => {
         if (!exampleChartRunId || exampleChartRunId !== activeRunId || run?.id !== exampleChartRunId || !terminal(run)) return;

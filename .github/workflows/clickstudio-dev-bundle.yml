@@ -1,0 +1,33 @@
+name: ClickStudio isolated validation checkout
+on:
+  push:
+    branches: [work/clickstudio-native-explorers-20260925]
+    paths: [.github/workflows/clickstudio-dev-bundle.yml]
+permissions:
+  contents: read
+jobs:
+  checkout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: clickstudio/package-lock.json
+      - name: Install the repository's locked dependencies
+        working-directory: clickstudio
+        run: npm ci
+      - name: Bundle tracked sources and installed dependencies
+        run: |
+          mkdir -p "$RUNNER_TEMP/clickstudio-checkout"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/clickstudio-checkout"
+          cp -a clickstudio/node_modules "$RUNNER_TEMP/clickstudio-checkout/clickstudio/"
+          tar -czf "$RUNNER_TEMP/clickstudio-checkout.tgz" -C "$RUNNER_TEMP/clickstudio-checkout" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clickstudio-validation-checkout
+          path: ${{ runner.temp }}/clickstudio-checkout.tgz
+          compression-level: 0
+          retention-days: 1

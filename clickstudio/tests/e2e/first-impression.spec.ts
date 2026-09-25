@@ -41,6 +41,10 @@ test('EXPLAIN PLAN opens a structured tree and keeps the raw result available', 
     await expect(plan).toContainText('Expression');
     await expect(plan).toContainText('ReadFromFixture');
     await expect(plan).toContainText('Fixture only; the SQL was not evaluated.');
+    await expect(plan.locator('.explain-plan-heading')).not.toContainText('no runtime measurements');
+    await expect(plan.locator('.explain-plan-heading > strong')).toBeVisible();
+    const headingHeight = await plan.locator('.explain-plan-heading').evaluate(element => element.getBoundingClientRect().height);
+    expect(headingHeight).toBeLessThan(48);
 
     await page.getByRole('tab', { name: 'Results', exact: true }).click();
     await expect(page.getByRole('table', { name: 'Retained query rows' })).toBeVisible();

@@ -57,8 +57,7 @@ export function ExplainPlanView({ plan, loading, copy }: { plan?: ExplainPlan; l
     if (!plan) return <div className="pipeline-graph-empty" role="status">{copy.planNoOutput}</div>;
     return <div className="explain-plan-view">
         <header className="explain-plan-heading">
-            <span className="explain-plan-mark" aria-hidden="true">PLAN</span>
-            <div><h3>{copy.logicalPlan}</h3><p>{copy.logicalPlanDescription}</p></div>
+            <h3>{copy.logicalPlan}</h3>
             <strong>{copy.planNodeCount.replace('{count}', plan.nodeCount.toLocaleString())}</strong>
         </header>
         {plan.truncated && <p className="pipeline-graph-warning" role="status">{copy.planTruncated}</p>}

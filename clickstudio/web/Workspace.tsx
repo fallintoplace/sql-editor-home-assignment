@@ -54,6 +54,47 @@ function safeStatementCount(sql: string) {
 type FailedQueryError = { draftId: string; draftSql: string; statementSql: string; sourceFrom: number; error: ApiError };
 const TOAST_TIMEOUT_MS = 10_000;
 
+function resultsViews(run: Run | undefined, experience: ExperienceLevel): readonly ResultsView[] {
+    if (run?.kind === 'explain') return ['results', 'indexes'];
+    if (run?.kind === 'plan') return ['results', 'plan'];
+    if (run?.kind === 'pipeline') return ['results', 'pipeline'];
+    if (run?.kind === 'analyze') return ['results', 'runtime'];
+    const tabs: ResultsView[] = experience === 'beginner' ? ['results', 'chart', 'sqlmap'] : ['results', 'chart', 'sqlmap', 'insights'];
+    if (run?.kind === 'query' && recommendGeo(run.columns)) tabs.splice(2, 0, 'map');
+    return tabs;
+}
+
+function resultsViewTitle(view: ResultsView, copy: Copy['common']): string {
+    switch (view) {
+        case 'sqlmap': return copy.sqlStructure;
+        case 'map': return copy.map;
+        case 'indexes': return copy.explain;
+        case 'plan': return copy.logicalPlan;
+        case 'pipeline': return copy.pipelineGraph;
+        case 'runtime': return copy.runtimeGraph;
+        default: return copy.results;
+    }
+}
+
+function resultPanelAriaLabel(view: ResultsView, copy: Copy['common']): string {
+    if (view === 'sqlmap') return copy.sqlStructure;
+    return ['map', 'plan', 'pipeline', 'indexes', 'runtime'].includes(view) ? resultsViewTitle(view, copy) : copy.queryResults;
+}
+
+function resultsTabLabel(view: ResultsView, copy: Copy['common']): string {
+    switch (view) {
+        case 'results': return copy.results;
+        case 'chart': return copy.chart;
+        case 'map': return copy.map;
+        case 'sqlmap': return copy.sqlMap;
+        case 'indexes': return copy.explain;
+        case 'plan': return copy.logicalPlan;
+        case 'pipeline': return copy.pipelineGraph;
+        case 'runtime': return copy.runtimeGraph;
+        default: return copy.insights;
+    }
+}
+
 function apiErrorDetail(error: unknown): ApiError {
     if (error instanceof RequestError) return error.detail;
     const candidate = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : undefined;
@@ -598,19 +639,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             : queryTreeCapability?.reason;
     const sqlMapParseStatement = sqlMapStatement && nativeParseSnapshot?.statements.find(statement =>
         statement.from === sqlMapStatement.from && statement.to === sqlMapStatement.to && active.sql.slice(statement.from, statement.to) === statement.sql);
-    const geoAvailable = run?.kind === 'query' && Boolean(recommendGeo(run.columns));
-    const queryResultTabs: readonly ResultsView[] = experience === 'beginner'
-        ? geoAvailable ? ['results', 'chart', 'map', 'sqlmap'] : ['results', 'chart', 'sqlmap']
-        : geoAvailable ? ['results', 'chart', 'map', 'sqlmap', 'insights'] : ['results', 'chart', 'sqlmap', 'insights'];
-    const resultTabs: readonly ResultsView[] = run?.kind === 'explain'
-        ? ['results', 'indexes']
-        : run?.kind === 'plan'
-            ? ['results', 'plan']
-        : run?.kind === 'pipeline'
-            ? ['results', 'pipeline']
-        : run?.kind === 'analyze'
-            ? ['results', 'runtime']
-            : queryResultTabs;
+    const resultTabs = resultsViews(run, experience);
     const visibleResultsView = resultTabs.includes(requestedResultsView) ? requestedResultsView : 'results';
     const retainedSnapshot = run && snapshot?.runId === run.id ? snapshot : undefined;
     const explainPlanOutput = run?.kind === 'plan' ? retainedSnapshot?.rows[0]?.[0] : undefined;
@@ -623,15 +652,9 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         : undefined, [pipelineOutputRows]);
     const analyzeOutput = run?.kind === 'analyze' ? retainedSnapshot?.rows.map(row => row[0]).filter((value): value is string => typeof value === 'string').join('\n') : undefined;
     const analyzeEvidence = useMemo(() => parseExplainAnalyze(analyzeOutput), [analyzeOutput]);
-    const resultsTitle = visibleResultsView === 'sqlmap' ? copy.common.sqlStructure
-        : visibleResultsView === 'map' ? copy.common.map
-        : visibleResultsView === 'indexes' ? copy.common.explain
-            : visibleResultsView === 'plan' ? copy.common.logicalPlan
-            : visibleResultsView === 'pipeline' ? copy.common.pipelineGraph
-            : visibleResultsView === 'runtime' ? copy.common.runtimeGraph : copy.common.results;
+    const resultsTitle = resultsViewTitle(visibleResultsView, copy.common);
     const resultsEyebrow = visibleResultsView === 'sqlmap' ? copy.common.queryVisualization : copy.common.workspaceOutput;
-    const resultsPanelLabel = visibleResultsView === 'sqlmap' ? copy.common.sqlStructure
-        : visibleResultsView === 'map' || visibleResultsView === 'plan' || visibleResultsView === 'pipeline' || visibleResultsView === 'indexes' || visibleResultsView === 'runtime' ? resultsTitle : copy.common.queryResults;
+    const resultsPanelLabel = resultPanelAriaLabel(visibleResultsView, copy.common);
     const snapshotChart = retainedSnapshot ? recommendChart(retainedSnapshot.columns, retainedSnapshot.rows) : undefined;
     const openDocument = (document: QueryDocument) => {
         addDraft(draftFromDocument(document));
@@ -998,7 +1021,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                 {run && <div className="results-tabs" role="tablist" aria-label={copy.common.workspaceOutput}>{resultTabs.map(tab => <button key={tab} role="tab" aria-selected={visibleResultsView === tab} type="button" onClick={() => {
                                     setView(tab);
                                     if (tab === 'insights') void perform(loadProfile, 'save');
-                                }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : tab === 'map' ? copy.common.map : tab === 'sqlmap' ? copy.common.sqlMap : tab === 'indexes' ? copy.common.explain : tab === 'plan' ? copy.common.logicalPlan : tab === 'pipeline' ? copy.common.pipelineGraph : tab === 'runtime' ? copy.common.runtimeGraph : copy.common.insights}{tab === 'chart' && retainedSnapshot && <span className="suggested-dot"/>}</button>)}</div>}
+                                }}>{resultsTabLabel(tab, copy.common)}{tab === 'chart' && retainedSnapshot && <span className="suggested-dot"/>}</button>)}</div>}
                                 {!compactViewport && <Button variant="ghost" className="panel-window-button" aria-label={resultsFloating ? 'Dock output panel' : 'Pop out output panel'} title={resultsFloating ? 'Dock output panel' : 'Pop out output panel'} onClick={() => togglePanelFloating('results')}><Icon name={resultsFloating ? 'dock' : 'popout'}/></Button>}
                                 {resultsFloating && <Button variant="ghost" className="panel-window-button" aria-label={resultsMode === 'maximized' ? 'Restore output panel' : 'Maximize output panel'} title={resultsMode === 'maximized' ? 'Restore output panel' : 'Maximize output panel'} onClick={() => togglePanelMaximized('results')}><Icon name={resultsMode === 'maximized' ? 'restore' : 'maximize'}/></Button>}
                                 <Button variant="ghost" className="panel-collapse-button" aria-label={`${resultsCollapsed ? copy.common.expand : copy.common.collapse} ${resultsPanelLabel}`} aria-expanded={!resultsCollapsed} aria-controls="query-results-content" title={resultsCollapsed ? copy.common.expandOutput : copy.common.collapseOutput} onClick={() => setResultsCollapsed(value => !value)}><Icon className="panel-toggle-icon" name="chevron"/></Button>

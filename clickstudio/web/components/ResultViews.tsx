@@ -256,7 +256,7 @@ export function ChartView({ result, loading, chart, onChart, copy, locale }: { r
     const selectedMeasures = usableConfiguredMeasures.length ? usableConfiguredMeasures : [defaultMeasure];
     const measureIndexes = chartKind === 'line' || chartKind === 'bar' ? selectedMeasures : selectedMeasures.slice(0, 1);
     const yIndex = measureIndexes[0] ?? 0;
-    const chartRows = chartKind === 'heatmap' ? result.rows : sampleChartRows(result.rows, MAX_CHART_RENDER_POINTS);
+    const chartRows = chartKind === 'heatmap' ? [] : sampleChartRows(result.rows, MAX_CHART_RENDER_POINTS);
     const plotSeries = measureIndexes.map((columnIndex, seriesIndex) => ({
         columnIndex,
         color: seriesColor(seriesIndex),

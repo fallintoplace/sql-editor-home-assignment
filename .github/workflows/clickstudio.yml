@@ -31,8 +31,8 @@ jobs:
         run: npm run check:syntax
       - name: TypeScript contracts
         run: npm run typecheck
-      - name: Core and workspace regressions
-        run: npm test
+      - name: Core and workspace coverage gates
+        run: npm run coverage
       - name: Production build
         run: npm run build:app
 

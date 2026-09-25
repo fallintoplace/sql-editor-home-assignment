@@ -11,6 +11,9 @@
     "typecheck": "npm --prefix clickstudio run typecheck",
     "test": "npm --prefix clickstudio test",
     "test:integration": "npm --prefix clickstudio run test:integration",
-    "test:e2e": "npm --prefix clickstudio run test:e2e"
+    "test:e2e": "npm --prefix clickstudio run test:e2e",
+    "coverage": "npm --prefix clickstudio run coverage",
+    "review": "npm --prefix clickstudio run review",
+    "check": "npm --prefix clickstudio run check"
   }
 }

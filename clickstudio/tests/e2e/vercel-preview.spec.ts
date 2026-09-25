@@ -25,13 +25,13 @@ test('Static Vercel preview loads the native parser and exports retained sample 
         .getByRole('button', { name: /Sample data/ }).click();
 
     await page.getByRole('button', { name: 'Reference', exact: true }).click();
-    await expect(page.getByTestId('reference-source')).toContainText('Bundled demo reference');
+    await expect(page.getByTestId('reference-source')).toContainText('Offline ClickHouse reference');
     await page.getByTestId('reference-search').fill('MergeTree');
     const mergeTree = page.getByRole('option', { name: /MergeTree Table Engine/ }).first();
     await expect(mergeTree).toBeVisible();
     await mergeTree.click();
     const article = page.getByRole('article', { name: 'Table Engine: MergeTree' });
-    await expect(article).toContainText('MergeTree family');
+    await expect(article).toContainText('general-purpose engine');
     await expect(article.locator('.reference-markdown code')).toContainText('ORDER BY');
     await article.getByRole('button', { name: 'Insert name', exact: true }).click();
     await expect(page.locator('.cm-content')).toContainText('MergeTree');

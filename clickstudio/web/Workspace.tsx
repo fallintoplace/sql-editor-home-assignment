@@ -31,6 +31,7 @@ import { useWorkspacePersistence } from './useWorkspacePersistence';
 import { useRunEvidence } from './useRunEvidence';
 import { useResultSnapshot } from './useResultSnapshot';
 import { useWorkspaceTabs } from './useWorkspaceTabs';
+import { useWorkspaceData } from './useWorkspaceData';
 import { PanelResizeHandles, panelTargetIsInteractive, useWorkspacePanels } from './useWorkspacePanels';
 import { useScriptExecution } from './useScriptExecution';
 import { useScopedValue } from './useScopedValue';
@@ -134,19 +135,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const editor = useRef<EditorHandle>(null);
     const [nativeParserStatus, setNativeParserStatus] = useState<NativeParserStatus>('loading');
     const [nativeParseSnapshot, setNativeParseSnapshot] = useState<NativeParseSnapshot>();
-    const [schema, setSchema] = useState<Schema>();
-    const sqlExamples = useMemo(() => sqlExamplesFor(connection, schema), [connection, schema]);
-    const [schemaLoading, setSchemaLoading] = useState(false);
-    const [schemaError, setSchemaError] = useState('');
-    const [documents, setDocuments] = useState<QueryDocument[]>([]);
-    const [documentsLoaded, setDocumentsLoaded] = useState(false);
-    const [documentsReadError, setDocumentsReadError] = useState(false);
-    const [documentRevisions, setDocumentRevisions] = useState<QueryDocument[]>([]);
-    const [revisionsDocumentId, setRevisionsDocumentId] = useState<string>();
-    const [revisionLoading, setRevisionLoading] = useState(false);
-    const [revisionError, setRevisionError] = useState('');
     const [savingDraftIds, setSavingDraftIds] = useState<Record<string, boolean>>({});
-    const [history, setHistory] = useState<Run[]>([]);
     const [scripts, setScripts] = useState<Record<string, Script>>({});
     const script = active.scriptId ? scripts[active.scriptId] : undefined;
     const [view, setView] = useState<ResultsView>('results');
@@ -212,6 +201,24 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const currentConnection = connections.find(item => item.id === connection.id) ?? connection;
     const trusted = currentConnection.trusted;
 
+    const {
+        schema, schemaLoading, schemaError,
+        documents, setDocuments, documentsLoaded, documentsReadError,
+        documentRevisions, revisionsDocumentId, revisionLoading, revisionError,
+        history, loadHistory, loadDocuments, loadDocumentRevisions, loadSchema,
+    } = useWorkspaceData({
+        connectionId: connection.id,
+        trusted,
+        activeServerId: active.serverId,
+        setWorkspace,
+        workspaceRef,
+        setError,
+    });
+    const sqlExamples = useMemo(() => sqlExamplesFor(connection, schema), [connection, schema]);
+    useEffect(() => {
+        if (inspector === 'revisions') void loadDocumentRevisions(active.serverId);
+    }, [active.serverId, inspector, loadDocumentRevisions]);
+
     useEffect(() => {
         const media = window.matchMedia('(max-width: 850px)');
         const update = () => {
@@ -220,15 +227,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         };
         media.addEventListener('change', update);
         return () => media.removeEventListener('change', update);
-    }, []);
-    const trustedRef = useRef(trusted);
-    trustedRef.current = trusted;
-    const schemaRequestRef = useRef(0), historyRequestRef = useRef(0), documentsRequestRef = useRef(0), revisionsRequestRef = useRef(0);
-    const invalidateWorkspaceRequests = useCallback(() => {
-        schemaRequestRef.current++;
-        historyRequestRef.current++;
-        documentsRequestRef.current++;
-        revisionsRequestRef.current++;
     }, []);
     const cancellingRef = useRef(false);
 
@@ -364,104 +362,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         if (result === 'unavailable' || result === 'fallback')
             applyBuiltIn();
     }, [active.id, active.sql, nativeParserEnabled, nativeParserStatus]);
-
-    const loadHistory = useCallback(async () => {
-        const requestId = ++historyRequestRef.current;
-        try {
-            const next = await api<Run[]>(`/runs?connectionId=${encodeURIComponent(connection.id)}`);
-            if (historyRequestRef.current === requestId) setHistory(next);
-        } catch (caught) {
-            if (historyRequestRef.current === requestId) throw caught;
-        }
-    }, [connection.id]);
-    const loadDocuments = useCallback(async () => {
-        const requestId = ++documentsRequestRef.current;
-        try {
-            const next = await api<QueryDocument[]>(`/documents?trash=true&connectionId=${encodeURIComponent(connection.id)}`);
-            if (documentsRequestRef.current === requestId) {
-                setDocuments(next);
-                setWorkspace(current => ({
-                    ...current,
-                    tabs: current.tabs.map(draft => {
-                        const saved = next.find(document => document.id === draft.serverId);
-                        return saved && draft.baseRevision !== saved.revision && sameSavedContent(draft, saved)
-                            ? { ...draft, baseRevision: saved.revision }
-                            : draft;
-                    }),
-                }));
-                setDocumentsReadError(false);
-            }
-        } catch (caught) {
-            if (documentsRequestRef.current === requestId) {
-                setDocumentsReadError(true);
-                throw caught;
-            }
-        } finally {
-            if (documentsRequestRef.current === requestId) setDocumentsLoaded(true);
-        }
-    }, [connection.id]);
-    const loadDocumentRevisions = useCallback(async (documentId = active.serverId) => {
-        if (!documentId) {
-            revisionsRequestRef.current++;
-            setRevisionsDocumentId(undefined);
-            setDocumentRevisions([]);
-            setRevisionError('Save this query before opening version history.');
-            setRevisionLoading(false);
-            return;
-        }
-        const requestId = ++revisionsRequestRef.current;
-        setRevisionsDocumentId(documentId);
-        setDocumentRevisions([]);
-        setRevisionError('');
-        setRevisionLoading(true);
-        try {
-            const next = await api<QueryDocument[]>(`/documents/${encodeURIComponent(documentId)}/revisions`);
-            const currentDraft = workspaceRef.current.tabs.find(draft => draft.id === workspaceRef.current.activeId);
-            if (revisionsRequestRef.current === requestId && currentDraft?.serverId === documentId)
-                setDocumentRevisions([...next].sort((left, right) => right.revision - left.revision));
-        } catch (caught) {
-            if (revisionsRequestRef.current === requestId) setRevisionError(message(caught));
-        } finally {
-            if (revisionsRequestRef.current === requestId) setRevisionLoading(false);
-        }
-    }, [active.serverId]);
-    useEffect(() => {
-        if (inspector === 'revisions') void loadDocumentRevisions(active.serverId);
-    }, [active.serverId, inspector, loadDocumentRevisions]);
-    const loadSchema = useCallback(async (refresh = false) => {
-        const requestId = ++schemaRequestRef.current;
-        if (!trustedRef.current) {
-            setSchema(undefined);
-            setSchemaError('');
-            setSchemaLoading(false);
-            return;
-        }
-        setSchemaLoading(true); setSchemaError('');
-        try {
-            const next = await api<Schema>(`/connections/${encodeURIComponent(connection.id)}/schema${refresh ? '?refresh=true' : ''}`);
-            if (schemaRequestRef.current === requestId && trustedRef.current)
-                setSchema(next);
-        } catch (caught) {
-            if (schemaRequestRef.current === requestId && trustedRef.current)
-                setSchemaError(message(caught));
-        } finally {
-            if (schemaRequestRef.current === requestId)
-                setSchemaLoading(false);
-        }
-    }, [connection.id]);
-
-    useEffect(() => {
-        void Promise.all([loadHistory(), loadDocuments()]).catch(caught => setError(message(caught)));
-        if (trusted) void loadSchema();
-        else {
-            schemaRequestRef.current++;
-            setSchema(undefined);
-            setSchemaError('');
-            setSchemaLoading(false);
-        }
-        const interval = window.setInterval(() => { void loadHistory().catch(() => undefined); }, 15000);
-        return () => { window.clearInterval(interval); invalidateWorkspaceRequests(); };
-    }, [invalidateWorkspaceRequests, loadDocuments, loadHistory, loadSchema, trusted]);
 
     const { run, setRunForRun, page, setPage, resultPage, snapshot, setSnapshotForRun, profile, setProfileForRun, pipeline, setPipelineForRun, eventState } = useRunEvidence({
         activeRunId,

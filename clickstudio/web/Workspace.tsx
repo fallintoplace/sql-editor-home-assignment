@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ApiError, ProfilePipeline, QueryDocument, QueryProfile, Result, Run, RunKind, SchemaTable, Script } from '../shared/types';
+import type { ApiError, ProfilePipeline, QueryDocument, QueryProfile, Result, Run, RunKind, Script } from '../shared/types';
 import { DEFAULT_LIMITS } from '../shared/types';
 import { parseExplainPlan } from '../shared/explain-plan';
 import { parseExplainAnalyze } from '../shared/explain-analyze';

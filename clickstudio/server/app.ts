@@ -13,8 +13,8 @@ import { MonitorService } from '../core/monitors.js';
 import { SessionService } from '../core/sessions.js';
 import { FileStore, type Store } from '../core/store.js';
 import { AppError, asError, requireThat } from '../core/errors.js';
-import { canWrite } from '../core/guards.js';
-import { choice, identifier, integer, record, text } from '../core/validation.js';
+import { canWrite, guardSql } from '../core/guards.js';
+import { choice, identifier, integer, record, stringMap, text } from '../core/validation.js';
 import { exportCsv } from '../shared/results.js';
 import { buildQueryProfile } from '../shared/profile.js';
 import { isReferenceCategory } from '../shared/reference.js';
@@ -24,7 +24,7 @@ import { DemoDriver } from './demo.js';
 import { OpenAIDriver } from './openai.js';
 import { OpenAIVoiceService, safetyIdentifier, type VoiceService } from './voice.js';
 import { telemetry, recordRun } from './telemetry.js';
-type Driver = QueryDriver & ImportDriver & Pick<ClickHouseDriver, 'connection' | 'connections' | 'test' | 'targets' | 'profileEvidence' | 'profilePipeline' | 'searchDocumentation' | 'documentationEntry' | 'close'>;
+type Driver = QueryDriver & ImportDriver & Pick<ClickHouseDriver, 'connection' | 'connections' | 'test' | 'targets' | 'profileEvidence' | 'profilePipeline' | 'queryTree' | 'searchDocumentation' | 'documentationEntry' | 'close'>;
 const MAX_WASM_PARSER_BYTES = 64 * 1024 * 1024;
 const ASSISTANT_ACTIONS = ['generate', 'explain', 'repair', 'result', 'performance', 'review'] as const satisfies readonly AssistantAction[];
 const IMPORT_FORMATS = ['csv', 'json', 'ndjson'] as const;
@@ -110,6 +110,17 @@ export function createApp(config: Config, overrides: {
     app.post('/api/connections/:id/test', async (req, res) => { canWrite(principal(res)); res.json(await driver.test(id(req))); });
     app.post('/api/connections/:id/trust', (req, res) => { const p = principal(res), v = body(req), connectionId = id(req); requireThat(v.confirmation === connectionId, 400, 'TRUST_CONFIRMATION', 'Confirm the selected connection ID'); runs.trust(p, connectionId, boolean(v.trusted, 'trusted')); res.json({ trusted: runs.isTrusted(p, connectionId) }); });
     app.get('/api/connections/:id/schema', async (req, res) => { const p = principal(res), c = id(req); requireThat(authorized(p, c), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before inspecting its schema'); res.json(await driver.schema(c)); });
+    app.post('/api/connections/:id/query-tree', async (req, res) => {
+        const p = principal(res), connectionId = id(req), value = body(req);
+        canWrite(p);
+        requireThat(authorized(p, connectionId), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before inspecting its analyzer tree');
+        const manifest = driver.connection(p, connectionId).manifest;
+        const capability = manifest?.queryTree ?? manifest?.explain;
+        requireThat(capability?.available !== false, 409, 'CAPABILITY_UNAVAILABLE', capability?.reason ?? 'ClickHouse query-tree analysis is unavailable for this connection');
+        const sql = text(value.sql, 'SQL', 200000), parameters = stringMap(value.parameters, 'parameters');
+        guardSql(sql, parameters);
+        res.json(await driver.queryTree(connectionId, sql, parameters));
+    });
     const requireDocumentation = (p: Principal, connectionId: string) => {
         requireThat(authorized(p, connectionId), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before inspecting its documentation');
         const capability = driver.connection(p, connectionId).manifest?.documentation;

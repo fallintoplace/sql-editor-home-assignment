@@ -2,7 +2,7 @@ import type { QueryDocument, Result, ResultPage, Run, Script } from '../shared/t
 import { splitSql } from '../shared/sql.js';
 import { sqlForRunKind } from '../shared/explain-plan.js';
 import { isResult, isRun } from '../shared/run-wire.js';
-import { loadPlaygroundSchema, PLAYGROUND_CONNECTION, PLAYGROUND_CONNECTION_ID, queryPlayground } from './playground.js';
+import { loadPlaygroundSchema, PLAYGROUND_CONNECTION, PLAYGROUND_CONNECTION_ID, queryPlayground, queryPlaygroundQueryTree } from './playground.js';
 import {
     DEMO_PREVIEW_RUN_ID,
     DEMO_PREVIEW_SQL,
@@ -39,6 +39,18 @@ export {
 export type { DemoPreviewStarter } from './demo-preview-data.js';
 
 type RequestOptions = { method?: string; body?: unknown; signal?: AbortSignal };
+const demoQueryTree = [
+    'QUERY id: 0',
+    '  PROJECTION COLUMNS',
+    '    event_type LowCardinality(String)',
+    '    events UInt64',
+    '  PROJECTION',
+    '    LIST id: 1, nodes: 2',
+    '      COLUMN id: 2, column_name: event_type, result_type: LowCardinality(String), source_id: 5',
+    '      FUNCTION id: 3, function_name: count, function_type: aggregate, result_type: UInt64',
+    '  JOIN TREE',
+    '    TABLE id: 5, table_name: demo.events',
+] as const;
 
 export class DemoPreviewApi {
     private trusted = true;
@@ -233,6 +245,16 @@ export class DemoPreviewApi {
         }
         if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'import-targets') return [];
         if (parts[0] === 'connections' && parts[1] === PLAYGROUND_CONNECTION_ID && parts[2] === 'import-targets') return [];
+        if (parts[0] === 'connections' && parts[2] === 'query-tree' && method === 'POST') {
+            const sql = typeof body.sql === 'string' ? body.sql : '';
+            const parameters = record(body.parameters) as Record<string, string>;
+            if (parts[1] === PLAYGROUND_CONNECTION_ID) {
+                if (Object.keys(parameters).length) throw new Error('Remove query parameters before inspecting SQL on ClickHouse Playground.');
+                const response = await queryPlaygroundQueryTree(sql, options.signal);
+                return response.rows.map(row => String(row[0] ?? '')).filter(Boolean);
+            }
+            if (parts[1] === 'demo') return [...demoQueryTree];
+        }
 
         if (pathname === '/runs' && method === 'POST') {
             const requestedKind = body.kind === 'explain' || body.kind === 'plan' || body.kind === 'pipeline' ? body.kind : 'query';

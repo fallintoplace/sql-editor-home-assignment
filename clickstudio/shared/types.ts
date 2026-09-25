@@ -34,6 +34,8 @@ export interface Manifest {
     cancellation: Capability;
     explain: Capability;
     explainPlan?: Capability;
+    /** Server-side semantic tree produced by EXPLAIN QUERY TREE. */
+    queryTree?: Capability;
     /** Running EXPLAIN PIPELINE as a query is separate from loading structured pipeline evidence. */
     explainPipeline?: Capability;
     pipeline: Capability;

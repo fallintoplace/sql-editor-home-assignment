@@ -285,6 +285,15 @@ export interface Copy {
         previousStatement: string;
         nextStatement: string;
         sqlFlowNativeAst: string;
+        sqlFlowAnalyzer: string;
+        queryTreeServer: string;
+        queryTreeClickNode: string;
+        queryTreeGraphHint: string;
+        queryTreeLoading: string;
+        queryTreeUnavailable: string;
+        queryTreeNoOutput: string;
+        queryTreeSelectedNode: string;
+        queryTreeTruncatedWarning: string;
         sqlFlowLogicalMode: string;
         sqlAstDescription: string;
         sqlAstClickNode: string;

@@ -48,6 +48,7 @@ export const PLAYGROUND_CONNECTION: Connection & { trusted: boolean } = {
         cancellation: capability(false, 'Closing the request cannot confirm that ClickHouse stopped the query.'),
         explain: capability(true),
         explainPlan: capability(true),
+        queryTree: capability(true),
         explainPipeline: capability(true),
         pipeline: capability(false, 'The public Playground returns pipeline text, but structured pipeline profiling is unavailable in this browser connection.'),
         queryLog: capability(false, 'Query-log profiling is not enabled in this browser preview.'),
@@ -209,6 +210,14 @@ async function executePlaygroundQuery(sql: string, signal: AbortSignal | undefin
 
 export function queryPlayground(sql: string, signal?: AbortSignal) {
     return executePlaygroundQuery(sql, signal, MAX_RESULT_ROWS, MAX_RESPONSE_BYTES);
+}
+
+export async function queryPlaygroundQueryTree(sql: string, signal?: AbortSignal) {
+    validateQuery(sql);
+    const result = await executePlaygroundQuery(`EXPLAIN QUERY TREE\n${sql}`, signal, 4_000, 4_000_000);
+    if (result.truncated)
+        throw new PlaygroundError('PLAYGROUND_ANALYZER_TOO_LARGE', 'The ClickHouse analyzer tree is too large to display. Simplify the statement and try again.');
+    return result;
 }
 
 export function queryPlaygroundWithParams(sql: string, queryParams: Record<string, string>, signal?: AbortSignal) {

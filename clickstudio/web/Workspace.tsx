@@ -554,6 +554,11 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         hasOutput: Boolean(run || visibleResultsView === 'sqlmap'),
     });
     const sqlMapStatement = safeSelectedStatement(active.sql, active.from, active.from);
+    const queryTreeCapability = connection.manifest?.queryTree ?? connection.manifest?.explain;
+    const queryTreeAvailable = trusted && !unsupportedParameters && queryTreeCapability?.available !== false;
+    const queryTreeUnavailableReason = !trusted ? copy.common.runActionTrustRequired
+        : unsupportedParameters ? connection.manifest?.parameters.reason ?? copy.common.runActionRemoveParameters
+            : queryTreeCapability?.reason;
     const sqlMapParseStatement = sqlMapStatement && nativeParseSnapshot?.statements.find(statement =>
         statement.from === sqlMapStatement.from && statement.to === sqlMapStatement.to && active.sql.slice(statement.from, statement.to) === statement.sql);
     const resultTabs: readonly ResultsView[] = run?.kind === 'explain'
@@ -949,7 +954,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             </div>
                         </div>
                         <div id="query-results-content" className={cx('panel-content results-content', ['insights', 'indexes', 'plan', 'pipeline'].includes(visibleResultsView) && 'results-content-scrollable')} hidden={resultsCollapsed}>
-                            {visibleResultsView === 'sqlmap' && <SqlFlowView copy={copy.common} sql={sqlMapStatement?.sql ?? active.sql} sourceOffset={sqlMapStatement?.from ?? 0} parseResult={sqlMapParseStatement?.result} parserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} parseDurationMs={nativeParseSnapshot?.elapsedMs} onRevealRange={(from, to) => editor.current?.revealRange(from, to)}/>}
+                            {visibleResultsView === 'sqlmap' && <SqlFlowView copy={copy.common} sql={sqlMapStatement?.sql ?? active.sql} sourceOffset={sqlMapStatement?.from ?? 0} parseResult={sqlMapParseStatement?.result} parserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} parseDurationMs={nativeParseSnapshot?.elapsedMs} connectionId={connection.id} parameters={active.parameters} analyzerAvailable={queryTreeAvailable} analyzerUnavailableReason={queryTreeUnavailableReason} onRevealRange={(from, to) => editor.current?.revealRange(from, to)}/>}
                             {visibleResultsView !== 'sqlmap' && staleResult && <div className="result-provenance" aria-live="polite"><span className="status-light is-warning"/><span><strong>Result from previous execution</strong><small>SQL or bound parameters changed since this run. Rerun to refresh the result.</small></span></div>}
                             {visibleResultsView === 'results' && script && <ScriptResults script={script} runs={history} activeRunId={run?.id} onSelectRun={runId => {
                                 if (active.scriptId) scriptFollowRef.current = { scriptId: active.scriptId, enabled: false };

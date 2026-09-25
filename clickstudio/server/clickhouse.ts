@@ -63,10 +63,11 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
         catch (error) {
             return { available: false, reason: error instanceof Error ? error.message : 'Not permitted' };
         } };
-        const [schema, progress, queryLog, documentation, explain, explainPlan, pipeline] = await Promise.all([
+        const [schema, progress, queryLog, documentation, explain, explainPlan, queryTree, pipeline] = await Promise.all([
             probe('SELECT name FROM system.columns LIMIT 1'), probe('SELECT query_id FROM system.processes LIMIT 0'), probe('SELECT query_id FROM system.query_log LIMIT 0'),
             probe('SELECT name, type, description FROM system.documentation LIMIT 0'), probe('EXPLAIN indexes = 1 SELECT 1'),
-            probe('EXPLAIN PLAN json = 1, indexes = 1, description = 1 SELECT 1'), probe('EXPLAIN PIPELINE graph = 1, compact = 0 SELECT 1'),
+            probe('EXPLAIN PLAN json = 1, indexes = 1, description = 1 SELECT 1'), probe('EXPLAIN QUERY TREE SELECT 1'),
+            probe('EXPLAIN PIPELINE graph = 1, compact = 0 SELECT 1'),
         ]);
         // KILL of a random, nonexistent own query checks cancellation permission without touching a real query.
         let cancellation: Manifest['cancellation'];
@@ -78,7 +79,7 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
         catch {
             cancellation = { available: false, reason: 'Own-query cancellation is not permitted; transport abort and server deadline still apply.' };
         }
-        const manifest: Manifest = { version: 1, serverVersion: version, testedAt: new Date().toISOString(), schema, progress, queryLog, documentation, explain, explainPlan, pipeline, cancellation,
+        const manifest: Manifest = { version: 1, serverVersion: version, testedAt: new Date().toISOString(), schema, progress, queryLog, documentation, explain, explainPlan, queryTree, pipeline, cancellation,
             import: { available: Boolean(this.profile(id).writer), reason: this.profile(id).writer ? 'Explicit allowlisted import identity configured' : 'Configure a separate writer and target allowlist to enable imports' }, scripts: { available: true }, parameters: { available: true } };
         this.manifests.set(id, manifest);
         return this.connection({ id: 'local-owner', role: 'owner' }, id);
@@ -308,6 +309,10 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
     async profileEvidence(run: Run) {
         requireThat(this.manifests.get(run.connectionId)?.queryLog.available, 409, 'CAPABILITY_UNAVAILABLE', 'Test the connection; query-log visibility is required');
         return this.rows(run.connectionId, "SELECT query_id, type, query_duration_ms, read_rows, read_bytes, result_rows, result_bytes, memory_usage, exception_code FROM system.query_log WHERE query_id = {id:String} AND type IN ('QueryFinish', 'ExceptionWhileProcessing', 'ExceptionBeforeStart') ORDER BY event_time DESC LIMIT 10", { id: run.queryId });
+    }
+    async queryTree(id: string, sql: string, parameters: Record<string, string> = {}): Promise<string[]> {
+        const rows = await this.rows<Record<string, unknown>>(id, `EXPLAIN QUERY TREE\n${sql}`, parameters);
+        return rows.map(row => String(Object.values(row)[0] ?? '')).filter(Boolean);
     }
     async profilePipeline(run: Run): Promise<string[]> {
         requireThat(this.manifests.get(run.connectionId)?.pipeline.available, 409, 'CAPABILITY_UNAVAILABLE', 'Test the connection; pipeline inspection is required');

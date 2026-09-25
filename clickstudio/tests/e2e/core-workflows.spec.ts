@@ -312,6 +312,23 @@ test('SQL structure switches from logical flow to native AST', async ({ page }) 
     await expect(structure.locator('.ast-node-inspector')).toContainText('uniqExact');
 });
 
+test('SQL structure loads the server analyzer tree', async ({ page }) => {
+    await page.goto('/');
+    await replaceSql(page, 'SELECT event_type, count() AS events FROM demo.events GROUP BY event_type');
+    await page.getByRole('button', { name: 'Visualize SQL structure', exact: true }).click();
+    const structure = page.locator('.sql-flow-view');
+    const analyzer = structure.getByRole('button', { name: 'Analyzer', exact: true });
+    await expect(analyzer).toBeEnabled();
+    await analyzer.click();
+    await expect(analyzer).toHaveAttribute('aria-pressed', 'true');
+    await expect(structure.locator('.sql-flow-heading p')).toHaveText('Select a node to inspect resolved analyzer fields.');
+    await expect(structure.locator('[data-query-tree-type="QUERY"]')).toBeVisible();
+    const table = structure.locator('[data-query-tree-type="TABLE"]');
+    await expect(table).toContainText('demo.events');
+    await table.click();
+    await expect(structure.locator('.query-tree-node-inspector')).toContainText('demo.events');
+});
+
 test('A delayed native parse cannot replace parser details for newer SQL', async ({ page }) => {
     const oldSql = 'SELECT old_fn()';
     const newSql = 'SELECT new_fn()';

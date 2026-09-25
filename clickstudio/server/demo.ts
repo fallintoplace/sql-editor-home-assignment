@@ -35,7 +35,7 @@ const demoIndexAnalysis = [
 /** Explicit UI/test fixtures, not a SQL emulator and never an automatic fallback for a real database. */
 export class DemoDriver {
     connection(_p: Principal, id: string): Connection { if (!['demo', 'demo-second'].includes(id))
-        throw new AppError(404, 'CONNECTION_NOT_FOUND', 'Fixture connection not found'); const yes = { available: true }; return { dataSource: 'fixture', id, name: id === 'demo' ? 'Demo fixtures (not live data)' : 'Second isolated fixture', host: 'fixture://local', database: 'demo', username: 'fixture-reader', readonly: true, limits: { ...DEFAULT_LIMITS }, manifest: { version: 1, serverVersion: 'fixture—not a ClickHouse server', testedAt: new Date().toISOString(), schema: yes, progress: yes, cancellation: yes, explain: yes, explainPlan: yes, pipeline: yes, queryLog: yes, documentation: { available: false, reason: 'Fixture mode' }, import: { available: false, reason: 'Fixture mode never writes data' }, scripts: yes, parameters: yes } }; }
+        throw new AppError(404, 'CONNECTION_NOT_FOUND', 'Fixture connection not found'); const yes = { available: true }; return { dataSource: 'fixture', id, name: id === 'demo' ? 'Demo fixtures (not live data)' : 'Second isolated fixture', host: 'fixture://local', database: 'demo', username: 'fixture-reader', readonly: true, limits: { ...DEFAULT_LIMITS }, manifest: { version: 1, serverVersion: 'fixture—not a ClickHouse server', testedAt: new Date().toISOString(), schema: yes, progress: yes, cancellation: yes, explain: yes, explainPlan: yes, queryTree: yes, pipeline: yes, queryLog: yes, documentation: { available: false, reason: 'Fixture mode' }, import: { available: false, reason: 'Fixture mode never writes data' }, scripts: yes, parameters: yes } }; }
     connections(p: Principal) { return ['demo', 'demo-second'].map(id => this.connection(p, id)); }
     async test(id: string) { return this.connection({ id: 'local-owner', role: 'owner' }, id); }
     async schema(id: string): Promise<Schema> {
@@ -89,6 +89,21 @@ export class DemoDriver {
     allowed(_id: string, _table: string) { return false; }
     async insert() { throw new AppError(403, 'DEMO_READ_ONLY', 'Fixture mode never inserts'); }
     async inspectInsert() { return 'unknown' as const; }
+    async queryTree(id: string) {
+        this.connection({ id: 'local-owner', role: 'owner' }, id);
+        return [
+            'QUERY id: 0',
+            '  PROJECTION COLUMNS',
+            '    event_type LowCardinality(String)',
+            '    events UInt64',
+            '  PROJECTION',
+            '    LIST id: 1, nodes: 2',
+            '      COLUMN id: 2, column_name: event_type, result_type: LowCardinality(String), source_id: 5',
+            '      FUNCTION id: 3, function_name: count, function_type: aggregate, result_type: UInt64',
+            '  JOIN TREE',
+            '    TABLE id: 5, table_name: demo.events',
+        ];
+    }
     async profileEvidence(_run: Run) { return [{ notice: 'Fixture mode has no real server profile' }]; }
     async profilePipeline(_run: Run) { return ['digraph {', '  node [shape=box];', '  read [label="ReadFromFixture"];', '  filter [label="FilterTransform × 2"];', '  expression [label="ExpressionTransform × 2"];', '  resize [label="Resize 2 → 1"];', '  output [label="Output"];', '  read -> filter [label="× 2"];', '  filter -> expression [label="× 2"];', '  expression -> resize;', '  resize -> output;', '}']; }
 }

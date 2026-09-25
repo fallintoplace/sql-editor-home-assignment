@@ -78,7 +78,7 @@ export function connection(trusted: boolean): Connection & { trusted: boolean } 
         readonly: true, trusted, limits: { ...DEFAULT_LIMITS },
         manifest: {
             version: 1, serverVersion: 'Frontend sample data', testedAt: now(), schema: available, progress: available,
-            cancellation: available, explain: available, pipeline: available, queryLog: available,
+            cancellation: available, explain: available, queryTree: available, pipeline: available, queryLog: available,
             documentation: { available: false, reason: 'System-table documentation is not connected in preview mode.' },
             import: { available: false, reason: 'File import is not connected in preview mode.' }, scripts: available,
             parameters: { available: false, reason: 'Sample results do not evaluate SQL parameters.' },

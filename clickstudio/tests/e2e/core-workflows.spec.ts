@@ -129,7 +129,12 @@ test('Desktop workspace panels float, resize, maximize, and dock without losing 
     const queryPanel = page.locator('.editor-surface');
     const editor = page.locator('#sql-editor-content .cm-content');
 
-    await page.getByRole('button', { name: 'Pop out query panel', exact: true }).click();
+    const queryPopout = page.getByRole('button', { name: 'Pop out query panel', exact: true });
+    const queryPopoutBox = await queryPopout.boundingBox();
+    expect(queryPopoutBox).not.toBeNull();
+    expect(queryPopoutBox!.width).toBeGreaterThanOrEqual(34);
+    expect(queryPopoutBox!.height).toBeGreaterThanOrEqual(34);
+    await queryPopout.click();
     await expect(queryPanel).toHaveClass(/is-floating/);
     await expect(editor).toContainText('SELECT');
 
@@ -189,6 +194,8 @@ test('Desktop docked query and output panels resize with the splitter', async ({
     expect(queryBefore).not.toBeNull();
     expect(resultsBefore).not.toBeNull();
     expect(splitBox).not.toBeNull();
+    expect(Math.abs(splitBox!.y - (queryBefore!.y + queryBefore!.height))).toBeLessThanOrEqual(2);
+    expect(Math.abs(resultsBefore!.y - (splitBox!.y + splitBox!.height))).toBeLessThanOrEqual(2);
 
     await page.mouse.move(splitBox!.x + splitBox!.width / 2, splitBox!.y + splitBox!.height / 2);
     await page.mouse.down();
@@ -197,10 +204,14 @@ test('Desktop docked query and output panels resize with the splitter', async ({
 
     const queryAfter = await queryPanel.boundingBox();
     const resultsAfter = await results.boundingBox();
+    const splitAfter = await splitter.boundingBox();
     expect(queryAfter).not.toBeNull();
     expect(resultsAfter).not.toBeNull();
+    expect(splitAfter).not.toBeNull();
     expect(queryAfter!.height).toBeGreaterThan(queryBefore!.height + 45);
     expect(resultsAfter!.height).toBeLessThan(resultsBefore!.height - 45);
+    expect(Math.abs(splitAfter!.y - (queryAfter!.y + queryAfter!.height))).toBeLessThanOrEqual(2);
+    expect(Math.abs(resultsAfter!.y - (splitAfter!.y + splitAfter!.height))).toBeLessThanOrEqual(2);
 });
 
 test('Native parser can be retried after a temporary worker failure', async ({ page }) => {

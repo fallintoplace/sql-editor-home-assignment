@@ -1,8 +1,10 @@
 # Product exploration
 
-These notes capture product directions I considered while building ClickStudio. They are **not implementation requirements** for the interview submission and they are not a claim that every item belongs in the current product.
+These notes capture the broader product directions considered while building ClickStudio.
 
-The implemented scope is documented in [Project scope](../PROJECT-STATUS.md). The technical choices in the submitted code are summarized in [Engineering decisions and tradeoffs](../ENGINEERING-NOTES.md).
+They complement the implemented application with ideas around workspace design, collaboration, AI-assisted analysis, governance, visualization, and product growth.
+
+The current implementation is summarized in [Project highlights](../PROJECT-STATUS.md), and the technical choices are described in [Engineering choices](../ENGINEERING-NOTES.md).
 
 ## Notes
 
@@ -17,4 +19,4 @@ The implemented scope is documented in [Project scope](../PROJECT-STATUS.md). Th
 9. [Trust, governance, and evals](09-trust-governance-and-evals.md)
 10. [Launch and moat](10-launch-and-moat.md)
 
-For an interview review, these are optional context. The README, engineering notes, and running application are the primary submission.
+For an interview review, these notes provide extra product context after exploring the README, engineering choices, and running application.

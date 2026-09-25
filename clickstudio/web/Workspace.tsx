@@ -57,6 +57,8 @@ function helpParseResult<T>(statement: { result: T } | undefined) { return state
 function revealEditorRange(editor: { current: EditorHandle | null }, from: number, to: number) { editor.current?.revealRange(from, to); }
 function insertEditorText(editor: { current: EditorHandle | null }, value: string) { editor.current?.insert(value); }
 function focusEditor(editor: { current: EditorHandle | null }) { editor.current?.focus(); }
+function helpParseDuration(snapshot: NativeParseSnapshot | undefined) { return snapshot?.elapsedMs; }
+function helpQueryLogAvailable(connection: Connected) { return connection.manifest?.queryLog.available === true; }
 type FailedQueryError = { draftId: string; draftSql: string; statementSql: string; sourceFrom: number; error: ApiError };
 const TOAST_TIMEOUT_MS = 10_000;
 
@@ -855,7 +857,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             parseResult: helpParseResult(sqlMapParseStatement),
                             parserEnabled: nativeParserEnabled,
                             parserStatus: nativeParserStatus,
-                            parseDurationMs: nativeParseSnapshot?.elapsedMs,
+                            parseDurationMs: helpParseDuration(nativeParseSnapshot),
                             connectionId: connection.id,
                             parameters: active.parameters,
                             analyzerAvailable: queryTreeAvailable,
@@ -875,7 +877,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             initialRun: run,
                             profiles: profilesByRun,
                             pipelines: pipelinesByRun,
-                            queryLogAvailable: connection.manifest?.queryLog.available === true,
+                            queryLogAvailable: helpQueryLogAvailable(connection),
                         }}
                         onReferenceInsert={value => {
                             insertEditorText(editor, value);

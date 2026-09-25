@@ -1,10 +1,12 @@
-# ClickStudio: setup and product guide
+# ClickStudio: setup and implementation reference
 
-## Delivery status
+This is the detailed reference for the interview project. Reviewers do **not** need to read it front to back. Start with the [README](../README.md) and [Engineering decisions and tradeoffs](ENGINEERING-NOTES.md), then use this document for setup or implementation details.
 
-ClickStudio is a **local-first, single-owner ClickHouse SQL editor**. It includes a real ClickHouse/Express connection and a separately labeled fixture driver for the sample workspace. It is a focused demo, not a multi-user production service.
+## Project boundary
 
-The application lives in `clickstudio/`; root npm scripts delegate there. SQL execution uses the bounded server API.
+ClickStudio is a **local-first, single-owner ClickHouse SQL editor**. It includes a real ClickHouse/Express connection and a separately labeled fixture driver for the sample workspace.
+
+The application lives in `clickstudio/`; root npm scripts delegate there. SQL execution uses the bounded server API. The single-owner and single-process choices are deliberate scope decisions for this project, not a proposed production architecture.
 
 ## First run with a local ClickHouse server
 
@@ -28,7 +30,7 @@ The bundled setup creates `default.events` with a small deterministic dataset an
 
 The SQL reader profile is mounted from `docker/clickstudio-reader.xml`. It keeps `readonly=1` and allows only the bounded operational settings required by the application to change in read-only mode. A separately managed ClickHouse server needs equivalent operator configuration. A read-only identity that cannot change these settings will return a capability/permission error; the application does not silently weaken it to a write identity.
 
-The compose file uses the requested 24.6 compatibility baseline, **not a claim that 24.6 is a suitable current production release**. Validate a supported, patched server release before production deployment.
+The compose file uses ClickHouse 24.6 as the project's compatibility fixture. A real deployment should choose its supported server version independently of this test fixture.
 
 ### Containerized application
 

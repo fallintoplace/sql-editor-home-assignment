@@ -9,11 +9,17 @@ export default defineConfig({
     fullyParallel: false,
     workers: 1,
     retries: 0,
+    forbidOnly: Boolean(process.env.CI),
     timeout: 45000,
+    reporter: [['line'], ['html', { open: 'never' }]],
     use: {
         baseURL,
         trace: 'retain-on-failure',
-        storageState: { cookies: [], origins: [{ origin: baseURL, localStorage: [{ name: 'clickstudio:experience', value: 'expert' }] }] },
+        screenshot: 'only-on-failure',
+        storageState: {
+            cookies: [],
+            origins: [{ origin: baseURL, localStorage: [{ name: 'clickstudio:experience', value: 'expert' }] }],
+        },
     },
     webServer: {
         command: `npm run build:vercel-preview && npx vite preview --host 127.0.0.1 --port ${webPort} --strictPort`,

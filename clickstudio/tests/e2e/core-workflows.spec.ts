@@ -21,13 +21,21 @@ async function replaceSql(page: Page, sql: string) {
         .toContain(sql.replace(/\s/g, ''));
 }
 
+function runIdentity(value: unknown): { id: string; queryId: string } {
+    if (typeof value !== 'object' || value === null ||
+        !('id' in value) || typeof value.id !== 'string' ||
+        !('queryId' in value) || typeof value.queryId !== 'string')
+        throw new Error('Run response did not include string id and queryId fields');
+    return { id: value.id, queryId: value.queryId };
+}
+
 async function runQuery(page: Page) {
     const runResponse = page.waitForResponse(response => {
         const request = response.request();
         return request.method() === 'POST' && new URL(response.url()).pathname === '/api/runs';
     });
     await runStatementButton(page).click();
-    const run = await (await runResponse).json() as { queryId: string };
+    const run = runIdentity(await (await runResponse).json());
     await expect(page.locator('.execution-bar code')).toHaveText(run.queryId);
     const results = page.getByRole('region', { name: 'Query results', exact: true });
     await expect(results.getByRole('table', { name: 'Retained query rows' })).toBeVisible();
@@ -235,7 +243,7 @@ test('Insights compare one run with its ClickHouse pipeline evidence', async ({ 
     await trust(page);
     const startedRunResponse = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/runs');
     const results = await runQuery(page);
-    const startedRun = await (await startedRunResponse).json() as { id: string; queryId: string };
+    const startedRun = runIdentity(await (await startedRunResponse).json());
     const queryPlan = page.getByRole('region', { name: 'Run and query plan comparison' });
 
     await results.getByRole('tab', { name: 'Insights', exact: true }).click();
@@ -628,25 +636,32 @@ test('Cancelling a long-running query reaches a terminal cancelled state', async
 });
 
 test('Cancellation stays available while execution profile loading is pending', async ({ page }) => {
+    let releaseProfile = () => undefined;
+    const profileGate = new Promise<void>(resolve => { releaseProfile = resolve; });
     await page.route(url => /\/api\/runs\/[^/]+\/profile$/.test(url.pathname), async route => {
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        await profileGate;
         await route.continue();
     });
-    await trust(page);
-    await replaceSql(page, 'SELECT fixture_slow');
-    const started = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/runs');
-    await runStatementButton(page).click();
-    const run = await (await started).json() as { id: string };
-    const cancel = page.locator('.execution-bar').getByRole('button', { name: 'Cancel', exact: true });
-    await expect(cancel).toBeVisible();
-    const profileRequest = page.waitForRequest(request => new URL(request.url()).pathname === `/api/runs/${run.id}/profile`);
-    await page.locator('.results-tabs').getByRole('tab', { name: 'Insights', exact: true }).click();
-    await profileRequest;
-    await expect(cancel).toBeEnabled();
-    const cancelled = page.waitForResponse(response => new URL(response.url()).pathname === `/api/runs/${run.id}/cancel`);
-    await cancel.click();
-    await cancelled;
-    await expect(page.locator('.execution-bar')).toHaveAttribute('data-run-status', 'cancelled', { timeout: 10000 });
+    try {
+        await trust(page);
+        await replaceSql(page, 'SELECT fixture_slow');
+        const started = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/runs');
+        await runStatementButton(page).click();
+        const run = runIdentity(await (await started).json());
+        const cancel = page.locator('.execution-bar').getByRole('button', { name: 'Cancel', exact: true });
+        await expect(cancel).toBeVisible();
+        const profileRequest = page.waitForRequest(request => new URL(request.url()).pathname === `/api/runs/${run.id}/profile`);
+        await page.locator('.results-tabs').getByRole('tab', { name: 'Insights', exact: true }).click();
+        await profileRequest;
+        await expect(cancel).toBeEnabled();
+        const cancelled = page.waitForResponse(response => new URL(response.url()).pathname === `/api/runs/${run.id}/cancel`);
+        await cancel.click();
+        await cancelled;
+        releaseProfile();
+        await expect(page.locator('.execution-bar')).toHaveAttribute('data-run-status', 'cancelled', { timeout: 10000 });
+    } finally {
+        releaseProfile();
+    }
 });
 
 test('A query and its local draft recover after reload without rerunning', async ({ page }) => {

@@ -7,7 +7,9 @@ export async function openBlankSql(page: Page) {
     await page.getByTestId('blank-sql').click();
 }
 
-export async function openWorkspacePanel(page: Page, panel: string) {
+type WorkspacePanel = 'history' | 'parser' | 'pipeline';
+
+export async function openWorkspacePanel(page: Page, panel: WorkspacePanel) {
     await page.getByTestId('workspace-panels').click();
     await page.getByTestId(`workspace-panel-${panel}`).click();
 }

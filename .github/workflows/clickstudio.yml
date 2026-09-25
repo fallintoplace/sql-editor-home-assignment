@@ -1,4 +1,7 @@
 name: ClickStudio validation
+concurrency:
+  group: clickstudio-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 on:
   push:
     paths: ["clickstudio/**", "package.json", "src/index.ts", ".github/workflows/clickstudio.yml"]
@@ -24,15 +27,12 @@ jobs:
           cache-dependency-path: clickstudio/package-lock.json
       - name: Install dependencies
         run: npm ci
-      - name: Core and workspace regressions plus dependency-aware build
-        run: npm test && npm run build
-      - name: Preserve generated dependency lock for review
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: clickstudio-dependency-lock
-          path: clickstudio/package-lock.json
-          if-no-files-found: ignore
+      - name: TypeScript contracts
+        run: npm run typecheck
+      - name: Core and workspace regressions
+        run: npm test
+      - name: Production build
+        run: npm run build:app
 
   long-tests:
     name: Long tests
@@ -63,6 +63,17 @@ jobs:
         run: npm run test:e2e
       - name: Vercel static preview parser and export smoke test
         run: npm run test:e2e:vercel
+      - name: Capture ClickHouse diagnostics
+        if: ${{ failure() && steps.database.outcome != 'skipped' }}
+        run: docker compose logs --no-color > clickhouse-compose.log 2>&1 || true
+      - name: Preserve ClickHouse diagnostics
+        if: ${{ failure() && steps.database.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: clickstudio-clickhouse-diagnostics
+          path: clickstudio/clickhouse-compose.log
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Preserve browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
@@ -72,6 +83,7 @@ jobs:
             clickstudio/playwright-report
             clickstudio/test-results
           if-no-files-found: ignore
+          retention-days: 7
       - name: Preserve UX screenshots
         if: always()
         uses: actions/upload-artifact@v4

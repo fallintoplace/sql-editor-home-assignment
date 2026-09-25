@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { Connection, SchemaTable } from '../../shared/types';
 import type { Copy, Locale } from '../i18n';
 import type { SqlExample, SqlExampleCategory } from '../sql-examples';
 import { localizeSqlExample, localizeSqlExampleCategory } from '../sql-examples-locales';
+import { MergeTreePartsPanel } from './MergeTreePartsPanel';
 import { OverlayPortal } from './OverlayPortal';
 import { Button, Icon, cx } from './ui';
 
+export type HelpPanelSection = 'examples' | 'parts';
 type CategoryFilter = SqlExampleCategory | 'charts' | 'all' | 'featured';
 
 const categories: CategoryFilter[] = ['featured', 'business', 'observability', 'operations', 'engineering', 'markets', 'cities', 'openSource', 'internet', 'datasets', 'clickhouse', 'charts', 'all', 'basics', 'aggregation', 'timeSeries', 'schema'];
@@ -53,19 +56,28 @@ function exampleText(example: SqlExample, locale: Locale, copy: Copy['common']) 
     return localizeSqlExample(example, locale);
 }
 
-export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onClose, onOpenExample, onRunExample, onStartBlankSql }: {
+export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, section, onSectionChange, onClose, onOpenExample, onRunExample, onStartBlankSql, connection, tables, schemaLoading, trusted }: {
     examples: SqlExample[];
     sourceLabel: string;
     copy: Copy['common'];
     locale: Locale;
     open: boolean;
+    section: HelpPanelSection;
+    onSectionChange: (section: HelpPanelSection) => void;
     onClose: (restoreFocus?: boolean) => void;
     onOpenExample: (example: SqlExample) => boolean;
     onRunExample: (example: SqlExample, view: 'results' | 'chart') => boolean;
     onStartBlankSql: () => boolean;
+    connection: Pick<Connection, 'id' | 'dataSource'>;
+    tables: SchemaTable[];
+    schemaLoading: boolean;
+    trusted: boolean;
 }) {
     const panelRef = useRef<HTMLElement>(null);
     const searchRef = useRef<HTMLInputElement>(null);
+    const tabRefs = useRef<Record<HelpPanelSection, HTMLButtonElement | null>>({ examples: null, parts: null });
+    const sectionRef = useRef(section);
+    sectionRef.current = section;
     const optionRefs = useRef(new Map<string, HTMLButtonElement>());
     const featuredExamples = useMemo(() => examples
         .filter(example => example.featuredOrder !== undefined)
@@ -109,7 +121,10 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onC
         const previousInert = appRoot?.inert ?? false;
         document.body.style.overflow = 'hidden';
         if (appRoot) appRoot.inert = true;
-        const focusFrame = window.requestAnimationFrame(() => searchRef.current?.focus());
+        const focusFrame = window.requestAnimationFrame(() => {
+            if (sectionRef.current === 'examples') searchRef.current?.focus();
+            else panelRef.current?.querySelector<HTMLElement>('.help-parts-table-picker select:not(:disabled), .workspace-help-close')?.focus();
+        });
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
                 event.preventDefault();
@@ -121,8 +136,8 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onC
             const panel = panelRef.current;
             if (!panel) return;
             const focusable = Array.from(panel.querySelectorAll<HTMLElement>(
-                'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
-            ));
+                'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+            )).filter(element => !element.closest('[hidden]'));
             const first = focusable[0];
             const last = focusable[focusable.length - 1];
             const focusIsOutside = !panel.contains(document.activeElement);
@@ -146,26 +161,43 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onC
         };
     }, [defaultExample?.id, featuredExamples.length, open, onClose]);
 
+    const handleTabKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, current: HelpPanelSection) => {
+        const next = event.key === 'ArrowRight' || event.key === 'ArrowDown'
+            ? current === 'examples' ? 'parts' : 'examples'
+            : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+                ? current === 'examples' ? 'parts' : 'examples'
+                : undefined;
+        if (!next) return;
+        event.preventDefault();
+        onSectionChange(next);
+        window.requestAnimationFrame(() => tabRefs.current[next]?.focus());
+    };
+
     return <>
-        {open && <OverlayPortal><div className="sql-examples-backdrop" onClick={event => {
+        {open && <OverlayPortal><div className="workspace-help-backdrop" onClick={event => {
             if (event.target === event.currentTarget) onClose();
         }}>
-            <section ref={panelRef} id="sql-examples-panel" className="sql-examples-panel" role="dialog" aria-modal="true" aria-labelledby="sql-examples-title" tabIndex={-1}>
-                <header className="sql-examples-header">
-                    <div><span className="eyebrow">{sourceLabel}</span><h2 id="sql-examples-title">{copy.sqlExamples}</h2><p>{copy.examplesHint}</p></div>
-                    <div className="sql-examples-header-actions">
+            <section ref={panelRef} id="workspace-help-panel" className="workspace-help-panel" role="dialog" aria-modal="true" aria-labelledby="workspace-help-title" tabIndex={-1}>
+                <header className="workspace-help-header">
+                    <div><span className="eyebrow">{sourceLabel}</span><h2 id="workspace-help-title">{copy.helpCenterTitle}</h2><p>{copy.helpCenterDescription}</p></div>
+                    <div className="workspace-help-header-actions">
                         <Button variant="secondary" className="sql-example-blank" data-testid="blank-sql" onClick={() => { if (onStartBlankSql()) onClose(false); }}><Icon name="plus"/>{copy.startBlankSql}</Button>
-                        <button type="button" className="sql-examples-close" aria-label={copy.closeExamples} title={copy.closeExamples} onClick={() => onClose()}><Icon name="close"/></button>
+                        <button type="button" className="workspace-help-close" aria-label={copy.closeHelp} title={copy.closeHelp} onClick={() => onClose()}><Icon name="close"/></button>
                     </div>
                 </header>
-                <div className="sql-examples-toolbar">
-                    <div className="sql-example-categories" role="group" aria-label={copy.exampleCategories}>
-                        {availableCategories.map(value => <button key={value} data-testid={`sql-example-category-${value}`} type="button" className={cx('sql-example-category', category === value && 'is-active')} aria-pressed={category === value} onClick={() => setCategory(value)}>{categoryLabel(value, copy, locale)}</button>)}
-                    </div>
-                    <label className="sql-example-search"><Icon name="search"/><input ref={searchRef} data-testid="sql-example-search" type="search" aria-label={copy.searchExamples} placeholder={copy.searchExamples} value={search} onChange={event => setSearch(event.target.value)}/></label>
+                <div className="workspace-help-tabs" role="tablist" aria-label={copy.helpPanelSections}>
+                    <button ref={element => { tabRefs.current.examples = element; }} id="workspace-help-tab-examples" type="button" role="tab" aria-selected={section === 'examples'} aria-controls="workspace-help-panel-examples" tabIndex={section === 'examples' ? 0 : -1} className={cx('workspace-help-tab', section === 'examples' && 'is-active')} onClick={() => onSectionChange('examples')} onKeyDown={event => handleTabKeyDown(event, 'examples')}>{copy.sqlExamples}</button>
+                    <button ref={element => { tabRefs.current.parts = element; }} id="workspace-help-tab-parts" type="button" role="tab" aria-selected={section === 'parts'} aria-controls="workspace-help-panel-parts" tabIndex={section === 'parts' ? 0 : -1} className={cx('workspace-help-tab', section === 'parts' && 'is-active')} onClick={() => onSectionChange('parts')} onKeyDown={event => handleTabKeyDown(event, 'parts')}>{copy.helpPartsTitle}</button>
                 </div>
-                {filteredExamples.length === 0 ? <p className="sql-examples-empty" role="status">{copy.noExamplesFound}</p> : <div className="sql-examples-layout">
-                    <div className="sql-examples-list" role="listbox" aria-label={copy.sqlExamples}>
+                <div id="workspace-help-panel-examples" className="workspace-help-tabpanel workspace-help-examples" role="tabpanel" aria-labelledby="workspace-help-tab-examples" hidden={section !== 'examples'}>
+                    <div className="sql-examples-toolbar">
+                        <div className="sql-example-categories" role="group" aria-label={copy.exampleCategories}>
+                            {availableCategories.map(value => <button key={value} data-testid={`sql-example-category-${value}`} type="button" className={cx('sql-example-category', category === value && 'is-active')} aria-pressed={category === value} onClick={() => setCategory(value)}>{categoryLabel(value, copy, locale)}</button>)}
+                        </div>
+                        <label className="sql-example-search"><Icon name="search"/><input ref={searchRef} data-testid="sql-example-search" type="search" aria-label={copy.searchExamples} placeholder={copy.searchExamples} value={search} onChange={event => setSearch(event.target.value)}/></label>
+                    </div>
+                    {filteredExamples.length === 0 ? <p className="sql-examples-empty" role="status">{copy.noExamplesFound}</p> : <div className="sql-examples-layout">
+                        <div className="sql-examples-list" role="listbox" aria-label={copy.sqlExamples}>
                         {filteredExamples.map((example, index) => <button key={example.id} data-testid={`sql-example-${example.id}`} ref={element => { if (element) optionRefs.current.set(example.id, element); else optionRefs.current.delete(example.id); }} type="button" role="option" tabIndex={example.id === selected?.id ? 0 : -1} aria-selected={example.id === selected?.id} className={cx('sql-example-option', example.id === selected?.id && 'is-selected')} onFocus={() => setSelectedId(example.id)} onClick={() => setSelectedId(example.id)} onKeyDown={event => {
                             let nextIndex: number | undefined;
                             if (event.key === 'ArrowDown') nextIndex = (index + 1) % filteredExamples.length;
@@ -185,8 +217,8 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onC
                                 <span className="sql-example-chart-kind">{chartLabel(example, copy)}</span>
                             </span>
                         </button>)}
-                    </div>
-                    {selected && <article className="sql-example-preview">
+                        </div>
+                        {selected && <article className="sql-example-preview">
                         <div className="sql-example-preview-heading"><div><span className="eyebrow">{selected.dataset ?? categoryLabel(selected.category, copy, locale)}</span><h3>{exampleText(selected, locale, copy).name}.sql</h3></div><span className="sql-example-readonly">{chartLabel(selected, copy)}</span></div>
                         <p>{exampleText(selected, locale, copy).description}</p>
                         <pre><code>{selected.sql}</code></pre>
@@ -195,8 +227,12 @@ export function SqlExamplesMenu({ examples, sourceLabel, copy, locale, open, onC
                             <Button variant="primary" className="sql-example-action" data-testid="run-sql-example" onClick={() => { if (onRunExample(selected, 'results')) onClose(false); }}><Icon name="play"/>{copy.run}</Button>
                             <Button variant="secondary" className="sql-example-action" data-testid="chart-sql-example" onClick={() => { if (onRunExample(selected, 'chart')) onClose(false); }}><Icon name="chart"/>{copy.chart}</Button>
                         </div>
-                    </article>}
-                </div>}
+                        </article>}
+                    </div>}
+                </div>
+                <div id="workspace-help-panel-parts" className="workspace-help-tabpanel workspace-help-parts" role="tabpanel" aria-labelledby="workspace-help-tab-parts" hidden={section !== 'parts'}>
+                    <MergeTreePartsPanel connection={connection} copy={copy} tables={tables} schemaLoading={schemaLoading} trusted={trusted} active={open && section === 'parts'}/>
+                </div>
             </section>
         </div></OverlayPortal>}
     </>;

@@ -75,7 +75,7 @@ function tooltip(part: MergeTreePart) {
     return `${part.name}\n${part.active ? 'Active' : 'Inactive'} · ${part.partition}\nRows: ${part.rows}\nMarks: ${part.marks}\nCompressed: ${part.compressedBytes} bytes\nUncompressed: ${part.uncompressedBytes} bytes\nCompression: ${formatCompressionRatio(part)}\nLevel: ${part.level}\nBlocks: ${part.minBlockNumber}–${part.maxBlockNumber}\nDisk: ${part.diskName}\nModified: ${part.modifiedAt}`;
 }
 
-export function PartsExplorer({ connection, table, copy, onClose }: { connection: Pick<Connection, 'id' | 'dataSource'>; table: SchemaTable; copy: Copy['common']; onClose: () => void }) {
+export function PartsExplorer({ connection, table, copy, onClose, embedded = false }: { connection: Pick<Connection, 'id' | 'dataSource'>; table: SchemaTable; copy: Copy['common']; onClose?: () => void; embedded?: boolean }) {
     const [state, setState] = useState<{ key: string; loading: boolean; snapshot?: MergeTreePartsSnapshot; error?: string }>();
     const [metric, setMetric] = useState<PartsMetric>('compressedBytes');
     const [partState, setPartState] = useState<PartsState>('all');
@@ -156,10 +156,11 @@ export function PartsExplorer({ connection, table, copy, onClose }: { connection
     }, [layout, layoutMode, zoomedPartition]);
 
     useEffect(() => {
-        const closeOnEscape = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+        if (embedded) return;
+        const closeOnEscape = (event: globalThis.KeyboardEvent) => { if (event.key === 'Escape') onClose?.(); };
         window.addEventListener('keydown', closeOnEscape);
         return () => window.removeEventListener('keydown', closeOnEscape);
-    }, [onClose]);
+    }, [embedded, onClose]);
 
     const current = state?.key === requestKey ? state : undefined;
     const partitions = new Set(filteredParts.map(part => part.partition)).size;
@@ -183,12 +184,10 @@ export function PartsExplorer({ connection, table, copy, onClose }: { connection
         .replace('{total}', exactCount(selectedTotal ?? '0'))
         .replace('{state}', selectedStateLabel.toLowerCase()) : undefined;
 
-    return <div className="parts-explorer-layer">
-        <button className="parts-explorer-scrim" type="button" aria-label={copy.closePanel} onClick={onClose}/>
-        <section className="parts-explorer-dialog" role="dialog" aria-modal="true" aria-label={copy.partsExplorerTitle}>
+    const dialog = <section className={`parts-explorer-dialog${embedded ? ' is-embedded' : ''}`} role={embedded ? 'region' : 'dialog'} aria-modal={embedded ? undefined : true} aria-label={copy.partsExplorerTitle}>
             <header className="parts-explorer-header">
                 <div><span className="eyebrow">{copy.partsExplorerTitle.toUpperCase()}</span><h2>{table.database}.{table.name}</h2><p>{copy.partsExplorerDescription}</p></div>
-                <Button variant="ghost" className="panel-collapse-button" aria-label={copy.closePanel} onClick={onClose}>×</Button>
+                {!embedded && <Button variant="ghost" className="panel-collapse-button" aria-label={copy.closePanel} onClick={() => onClose?.()}>×</Button>}
             </header>
             <div className="parts-explorer-toolbar">
                 <div className="parts-view-control" role="group" aria-label={copy.partsStateFilter}>
@@ -307,7 +306,7 @@ export function PartsExplorer({ connection, table, copy, onClose }: { connection
                 </div>
             </>}
             {connection.dataSource === 'fixture' && snapshot && <span className="parts-fixture-label">{copy.partsFixture}</span>}
-            <div className="parts-explorer-footer"><span>{snapshot && `${exactCount(snapshot.totalParts)} ${copy.partsTotal}`}</span><Button variant="secondary" className="toolbar-small" onClick={onClose}>{copy.closePanel}</Button></div>
-        </section>
-    </div>;
+            <div className="parts-explorer-footer"><span>{snapshot && `${exactCount(snapshot.totalParts)} ${copy.partsTotal}`}</span>{!embedded && <Button variant="secondary" className="toolbar-small" onClick={() => onClose?.()}>{copy.closePanel}</Button>}</div>
+        </section>;
+    return embedded ? <div className="parts-explorer-embedded">{dialog}</div> : <div className="parts-explorer-layer"><button className="parts-explorer-scrim" type="button" aria-label={copy.closePanel} onClick={() => onClose?.()}/>{dialog}</div>;
 }

@@ -12,7 +12,7 @@ export function HelpButton({ copy, open, onOpen }: {
         aria-label={copy.help}
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-controls="help-center-panel"
+        aria-controls="workspace-help-panel"
         title={copy.help}
         onClick={event => onOpen(event.currentTarget)}
     >

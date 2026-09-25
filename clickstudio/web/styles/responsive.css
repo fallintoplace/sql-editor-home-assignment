@@ -93,9 +93,8 @@
     .document-tab { min-width: 140px; max-width: 260px; gap: 5px; padding: 0 7px; font-size: 9px; }
     .document-tab-actions { padding-left: 3px; }
     .document-tabs-scroll-button { width: 25px; }
-    .sql-examples-backdrop { padding: 12px; }
-    .sql-examples-panel { width: calc(100vw - 24px); height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); }
-    .sql-examples-panel { border-radius: 10px; }
+    .workspace-help-backdrop { padding: 12px; }
+    .workspace-help-panel { width: calc(100vw - 24px); height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); border-radius: 10px; }
     .sql-examples-toolbar { align-items: stretch; }
     .sql-example-search { min-width: 100%; flex-basis: 100%; }
     .sql-examples-layout { grid-template-columns: minmax(150px, .8fr) minmax(0, 1.2fr); }
@@ -108,8 +107,6 @@
     .editor-footer { font-size: 7px; }
     .execution-bar { min-height: 40px; flex-wrap: wrap; gap: 7px 12px; padding: 6px 10px; }
     .help-button { min-height: 27px; }
-    .help-center-backdrop { padding: 12px; }
-    .help-center-panel { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); }
     .execution-telemetry { justify-content: flex-start; }
     .execution-right code { max-width: 90px; }
     .toast-stack { right: 10px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); width: calc(100vw - 20px); }
@@ -124,10 +121,12 @@
 @media (max-width: 560px) {
     .is-drawer { width: calc(100vw - 12px); }
     .new-tab-labeled { gap: 4px; padding-inline: 7px; font-size: 9px; }
-    .sql-examples-backdrop { padding: 8px; }
-    .sql-examples-panel { width: calc(100vw - 16px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); }
-    .sql-examples-header { padding: 13px 12px 10px; }
-    .sql-examples-header p { max-width: 270px; }
+    .workspace-help-backdrop { padding: 8px; }
+    .workspace-help-panel { width: calc(100vw - 16px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); border-radius: 10px; }
+    .workspace-help-header { padding: 13px 12px 10px; }
+    .workspace-help-header p { max-width: 270px; }
+    .workspace-help-tabs { padding: 6px 9px; }
+    .workspace-help-tab { flex: 1; }
     .sql-examples-toolbar { padding: 8px; }
     .sql-example-categories { width: 100%; }
     .sql-examples-layout { display: flex; flex-direction: column; }
@@ -138,20 +137,14 @@
     .sql-example-preview pre { font-size: 8px; }
     .help-button { width: 29px; min-height: 29px; padding: 0; }
     .help-button span { display: none; }
-    .help-center-backdrop { padding: 8px; }
-    .help-center-panel { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); border-radius: 10px; }
-    .help-center-header { padding: 13px 12px 10px; }
-    .help-center-header p { max-width: 270px; }
-    .help-center-content { padding: 9px; }
-    .help-feature-card, .help-center-lower { grid-template-columns: minmax(0, 1fr); }
-    .help-feature-card { gap: 12px; padding: 11px; }
-    .help-parts-illustration { min-height: 170px; }
-    .help-center-note { min-height: 125px; }
+    .help-parts-browser { padding: 8px; }
+    .help-parts-browser-toolbar { align-items: stretch; flex-direction: column; gap: 7px; }
+    .help-parts-table-picker { min-width: 0; max-width: none; flex-basis: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .sql-examples-backdrop, .sql-examples-panel { animation: none; }
-    .help-button, .help-center-backdrop, .help-center-panel { animation: none; }
+    .workspace-help-backdrop, .workspace-help-panel { animation: none; }
+    .help-button { animation: none; }
 }
 
 @media (max-width: 560px) {

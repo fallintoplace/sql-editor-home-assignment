@@ -12,11 +12,9 @@ import { api, download, isFrontendDemoPreview, message, post, RequestError } fro
 import { PLAYGROUND_CONNECTION_ID } from './playground';
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { ImportWizard } from './components/ImportWizard';
-import { SqlExamplesMenu } from './components/SqlExamplesMenu';
+import { WorkspaceHelpPanel, type HelpPanelSection } from './components/WorkspaceHelpPanel';
 import { ExplainAnalyzeView } from './components/ExplainAnalyzeView';
 import { HelpButton } from './components/HelpButton';
-import { HelpCenter } from './components/HelpCenter';
-import { PartsExplorer } from './components/PartsExplorer';
 import { RestoreSqlMenu } from './components/RestoreSqlMenu';
 import { OverlayPortal } from './components/OverlayPortal';
 import { ChartView, InsightsView, ResultGrid } from './components/ResultViews';
@@ -106,27 +104,20 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [compactViewport, setCompactViewport] = useState(() => window.matchMedia('(max-width: 850px)').matches);
     const [importOpen, setImportOpen] = useState(false);
-    const [examplesOpen, setExamplesOpen] = useState(false);
-    const examplesOpenerRef = useRef<HTMLButtonElement | null>(null);
-    const [helpOpen, setHelpOpen] = useState(false);
-    const helpOpenerRef = useRef<HTMLButtonElement | null>(null);
-    const [helpPartsTable, setHelpPartsTable] = useState<SchemaTable>();
-    const openExamples = useCallback((opener: HTMLButtonElement) => {
-        examplesOpenerRef.current = opener;
-        setExamplesOpen(true);
+    const [helpPanelOpen, setHelpPanelOpen] = useState(false);
+    const [helpPanelSection, setHelpPanelSection] = useState<HelpPanelSection>('examples');
+    const helpPanelOpenerRef = useRef<HTMLButtonElement | null>(null);
+    const openHelpPanel = useCallback((section: HelpPanelSection, opener: HTMLButtonElement) => {
+        helpPanelOpenerRef.current = opener;
+        setHelpPanelSection(section);
+        setHelpPanelOpen(true);
     }, []);
-    const closeExamples = useCallback((restoreFocus = true) => {
-        setExamplesOpen(false);
-        if (restoreFocus) window.requestAnimationFrame(() => examplesOpenerRef.current?.focus());
+    const closeHelpPanel = useCallback((restoreFocus = true) => {
+        setHelpPanelOpen(false);
+        if (restoreFocus) window.requestAnimationFrame(() => helpPanelOpenerRef.current?.focus());
     }, []);
-    const openHelp = useCallback((opener: HTMLButtonElement) => {
-        helpOpenerRef.current = opener;
-        setHelpOpen(true);
-    }, []);
-    const closeHelp = useCallback((restoreFocus = true) => {
-        setHelpOpen(false);
-        if (restoreFocus) window.requestAnimationFrame(() => helpOpenerRef.current?.focus());
-    }, []);
+    const openExamples = useCallback((opener: HTMLButtonElement) => openHelpPanel('examples', opener), [openHelpPanel]);
+    const openHelp = useCallback((opener: HTMLButtonElement) => openHelpPanel('parts', opener), [openHelpPanel]);
     const [busy, setBusy] = useState<BusyAction>('');
     const [cancelling, setCancelling] = useState(false);
     const [error, setErrorState] = useState('');
@@ -834,8 +825,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                 onClick={() => scrollTabs(1)}
                             ><Icon name="chevron"/></button>
                         </>}
-                    <button className="new-tab-button new-tab-labeled" data-testid="new-sql" type="button" aria-label={copy.common.newSql} title={copy.common.newSql} aria-haspopup="dialog" aria-expanded={examplesOpen} aria-controls="sql-examples-panel" onClick={event => openExamples(event.currentTarget)}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
-                    <SqlExamplesMenu open={examplesOpen} onClose={closeExamples} examples={sqlExamples} sourceLabel={connectionLabel} copy={copy.common} locale={locale} onOpenExample={example => {
+                    <button className="new-tab-button new-tab-labeled" data-testid="new-sql" type="button" aria-label={copy.common.newSql} title={copy.common.newSql} aria-haspopup="dialog" aria-expanded={helpPanelOpen} aria-controls="workspace-help-panel" onClick={event => openExamples(event.currentTarget)}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
+                    <WorkspaceHelpPanel open={helpPanelOpen} section={helpPanelSection} onSectionChange={setHelpPanelSection} onClose={closeHelpPanel} examples={sqlExamples} sourceLabel={connectionLabel} copy={copy.common} locale={locale} connection={connection} tables={schema?.tables ?? []} schemaLoading={schemaLoading} trusted={trusted} onOpenExample={example => {
                         const draft = createExampleDraft(example);
                         if (!openNewDraft(draft)) return false;
                         window.requestAnimationFrame(() => editor.current?.focus());
@@ -1030,8 +1021,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             {drawerOpen && (experience === 'beginner' || compactViewport) && <OverlayPortal><><button className="drawer-backdrop" type="button" aria-label="Close panel" onClick={() => setDrawerOpen(false)}/><InspectorPane {...inspectorProps} drawer onClose={() => setDrawerOpen(false)} onInsert={value => { editor.current?.insert(value); setDrawerOpen(false); }} onOpenDocument={document => { openDocument(document); setDrawerOpen(false); }}/></></OverlayPortal>}
         </div>
         <ImportWizard open={importOpen} connectionId={connection.id} trusted={trusted} demoMode={demoMode} onClose={() => setImportOpen(false)} onImported={() => { void loadSchema(); setNotice('Import complete. The destination schema was refreshed.'); }}/>
-        <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} cancelling={cancelling} scriptRunning={script?.status === 'running'} copy={copy.common} helpButton={<HelpButton copy={copy.common} open={helpOpen} onOpen={openHelp}/>}/>
-        <HelpCenter open={helpOpen} copy={copy.common} tables={schema?.tables ?? []} schemaLoading={schemaLoading} trusted={trusted} onClose={closeHelp} onOpenObjects={() => showInspector('schema')} onOpenParts={table => { closeHelp(false); setHelpPartsTable(table); }}/>
-        {helpPartsTable && <OverlayPortal><PartsExplorer connection={connection} table={helpPartsTable} copy={copy.common} onClose={() => setHelpPartsTable(undefined)}/></OverlayPortal>}
+        <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} cancelling={cancelling} scriptRunning={script?.status === 'running'} copy={copy.common} helpButton={<HelpButton copy={copy.common} open={helpPanelOpen} onOpen={openHelp}/>}/>
     </div>;
 }

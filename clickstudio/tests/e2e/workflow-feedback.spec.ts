@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import type { QueryDocument, Run } from '../../shared/types.js';
-import { openWorkspacePanel, trust } from './helpers.js';
+import { openWorkspacePanel, runStatementButton, trust } from './helpers.js';
 
 async function replaceSql(page: Page, sql: string) {
     await page.locator('.cm-content').click();
@@ -75,6 +75,31 @@ test('Editing during a delayed save leaves the newer SQL marked unsaved', async 
         await expect(page.locator('.draft-status')).toHaveText('Unsaved changes');
         await expect(page.locator('.cm-content')).toContainText('SELECT 222');
         expect(executions).toBe(0);
+    } finally {
+        release();
+    }
+});
+
+test('Chart snapshot loads while a save is still in progress', async ({ page }) => {
+    let release!: () => void, snapshotRequests = 0;
+    const wait = new Promise<void>(resolve => { release = resolve; });
+    page.on('request', request => {
+        if (request.method() === 'GET' && /^\/api\/runs\/[^/]+\/snapshot$/.test(new URL(request.url()).pathname)) snapshotRequests++;
+    });
+    await page.route(url => url.pathname === '/api/documents' || /^\/api\/documents\/[^/]+$/.test(url.pathname), async route => {
+        if (['POST', 'PUT'].includes(route.request().method())) await wait;
+        await route.continue();
+    });
+    await trust(page);
+    await runStatementButton(page).click();
+    const results = page.getByRole('region', { name: 'Query results', exact: true });
+    await expect(results.getByRole('table', { name: 'Retained query rows' })).toBeVisible();
+    try {
+        await page.getByTestId('save-query').click();
+        await expect(page.locator('.draft-status')).toHaveText('Saving…');
+        await results.getByRole('tab', { name: 'Chart', exact: true }).click();
+        await expect.poll(() => snapshotRequests).toBe(1);
+        await expect(results.locator('.chart-workspace, .chart-table-fallback')).toBeVisible();
     } finally {
         release();
     }

@@ -142,34 +142,37 @@ function App() {
                 </div>}
             </div>
             <div className="topbar-spacer"/>
-            <div className="experience-switch">
-                <span className="mode-caption">{copy.common.workspaceMode}</span>
-                <RadioGroup className="navbar-mode-control" value={experience} onValueChange={value => {
-                    const selected = experienceOptions(copy).find(option => option.value === value);
-                    if (selected) setExperience(selected.value);
-                }} aria-label={copy.common.workspaceMode} inline orientation="horizontal" dir="end">
-                    <RadioGroup.Item value="beginner" className={`navbar-mode-option is-beginner ${experience === 'beginner' ? 'is-active' : ''}`} label={copy.app.beginner}/>
-                    <RadioGroup.Item value="expert" className={`navbar-mode-option is-expert ${experience === 'expert' ? 'is-active' : ''}`} label={copy.app.expert}/>
-                </RadioGroup>
-            </div>
-            <div className="experience-switch parser-switch">
-                <span className="mode-caption">{copy.common.parserMode}</span>
-                <RadioGroup className="navbar-mode-control" value={parserMode} onValueChange={value => {
-                    if (value === 'wasm' || value === 'basic') setParserMode(value);
-                }} aria-label={copy.common.parserMode} inline orientation="horizontal" dir="end">
-                    <RadioGroup.Item value="wasm" className={`navbar-mode-option parser-mode-option is-wasm ${parserMode === 'wasm' ? 'is-active' : ''}`} label="WASM"/>
-                    <RadioGroup.Item value="basic" className={`navbar-mode-option parser-mode-option is-basic ${parserMode === 'basic' ? 'is-active' : ''}`} label="CodeMirror"/>
-                </RadioGroup>
-            </div>
-            <div className="topbar-divider topbar-divider-short"/>
-            <div className="topbar-preferences">
-                <SelectControl label={copy.app.language} value={locale} options={localeOptions} onChange={setLocale}/>
-                <div className="experience-switch theme-switch">
-                    <div className="theme-mode-control" role="radiogroup" aria-label={copy.app.theme}>
-                        {themeOptions(copy).map(option => <label key={option.value} className={`theme-mode-option ${theme === option.value ? 'is-active' : ''}`} title={option.label}>
-                            <input type="radio" name="clickstudio-theme" value={option.value} checked={theme === option.value} aria-label={option.label} onChange={() => setTheme(option.value)}/>
-                            <Icon name={option.value === 'click-dark' ? 'moon' : 'sun'} className="theme-mode-icon"/>
-                        </label>)}
+            <div className="topbar-control-rail">
+                <div className="experience-switch">
+                    <span className="mode-caption">{copy.common.workspaceMode}</span>
+                    <RadioGroup className="navbar-mode-control" value={experience} onValueChange={value => {
+                        const selected = experienceOptions(copy).find(option => option.value === value);
+                        if (selected) setExperience(selected.value);
+                    }} aria-label={copy.common.workspaceMode} inline orientation="horizontal" dir="end">
+                        <RadioGroup.Item value="beginner" className={`navbar-mode-option is-beginner ${experience === 'beginner' ? 'is-active' : ''}`} label={copy.app.beginner}/>
+                        <RadioGroup.Item value="expert" className={`navbar-mode-option is-expert ${experience === 'expert' ? 'is-active' : ''}`} label={copy.app.expert}/>
+                    </RadioGroup>
+                </div>
+                <div className="topbar-divider topbar-divider-short"/>
+                <div className="experience-switch parser-switch">
+                    <span className="mode-caption">{copy.common.parserMode}</span>
+                    <RadioGroup className="navbar-mode-control" value={parserMode} onValueChange={value => {
+                        if (value === 'wasm' || value === 'basic') setParserMode(value);
+                    }} aria-label={copy.common.parserMode} inline orientation="horizontal" dir="end">
+                        <RadioGroup.Item value="wasm" className={`navbar-mode-option parser-mode-option is-wasm ${parserMode === 'wasm' ? 'is-active' : ''}`} label="WASM"/>
+                        <RadioGroup.Item value="basic" className={`navbar-mode-option parser-mode-option is-basic ${parserMode === 'basic' ? 'is-active' : ''}`} label="CodeMirror"/>
+                    </RadioGroup>
+                </div>
+                <div className="topbar-divider topbar-divider-short"/>
+                <div className="topbar-preferences">
+                    <SelectControl label={copy.app.language} value={locale} options={localeOptions} onChange={setLocale}/>
+                    <div className="experience-switch theme-switch">
+                        <div className="theme-mode-control" role="radiogroup" aria-label={copy.app.theme}>
+                            {themeOptions(copy).map(option => <label key={option.value} className={`theme-mode-option ${theme === option.value ? 'is-active' : ''}`} title={option.label}>
+                                <input type="radio" name="clickstudio-theme" value={option.value} checked={theme === option.value} aria-label={option.label} onChange={() => setTheme(option.value)}/>
+                                <Icon name={option.value === 'click-dark' ? 'moon' : 'sun'} className="theme-mode-icon"/>
+                            </label>)}
+                        </div>
                     </div>
                 </div>
             </div>

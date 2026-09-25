@@ -1,46 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Json, Schema, SchemaColumn } from '../../shared/types';
+import type { Schema } from '../../shared/types';
 import { api, message, post, RequestError } from '../api';
+import { ImportPreviewTable } from './ImportPreviewTable';
+import {
+    MAX_FILE_BYTES,
+    fileFormat,
+    importStateKey,
+    importSteps,
+    initialFields,
+    isPendingImport,
+    loadImportSetup,
+    writableColumns,
+    type BusyAction,
+    type ImportFormat,
+    type ImportJob,
+    type ImportMapping,
+    type ImportPreview,
+    type PendingImport,
+    type Step,
+} from './import-wizard-model';
 
-type ImportFormat = 'csv' | 'json' | 'ndjson';
-type Step = 'file' | 'mapping' | 'review' | 'status';
-const importSteps = [
-    { id: 'file', label: 'File' },
-    { id: 'mapping', label: 'Map' },
-    { id: 'review', label: 'Review' },
-    { id: 'status', label: 'Import' },
-] as const satisfies readonly { id: Step; label: string }[];
-type ImportPreview = {
-    id: string;
-    name: string;
-    format: ImportFormat;
-    columns: string[];
-    rows: Record<string, Json>[];
-    rowCount: number;
-};
-type ImportMapping = {
-    id: string;
-    inputId: string;
-    connectionId: string;
-    table: string;
-    fields: Record<string, string>;
-    rows: Record<string, Json>[];
-    rowCount: number;
-};
-type ImportJob = {
-    id: string;
-    connectionId?: string;
-    table: string;
-    queryId?: string;
-    rows: number;
-    createdAt?: string;
-    status: 'running' | 'succeeded' | 'unknown';
-    error?: string;
-    reconciliationRequired?: boolean;
-    reviewedAt?: string;
-};
-type PendingImport = { id: string; table: string; rows: number; name: string };
-type BusyAction = '' | 'setup' | 'preview' | 'mapping' | 'commit' | 'recover' | 'reconcile' | 'review';
 type ImportWizardProps = {
     open: boolean;
     connectionId: string;
@@ -49,48 +28,6 @@ type ImportWizardProps = {
     onClose: () => void;
     onImported: () => void;
 };
-
-function isPendingImport(value: unknown): value is PendingImport {
-    return typeof value === 'object' && value !== null && !Array.isArray(value) &&
-        'id' in value && typeof value.id === 'string' && value.id.length > 0 &&
-        'table' in value && typeof value.table === 'string' && value.table.length > 0 &&
-        'rows' in value && typeof value.rows === 'number' && Number.isSafeInteger(value.rows) && value.rows >= 0 &&
-        'name' in value && typeof value.name === 'string';
-}
-
-const MAX_FILE_BYTES = 2_000_000;
-const importStateKey = (connectionId: string) => `clickstudio:import:${connectionId}:v1`;
-
-function fileFormat(file: File): ImportFormat | undefined {
-    const name = file.name.toLowerCase();
-    if (name.endsWith('.csv')) return 'csv';
-    if (name.endsWith('.json')) return 'json';
-    if (name.endsWith('.ndjson') || name.endsWith('.jsonl')) return 'ndjson';
-    return undefined;
-}
-
-function displayValue(value: Json | undefined): string {
-    if (value === undefined) return '—';
-    if (typeof value === 'string') return value;
-    if (value === null) return 'null';
-    return JSON.stringify(value);
-}
-
-function writableColumns(schema: Schema | undefined, table: string): SchemaColumn[] {
-    return schema?.columns.filter(column => `${column.database}.${column.table}` === table && !['MATERIALIZED', 'ALIAS'].includes(column.defaultKind)) ?? [];
-}
-
-function initialFields(sourceColumns: string[], destinations: SchemaColumn[]): Record<string, string> {
-    const writableNames = new Set(destinations.map(column => column.name));
-    return Object.fromEntries(sourceColumns.map(column => [column, writableNames.has(column) ? column : '']));
-}
-
-function loadImportSetup(connectionId: string, signal?: AbortSignal) {
-    return Promise.all([
-        api<string[]>(`/connections/${encodeURIComponent(connectionId)}/import-targets`, signal ? { signal } : {}),
-        api<Schema>(`/connections/${encodeURIComponent(connectionId)}/schema`, signal ? { signal } : {}),
-    ]);
-}
 
 export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, onImported }: ImportWizardProps) {
     const dialogRef = useRef<HTMLDialogElement>(null);
@@ -510,7 +447,7 @@ export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, o
                             <div><span className="text-xs font-semibold">{preview.name}</span><p className="mt-1 text-[11px] text-[var(--muted)]">{preview.rowCount.toLocaleString()} rows · {preview.columns.length} columns · {preview.format.toUpperCase()}</p></div>
                             <button type="button" onClick={() => { void api(`/imports/${encodeURIComponent(preview.id)}`, { method: 'DELETE' }).catch(() => undefined); setPreview(undefined); setMapping(undefined); setStep('file'); setError(''); }} className="rounded-lg border border-[var(--line)] px-3 py-2 text-[11px] text-[var(--text-soft)] hover:bg-[var(--panel-hover)]">Choose another file</button>
                         </div>
-                        <PreviewTable preview={preview} columns={sampleColumns}/>
+                        <ImportPreviewTable preview={preview} columns={sampleColumns}/>
                     </>}
                     {preview && availableTargets.length === 0 && <div role="status" className="rounded-lg border border-[var(--line)] p-3 text-xs text-[var(--muted)]">No configured import destination is available for this connection.</div>}
                 </section>}
@@ -582,14 +519,3 @@ export function ImportWizard({ open, connectionId, trusted, demoMode, onClose, o
     </dialog>;
 }
 
-function PreviewTable({ preview, columns }: { preview: ImportPreview; columns: string[] }) {
-    return <div className="overflow-hidden rounded-xl border border-[var(--line)]">
-        <div className="flex items-center justify-between gap-3 bg-[var(--page)] px-3 py-2 text-[10px] text-[var(--muted)]"><span>Sample rows</span><span>Showing {preview.rows.length} of {preview.rowCount.toLocaleString()} · {columns.length} of {preview.columns.length} columns</span></div>
-        <div className="max-h-64 overflow-auto">
-            <table className="w-full min-w-[440px] border-collapse text-left text-[10px]">
-                <thead className="sticky top-0 bg-[var(--panel-raised)] text-[var(--muted)]"><tr>{columns.map(column => <th key={column} className="max-w-[180px] truncate px-3 py-2 font-semibold" title={column}>{column}</th>)}</tr></thead>
-                <tbody>{preview.rows.map((row, index) => <tr key={index} className="border-t border-[var(--line)]">{columns.map(column => <td key={column} className="max-w-[180px] truncate px-3 py-2 text-[var(--text-soft)]" title={displayValue(row[column])}>{displayValue(row[column])}</td>)}</tr>)}</tbody>
-            </table>
-        </div>
-    </div>;
-}

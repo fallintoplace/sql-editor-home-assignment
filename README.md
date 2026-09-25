@@ -2,6 +2,17 @@
 
 A local-first ClickHouse SQL workbench built with React, Click UI, CodeMirror, and a bounded server API. ClickStudio keeps SQL, parameters, execution limits, results, and query evidence tied to each run instead of treating the editor as disposable text.
 
+## Reviewer tour
+
+If you are reviewing this as an interview project, the shortest useful path is:
+
+1. Start the **sample workspace** below and run through the editor, results, charts, and EXPLAIN views.
+2. Read [Engineering decisions and tradeoffs](docs/ENGINEERING-NOTES.md) for the reasoning behind the server boundary, result model, ClickHouse permissions, exact numeric handling, fixtures, and persistence choices.
+3. Use [Project scope](docs/PROJECT-STATUS.md) to see what is implemented and what is intentionally left out.
+4. Use the longer [setup and implementation reference](docs/CLICKSTUDIO.md) only when you want a specific detail.
+
+The project is intentionally broader than a bare text editor, but the core idea is simple: make ClickHouse query execution **inspectable, bounded, and tied to durable evidence** without hiding the underlying SQL or database behavior.
+
 ## Quick start
 
 Requires **Node.js 22.12+**, npm, and Docker only for the live ClickHouse path.
@@ -75,7 +86,9 @@ Real connections require explicit review and trust before query execution. Sampl
 
 For the main local quality gate:
 
-```npm run check```
+```sh
+npm run check
+```
 
 That delegates to the ClickStudio review suite, including syntax checks, TypeScript, ESLint, coverage gates, and the production build.
 
@@ -96,7 +109,9 @@ npm run eval
 
 ## Documentation
 
-- [ClickStudio setup and product guide](docs/CLICKSTUDIO.md) explains setup, execution behavior, security boundaries, persistence, imports, assistant behavior, and operational limits.
-- [Project status](docs/PROJECT-STATUS.md) gives the short implemented-scope summary.
+- [Documentation index](docs/README.md) - reviewer-oriented map of the repository docs.
+- [Engineering decisions and tradeoffs](docs/ENGINEERING-NOTES.md) - the recommended technical interview read.
+- [Project scope](docs/PROJECT-STATUS.md) - implemented features and deliberate boundaries.
+- [Setup and implementation reference](docs/CLICKSTUDIO.md) - detailed reference for setup and behavior.
 
-The project is intentionally local-first and single-owner. It is not presented as a multi-user production service.
+The project is intentionally local-first and single-owner. A production multi-user deployment would need a different auth and persistence model; those boundaries are discussed in the engineering notes rather than presented as unfinished interview requirements.

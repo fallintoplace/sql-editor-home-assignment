@@ -43,13 +43,41 @@ test('EXPLAIN PLAN opens a graph with a tree view and keeps the raw result avail
     await expect(plan).toContainText('Fixture only; the SQL was not evaluated.');
     await expect(plan.locator('.explain-plan-heading')).not.toContainText('no runtime measurements');
     await expect(plan.getByRole('button', { name: 'Graph', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('region', { name: 'Logical query plan', exact: true })).toHaveCount(1);
+    const graph = plan.getByRole('region', { name: 'Logical query plan · Graph', exact: true });
+    await expect(graph).toBeVisible();
+    const graphNodes = graph.locator('[data-node-id]');
+    await expect(graphNodes).toHaveCount(2);
+    await expect(graph.locator('[data-node-id][tabindex="0"]')).toHaveCount(1);
+    await expect(graph.locator('[data-node-id][tabindex="-1"]')).toHaveCount(1);
+    const initiallySelected = graph.locator('[data-node-id][aria-pressed="true"]');
+    const initialNodeId = await initiallySelected.getAttribute('data-node-id');
+    expect(initialNodeId).not.toBeNull();
+    await initiallySelected.focus();
+    await page.keyboard.press('ArrowDown');
+    const keyboardSelected = graph.locator('[data-node-id][aria-pressed="true"]');
+    await expect(keyboardSelected).not.toHaveAttribute('data-node-id', initialNodeId!);
+    await expect(keyboardSelected).toBeFocused();
+
+    const controls = plan.getByRole('group', { name: 'Graph view controls', exact: true });
+    await controls.getByRole('button', { name: 'Zoom in', exact: true }).click();
+    const zoomBeforeEditorFocus = await controls.getByLabel('Zoom level').innerText();
+    const selectedNodeId = await keyboardSelected.getAttribute('data-node-id');
+    expect(selectedNodeId).not.toBeNull();
+    const editor = page.locator('.cm-content');
+    await editor.click();
+    await page.keyboard.press('ControlOrMeta+a');
+    await expect(editor).toBeFocused();
+    await expect(graph.locator('[data-node-id][aria-pressed="true"]')).toHaveAttribute('data-node-id', selectedNodeId!);
+    await expect(controls.getByLabel('Zoom level')).toHaveText(zoomBeforeEditorFocus);
+
     await expect(plan.locator('.explain-plan-heading-actions > strong')).toBeVisible();
     const headingHeight = await plan.locator('.explain-plan-heading').evaluate(element => element.getBoundingClientRect().height);
     expect(headingHeight).toBeLessThan(56);
     await plan.getByRole('button', { name: 'Tree', exact: true }).click();
     await expect(plan.locator('.explain-plan-tree')).toBeVisible();
     await plan.getByRole('button', { name: 'Graph', exact: true }).click();
-    await expect(plan.locator('.pipeline-graph-scroll')).toBeVisible();
+    await expect(plan.getByRole('region', { name: 'Logical query plan · Graph', exact: true })).toBeVisible();
 
     await page.getByRole('tab', { name: 'Results', exact: true }).click();
     await expect(page.getByRole('table', { name: 'Retained query rows' })).toBeVisible();

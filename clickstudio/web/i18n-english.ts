@@ -37,6 +37,7 @@ export const english: Copy = {
         assistant: 'AI',
         results: 'Results',
         chart: 'Chart',
+        map: 'Map',
         insights: 'Insights',
         newSql: 'New SQL',
         restore: 'Restore',

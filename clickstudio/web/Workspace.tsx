@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ApiError, AssistantAction, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Result, Run, RunKind, Script } from '../shared/types';
+import type { ApiError, ProfilePipeline, QueryDocument, QueryProfile, Result, Run, RunKind, Script } from '../shared/types';
 import { DEFAULT_LIMITS } from '../shared/types';
 import { parseExplainPlan } from '../shared/explain-plan';
 import { parseExplainIndexAnalysis } from '../shared/explain-indexes';
@@ -32,14 +32,14 @@ import { useRunEvidence } from './useRunEvidence';
 import { useResultSnapshot } from './useResultSnapshot';
 import { useWorkspaceTabs } from './useWorkspaceTabs';
 import { useWorkspaceData } from './useWorkspaceData';
+import { useWorkspaceAssistant } from './useWorkspaceAssistant';
 import { PanelResizeHandles, panelTargetIsInteractive, useWorkspacePanels } from './useWorkspacePanels';
 import { useScriptExecution } from './useScriptExecution';
-import { useScopedValue } from './useScopedValue';
 import { sqlExamplesFor, type SqlExample } from './sql-examples';
 import { localizeSqlExample } from './sql-examples-locales';
 import { sqlErrorRangeInDraft, type SqlErrorRange } from './sql-error';
 import type { Copy, ExperienceLevel, Locale } from './i18n';
-import type { AssistantContext, BusyAction, Connected, Inspector, ResultsView, SpeechRecognitionLike } from './workspace-types';
+import type { BusyAction, Connected, Inspector, ResultsView } from './workspace-types';
 import { clampPanelSplitRatio } from './workspace-layout';
 
 const stateKey = (connectionId: string) => `clickstudio:workspace:${connectionId}:v1`;
@@ -57,9 +57,6 @@ function apiErrorDetail(error: unknown): ApiError {
         code: typeof candidate?.code === 'string' ? candidate.code : 'EXECUTION_FAILED',
         message: typeof candidate?.message === 'string' ? candidate.message : message(error),
     };
-}
-function assistantContextKey(connectionId: string, draftId: string, sql: string, parameters: Record<string, string>, runId: string | undefined, includeResult: boolean, action: AssistantAction, question: string) {
-    return JSON.stringify({ connectionId, draftId, sql, parameters: Object.entries(parameters).sort(([left], [right]) => left.localeCompare(right)), runId, includeResult, action, question });
 }
 function previewStarterDraft(starter: typeof DEMO_PREVIEW_INITIAL_STARTERS[number]): Draft {
     const runId = demoPreviewStarterRunId(starter.id);
@@ -162,17 +159,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [failedQueryError, setFailedQueryError] = useState<FailedQueryError>();
     const [notice, setNotice] = useState('');
     const [search, setSearch] = useState('');
-    const [assistantAction, setAssistantAction] = useState<AssistantAction>('generate');
-    const [assistantQuestion, setAssistantQuestion] = useState('');
-    const [assistantContextState, setAssistantContextForDraft] = useScopedValue<AssistantContext | undefined>(active.id);
-    const [assistantProposalState, setAssistantProposalForDraft] = useScopedValue<{ key: string; value: Proposal } | undefined>(active.id);
-    const [assistantBusyKey, setAssistantBusyKey] = useState<string>();
-    const [assistantErrors, setAssistantErrors] = useState<Record<string, string>>({});
-    const [includeResult, setIncludeResultState] = useState(false);
-    const [voiceListening, setVoiceListening] = useState(false);
-    const [voiceError, setVoiceError] = useState('');
-    const recognitionRef = useRef<SpeechRecognitionLike | undefined>(undefined);
-    const promptBeforeVoiceRef = useRef('');
     const storageError = useWorkspacePersistence(key, workspace);
     const parameters = useMemo(() => {
         try { return parameterNames(active.sql); } catch { return []; }
@@ -188,18 +174,35 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         }
         return undefined;
     };
-    const assistantKey = assistantContextKey(connection.id, active.id, active.sql, active.parameters, activeRunId, includeResult, assistantAction, assistantQuestion);
-    const assistantKeyRef = useRef(assistantKey);
-    assistantKeyRef.current = assistantKey;
-    const assistantBusy = assistantBusyKey === assistantKey;
-    const assistantError = assistantErrors[active.id] ?? '';
-    const setAssistantError = (error: string) => setAssistantErrors(current => ({ ...current, [active.id]: error }));
-    const assistantContext = assistantContextState?.key === assistantKey ? assistantContextState : undefined;
-    const assistantProposal = assistantProposalState && (assistantProposalState.key === assistantKey || (assistantProposalState.value.decision === 'accepted' && assistantProposalState.value.sql === active.sql))
-        ? assistantProposalState.value : undefined;
-    const assistantRequestRef = useRef(0);
     const currentConnection = connections.find(item => item.id === connection.id) ?? connection;
     const trusted = currentConnection.trusted;
+
+    const {
+        assistantAction,
+        changeAssistantAction,
+        assistantQuestion,
+        changeAssistantQuestion,
+        assistantContext,
+        assistantProposal,
+        assistantBusy,
+        assistantError,
+        includeResult,
+        setIncludeResult,
+        voiceListening,
+        voiceError,
+        startVoiceInput,
+        prepareAssistantContext,
+        requestAssistantProposal,
+        decideAssistantProposal,
+    } = useWorkspaceAssistant({
+        active,
+        activeRunId,
+        connectionId: connection.id,
+        trusted,
+        locale,
+        workspaceRef,
+        setWorkspace,
+    });
 
     const {
         schema, schemaLoading, schemaError,
@@ -230,119 +233,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     }, []);
     const cancellingRef = useRef(false);
 
-    useEffect(() => () => recognitionRef.current?.abort(), []);
     useEffect(() => { setDrawerOpen(false); }, [experience]);
-
-    const startVoiceInput = () => {
-        if (voiceListening) { recognitionRef.current?.stop(); return; }
-        const SpeechRecognition = window.SpeechRecognition ?? window.webkitSpeechRecognition;
-        if (!SpeechRecognition) { setVoiceError('Voice input is not available in this browser. You can type your question instead.'); return; }
-        setVoiceError('');
-        promptBeforeVoiceRef.current = assistantQuestion.trimEnd();
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = ({ en: 'en-US', de: 'de-DE', es: 'es-ES', nl: 'nl-NL', zh: 'zh-CN', ru: 'ru-RU' } as const)[locale];
-        recognition.onresult = event => {
-            const transcript = Array.from(event.results).map(result => result[0]?.transcript ?? '').join(' ').replace(/\s+/g, ' ').trim();
-            const base = promptBeforeVoiceRef.current;
-            setAssistantQuestion(`${base}${base && transcript ? ' ' : ''}${transcript}`);
-            assistantRequestRef.current++;
-            setAssistantBusyKey(undefined);
-            setAssistantContextForDraft(active.id, undefined);
-            setAssistantProposalForDraft(active.id, undefined);
-        };
-        recognition.onerror = event => {
-            setVoiceError(event.error === 'not-allowed' ? 'Microphone access was denied. Allow access or type your question instead.' : `Voice input stopped (${event.error}). You can continue by typing.`);
-            setVoiceListening(false);
-        };
-        recognition.onend = () => setVoiceListening(false);
-        recognitionRef.current = recognition;
-        try { recognition.start(); setVoiceListening(true); }
-        catch { setVoiceError('Voice input could not start. Check microphone access or type your question instead.'); setVoiceListening(false); }
-    };
-
-    const prepareAssistantContext = async (action = assistantAction, question = assistantQuestion) => {
-        if (!trusted) return;
-        if (!question.trim() && action === 'generate') { setAssistantError('Describe what you want to learn from your data first.'); return; }
-        const draftId = active.id;
-        const requestKey = assistantContextKey(connection.id, draftId, active.sql, active.parameters, activeRunId, includeResult, action, question);
-        const requestId = ++assistantRequestRef.current;
-        setAssistantBusyKey(requestKey); setAssistantError(''); setAssistantAction(action);
-        try {
-            const result = await post<AssistantContext>('/assistant/context', { connectionId: connection.id, action, question, sql: active.sql, runId: activeRunId, includeResult });
-            if (assistantRequestRef.current !== requestId || assistantKeyRef.current !== requestKey) return;
-            setAssistantContextForDraft(draftId, { ...result, key: requestKey });
-            setAssistantProposalForDraft(draftId, undefined);
-        } catch (caught) {
-            if (assistantRequestRef.current === requestId && assistantKeyRef.current === requestKey) setAssistantError(message(caught));
-        } finally { if (assistantRequestRef.current === requestId) setAssistantBusyKey(undefined); }
-    };
-
-    const requestAssistantProposal = async () => {
-        if (!assistantContext || assistantBusy) return;
-        const context = assistantContext;
-        if (context.key !== assistantKeyRef.current) { setAssistantError('The draft changed. Preview the current context before asking for a proposal.'); return; }
-        if (!window.confirm(`Send the reviewed SQL and selected context to the configured AI provider? ${assistantContext.summary.join(' ')}`)) return;
-        const draftId = active.id;
-        const requestId = ++assistantRequestRef.current;
-        setAssistantBusyKey(context.key); setAssistantError('');
-        try {
-            const proposal = await post<Proposal>('/assistant/proposals', { contextId: context.id, consent: true });
-            if (assistantRequestRef.current !== requestId || assistantKeyRef.current !== context.key) return;
-            setAssistantProposalForDraft(draftId, { key: context.key, value: proposal });
-        } catch (caught) {
-            if (assistantRequestRef.current === requestId && assistantKeyRef.current === context.key) setAssistantError(message(caught));
-        } finally { if (assistantRequestRef.current === requestId) setAssistantBusyKey(undefined); }
-    };
-
-    const decideAssistantProposal = async (decision: 'accepted' | 'rejected') => {
-        if (!assistantProposal || assistantProposal.decision !== 'pending' || assistantProposal.baseSql !== active.sql) return;
-        const proposal = assistantProposal;
-        const draftId = active.id;
-        const requestKey = assistantContextKey(connection.id, draftId, active.sql, active.parameters, activeRunId, includeResult, assistantAction, assistantQuestion);
-        const requestId = ++assistantRequestRef.current;
-        setAssistantBusyKey(requestKey); setAssistantError('');
-        try {
-            const reviewed = await post<Proposal>(`/assistant/proposals/${encodeURIComponent(proposal.id)}/decision`, { decision, connectionId: connection.id, currentSql: active.sql });
-            setAssistantProposalForDraft(draftId, { key: requestKey, value: reviewed }, true);
-            const currentDraft = workspaceRef.current.tabs.find(draft => draft.id === draftId);
-            if (decision === 'accepted' && reviewed.sql !== null && currentDraft?.sql === proposal.baseSql) {
-                update(draftId, draft => ({ ...checkpoint(draft, 'Before accepted AI proposal'), sql: reviewed.sql!, from: 0, to: 0 }));
-            }
-        } catch (caught) {
-            if (assistantRequestRef.current === requestId && assistantKeyRef.current === requestKey) setAssistantError(message(caught));
-        } finally { if (assistantRequestRef.current === requestId) setAssistantBusyKey(undefined); }
-    };
-
-    const changeAssistantQuestion = (question: string) => {
-        assistantRequestRef.current++;
-        setAssistantBusyKey(undefined);
-        setAssistantQuestion(question); setAssistantContextForDraft(active.id, undefined); setAssistantProposalForDraft(active.id, undefined); setAssistantError('');
-    };
-    const clearAssistantReview = () => {
-        assistantRequestRef.current++;
-        setAssistantBusyKey(undefined);
-        setAssistantContextForDraft(active.id, undefined);
-        setAssistantProposalForDraft(active.id, undefined);
-        setAssistantError('');
-    };
-    const changeIncludeResult = (include: boolean) => {
-        if (include === includeResult) return;
-        setIncludeResultState(include);
-        clearAssistantReview();
-    };
-    const setAssistantContext = (context?: AssistantContext) => {
-        assistantRequestRef.current++;
-        setAssistantBusyKey(undefined);
-        setAssistantContextForDraft(active.id, context);
-    };
-    const setAssistantProposal = (proposal?: Proposal) => {
-        assistantRequestRef.current++;
-        setAssistantBusyKey(undefined);
-        setAssistantProposalForDraft(active.id, proposal ? { key: assistantKey, value: proposal } : undefined);
-    };
-    const setIncludeResult = changeIncludeResult;
 
     const update = useCallback((id: string, change: (draft: Draft) => Draft) => {
         setWorkspace(current => ({ ...current, tabs: current.tabs.map(draft => draft.id === id ? change(draft) : draft) }));
@@ -810,7 +701,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         onRefreshRevisions: () => void loadDocumentRevisions(active.serverId),
         onRestoreRevision: restoreDocumentRevision,
         assistantAction,
-        onAssistantAction: (value: AssistantAction) => { setAssistantAction(value); setAssistantContext(undefined); setAssistantProposal(undefined); },
+        onAssistantAction: changeAssistantAction,
         assistantQuestion,
         onAssistantQuestion: changeAssistantQuestion,
         assistantContext,

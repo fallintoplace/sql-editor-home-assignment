@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { isIP } from 'node:net';
 import { resolve } from 'node:path';
 import type { Connection, Limits } from '../shared/types.js';
-import { AppError, requireThat } from '../core/errors.js';
+import { requireThat } from '../core/errors.js';
 import { identifier, integer, limits, record, text } from '../core/validation.js';
 function isLoopbackHost(host: string) {
     const normalized = host.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');

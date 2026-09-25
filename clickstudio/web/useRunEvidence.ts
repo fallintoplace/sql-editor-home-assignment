@@ -44,7 +44,7 @@ export function useRunEvidence({ activeRunId, connectionId, loadHistory, setErro
     }, [activeRunId, page, run, setError, setResultPageForRun]);
 
     useEffect(() => {
-        if (!activeRunId || !run || terminal(run)) { setEventState('idle'); return; }
+        if (!activeRunId || !running) { setEventState('idle'); return; }
         setEventState('reconnecting');
         const stream = new EventSource(`/api/runs/${encodeURIComponent(activeRunId)}/events`);
         stream.onopen = () => setEventState('live');
@@ -63,7 +63,7 @@ export function useRunEvidence({ activeRunId, connectionId, loadHistory, setErro
         };
         stream.onerror = () => setEventState('reconnecting');
         return () => stream.close();
-    }, [activeRunId, connectionId, loadHistory, run?.status, setRunForRun]);
+    }, [activeRunId, connectionId, loadHistory, running, setRunForRun]);
 
     useEffect(() => {
         if (!running || eventState === 'live' || !activeRunId) return;

@@ -310,7 +310,6 @@ test('A delayed native parse cannot replace parser details for newer SQL', async
     const oldSql = 'SELECT old_fn()';
     const newSql = 'SELECT new_fn()';
     const oldResult = { ast: { type: 'OldStatement' }, highlights: [{ begin: 7, end: 13, type: 'function' }] };
-    const newResult = { ast: { type: 'NewStatement' }, highlights: [{ begin: 7, end: 13, type: 'function' }] };
     await page.addInitScript(parserWorkerStub('ready', oldResult));
     await page.goto('/');
     await expect.poll(() => page.evaluate(() => Number(window.__parserParseCount ?? 0))).toBeGreaterThan(0);

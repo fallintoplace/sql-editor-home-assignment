@@ -31,6 +31,8 @@ jobs:
         run: npm run check:syntax
       - name: TypeScript contracts
         run: npm run typecheck
+      - name: ESLint
+        run: npm run lint
       - name: Core and workspace coverage gates
         run: npm run coverage
       - name: Production build

@@ -9,7 +9,7 @@ import { exportCsv, recommendChart } from '../shared/results';
 import { matchesDraft } from '../shared/evidence';
 import { formatSql, hasSqlComments, parameterNames, selectedStatement, splitSql } from '../shared/sql';
 import { api, download, isFrontendDemoPreview, message, post, RequestError } from './api';
-import { DEMO_PREVIEW_INITIAL_STARTERS, DEMO_PREVIEW_RUN_ID, DEMO_PREVIEW_SQL, DEMO_PREVIEW_STARTER_DOCUMENT_ID, demoPreviewStarterRunId, PLAYGROUND_PREVIEW_STARTER } from './demo-preview';
+import { DEMO_PREVIEW_INITIAL_STARTERS, DEMO_PREVIEW_SQL, DEMO_PREVIEW_STARTER_DOCUMENT_ID, demoPreviewStarterRunId, PLAYGROUND_PREVIEW_STARTER } from './demo-preview';
 import { PLAYGROUND_CONNECTION_ID } from './playground';
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { ImportWizard } from './components/ImportWizard';
@@ -17,7 +17,6 @@ import { SqlExamplesMenu } from './components/SqlExamplesMenu';
 import { HelpExamplesButton } from './components/HelpExamplesButton';
 import { RestoreSqlMenu } from './components/RestoreSqlMenu';
 import { OverlayPortal } from './components/OverlayPortal';
-import { AssistantWorkflow } from './components/AssistantWorkflow';
 import { ChartView, InsightsView, ResultGrid } from './components/ResultViews';
 import { ExplainPlanView } from './components/ExplainPlanView';
 import { PipelineGraph } from './components/PipelineGraph';
@@ -322,6 +321,12 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const trustedRef = useRef(trusted);
     trustedRef.current = trusted;
     const schemaRequestRef = useRef(0), historyRequestRef = useRef(0), documentsRequestRef = useRef(0), revisionsRequestRef = useRef(0);
+    const invalidateWorkspaceRequests = useCallback(() => {
+        schemaRequestRef.current++;
+        historyRequestRef.current++;
+        documentsRequestRef.current++;
+        revisionsRequestRef.current++;
+    }, []);
     const cancellingRef = useRef(false);
 
     useEffect(() => () => recognitionRef.current?.abort(), []);
@@ -420,10 +425,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         setAssistantContextForDraft(active.id, undefined);
         setAssistantProposalForDraft(active.id, undefined);
         setAssistantError('');
-    };
-    const changeAssistantAction = (action: AssistantAction) => {
-        setAssistantAction(action);
-        clearAssistantReview();
     };
     const changeIncludeResult = (include: boolean) => {
         if (include === includeResult) return;
@@ -576,8 +577,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             setSchemaLoading(false);
         }
         const interval = window.setInterval(() => { void loadHistory().catch(() => undefined); }, 15000);
-        return () => { window.clearInterval(interval); schemaRequestRef.current++; historyRequestRef.current++; documentsRequestRef.current++; revisionsRequestRef.current++; };
-    }, [loadDocuments, loadHistory, loadSchema, trusted]);
+        return () => { window.clearInterval(interval); invalidateWorkspaceRequests(); };
+    }, [invalidateWorkspaceRequests, loadDocuments, loadHistory, loadSchema, trusted]);
 
     const { run, setRunForRun, page, setPage, resultPage, snapshot, setSnapshotForRun, profile, setProfileForRun, pipeline, setPipelineForRun, eventState } = useRunEvidence({
         activeRunId,

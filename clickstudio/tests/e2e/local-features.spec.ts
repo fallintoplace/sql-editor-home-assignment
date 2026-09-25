@@ -9,12 +9,6 @@ function countRuns(page: Page) {
     });
     return () => count;
 }
-async function snapshot(page: Page, transform: (result: Result) => Result) {
-    await page.route('**/api/runs/*/snapshot', async route => {
-        const response = await route.fetch();
-        await route.fulfill({ response, json: transform(await response.json()) });
-    });
-}
 async function resultPage(page: Page, transform: (result: Result) => Result) {
     await page.route(url => url.pathname.endsWith('/result'), async route => {
         const response = await route.fetch();
@@ -57,7 +51,7 @@ test('Duplicate result-column names keep their values in the correct positions',
 test('Result export downloads the complete retained CSV from the server', async ({ page }) => {
     const runs = countRuns(page);
     await trust(page);
-    const results = await run(page);
+    await run(page);
     const [download] = await Promise.all([
         page.waitForEvent('download'),
         page.locator('.inspector-footer').getByRole('button', { name: 'Export', exact: true }).click(),

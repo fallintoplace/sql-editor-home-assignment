@@ -200,7 +200,8 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
         }
         editor.dispatch(setDiagnostics(editor.state, diagnostics));
     }, []);
-    const languageExtension = () => sql({ dialect: clickhouse, schema: schemaIndex.codeMirror });
+    const languageExtension = useCallback(() => sql({ dialect: clickhouse, schema: schemaIndexRef.current.codeMirror }), []);
+    const invalidateNativeValidation = useCallback(() => { validationRevision.current++; }, []);
     const themeExtension = () => EditorView.theme({ '&': { height: '100%', backgroundColor: 'var(--panel)', color: 'var(--text)' }, '.cm-scroller': { fontFamily: 'var(--font-mono)', fontSize: '13px', lineHeight: '1.55', fontVariantLigatures: 'none', fontVariantNumeric: 'tabular-nums' }, '.cm-gutters': { backgroundColor: 'var(--panel)', color: 'var(--muted)', border: 'none', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }, '.cm-content': { minHeight: '220px' }, '.cm-cursor': { borderLeftColor: 'var(--text)' }, '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: 'var(--editor-selection)' } }, { dark: current.current.dark });
     useEffect(() => { if (!element.current)
         return; const p = current.current; const editor = new EditorView({ parent: element.current, state: EditorState.create({ doc: p.value, selection: { anchor: Math.min(p.from, p.value.length), head: Math.min(p.to, p.value.length) }, extensions: [tools.current.of(sqlEditorTools(p.copy)), nativeDecorations, serverErrorDecorations, sqlMapHighlight, lineNumbers(), history(), drawSelection(), highlightActiveLine(), rectangularSelection(), bracketMatching(), foldGutter(), highlightSelectionMatches(), syntaxHighlighting(defaultHighlightStyle), autocompletion({ override: [ifNotIn(['QuotedIdentifier', 'String', 'LineComment', 'BlockComment'], context => completionSource(context, schemaIndexRef.current))] }), hoverTooltip((view, pos) => { const word = view.state.wordAt(pos); if (!word)
@@ -209,10 +210,12 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
                     current.current.onChange(update.state.doc.toString()); if (update.selectionSet) {
                     const s = update.state.selection.main;
                     current.current.onSelection(s.from, s.to);
-                } })] }) }); view.current = editor; return () => { editor.destroy(); view.current = undefined; }; }, []);
+                } })] }) }); view.current = editor; return () => { editor.destroy(); view.current = undefined; }; }, [languageExtension]);
     useEffect(() => { view.current?.dispatch({ effects: tools.current.reconfigure(sqlEditorTools(props.copy)) }); }, [props.copy]);
-    useEffect(() => { const v = view.current; if (v && v.state.doc.toString() !== props.value)
-        v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: props.value }, selection: { anchor: Math.min(props.from, props.value.length), head: Math.min(props.to, props.value.length) } }); }, [props.value]);
+    useEffect(() => { const v = view.current; if (v && v.state.doc.toString() !== props.value) {
+        const { from, to } = current.current;
+        v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: props.value }, selection: { anchor: Math.min(from, props.value.length), head: Math.min(to, props.value.length) } });
+    } }, [props.value]);
     useEffect(() => {
         if (!props.nativeParserEnabled)
             return;
@@ -261,14 +264,14 @@ export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(prop
             });
         }, 250);
         return () => {
-            validationRevision.current++;
+            invalidateNativeValidation();
             window.clearTimeout(timer);
         };
-    }, [props.nativeParserEnabled, props.parserStatus, props.value, applyDiagnostics]);
+    }, [props.nativeParserEnabled, props.parserStatus, props.value, applyDiagnostics, invalidateNativeValidation]);
     useEffect(() => { const v = view.current; if (!v)
         return; const from = Math.min(props.from, v.state.doc.length), to = Math.min(props.to, v.state.doc.length); if (v.state.selection.main.from !== from || v.state.selection.main.to !== to)
         v.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true }); }, [props.from, props.to]);
-    useEffect(() => { view.current?.dispatch({ effects: language.current.reconfigure(languageExtension()) }); }, [schemaIndex]);
+    useEffect(() => { view.current?.dispatch({ effects: language.current.reconfigure(languageExtension()) }); }, [schemaIndex, languageExtension]);
     useEffect(() => { view.current?.dispatch({ effects: theme.current.reconfigure(themeExtension()) }); }, [props.dark]);
     useEffect(() => applyDiagnostics(), [props.error, props.errorRange, applyDiagnostics]);
     useImperativeHandle(ref, () => ({

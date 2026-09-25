@@ -1,6 +1,5 @@
 import { DEFAULT_LIMITS, type Column, type Connection, type Json, type Row, type Schema } from '../shared/types.js';
 import { lexSql, splitSql } from '../shared/sql.js';
-import { sqlForRunKind } from '../shared/explain-plan.js';
 import { isSchema } from '../shared/schema.js';
 import { ClickHouseError, createClient } from '@clickhouse/client-web';
 

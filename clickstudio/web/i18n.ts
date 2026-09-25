@@ -97,6 +97,13 @@ export interface Copy {
         explainPipeline: string;
         logicalPlan: string;
         logicalPlanDescription: string;
+        planGraphView: string;
+        planTreeView: string;
+        planGraphHint: string;
+        planStep: string;
+        planSelectedStep: string;
+        planInspectStep: string;
+        planStepDetails: string;
         planUnknownStep: string;
         planDepthLimit: string;
         pipelineGraph: string;
@@ -466,6 +473,13 @@ const english: Copy = {
         explainPipeline: 'EXPLAIN PIPELINE',
         logicalPlan: 'Logical query plan',
         logicalPlanDescription: 'ClickHouse optimizer steps before execution. This view shows no runtime measurements.',
+        planGraphView: 'Graph',
+        planTreeView: 'Tree',
+        planGraphHint: 'Select a step to inspect its properties.',
+        planStep: 'step',
+        planSelectedStep: 'Selected step',
+        planInspectStep: 'Inspect step',
+        planStepDetails: 'Selected plan step details',
         planUnknownStep: 'Unknown step',
         planDepthLimit: 'Plan depth limit reached',
         pipelineGraph: 'ClickHouse pipeline',
@@ -902,7 +916,7 @@ const objectExplorerTranslations: Record<Exclude<Locale, 'en'>, ObjectExplorerTr
 };
 
 const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common'],
-    'explain' | 'explainPlan' | 'logicalPlan' | 'logicalPlanDescription' | 'planUnknownStep' | 'planDepthLimit' | 'pipelineGraph' | 'pipelineGraphDescription' |
+    'explain' | 'explainPlan' | 'logicalPlan' | 'logicalPlanDescription' | 'planGraphView' | 'planTreeView' | 'planGraphHint' | 'planStep' | 'planSelectedStep' | 'planInspectStep' | 'planStepDetails' | 'planUnknownStep' | 'planDepthLimit' | 'pipelineGraph' | 'pipelineGraphDescription' |
     'pipelineGraphHint' | 'pipelineGraphTruncated' | 'pipelineZoomControls' | 'pipelineZoomOut' | 'pipelineZoomIn' | 'pipelineZoomReset' | 'pipelineZoomLevel' | 'pipelineFocusNode' | 'pipelineFit' |
     'pipelineInputs' | 'pipelineOutputs' | 'pipelineRunDuration' | 'pipelineRunRows' | 'pipelineRunBytes' |
     'planNodeCount' | 'planProperties' | 'planNoOutput' | 'planLoading' | 'planTruncated' | 'pipelineNoOutput' |
@@ -910,6 +924,7 @@ const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common
     de: {
         explain: 'EXPLAIN INDEXES', explainPlan: 'EXPLAIN PLAN', logicalPlan: 'Logischer Abfrageplan',
         logicalPlanDescription: 'ClickHouse-Optimierungsschritte vor der Ausführung. Diese Ansicht zeigt keine Laufzeitmessungen.',
+        planGraphView: 'Diagramm', planTreeView: 'Baum', planGraphHint: 'Schritt auswählen, um Eigenschaften anzuzeigen.', planStep: 'Schritt', planSelectedStep: 'Ausgewählter Schritt', planInspectStep: 'Schritt ansehen', planStepDetails: 'Details des ausgewählten Planschritts',
         pipelineGraph: 'ClickHouse-Pipeline', pipelineGraphDescription: 'Geplante Prozessortopologie aus EXPLAIN PIPELINE. Laufzeitdaten werden separat angezeigt.',
         planUnknownStep: 'Unbekannter Schritt', planDepthLimit: 'Tiefenlimit des Plans erreicht',
         pipelineGraphHint: 'Operator auswählen, um Details anzuzeigen.', pipelineGraphTruncated: 'Der Plan ist groß. Das Diagramm zeigt eine begrenzte Anzahl von Operatoren.',
@@ -925,6 +940,7 @@ const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common
     es: {
         explain: 'EXPLAIN INDEXES', explainPlan: 'EXPLAIN PLAN', logicalPlan: 'Plan lógico de consulta',
         logicalPlanDescription: 'Pasos del optimizador de ClickHouse antes de ejecutar. Esta vista no muestra medidas de ejecución.',
+        planGraphView: 'Gráfico', planTreeView: 'Árbol', planGraphHint: 'Selecciona un paso para ver sus propiedades.', planStep: 'Paso', planSelectedStep: 'Paso seleccionado', planInspectStep: 'Inspeccionar paso', planStepDetails: 'Detalles del paso seleccionado',
         pipelineGraph: 'Pipeline de ClickHouse', pipelineGraphDescription: 'Topología planificada de procesadores de EXPLAIN PIPELINE. El tiempo de ejecución se muestra aparte.',
         planUnknownStep: 'Paso desconocido', planDepthLimit: 'Se alcanzó el límite de profundidad del plan',
         pipelineGraphHint: 'Selecciona un operador para ver sus detalles.', pipelineGraphTruncated: 'El plan es grande. El gráfico muestra un número limitado de operadores.',
@@ -940,6 +956,7 @@ const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common
     nl: {
         explain: 'EXPLAIN INDEXES', explainPlan: 'EXPLAIN PLAN', logicalPlan: 'Logisch queryplan',
         logicalPlanDescription: 'ClickHouse-optimalisatiestappen vóór uitvoering. Deze weergave toont geen runtimemetingen.',
+        planGraphView: 'Grafiek', planTreeView: 'Boom', planGraphHint: 'Selecteer een stap om de eigenschappen te bekijken.', planStep: 'Stap', planSelectedStep: 'Geselecteerde stap', planInspectStep: 'Stap bekijken', planStepDetails: 'Details van geselecteerde planstap',
         pipelineGraph: 'ClickHouse-pipeline', pipelineGraphDescription: 'Geplande processortopologie uit EXPLAIN PIPELINE. Runtime wordt apart getoond.',
         planUnknownStep: 'Onbekende stap', planDepthLimit: 'Dieptelimiet van het plan bereikt',
         pipelineGraphHint: 'Selecteer een operator om details te bekijken.', pipelineGraphTruncated: 'Dit plan is groot. De grafiek toont een beperkt aantal operators.',
@@ -955,6 +972,7 @@ const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common
     zh: {
         explain: 'EXPLAIN INDEXES', explainPlan: 'EXPLAIN PLAN', logicalPlan: '逻辑查询计划',
         logicalPlanDescription: 'ClickHouse 执行前的优化步骤。此视图不显示运行时测量数据。',
+        planGraphView: '图', planTreeView: '树', planGraphHint: '选择步骤以查看其属性。', planStep: '步骤', planSelectedStep: '已选步骤', planInspectStep: '查看步骤', planStepDetails: '所选计划步骤详情',
         pipelineGraph: 'ClickHouse 执行管线', pipelineGraphDescription: '来自 EXPLAIN PIPELINE 的计划处理器拓扑。运行时数据单独显示。',
         planUnknownStep: '未知步骤', planDepthLimit: '已达到计划深度上限',
         pipelineGraphHint: '选择算子以查看详情。', pipelineGraphTruncated: '计划较大，图中仅显示有限数量的算子。',
@@ -970,6 +988,7 @@ const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common
     ru: {
         explain: 'EXPLAIN INDEXES', explainPlan: 'EXPLAIN PLAN', logicalPlan: 'Логический план запроса',
         logicalPlanDescription: 'Шаги оптимизатора ClickHouse до выполнения. Здесь не показываются показатели выполнения.',
+        planGraphView: 'Граф', planTreeView: 'Дерево', planGraphHint: 'Выберите шаг, чтобы посмотреть его свойства.', planStep: 'Шаг', planSelectedStep: 'Выбранный шаг', planInspectStep: 'Просмотреть шаг', planStepDetails: 'Сведения о выбранном шаге плана',
         pipelineGraph: 'Конвейер ClickHouse', pipelineGraphDescription: 'Планируемая топология процессоров из EXPLAIN PIPELINE. Показатели выполнения отображаются отдельно.',
         planUnknownStep: 'Неизвестный шаг', planDepthLimit: 'Достигнута предельная глубина плана',
         pipelineGraphHint: 'Выберите оператор, чтобы посмотреть сведения.', pipelineGraphTruncated: 'План большой. На графе показано ограниченное число операторов.',

@@ -219,7 +219,7 @@ export interface ProfilePipelineEdge {
 }
 export interface ProfilePipeline {
     available: boolean;
-    source: 'explain_pipeline' | 'query_shape';
+    source: 'explain_pipeline' | 'explain_plan' | 'query_shape';
     nodes: ProfilePipelineNode[];
     edges: ProfilePipelineEdge[];
     raw?: string[];

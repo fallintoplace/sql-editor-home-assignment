@@ -210,7 +210,6 @@ export function ReferenceExplorer({ copy, connection, trusted, target, onTargetH
                         <span className="reference-result-copy"><strong>{entry.type === 'System Table' ? `system.${entry.name}` : entry.name}</strong><small>{entry.type}</small></span><span className="history-open">›</span>
                     </button>)}
                 </div>}
-                <p className="reference-keyboard-hint">{copy.referenceKeyboard}</p>
             </>}
         </>}
     </section>;

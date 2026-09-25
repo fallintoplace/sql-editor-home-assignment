@@ -1356,7 +1356,6 @@
     .reference-result-copy { display: grid; min-width: 0; flex: 1; gap: 2px; }
     .reference-result-copy strong { overflow: hidden; font-family: var(--font-mono); font-size: 9px; font-weight: 630; text-overflow: ellipsis; white-space: nowrap; }
     .reference-result-copy small { overflow: hidden; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
-    .reference-keyboard-hint { flex: none; margin: 0; color: var(--muted); font-family: var(--font-mono); font-size: 8px; text-align: right; }
     .reference-detail-view { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 8px; overflow: hidden; }
     .reference-back { display: flex; min-height: 34px; flex: none; align-items: center; gap: 7px; padding: 0 4px; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--explorer-signal) 18%, var(--line)); background: transparent; color: var(--text-soft); font-size: 9px; font-weight: 670; text-align: left; cursor: pointer; }
     .reference-back:hover, .reference-back:focus-visible { color: var(--explorer-signal); outline: none; }

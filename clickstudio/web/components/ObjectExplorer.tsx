@@ -283,16 +283,20 @@ function ObjectDetails({ copy, selection, trusted, copiedId, onClose, onInsert, 
         const qualified = qualifiedTableName(table);
         return <section className="object-details" aria-label="Selected object">{onClose && <button type="button" className="object-details-close" aria-label="Close object details" onClick={onClose}>×</button>}
             <div className="object-details-hero"><span className={cx('object-kind-badge', selection.relationKind === 'view' && 'is-view')}>{selection.relationKind === 'view' ? 'VIEW' : 'TABLE'}</span><strong>{table.name}</strong><code>{table.database}.{table.name}</code><small>{table.engine} · {tableSummary(table, copy)}</small></div>
-            <div className="object-action-grid">
-                <Button variant="secondary" className="toolbar-small" disabled={!trusted} title={!trusted ? copy.runActionTrustRequired : undefined} onClick={() => onOpenSqlDraft(`Preview ${table.name}.sql`, tableQuerySql(table, columns, 'preview'), true)}>{copy.previewRows}</Button>
-                <Button variant="secondary" className="toolbar-small" onClick={() => onOpenSqlDraft(`Select ${table.name}.sql`, tableQuerySql(table, columns, 'select'), false)}>{copy.generateSelect}</Button>
-                <Button variant="ghost" className="toolbar-small" onClick={() => onInsert(qualified)}>{copy.insertName}</Button>
-                <Button variant="ghost" className="toolbar-small" onClick={() => void onCopy(qualified, selection.id)}>{copiedId === selection.id ? copy.copied : copy.copyName}</Button>
+            <div className="object-relation-actions">
+                <div className="object-action-grid">
+                    <Button variant="primary" className="toolbar-small object-preview-action" disabled={!trusted} title={!trusted ? copy.runActionTrustRequired : undefined} onClick={() => onOpenSqlDraft(`Preview ${table.name}.sql`, tableQuerySql(table, columns, 'preview'), true)}><Icon name="table"/>{copy.previewRows}</Button>
+                    <Button variant="secondary" className="toolbar-small object-generate-action" onClick={() => onOpenSqlDraft(`Select ${table.name}.sql`, tableQuerySql(table, columns, 'select'), false)}><Icon name="parser"/>{copy.generateSelect}</Button>
+                </div>
+                <div className="object-utility-actions">
+                    <Button variant="ghost" className="toolbar-small" onClick={() => onInsert(qualified)}><Icon name="plus"/>{copy.insertName}</Button>
+                    <Button variant="ghost" className="toolbar-small" onClick={() => void onCopy(qualified, selection.id)}><Icon name="copy"/>{copiedId === selection.id ? copy.copied : copy.copyName}</Button>
+                </div>
             </div>
             <div className="object-reference-actions">
-                {table.engine.endsWith('MergeTree') && <Button variant="secondary" className="toolbar-small" disabled={!trusted} title={!trusted ? copy.runActionTrustRequired : undefined} onClick={() => onOpenParts(table)}>{copy.partsVisualize}</Button>}
-                {table.engine && <Button variant="secondary" className="toolbar-small" onClick={() => onOpenReference(table.engine, 'Table Engine')}>{copy.referenceTableEngine}</Button>}
-                {table.database === 'system' && <Button variant="ghost" className="toolbar-small" onClick={() => onOpenReference(table.name, 'System Table')}>{copy.referenceSystemTable}</Button>}
+                {table.engine.endsWith('MergeTree') && <Button variant="secondary" className="toolbar-small object-parts-action" disabled={!trusted} title={!trusted ? copy.runActionTrustRequired : undefined} onClick={() => onOpenParts(table)}><Icon name="chart"/>{copy.partsVisualize}</Button>}
+                {table.engine && <Button variant="secondary" className="toolbar-small" onClick={() => onOpenReference(table.engine, 'Table Engine')}><Icon name="reference"/>{copy.referenceTableEngine}</Button>}
+                {table.database === 'system' && <Button variant="ghost" className="toolbar-small" onClick={() => onOpenReference(table.name, 'System Table')}><Icon name="reference"/>{copy.referenceSystemTable}</Button>}
             </div>
             <TableMetadata table={table}/>
         </section>;

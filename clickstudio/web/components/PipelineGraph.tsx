@@ -127,6 +127,37 @@ function pathFor(points: PositionedEdge['points']) {
     return points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ');
 }
 
+function focusPipeline(pipeline: ProfilePipeline, selectedId?: string) {
+    if (!selectedId) return undefined;
+    const incoming = new Map(pipeline.nodes.map(node => [node.id, new Set<string>()]));
+    const outgoing = new Map(pipeline.nodes.map(node => [node.id, new Set<string>()]));
+    for (const edge of pipeline.edges) {
+        incoming.get(edge.target)?.add(edge.source);
+        outgoing.get(edge.source)?.add(edge.target);
+    }
+    const trace = (links: Map<string, Set<string>>) => {
+        const visited = new Set([selectedId]);
+        const queue = [selectedId];
+        for (let index = 0; index < queue.length; index++) {
+            for (const next of links.get(queue[index]!) ?? []) {
+                if (visited.has(next)) continue;
+                visited.add(next);
+                queue.push(next);
+            }
+        }
+        return visited;
+    };
+    const upstream = trace(incoming);
+    const downstream = trace(outgoing);
+    const nodeIds = new Set([...upstream, ...downstream]);
+    const edgeIds = new Set(pipeline.edges.flatMap(edge =>
+        (upstream.has(edge.source) && upstream.has(edge.target)) || (downstream.has(edge.source) && downstream.has(edge.target))
+            ? [`${edge.source}\u0000${edge.target}`]
+            : [],
+    ));
+    return { nodeIds, edgeIds };
+}
+
 function sqlFlowNodeKind(kind: string, copy?: Copy['common']) {
     const translation: Partial<Record<ProfilePipelineNode['kind'], keyof Copy['common']>> = {
         read: 'sqlFlowReadKind', filter: 'sqlFlowFilterKind', aggregate: 'sqlFlowAggregateKind', sort: 'sqlFlowSortKind',
@@ -182,7 +213,12 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
         setZoom(1);
     }, [pipeline]);
     const selected = pipeline.nodes.find(node => node.id === selectedId) ?? pipeline.nodes[0];
-    const markerId = `pipeline-arrow-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+    const graphId = `pipeline-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
+    const markerId = `${graphId}-arrow`;
+    const activeMarkerId = `${graphId}-arrow-active`;
+    const gridId = `${graphId}-grid`;
+    const ambientId = `${graphId}-ambient`;
+    const focusedGraph = useMemo(() => focusPipeline(pipeline, selected?.id), [pipeline, selected?.id]);
     const incomingCount = selected ? pipeline.edges.filter(edge => edge.target === selected.id).length : 0;
     const outgoingCount = selected ? pipeline.edges.filter(edge => edge.source === selected.id).length : 0;
     const chooseNode = (node: ProfilePipelineNode) => {
@@ -225,21 +261,43 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
         </div>
         <div ref={graphViewport} className="pipeline-graph-scroll overflow-auto" role="region" aria-label={graphKind === 'sql-flow' ? copy?.sqlMap ?? 'Scrollable SQL flow graph' : 'Scrollable operator graph'}>
             <svg className="pipeline-graph-svg" width={Math.round(graphWidth * zoom)} height={Math.round(graphHeight * zoom)} viewBox={`0 0 ${graphWidth} ${graphHeight}`} role="group" aria-label={graphKind === 'sql-flow' ? copy?.sqlFlowGraphHint ?? 'Click a stage to inspect it' : copy?.pipelineGraphHint ?? 'Click an operator to inspect it'}>
-                <defs><marker id={markerId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" className="pipeline-graph-arrow"/></marker></defs>
+                <defs>
+                    <pattern id={gridId} width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 H 0 V 32" className="pipeline-graph-grid-line"/></pattern>
+                    <radialGradient id={ambientId} cx="50%" cy="0%" r="90%"><stop offset="0%" stopColor="var(--accent)" stopOpacity=".16"/><stop offset="100%" stopColor="var(--accent)" stopOpacity="0"/></radialGradient>
+                    <marker id={markerId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" className="pipeline-graph-arrow"/></marker>
+                    <marker id={activeMarkerId} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" className="pipeline-graph-arrow-active"/></marker>
+                </defs>
+                <g className="pipeline-graph-atmosphere" aria-hidden="true"><rect width={graphWidth} height={graphHeight} fill={`url(#${gridId})`}/><rect width={graphWidth} height={graphHeight} fill={`url(#${ambientId})`}/></g>
                 <g className="pipeline-graph-edges" aria-hidden="true">
                     {layout.edges.map((edge, index) => {
                         const middle = edge.points[Math.floor(edge.points.length / 2)];
-                        return <g key={`${edge.source}-${edge.target}-${index}`}><path d={pathFor(edge.points)} markerEnd={`url(#${markerId})`}/>{edge.label && middle && <text x={middle.x + 7} y={middle.y - 5}>{edge.label}</text>}</g>;
+                        const edgeId = `${edge.source}\u0000${edge.target}`;
+                        const active = focusedGraph?.edgeIds.has(edgeId) ?? false;
+                        const edgeState = focusedGraph ? active ? ' is-active' : ' is-muted' : '';
+                        const path = pathFor(edge.points);
+                        return <g key={`${edge.source}-${edge.target}-${index}`} className={`pipeline-graph-edge${edgeState}`}>
+                            {active && <path className="pipeline-edge-glow" d={path}/>}
+                            <path className="pipeline-edge-line" d={path} markerEnd={`url(#${active ? activeMarkerId : markerId})`}/>
+                            {active && (edge.source === selected?.id || edge.target === selected?.id) && <path className="pipeline-edge-pulse" d={path}/>}
+                            {edge.label && middle && <text x={middle.x + 7} y={middle.y - 5}>{edge.label}</text>}
+                        </g>;
                     })}
                 </g>
                 {layout.nodes.map(({ node, x, y }) => {
                     const label = graphKind === 'sql-flow' ? sqlFlowNodeLabel(node, copy) : node.label;
                     const lines = labelLines(label);
                     const active = selected?.id === node.id;
+                    const related = focusedGraph?.nodeIds.has(node.id) ?? false;
                     const status = graphKind === 'execution' && node.status === 'planned' ? copy?.plannedStatus ?? node.status : node.status;
-                    return <g key={node.id} role="button" tabIndex={0} aria-label={`${terminology.action} ${label}`} aria-pressed={active} data-node-id={node.id} className={`pipeline-graph-node pipeline-node-${node.kind}${active ? ' is-selected' : ''}`} transform={`translate(${x - nodeWidth / 2} ${y - nodeHeight / 2})`} onClick={() => chooseNode(node)} onKeyDown={event => onNodeKeyDown(event, node)}>
+                    const focusState = focusedGraph ? active ? ' is-selected' : related ? ' is-related' : ' is-muted' : '';
+                    return <g key={node.id} role="button" tabIndex={0} aria-label={`${terminology.action} ${label}`} aria-pressed={active} data-node-id={node.id} className={`pipeline-graph-node pipeline-node-${node.kind}${focusState}`} transform={`translate(${x - nodeWidth / 2} ${y - nodeHeight / 2})`} onClick={() => chooseNode(node)} onKeyDown={event => onNodeKeyDown(event, node)}>
                         <title>{label}</title>
-                        <rect width={nodeWidth} height={nodeHeight} rx="11"/>
+                        <rect className="pipeline-node-shadow" x="10" y="10" width={nodeWidth} height={nodeHeight} rx="11"/>
+                        <path className="pipeline-node-side" d={`M 0 ${nodeHeight - 1} H ${nodeWidth} L ${nodeWidth + 10} ${nodeHeight + 9} H 10 Z`}/>
+                        <path className="pipeline-node-side-right" d={`M ${nodeWidth - 1} 4 L ${nodeWidth + 9} 13 V ${nodeHeight + 9} L ${nodeWidth - 1} ${nodeHeight - 1} Z`}/>
+                        <rect className="pipeline-node-face" width={nodeWidth} height={nodeHeight} rx="11"/>
+                        <path className="pipeline-node-cap" d={`M 12 1 H ${nodeWidth - 12}`}/>
+                        <path className="pipeline-node-accent-rail" d="M 1 17 V 57"/>
                         <text className="pipeline-node-kind" x="14" y="19">{(graphKind === 'sql-flow' ? sqlFlowNodeKind(node.kind, copy) : node.kind).toUpperCase()}</text>
                         {lines.map((line, index) => <text className="pipeline-node-label" key={index} x="14" y={43 + index * 15}>{line}</text>)}
                         {node.parallelism !== undefined && <text className="pipeline-node-parallel" x={nodeWidth - 12} y="20" textAnchor="end">× {node.parallelism}</text>}

@@ -632,15 +632,34 @@
     .pipeline-graph-controls button:disabled { cursor: not-allowed; opacity: .45; }
     .pipeline-graph-controls .pipeline-zoom-fit { padding-inline: 9px; white-space: nowrap; }
     .pipeline-graph-controls output { min-width: 42px; color: var(--text-soft); font-family: var(--font-mono); font-size: 8px; text-align: center; }
-    .pipeline-graph-scroll { max-width: 100%; max-height: clamp(150px, 56dvh, 540px); border: 1px solid var(--line); border-radius: 9px; background: radial-gradient(ellipse at 50% 0, color-mix(in srgb, var(--accent) 4%, transparent), transparent 72%), var(--panel); scrollbar-gutter: stable; }
-    .pipeline-graph-svg { display: block; max-width: none; }
+    .pipeline-graph-scroll { position: relative; isolation: isolate; max-width: 100%; max-height: clamp(150px, 56dvh, 540px); overflow: auto; border: 1px solid color-mix(in srgb, var(--accent) 17%, var(--line)); border-radius: 10px; background: radial-gradient(ellipse at 50% 0, color-mix(in srgb, var(--accent) 10%, transparent), transparent 66%), radial-gradient(ellipse at 95% 100%, color-mix(in srgb, var(--violet) 5%, transparent), transparent 44%), linear-gradient(145deg, color-mix(in srgb, var(--panel-raised) 48%, var(--panel)), var(--panel) 62%); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent), 0 14px 34px #00000024; scrollbar-gutter: stable; }
+    .pipeline-graph-scroll::before { position: absolute; z-index: 0; inset: 0; background-image: linear-gradient(90deg, color-mix(in srgb, var(--line-bright) 24%, transparent) 1px, transparent 1px), linear-gradient(color-mix(in srgb, var(--line-bright) 24%, transparent) 1px, transparent 1px); background-size: 32px 32px; content: ''; opacity: .42; mask-image: radial-gradient(ellipse at 50% 45%, #000 18%, transparent 100%); pointer-events: none; }
+    .pipeline-graph-svg { position: relative; z-index: 1; display: block; max-width: none; transform: perspective(1500px) rotateX(3.2deg) rotateY(-1deg); transform-origin: 50% 46%; transform-style: preserve-3d; }
+    .pipeline-graph-atmosphere { pointer-events: none; }
+    .pipeline-graph-grid-line { fill: none; stroke: color-mix(in srgb, var(--line-bright) 38%, transparent); stroke-width: .65px; }
     .pipeline-graph-arrow { fill: var(--line-bright); }
-    .pipeline-graph-edges path { fill: none; stroke: var(--line-bright); stroke-width: 1.5; }
+    .pipeline-graph-arrow-active { fill: var(--accent); }
+    .pipeline-graph-edge { transition: opacity .2s ease; }
+    .pipeline-graph-edge.is-muted { opacity: .2; }
+    .pipeline-edge-glow, .pipeline-edge-line, .pipeline-edge-pulse { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .pipeline-edge-glow { stroke: var(--accent); stroke-width: 9px; opacity: .24; filter: blur(5px); }
+    .pipeline-edge-line { stroke: var(--line-bright); stroke-width: 1.5px; transition: stroke .2s ease, stroke-width .2s ease; }
+    .pipeline-graph-edge.is-active .pipeline-edge-line { stroke: var(--accent); stroke-width: 2px; }
+    .pipeline-edge-pulse { stroke: var(--accent-strong); stroke-width: 2px; stroke-dasharray: 3 20; stroke-dashoffset: 28; opacity: 0; filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent) 75%, transparent)); animation: pipeline-signal-pass 1.15s ease-out 1 both; }
+    @keyframes pipeline-signal-pass { 0% { stroke-dashoffset: 36; opacity: 0; } 24% { opacity: .95; } 100% { stroke-dashoffset: 0; opacity: 0; } }
     .pipeline-graph-edges text { fill: var(--muted); font-family: var(--font-mono); font-size: 9px; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
     .pipeline-graph-node { cursor: pointer; outline: none; }
-    .pipeline-graph-node rect { fill: var(--panel-raised); stroke: var(--line-bright); stroke-width: 1.25px; transition: fill .15s ease, stroke .15s ease, filter .15s ease; }
-    .pipeline-graph-node:hover rect, .pipeline-graph-node:focus-visible rect { stroke: var(--accent); stroke-width: 2px; }
-    .pipeline-graph-node.is-selected rect { fill: color-mix(in srgb, var(--accent) 9%, var(--panel-raised)); stroke: var(--accent); stroke-width: 2px; filter: drop-shadow(0 3px 8px color-mix(in srgb, var(--accent) 12%, transparent)); }
+    .pipeline-graph-node.is-muted { opacity: .34; filter: saturate(.55); }
+    .pipeline-graph-node.is-related:not(.is-selected) .pipeline-node-face { fill: color-mix(in srgb, var(--accent) 5%, var(--panel-raised)); stroke: color-mix(in srgb, var(--accent) 44%, var(--line-bright)); }
+    .pipeline-node-shadow { fill: #03080c8c; stroke: color-mix(in srgb, var(--line) 65%, transparent); stroke-width: 1px; }
+    .pipeline-node-side { fill: color-mix(in srgb, var(--accent) 14%, var(--page)); stroke: color-mix(in srgb, var(--accent) 22%, var(--line)); stroke-width: 1px; }
+    .pipeline-node-side-right { fill: color-mix(in srgb, var(--accent) 20%, var(--page)); stroke: color-mix(in srgb, var(--accent) 25%, var(--line)); stroke-width: 1px; }
+    .pipeline-node-face { fill: color-mix(in srgb, var(--panel-raised) 94%, var(--accent) 6%); stroke: var(--line-bright); stroke-width: 1.25px; transition: fill .18s ease, stroke .18s ease, filter .18s ease; }
+    .pipeline-graph-node:hover .pipeline-node-face, .pipeline-graph-node:focus-visible .pipeline-node-face { stroke: var(--accent); stroke-width: 2px; }
+    .pipeline-graph-node.is-selected { filter: drop-shadow(0 7px 12px color-mix(in srgb, var(--accent) 23%, transparent)); }
+    .pipeline-graph-node.is-selected .pipeline-node-face { fill: color-mix(in srgb, var(--accent) 13%, var(--panel-raised)); stroke: var(--accent); stroke-width: 2px; }
+    .pipeline-node-cap { fill: none; stroke: color-mix(in srgb, var(--text) 28%, transparent); stroke-width: 1px; }
+    .pipeline-node-accent-rail { fill: none; stroke: var(--accent); stroke-width: 2px; stroke-linecap: round; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--accent) 66%, transparent)); }
     .pipeline-node-kind { fill: var(--muted); font-family: var(--font-sans); font-size: 8px; font-weight: 730; letter-spacing: .12em; }
     .pipeline-node-label { fill: var(--text); font-family: var(--font-mono); font-size: 11px; font-weight: 610; }
     .pipeline-node-parallel { fill: var(--accent); font-family: var(--font-mono); font-size: 9px; font-weight: 700; }
@@ -662,11 +681,11 @@
     .pipeline-graph-empty { padding: 13px; border: 1px dashed var(--line-bright); border-radius: 8px; color: var(--muted); font-size: 9px; text-align: center; }
     .ast-graph-card { min-width: 0; }
     .ast-graph-svg { display: block; min-width: 100%; }
-    .ast-graph-edges path { fill: none; stroke: color-mix(in srgb, var(--line-bright) 84%, transparent); stroke-width: 1.5; }
+    .ast-graph-edges path { fill: none; stroke: color-mix(in srgb, var(--accent) 36%, var(--line-bright)); stroke-width: 1.5; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 15%, transparent)); }
     .ast-graph-node { cursor: pointer; outline: none; }
-    .ast-graph-node rect { fill: color-mix(in srgb, var(--panel-raised) 94%, transparent); stroke: var(--line-bright); stroke-width: 1; transition: fill .15s ease, stroke .15s ease, stroke-width .15s ease; }
+    .ast-graph-node rect { fill: color-mix(in srgb, var(--panel-raised) 94%, transparent); stroke: var(--line-bright); stroke-width: 1; filter: drop-shadow(5px 7px 0 color-mix(in srgb, var(--page) 72%, transparent)); transition: fill .15s ease, stroke .15s ease, stroke-width .15s ease, filter .15s ease; }
     .ast-graph-node:hover rect { fill: color-mix(in srgb, var(--accent) 5%, var(--panel-raised)); stroke: color-mix(in srgb, var(--accent) 28%, var(--line-bright)); }
-    .ast-graph-node:focus-visible rect, .ast-graph-node.is-selected rect { fill: color-mix(in srgb, var(--accent) 9%, var(--panel-raised)); stroke: var(--accent); stroke-width: 1.6; }
+    .ast-graph-node:focus-visible rect, .ast-graph-node.is-selected rect { fill: color-mix(in srgb, var(--accent) 9%, var(--panel-raised)); stroke: var(--accent); stroke-width: 1.6; filter: drop-shadow(5px 7px 0 color-mix(in srgb, var(--accent) 18%, var(--page))) drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 18%, transparent)); }
     .ast-node-query rect { stroke: color-mix(in srgb, var(--accent) 34%, var(--line-bright)); }
     .ast-node-function rect { stroke: color-mix(in srgb, var(--green) 34%, var(--line-bright)); }
     .ast-node-identifier rect { stroke: color-mix(in srgb, var(--violet) 34%, var(--line-bright)); }
@@ -1453,3 +1472,13 @@
 .panel-collapse-button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 40%, var(--line-bright)); background: var(--panel-hover); color: var(--accent); }
 .panel-collapse-button .panel-toggle-icon { transition: transform .18s ease; }
 .panel-collapse-button[aria-expanded="true"] .panel-toggle-icon { transform: rotate(180deg); }
+
+@media (max-width: 760px) {
+    .pipeline-graph-svg { transform: none; }
+    .pipeline-graph-scroll::before { opacity: .28; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pipeline-graph-edge, .pipeline-graph-node, .pipeline-node-face { transition: none; }
+    .pipeline-edge-pulse { animation: none; }
+}

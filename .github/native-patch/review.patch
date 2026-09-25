@@ -1,0 +1,135 @@
+diff --git a/clickstudio/docs/native-explorers.md b/clickstudio/docs/native-explorers.md
+index d7e4a1e..3a7f9d1 100644
+--- a/clickstudio/docs/native-explorers.md
++++ b/clickstudio/docs/native-explorers.md
+@@ -26,4 +26,10 @@ The comparison shows SQL, parameters, configured limits, and pipelines previousl
+ 
+ ## Hosted preview
+ 
+-The Vercel preview uses the browser Playground reader for live metadata. Permission errors and empty system tables remain explicit. Sample mode includes labelled, static materialized-view, merge, and mutation examples; fixtures are never substituted for failed live reads. Run comparison uses retained history available to the selected connection.
++The hosted preview uses the browser Playground reader for live metadata. Permission errors and empty system tables remain explicit. Sample mode includes labelled, static materialized-view, merge, and mutation examples; fixtures are never substituted for failed live reads. Run comparison uses retained history available to the selected connection.
++
++## Reader setup
++
++For the bundled local server, rerun `npm run db:setup` after updating. The setup grants the application reader SELECT on `system.merges`, `system.mutations`, and `system.view_refreshes` in addition to its existing catalog access. The web app continues to use its reader credentials; setup is an operator-only command.
++
++For an existing connection, the administrator can grant access to the specific metadata tables needed for each view. Query-log access remains separately opt-in because it can expose SQL from other users. ClickStudio never changes grants on a connected server.
+diff --git a/clickstudio/scripts/seed.ts b/clickstudio/scripts/seed.ts
+index 00096ba..52180dc 100644
+--- a/clickstudio/scripts/seed.ts
++++ b/clickstudio/scripts/seed.ts
+@@ -22,7 +22,7 @@ try {
+     }
+     await command('GRANT SELECT ON default.events TO clickstudio_reader');
+     await command('GRANT SELECT ON default.import_events TO clickstudio_reader');
+-    for (const table of ['columns', 'tables', 'databases', 'processes'])
++    for (const table of ['columns', 'tables', 'databases', 'processes', 'merges', 'mutations', 'view_refreshes'])
+         await command(`GRANT SELECT ON system.${table} TO clickstudio_reader`);
+     await command('GRANT INSERT ON default.import_events TO clickstudio_writer');
+     // Do not grant global query_log access: it can reveal other users’ SQL. That capability is opt-in.
+diff --git a/clickstudio/shared/native-explorers.ts b/clickstudio/shared/native-explorers.ts
+index c999be3..d4cd244 100644
+--- a/clickstudio/shared/native-explorers.ts
++++ b/clickstudio/shared/native-explorers.ts
+@@ -33,11 +33,18 @@ export function lineageTablesQuery(columns: ReadonlySet<string>): string {
+         FROM system.tables AS t WHERE database = {database:String} AND is_temporary = 0
+         ORDER BY engine = 'MaterializedView' DESC, length(t.dependencies_table) > 0 DESC, name LIMIT ${LINEAGE_TABLE_LIMIT + 1}`;
+ }
+-const refreshQuery = `SELECT database, view, status, toString(last_success_time, 'UTC') AS last_success_time,
+-    toString(last_success_duration_ms) AS last_success_duration_ms,
+-    toString(last_refresh_time, 'UTC') AS last_refresh_time, toString(next_refresh_time, 'UTC') AS next_refresh_time,
+-    progress, toString(read_rows) AS read_rows, toString(written_rows) AS written_rows, leftUTF8(exception, 4096) AS exception
+-    FROM system.view_refreshes WHERE database = {database:String} ORDER BY view LIMIT ${LINEAGE_TABLE_LIMIT + 1}`;
++export function refreshActivityQuery(columns: ReadonlySet<string>): string {
++    const timestamps = ['last_success_time', 'last_refresh_time', 'next_refresh_time'];
++    const counters = ['last_success_duration_ms', 'read_rows', 'written_rows'];
++    const fields = [
++        ...timestamps.map(name => `${columns.has(name) ? `toString(r.${name}, 'UTC')` : 'NULL'} AS ${name}`),
++        ...counters.map(name => `${columns.has(name) ? `toString(r.${name})` : 'NULL'} AS ${name}`),
++        `${columns.has('progress') ? 'r.progress' : 'NULL'} AS progress`,
++        `${columns.has('exception') ? 'leftUTF8(r.exception, 4096)' : "''"} AS exception`,
++    ];
++    return `SELECT database, view, status, ${fields.join(', ')} FROM system.view_refreshes AS r
++        WHERE database = {database:String} ORDER BY view LIMIT ${LINEAGE_TABLE_LIMIT + 1}`;
++}
+ 
+ /** The reader accepts only these fixed queries and bound parameters, never user SQL. */
+ export async function loadNativeExplorer(request: NativeExplorerRequest, read: MetadataReader, signal?: AbortSignal): Promise<NativeExplorerSnapshot> {
+@@ -57,7 +64,10 @@ export async function loadNativeExplorer(request: NativeExplorerRequest, read: M
+     const rows = await read(lineageTablesQuery(columns), parameters);
+     signal?.throwIfAborted();
+     let refreshes: Awaited<ReturnType<MetadataReader>> = [];
+-    try { refreshes = await read(refreshQuery, parameters); }
++    try {
++        const refreshColumns = await read("SELECT name FROM system.columns WHERE database = 'system' AND table = 'view_refreshes' LIMIT 100", {});
++        refreshes = await read(refreshActivityQuery(new Set(refreshColumns.map(row => metadataText(row.name)))), parameters);
++    }
+     catch {
+         signal?.throwIfAborted();
+         notes.push('Refresh telemetry is unavailable to this reader or ClickHouse version. No refresh state is inferred.');
+diff --git a/clickstudio/tests/core/native-explorers.test.mjs b/clickstudio/tests/core/native-explorers.test.mjs
+index 781ff88..e72c555 100644
+--- a/clickstudio/tests/core/native-explorers.test.mjs
++++ b/clickstudio/tests/core/native-explorers.test.mjs
+@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
+ import { metadataInteger, metadataTime, metadataProgress, metadataFlag } from '../../.core-build/shared/native-metadata.js';
+ import { materializedViewDefinition } from '../../.core-build/shared/materialized-view-definition.js';
+ import { buildMaterializedViewLineage, layoutLineage, tableReferenceId } from '../../.core-build/shared/materialized-view-lineage.js';
+-import { loadNativeExplorer, lineageTablesQuery, mergeActivityQuery, mutationActivityQuery } from '../../.core-build/shared/native-explorers.js';
++import { loadNativeExplorer, lineageTablesQuery, mergeActivityQuery, mutationActivityQuery, refreshActivityQuery } from '../../.core-build/shared/native-explorers.js';
+ import { nativeExplorerFixture } from '../../.core-build/shared/native-explorer-fixtures.js';
+ import { parseMergeActivity, parseMutationActivity, mutationStatus } from '../../.core-build/shared/storage-activity.js';
+ import { nativeCount, nativeBytes } from '../../.core-build/shared/native-format.js';
+@@ -92,3 +92,14 @@ test('Fixtures are explicitly labelled and never generated for arbitrary live ob
+     for (const kind of ['lineage', 'merges', 'mutations']) assert.equal(nativeExplorerFixture({ kind, database: 'demo', table: 'events' }).source, 'fixture');
+     assert.throws(() => nativeExplorerFixture({ kind: 'lineage', database: 'production' }));
+ });
++
++test('Older refresh schemas retain timestamps without inventing missing durations', () => {
++    const old = refreshActivityQuery(new Set(['last_success_time', 'last_refresh_time', 'next_refresh_time']));
++    assert.match(old, /toString\(r.last_success_time, 'UTC'\)/);
++    assert.match(old, /NULL AS last_success_duration_ms/);
++    assert.match(old, /NULL AS progress/);
++    assert.match(old, /LIMIT 251/);
++    const modern = refreshActivityQuery(new Set(['last_success_duration_ms', 'progress', 'read_rows']));
++    assert.match(modern, /toString\(r.last_success_duration_ms\)/);
++    assert.match(modern, /r.progress AS progress/);
++});
+diff --git a/clickstudio/tests/e2e/native-explorers.spec.ts b/clickstudio/tests/e2e/native-explorers.spec.ts
+index 0977da6..a8b0545 100644
+--- a/clickstudio/tests/e2e/native-explorers.spec.ts
++++ b/clickstudio/tests/e2e/native-explorers.spec.ts
+@@ -56,6 +56,8 @@ test('Run comparison selects two retained runs without executing another query',
+     await expect(dialog.locator('.native-comparison-table')).toContainText('Client-observed elapsed time');
+     await dialog.getByRole('button', { name: 'Swap ⇄', exact: true }).click();
+     await expect(dialog.locator('.native-comparison-table')).toContainText('Retained result rows');
++    await expect(dialog.getByRole('rowheader', { name: /Client-observed elapsed time/ })).toBeInViewport();
++    expect((await dialog.locator('.native-comparison-table-scroll').boundingBox())?.height).toBeGreaterThan(200);
+     await page.screenshot({ path: info.outputPath('clickstudio-run-comparison.png') });
+     expect(submissions).toBe(0);
+ });
+diff --git a/clickstudio/tests/integration/native-explorers.test.ts b/clickstudio/tests/integration/native-explorers.test.ts
+index 0f4966c..d08f6c1 100644
+--- a/clickstudio/tests/integration/native-explorers.test.ts
++++ b/clickstudio/tests/integration/native-explorers.test.ts
+@@ -36,6 +36,7 @@ test('LIVE ClickHouse: native metadata queries work with the configured reader',
+     assert.ok(table, 'Integration setup includes a MergeTree table');
+     const graph = await driver.nativeExplorer(connection.id, { kind: 'lineage', database: table.database });
+     assert.equal(graph.kind, 'lineage'); assert.equal(graph.source, 'clickhouse');
++    assert.equal(graph.notes.some(note => note.includes('Refresh telemetry is unavailable')), false);
+     for (const kind of ['merges', 'mutations'] as const) {
+         const snapshot = await driver.nativeExplorer(connection.id, { kind, database: table.database, table: table.name });
+         assert.equal(snapshot.kind, kind); assert.equal(snapshot.source, 'clickhouse');
+diff --git a/clickstudio/web/styles/native-explorers.css b/clickstudio/web/styles/native-explorers.css
+index 4e4f9b2..baebfb9 100644
+--- a/clickstudio/web/styles/native-explorers.css
++++ b/clickstudio/web/styles/native-explorers.css
+@@ -73,7 +73,7 @@
+ .native-run-pickers { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+ .native-run-picker { display: grid; gap: 8px; min-width: 180px; flex: 1; color: var(--muted); }
+ .native-run-picker select { width: 100%; min-width: 0; }
+-.native-comparison-table-scroll { overflow-x: auto; }
++.native-comparison-table-scroll { overflow-x: auto; flex-shrink: 0; }
+ .native-comparison-table { width: 100%; border-collapse: collapse; text-align: left; font-variant-numeric: tabular-nums; }
+ .native-comparison-table th, .native-comparison-table td { padding: 14px 12px; border-bottom: 1px solid var(--line); }
+ .native-comparison-table thead { color: var(--muted); font-size: 11px; text-transform: uppercase; }

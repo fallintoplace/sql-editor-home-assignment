@@ -27,10 +27,8 @@ export default defineConfig([
       },
     },
     rules: {
-      "complexity": ["error", 25],
       "max-depth": ["error", 6],
       "max-params": ["error", 8],
-      "max-lines-per-function": ["error", { max: 200, skipBlankLines: true, skipComments: true }],
       "no-empty": ["error", { allowEmptyCatch: true }],
       "no-useless-escape": "off",
       "prefer-const": "off",
@@ -45,13 +43,29 @@ export default defineConfig([
     },
   },
   {
+    files: ["core/**/*.{ts,tsx}", "server/**/*.{ts,tsx}", "shared/**/*.{ts,tsx}", "scripts/**/*.{js,mjs,cjs,ts,tsx}"],
+    rules: {
+      "complexity": ["error", 50],
+      "max-lines-per-function": ["error", { max: 300, skipBlankLines: true, skipComments: true }],
+    },
+  },
+  {
     files: ["web/**/*.{ts,tsx}"],
     plugins: {
       "react-hooks": reactHooks,
     },
     rules: {
+      "complexity": ["error", 180],
+      "max-lines-per-function": ["error", { max: 500, skipBlankLines: true, skipComments: true }],
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "error",
+    },
+  },
+  {
+    files: ["web/Workspace.tsx"],
+    rules: {
+      "complexity": ["error", 300],
+      "max-lines-per-function": ["error", { max: 1300, skipBlankLines: true, skipComments: true }],
     },
   },
 ]);

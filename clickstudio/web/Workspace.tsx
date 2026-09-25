@@ -124,7 +124,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const workspaceRef = useRef(workspace);
     workspaceRef.current = workspace;
     const {
-        active, tabScrollerRef, tabScrollState, scrollTabs,
+        active, tabScrollerRef, tabScrollState, updateTabScrollState, scrollTabs,
         renamingTabId, tabRenameValue, setTabRenameValue,
         beginTabRename, finishTabRename, cancelTabRename,
     } = useWorkspaceTabs(workspace, setWorkspace);

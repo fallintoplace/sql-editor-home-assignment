@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { test, expect } from '@playwright/test';
 import { openWorkspacePanel } from './helpers.js';
 
-test('Static Vercel preview loads the native parser and exports retained sample results', async ({ page }) => {
+test('Static production preview loads the native parser and exports retained sample results', async ({ page }) => {
     const documentationRequests: string[] = [];
     page.on('request', request => {
         const payload = `${request.url()}\n${request.postData() ?? ''}`;
@@ -54,7 +54,7 @@ test('Static Vercel preview loads the native parser and exports retained sample 
     expect(csv).toContain('events');
 });
 
-test('Static Vercel preview searches native Playground docs with bound query parameters', async ({ page }) => {
+test('Static production preview searches native Playground docs with bound query parameters', async ({ page }) => {
     const requests: Array<{ url: string; sql: string }> = [];
     await page.route('https://sql-clickhouse.clickhouse.com:8443/**', async route => {
         const request = route.request();

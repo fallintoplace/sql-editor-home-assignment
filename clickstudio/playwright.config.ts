@@ -15,7 +15,7 @@ export default defineConfig({
     forbidOnly: Boolean(process.env.CI),
     timeout: 30000,
     reporter: [['line'], ['html', { open: 'never' }]],
-    testIgnore: ['**/vercel-preview.spec.ts'],
+    testIgnore: ['**/preview.spec.ts'],
     use: {
         baseURL,
         trace: 'retain-on-failure',

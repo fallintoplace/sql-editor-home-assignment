@@ -123,8 +123,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Browser suite
         run: npm run test:e2e
-      - name: Vercel preview parser and export smoke test
-        run: npm run test:e2e:vercel
+      - name: Production preview parser and export smoke test
+        run: npm run test:e2e:preview
       - name: Preserve browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v4

@@ -13,6 +13,6 @@
   "include": [
     "tests/e2e/**/*.ts",
     "playwright.config.ts",
-    "playwright.vercel.config.ts"
+    "playwright.preview.config.ts"
   ]
 }

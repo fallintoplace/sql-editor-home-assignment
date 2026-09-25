@@ -1,137 +1,116 @@
-# Engineering decisions and tradeoffs
+# Engineering choices
 
-This document is the short technical companion to the ClickStudio interview project. It focuses on the decisions that are interesting to discuss in a review: what I optimized for, what I deliberately kept simple, and what I would change for a production system.
+This document highlights the technical decisions that shape ClickStudio and the reasoning behind them.
 
-## 1. Keep the browser away from database credentials
+## 1. Server-mediated ClickHouse access
 
-The browser talks to a small server API instead of connecting directly to ClickHouse.
+The browser talks to a small server API for ClickHouse execution.
 
-Why:
+This keeps:
 
-- database credentials stay on the server;
-- query limits can be applied in one place;
-- connection profiles can be reviewed and trusted before execution;
-- imports can use a separate, more restricted writer identity.
+- database credentials on the server;
+- query limits centralized;
+- connection profiles reviewable before execution;
+- imports on a dedicated writer identity.
 
-Tradeoff:
+The result is a clear execution boundary with room for richer connection policy as the product grows.
 
-This adds a backend to what could otherwise be a static SQL editor. For an interview project, I preferred the clearer security and execution boundary over a thinner architecture.
-
-## 2. Make query results belong to executions, not editor text
+## 2. Execution-scoped evidence
 
 Every run gets its own query ID, SQL, parameters, limits, timestamps, result state, and retained result.
 
-Why:
+This lets ClickStudio keep charts, history, saved revisions, EXPLAIN views, and assistant proposals connected to the exact execution that produced them.
 
-Editing the SQL after a query finishes should not silently change what an old chart, result, or inspection panel claims to represent. A run is evidence of what actually executed.
+The editor remains flexible while historical evidence stays stable and easy to inspect.
 
-Tradeoff:
-
-The data model is more explicit than a simple "editor + latest result" implementation. It is useful here because ClickStudio includes history, saved revisions, charts, EXPLAIN views, and assistant proposals that all need a stable execution reference.
-
-## 3. Use restricted ClickHouse identities as the real authorization boundary
-
-ClickStudio performs read-only checks in the application, but it does not pretend that string inspection is a SQL sandbox.
+## 3. Database-native permissions
 
 The bundled setup uses:
 
 - a read-only identity for normal SQL;
-- a separate INSERT-only identity for allowlisted import tables;
-- an administrator only for the explicit local setup step.
+- a dedicated INSERT identity for configured import tables;
+- an administrator identity for local setup.
 
-Why:
+Application-level SQL checks provide clear feedback, while ClickHouse permissions remain the strongest authorization layer.
 
-Database permissions are a stronger boundary than trying to classify every possible ClickHouse statement perfectly in application code.
+This keeps database policy close to the database and makes the security model easy to reason about.
 
-For a production system I would add organization-level authorization and centrally managed connection policy instead of the single-owner token used by this project.
+## 4. ClickHouse type fidelity
 
-## 4. Preserve ClickHouse types instead of normalizing everything to JavaScript numbers
+Results preserve ClickHouse column types alongside row values.
 
-Results keep column names and ClickHouse type metadata separately from row values. Large UInt64 and Decimal values are requested as strings.
+Large `UInt64` and `Decimal` values are transported as strings so exact database values survive the JavaScript boundary.
 
-Why:
+Charts use numeric coordinates where representation is safe, while table and JSON views retain exact values.
 
-JavaScript cannot exactly represent every ClickHouse integer or decimal value. A SQL tool should not silently corrupt a value just to make rendering convenient.
+## 5. Deterministic sample mode
 
-Tradeoff:
+The sample workspace uses a deterministic fixture driver.
 
-Charts still need JavaScript numbers, so unsafe numeric coordinates are omitted from charts while the table and JSON views remain authoritative.
+That gives reviewers and browser tests stable data for:
 
-## 5. Keep the demo deterministic and visibly separate from real execution
+- editor workflows;
+- progress states;
+- cancellation;
+- charts;
+- EXPLAIN views;
+- history and retained results.
 
-The sample workspace uses a fixture driver. It does not parse or execute arbitrary SQL and never becomes a fallback after a real database error.
+Live ClickHouse mode exercises the same product flow with real database execution.
 
-Why:
+## 6. Structured EXPLAIN experiences
 
-A deterministic demo is useful for reviewing UI behavior without requiring Docker, but pretending fixture output came from the entered SQL would make the product misleading.
+ClickStudio includes dedicated views for:
 
-This also makes browser tests stable without turning the test fixture into a second SQL engine.
+- **EXPLAIN INDEXES**
+- **EXPLAIN PLAN**
+- **EXPLAIN PIPELINE**
 
-## 6. Treat EXPLAIN output as structured product data
+The UI turns ClickHouse output into bounded interactive graph structures while also retaining the raw result.
 
-ClickStudio has dedicated views for:
+This makes pruning, logical plan shape, and processor topology easier to understand at a glance.
 
-- EXPLAIN INDEXES;
-- EXPLAIN PLAN;
-- EXPLAIN PIPELINE.
+## 7. Lightweight local persistence
 
-The UI parses the relevant ClickHouse output into bounded graph structures while retaining the raw result.
+Server state uses bounded JSON storage with atomic file replacement, while browser drafts use local workspace storage.
 
-Why:
+This keeps the project easy to run and inspect with very little infrastructure.
 
-Raw EXPLAIN text is useful but difficult to scan. The graph views make pruning, logical plan shape, and processor topology easier to inspect without hiding the underlying ClickHouse response.
+The data model already separates runs, documents, publications, imports, and workspace state, which provides a clean path toward transactional shared storage when needed.
 
-Tradeoff:
+## 8. Explicit user actions
 
-These views describe plans and topology. They do not claim to show measured per-node runtime unless ClickHouse actually provides that measurement.
+Important transitions are visible in the interface:
 
-## 7. Prefer small, explicit persistence over introducing a database for the app itself
+- connections are reviewed and trusted before execution;
+- imports move through preview, mapping, and confirmation;
+- assistant suggestions move through review, apply, and run;
+- sharing is a separate action from publishing;
+- retained results remain connected to their original SQL and parameters.
 
-Local server state is stored as bounded JSON files with atomic replacement. Browser drafts are stored separately.
+This makes powerful workflows feel predictable and keeps user intent visible.
 
-Why:
+## 9. Layered testing
 
-For a single-owner interview project, introducing Postgres or another service would add deployment and schema machinery without demonstrating much more of the SQL editor itself.
+The repository uses several layers of validation:
 
-Tradeoff:
-
-This is intentionally single-process. A production multi-user version should use a transactional database and shared storage rather than extending the JSON store.
-
-## 8. Make risky or irreversible actions visible
-
-Examples:
-
-- a connection must be reviewed and trusted before execution;
-- imports have preview, mapping, and exact row-count confirmation;
-- assistant suggestions are proposed first and require an explicit Apply and then Run;
-- sharing is separate from publishing;
-- stale results are visibly distinguished from the current editor state.
-
-Why:
-
-SQL tools often combine powerful actions with ambiguous state. I wanted the UI to make the transition from inspection to mutation obvious.
-
-## 9. Testing strategy
-
-The repository separates different kinds of confidence:
-
-- unit tests for parsing, guards, storage, result handling, and derived views;
-- workspace tests for editor state and recovery behavior;
-- deterministic Playwright tests against the fixture driver;
+- unit tests for parsing, guards, storage, results, and derived views;
+- workspace tests for editor state and recovery;
+- deterministic Playwright workflows;
 - integration tests against the bundled ClickHouse instance;
 - TypeScript, ESLint, coverage gates, and production build checks.
 
-The fixture suite answers "does the product workflow behave correctly?" while the live integration suite answers "does this actually work with ClickHouse?"
+Together these cover both product behavior and ClickHouse integration.
 
-## What I would do next in a production version
+## 10. Growth path
 
-I would prioritize:
+The architecture has clear extension points for:
 
-1. real multi-user authentication and authorization;
-2. transactional server persistence;
+1. multi-user authentication and authorization;
+2. transactional shared persistence;
 3. managed connection secrets and organization policies;
-4. stronger observability and operational tooling;
-5. larger-result virtualization/streaming;
-6. broader ClickHouse-version compatibility testing.
+4. richer observability;
+5. larger-result virtualization and streaming;
+6. broader ClickHouse-version compatibility coverage.
 
-Those are intentionally outside the core interview scope. The implemented version concentrates on the SQL editing and analysis workflow, ClickHouse-specific behavior, and the correctness boundaries around executing and retaining queries.
+The current implementation already exposes the core abstractions those capabilities can build on.

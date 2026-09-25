@@ -1,0 +1,139 @@
+name: ClickStudio native explorers validation
+on:
+  push:
+    branches: [work/clickstudio-native-explorers-validation]
+    paths: [.github/native-patch/**, .github/workflows/clickstudio-native-stage.yml]
+permissions:
+  contents: read
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.apply.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Apply locally validated implementation on the isolated branch
+        id: apply
+        run: |
+          python3 - <<'PY'
+          import hashlib, lzma
+          from pathlib import Path
+          payload = b''.join(p.read_bytes() for p in sorted(Path('.github/native-patch').glob('*.xz')))
+          patch = lzma.decompress(payload)
+          assert hashlib.sha256(patch).hexdigest() == '7e5adbd62be55dddb715632da46c6d9e172097dc996af0df732e8e96bc07d0fb'
+          Path('/tmp/native.patch').write_bytes(patch)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git apply --3way --index /tmp/native.patch
+          git diff --cached --check
+          git commit -m 'feat: add native dependency, storage activity, and run comparison explorers'
+          git push origin HEAD:work/clickstudio-native-explorers-validation
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          git show --stat --oneline HEAD
+  review:
+    needs: apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.apply.outputs.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: clickstudio/package-lock.json
+      - run: npm ci
+        working-directory: clickstudio
+      - run: npm run review 2>&1 | tee native-review.log
+        working-directory: clickstudio
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-review
+          path: clickstudio/native-review.log
+  browser:
+    needs: apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.apply.outputs.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: clickstudio/package-lock.json
+      - run: npm ci && npx playwright install --with-deps chromium
+        working-directory: clickstudio
+      - name: Feature interactions
+        run: npx playwright test tests/e2e/native-explorers.spec.ts 2>&1 | tee native-browser.log
+        working-directory: clickstudio
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-explorer-screenshots
+          path: |
+            clickstudio/native-browser.log
+            clickstudio/test-results
+            clickstudio/playwright-report
+      - name: Browser regression suite
+        run: npm run test:e2e 2>&1 | tee native-regressions.log
+        working-directory: clickstudio
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-browser-regressions
+          path: |
+            clickstudio/native-regressions.log
+            clickstudio/test-results
+            clickstudio/playwright-report
+      - name: Hosted frontend preview
+        run: npm run test:e2e:vercel 2>&1 | tee native-preview.log
+        working-directory: clickstudio
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-preview
+          path: |
+            clickstudio/native-preview.log
+            clickstudio/test-results
+            clickstudio/playwright-report
+  integration:
+    needs: apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: clickstudio
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.apply.outputs.sha }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: clickstudio/package-lock.json
+      - run: npm ci
+      - run: npm run init:env && docker compose up -d --wait clickhouse && npm run db:setup
+      - run: CLICKHOUSE_INTEGRATION=1 npm run test:integration 2>&1 | tee native-integration.log
+      - run: npm run eval
+      - if: always()
+        run: docker compose logs --no-color > native-clickhouse.log 2>&1 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-integration
+          path: |
+            clickstudio/native-integration.log
+            clickstudio/native-clickhouse.log
+      - if: always()
+        run: docker compose down -v

@@ -1,7 +1,8 @@
 @import "tailwindcss";
 @import "./styles/foundation.css";
 @import "./styles/app-chrome.css";
-@import "./styles/editor-results.css";
+@import "./styles/editor.css";
+@import "./styles/results.css";
 @import "./styles/inspector-assistant.css";
 @import "./styles/responsive.css";
 @import "./styles/object-explorer.css";

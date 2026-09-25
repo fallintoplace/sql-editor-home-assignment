@@ -178,6 +178,8 @@
     .run-action-group { gap: 4px; }
     .run-action-group .run-query-button { min-width: 70px; padding: 0 8px; }
     .run-option-button { min-height: 30px; padding: 0 7px; font-size: 8px; }
+    .run-explain-actions { flex-wrap: wrap; }
+    .run-explain-label { padding-inline: 4px; font-size: 7px; }
     .parameters-row { align-items: stretch; gap: 7px; padding: 8px; }
     .parameters-label { min-width: 100%; }
     .parameter-field { min-width: calc(50% - 5px); flex: 1; }

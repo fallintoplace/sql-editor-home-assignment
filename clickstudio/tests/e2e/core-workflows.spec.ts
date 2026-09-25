@@ -292,9 +292,15 @@ test('SQL structure switches from logical flow to native AST', async ({ page }) 
     const nativeAst = structure.getByRole('button', { name: 'Native AST', exact: true });
     await expect(flow).toHaveAttribute('aria-pressed', 'true');
     await expect(nativeAst).toBeEnabled();
+    await expect(structure.locator('.sql-flow-heading p')).toHaveText('Click a stage to jump to its SQL.');
+    await expect(structure.locator('.sql-flow-heading')).not.toContainText('not a server execution plan');
+    const headingHeight = await structure.locator('.sql-flow-heading').evaluate(element => element.getBoundingClientRect().height);
+    expect(headingHeight).toBeLessThan(64);
 
     await nativeAst.click();
     await expect(nativeAst).toHaveAttribute('aria-pressed', 'true');
+    await expect(structure.locator('.sql-flow-heading p')).toHaveText('Select a node to inspect its parser fields.');
+    await expect(structure.locator('.sql-flow-heading')).not.toContainText('server execution plan');
     await expect(structure.locator('[data-ast-node-type="SelectWithUnionQuery"]')).toBeVisible();
     const selectList = structure.locator('[data-ast-node-path="$.list_of_selects.children[0].select"]');
     await expect(selectList).toBeVisible();

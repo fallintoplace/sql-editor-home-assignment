@@ -32,7 +32,6 @@ export function SqlFlowView({ copy, sql, sourceOffset, parseResult, parserEnable
             <div>
                 <span className="eyebrow">{copy.sqlStructure.toUpperCase()}</span>
                 <h3>{copy.sqlFlowTitle}</h3>
-                <p>{view === 'ast' ? copy.sqlAstDescription : copy.sqlFlowDescription}</p>
                 <p>{view === 'ast' ? copy.sqlAstClickNode : copy.sqlFlowClickStage}</p>
             </div>
             <span className={`sql-flow-parser-state ${model.mode === 'native AST' ? 'is-native' : ''}`}><span className="status-light"/>{parserLabel}{duration && model.mode === 'native AST' ? ` · ${duration}` : ''}</span>

@@ -605,12 +605,13 @@
     .run-analysis-stages strong { overflow: hidden; color: var(--text-soft); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
     .run-analysis-stages small, .run-analysis-stages > small { color: var(--muted); font-size: 7px; text-transform: capitalize; }
     .pipeline-graph-card { min-width: 0; border-color: var(--line); background: color-mix(in srgb, var(--panel) 72%, transparent); }
-    .sql-flow-view { display: grid; min-width: 0; min-height: 0; flex: 1; align-content: start; gap: 11px; overflow: auto; padding: 12px; }
-    .sql-flow-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 13px; border: 1px solid var(--line); border-radius: 10px; background: linear-gradient(112deg, color-mix(in srgb, var(--accent) 6%, var(--panel-raised)), var(--panel-raised) 65%); }
-    .sql-flow-heading > div { display: grid; min-width: 0; gap: 4px; }
-    .sql-flow-heading h3 { margin: 0; color: var(--text); font-size: 14px; font-weight: 690; }
-    .sql-flow-heading p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.5; }
-    .sql-flow-parser-state { display: inline-flex; flex: none; align-items: center; gap: 7px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--muted); font-size: 8px; white-space: nowrap; }
+    .sql-flow-view { display: grid; min-width: 0; min-height: 0; flex: 1; align-content: start; gap: 8px; overflow: auto; padding: 8px; }
+    .sql-flow-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 10px; background: linear-gradient(112deg, color-mix(in srgb, var(--accent) 6%, var(--panel-raised)), var(--panel-raised) 65%); }
+    .sql-flow-heading > div { display: flex; flex: 1; min-width: 0; align-items: baseline; flex-wrap: wrap; gap: 2px 9px; }
+    .sql-flow-heading > div > .eyebrow { flex: none; font-size: 7px; }
+    .sql-flow-heading h3 { margin: 0; color: var(--text); font-size: 12px; font-weight: 690; }
+    .sql-flow-heading p { flex: 1 1 180px; min-width: 0; overflow: hidden; margin: 0; color: var(--muted); font-size: 8px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+    .sql-flow-parser-state { display: inline-flex; flex: none; align-items: center; gap: 6px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--muted); font-size: 8px; white-space: nowrap; }
     .sql-flow-parser-state.is-native { border-color: color-mix(in srgb, var(--green) 30%, var(--line)); color: var(--green); }
     .sql-flow-parse-note { padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--amber) 28%, var(--line)); border-radius: 8px; background: color-mix(in srgb, var(--amber) 7%, transparent); color: var(--amber); font-size: 8px; line-height: 1.5; }
     .sql-flow-mode-tabs { display: inline-flex; width: max-content; max-width: 100%; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-raised); }

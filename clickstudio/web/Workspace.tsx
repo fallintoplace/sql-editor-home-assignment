@@ -771,8 +771,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
 
     return <div className={cx('workspace-root', experience === 'expert' && 'is-expert', experience === 'beginner' && 'is-beginner')}>
         <OverlayPortal><div className="toast-stack">
-            {error && <div className="toast toast-error animate-enter" role="alert"><span>!</span>{error}<button onClick={() => setError('')} aria-label="Dismiss error"><Icon name="close"/></button></div>}
-            {notice && <div className="toast toast-success animate-enter" role="status"><span>✓</span>{notice}<button onClick={() => setNotice('')} aria-label="Dismiss message"><Icon name="close"/></button></div>}
+            {error && <div className="toast toast-error animate-enter" role="alert"><span>!</span>{error}<button onClick={() => setError('')} aria-label="Dismiss error"><Icon name="close"/></button><div key={error} className="toast-timer" style={{ animationDuration: `${TOAST_TIMEOUT_MS}ms` }} aria-hidden="true"/></div>}
+            {notice && <div className="toast toast-success animate-enter" role="status"><span>✓</span>{notice}<button onClick={() => setNotice('')} aria-label="Dismiss message"><Icon name="close"/></button><div key={notice} className="toast-timer" style={{ animationDuration: `${TOAST_TIMEOUT_MS}ms` }} aria-hidden="true"/></div>}
             {storageError && <div className="toast toast-error" role="alert">Local draft storage could not save changes: {storageError}</div>}
         </div></OverlayPortal>
 

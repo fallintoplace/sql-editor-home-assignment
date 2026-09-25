@@ -350,7 +350,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         setWorkspace(current => ({ ...current, tabs: current.tabs.map(draft => draft.id === id ? change(draft) : draft) }));
     }, []);
     const patch = useCallback((values: Partial<Draft>) => update(active.id, draft => ({ ...draft, ...values })), [active.id, update]);
-    const formatActiveSql = useCallback    const formatActiveSql = useCallback(async (formatter: 'wasm' | 'builtin') => {
+    const formatActiveSql = useCallback(async (formatter: 'wasm' | 'builtin') => {
         const draftId = active.id, sourceSql = active.sql;
         const applyBuiltIn = () => setWorkspace(current => current.activeId !== draftId ? current : ({ ...current,
             tabs: current.tabs.map(draft => draft.id === draftId && draft.sql === sourceSql ? { ...draft, sql: formatSql(sourceSql) } : draft),

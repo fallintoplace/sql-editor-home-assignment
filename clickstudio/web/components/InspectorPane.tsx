@@ -106,7 +106,7 @@ export function InspectorPane({ copy, inspector, setInspector, connection, schem
 
     return <aside className={cx('inspector-pane', expert && 'is-expert-browser', expert && (inspector === 'schema' || inspector === 'reference' || inspector === 'documents') && 'is-browser-tab-selected', drawer && 'is-drawer animate-drawer', objectDrawer && 'is-object-drawer')}>
         <header className="inspector-header"><div><span className="eyebrow">{expert ? copy.browse : copy.workspaceInspector}</span><h2>{title}</h2></div>{closeButton}</header>
-        {!objectDrawer && (expert ? <nav className="inspector-tabs is-browser-tabs" aria-label={copy.workspaceBrowser}>
+        {expert ? <nav className="inspector-tabs is-browser-tabs" aria-label={copy.workspaceBrowser}>
             <button type="button" aria-label={copy.objects} aria-pressed={inspector === 'schema'} onClick={() => setInspector('schema')}><Icon name="schema"/><span>{copy.objects}</span></button>
             <button type="button" aria-label={copy.reference} aria-pressed={inspector === 'reference'} onClick={() => { setReferenceTarget(undefined); setInspector('reference'); }}><Icon name="reference"/><span>{copy.reference}</span></button>
             <button type="button" aria-label={copy.queries} aria-pressed={inspector === 'documents'} onClick={() => setInspector('documents')}><Icon name="documents"/><span>{copy.queries}</span></button>
@@ -115,7 +115,7 @@ export function InspectorPane({ copy, inspector, setInspector, connection, schem
             <button type="button" aria-label={copy.objects} aria-pressed={inspector === 'schema'} onClick={() => setInspector('schema')}><Icon name="schema"/><span>{copy.objects}</span></button>
             <button type="button" aria-label={copy.reference} aria-pressed={inspector === 'reference'} onClick={() => { setReferenceTarget(undefined); setInspector('reference'); }}><Icon name="reference"/><span>{copy.reference}</span></button>
             <InspectorMoreMenu copy={copy} inspector={inspector} onSelect={setInspector} items={inspectorTabs.filter(item => item.id === 'history' || item.id === 'documents' || item.id === 'revisions')} />
-        </nav>)}
+        </nav>}
         <div className="inspector-content">
             {inspector === 'schema' && <ObjectExplorer key={connection.id} copy={copy} connection={connection} schema={schema} schemaLoading={schemaLoading} schemaError={schemaError} search={search} setSearch={setSearch} trusted={trusted} onRefreshSchema={onRefreshSchema} onInsert={onInsert} compact={drawer} onOpenSqlDraft={onOpenSqlDraft} onOpenReference={openReference}/>}
             {inspector === 'reference' && <ReferenceExplorer copy={copy} connection={connection} trusted={trusted} target={referenceTarget} onTargetHandled={clearReferenceTarget} onInsert={onInsert}/>}

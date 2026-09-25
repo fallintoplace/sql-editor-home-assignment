@@ -11,7 +11,8 @@ test('Advanced mode gives the editor the full work area before the first run', a
     await expect(page.locator('.icon-rail')).toBeHidden();
 
     const browser = page.getByRole('navigation', { name: 'Workspace browser', exact: true });
-    await expect(browser.getByRole('button', { name: 'Tables', exact: true })).toBeVisible();
+    await expect(browser.getByRole('button', { name: 'Objects', exact: true })).toBeVisible();
+    await expect(browser.getByRole('button', { name: 'Reference', exact: true })).toBeVisible();
     await expect(browser.getByRole('button', { name: 'Queries', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Ask AI', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Save revision', exact: true })).toBeVisible();
@@ -96,10 +97,16 @@ test('Mobile expert navigation opens the browser drawer and keeps its tabs usabl
     await page.setViewportSize({ width: 390, height: 844 });
     await trust(page);
 
-    await page.locator('.icon-rail').getByRole('button', { name: 'Schema', exact: true }).click();
+    await page.locator('.icon-rail').getByRole('button', { name: 'Objects', exact: true }).click();
     const drawer = page.locator('.inspector-pane.is-drawer');
     await expect(drawer).toBeVisible();
-    await drawer.getByRole('navigation', { name: 'Workspace browser', exact: true }).getByRole('button', { name: 'Queries', exact: true }).click();
+    const browser = drawer.getByRole('navigation', { name: 'Workspace browser', exact: true });
+    await expect(browser.getByRole('button', { name: 'Objects', exact: true })).toBeVisible();
+    await expect(browser.getByRole('button', { name: 'Reference', exact: true })).toBeVisible();
+    await expect(browser.getByRole('button', { name: 'Queries', exact: true })).toBeVisible();
+    await browser.getByRole('button', { name: 'Reference', exact: true }).click();
+    await expect(drawer.locator('.inspector-header h2')).toHaveText('Reference');
+    await browser.getByRole('button', { name: 'Queries', exact: true }).click();
     await expect(drawer.locator('.inspector-header h2')).toHaveText('Queries');
     await drawer.getByRole('button', { name: 'Close inspector', exact: true }).click();
     await expect(drawer).toHaveCount(0);

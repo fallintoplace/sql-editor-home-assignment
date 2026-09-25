@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react';
-import { displayValue, recommendChart, chartNumber, countRowsByCategory, countRowsOverTime, numericType, temporalType, filterRows, sampleChartRows, MAX_CHART_RENDER_POINTS } from '../../shared/results';
+import { displayValue, recommendChart, chartNumber, countRowsByCategory, countRowsOverTime, heatmapCellKey, prepareHeatmap, numericType, temporalType, filterRows, sampleChartRows, MAX_CHART_RENDER_POINTS } from '../../shared/results';
 import { CandlestickChart } from './CandlestickChart';
 import type { CandlestickConfig, ProfilePipeline, QueryProfile, Result, ResultPage, Run } from '../../shared/types';
 import type { Draft } from '../workspace-state';
@@ -271,21 +271,14 @@ export function ChartView({ result, loading, chart, onChart, copy, locale }: { r
         ? chartText(chartCopy.sampledRowsSummary, { sampled: formatCount(chartRows.length, locale), rows: formatCount(result.rows.length, locale) })
         : chartText(measureIndexes.length === 1 ? chartCopy.retainedRowsAcrossOneMeasure : chartCopy.retainedRowsAcrossManyMeasures, { rows: formatCount(chartRows.length, locale), measures: formatCount(measureIndexes.length, locale) });
     const barWidth = Math.max(1, Math.min(28, (680 / Math.max(1, chartRows.length)) * .68 / measureIndexes.length));
-    const heatmapRows = chartKind === 'heatmap' && groupByIndex !== undefined
-        ? result.rows.map(row => ({ xLabel: displayValue(row[xIndex]), yLabel: displayValue(row[groupByIndex]), value: chartNumber(row[yIndex]) }))
-        : [];
     const collator = new Intl.Collator(locale, { numeric: true, sensitivity: 'base' });
-    const heatmapXLabels = [...new Set(heatmapRows.map(row => row.xLabel))].sort(collator.compare);
-    const heatmapYLabels = [...new Set(heatmapRows.map(row => row.yLabel))].sort(collator.compare);
-    const heatmapCells = new Map<string, number>();
-    const heatmapPresent = new Set<string>();
-    for (const cell of heatmapRows) {
-        const key = `${cell.yLabel}\u0000${cell.xLabel}`;
-        heatmapPresent.add(key);
-        if (cell.value !== null) heatmapCells.set(key, (heatmapCells.get(key) ?? 0) + cell.value);
-    }
-    const heatmapMaximum = Math.max(0, ...heatmapCells.values());
-    const heatmapTooLarge = heatmapXLabels.length * heatmapYLabels.length > 1_200;
+    const heatmap = chartKind === 'heatmap' && groupByIndex !== undefined
+        ? prepareHeatmap(result.rows, xIndex, groupByIndex, yIndex)
+        : undefined;
+    const heatmapXLabels = heatmap?.tooLarge ? [] : [...(heatmap?.xLabels ?? [])].sort(collator.compare);
+    const heatmapYLabels = heatmap?.tooLarge ? [] : [...(heatmap?.yLabels ?? [])].sort(collator.compare);
+    const heatmapMaximum = heatmap?.maximum ?? 0;
+    const heatmapTooLarge = heatmap?.tooLarge ?? false;
     const compactNumber = new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 });
     const scatterPoints = chartRows.map(row => ({ x: chartNumber(row[xIndex]), y: chartNumber(row[yIndex]), label: displayValue(row[xIndex]) }))
         .filter((point): point is { x: number; y: number; label: string } => point.x !== null && point.y !== null);
@@ -297,14 +290,16 @@ export function ChartView({ result, loading, chart, onChart, copy, locale }: { r
     const scatterRangeY = scatterMaxY - scatterMinY || 1;
     const scatterX = (value: number) => 32 + ((value - scatterMinX) / scatterRangeX) * 700;
     const scatterY = (value: number) => plotBottom - ((value - scatterMinY) / scatterRangeY) * (plotBottom - plotTop);
-    const suggestionReason = result.rows.length === 1
-        ? chartCopy.reasonSingleNumber
-        : temporalType(result.columns[suggestion.config.x]?.type ?? '')
-            ? chartCopy.reasonTimeMeasure
-            : chartCopy.reasonDimensionMeasure;
+    const suggestionReason = chartKind === 'heatmap'
+        ? chartCopy.heatmapReturnedRows
+        : result.rows.length === 1
+            ? chartCopy.reasonSingleNumber
+            : temporalType(result.columns[suggestion.config.x]?.type ?? '')
+                ? chartCopy.reasonTimeMeasure
+                : chartCopy.reasonDimensionMeasure;
     const chartTitle = chart.title === 'Query result' ? chartCopy.queryResult : chart.title || result.columns[yIndex]?.name || chartCopy.queryResult;
     return <div className="chart-workspace animate-enter">
-        <div className="chart-title-row"><div><span className="eyebrow">{chartCopy.visualExploration}</span><h3>{chartTitle}</h3><p>{suggestionReason} {chartKind === 'heatmap' ? chartCopy.heatmapReturnedRows : chartCopy.sampledForDisplay}</p></div><div className="chart-controls">
+        <div className="chart-title-row"><div><span className="eyebrow">{chartCopy.visualExploration}</span><h3>{chartTitle}</h3><p>{suggestionReason}{chartKind === 'heatmap' ? '' : ` ${chartCopy.sampledForDisplay}`}</p></div><div className="chart-controls">
             {chartKind !== 'number' && <label>{chartKind === 'scatter' ? chartCopy.xAxisMeasure : chartCopy.xAxis}<select value={xIndex} onChange={event => {
                 const nextX = Number(event.target.value);
                 const nextGroupCandidate = chartKind === 'heatmap' && nextX === groupByIndex ? result.columns.findIndex((_column, index) => index !== nextX && index !== yIndex) : groupByIndex;
@@ -333,14 +328,14 @@ export function ChartView({ result, loading, chart, onChart, copy, locale }: { r
         {chartKind === 'number' ? result.rows.length !== 1 ? <div className="chart-empty">{chartCopy.numberNeedsOneRow}</div> : !numericType(result.columns[yIndex]?.type ?? '') ? <div className="chart-empty">{chartCopy.chooseNumericColumn}</div> : <div className="chart-number-card"><span className="eyebrow">{chartCopy.singleValue}</span><strong>{displayValue(result.rows[0]?.[yIndex])}</strong><span>{result.columns[yIndex]?.name}</span><small>{chartCopy.exactResultValue}</small></div>
             : chartKind === 'heatmap'
                 ? heatmapTooLarge ? <div className="chart-empty">{chartCopy.tooManyHeatmapLabels}</div>
-                    : !heatmapRows.length || groupByIndex === undefined ? <div className="chart-empty">{chartCopy.heatmapNeedsDimensions}</div>
+                    : !heatmap || groupByIndex === undefined || heatmap.present.size === 0 ? <div className="chart-empty">{chartCopy.heatmapNeedsDimensions}</div>
                         : <div className="heatmap-scroll"><table className="heatmap-grid" aria-label={chartText(chartCopy.heatmapTableAria, { measure: result.columns[yIndex]?.name ?? '', groupBy: result.columns[groupByIndex]?.name ?? '', xAxis: result.columns[xIndex]?.name ?? '' })}>
                             <thead><tr><th className="heatmap-corner" scope="col">{result.columns[groupByIndex]?.name} / {result.columns[xIndex]?.name}</th>
                             {heatmapXLabels.map(label => <th className="heatmap-axis-label" scope="col" key={`x-${label}`}>{label}</th>)}</tr></thead>
                             <tbody>{heatmapYLabels.map(yLabel => <tr key={`y-${yLabel}`}><th className="heatmap-axis-label heatmap-row-label" scope="row" title={yLabel}>{yLabel}</th>{heatmapXLabels.map(xLabel => {
-                                const key = `${yLabel}\u0000${xLabel}`;
-                                const value = heatmapCells.get(key);
-                                const hasRow = heatmapPresent.has(key);
+                                const key = heatmapCellKey(xLabel, yLabel);
+                                const value = heatmap.cells.get(key);
+                                const hasRow = heatmap.present.has(key);
                                 const missing = !hasRow;
                                 const cellDescription = missing ? result.completeness === 'truncated' ? chartCopy.heatmapNotRetained : chartCopy.heatmapNoReturnedRow : value === undefined ? chartCopy.heatmapNullMeasure : formatCount(value, locale);
                                 const plotted = value ?? 0;
@@ -376,7 +371,7 @@ export function ChartView({ result, loading, chart, onChart, copy, locale }: { r
             ? <><span className="chart-legend-dot"/>{result.columns[yIndex]?.name}</>
             : chartKind === 'line' || chartKind === 'bar'
                 ? measureIndexes.map((index, seriesIndex) => <span key={index}><span className="chart-legend-dot" style={{ backgroundColor: seriesColor(seriesIndex) }}/>{result.columns[index]?.name}</span>)
-                : <><span className="chart-legend-dot" style={{ backgroundColor: seriesColor(0) }}/>{result.columns[yIndex]?.name}</>}</span><span>{chartKind === 'number' ? result.rows.length === 1 ? chartCopy.oneValue : chartText(chartCopy.retainedRows, { rows: formatCount(result.rows.length, locale) }) : chartKind === 'heatmap' ? chartText(chartCopy.populatedCells, { cells: formatCount(heatmapCells.size, locale), rows: formatCount(result.rows.length, locale) }) : chartKind === 'scatter' ? chartText(chartCopy.plottedPoints, { points: formatCount(scatterPoints.length, locale) }) : rowSummary} <i>·</i> {result.completeness === 'truncated' ? chartCopy.retainedPrefixOnly : chartCopy.completeQueryResult}</span></div>
+                : <><span className="chart-legend-dot" style={{ backgroundColor: seriesColor(0) }}/>{result.columns[yIndex]?.name}</>}</span><span>{chartKind === 'number' ? result.rows.length === 1 ? chartCopy.oneValue : chartText(chartCopy.retainedRows, { rows: formatCount(result.rows.length, locale) }) : chartKind === 'heatmap' ? chartText(chartCopy.populatedCells, { cells: formatCount(heatmap?.cells.size ?? 0, locale), rows: formatCount(result.rows.length, locale) }) : chartKind === 'scatter' ? chartText(chartCopy.plottedPoints, { points: formatCount(scatterPoints.length, locale) }) : rowSummary} <i>·</i> {result.completeness === 'truncated' ? chartCopy.retainedPrefixOnly : chartCopy.completeQueryResult}</span></div>
     </div>;
 }
 

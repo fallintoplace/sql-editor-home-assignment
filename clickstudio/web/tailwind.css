@@ -952,9 +952,10 @@
     .drawer-backdrop { position: fixed; z-index: var(--z-overlay-backdrop); inset: 68px 0 0; border: 0; background: #0008; animation: fadeIn .18s ease both; backdrop-filter: blur(2px); }
     .execution-bar { position: relative; z-index: var(--z-execution-bar); display: flex; min-height: 43px; flex: none; align-items: center; justify-content: space-between; gap: 18px; overflow: hidden; padding: 5px 17px; border-top: 1px solid var(--line-bright); background: color-mix(in srgb, var(--panel-raised) 93%, transparent); box-shadow: 0 -10px 28px #0002; }
     .execution-bar.is-running { border-top-color: color-mix(in srgb, var(--accent) 37%, var(--line)); }
-    .help-examples-button { display: inline-flex; min-height: 27px; flex: none; align-items: center; justify-content: center; gap: 6px; padding: 0 8px; border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line-bright)); border-radius: 6px; background: transparent; color: var(--text); font-size: 9px; font-weight: 700; white-space: nowrap; cursor: pointer; transition: border-color .16s ease, background .16s ease, color .16s ease; }
+    .help-examples-button { display: inline-flex; min-height: 27px; flex: none; align-items: center; justify-content: center; gap: 6px; padding: 0 8px; border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--line-bright)); border-radius: 6px; background: transparent; color: var(--text); font-size: 9px; font-weight: 700; white-space: nowrap; cursor: pointer; animation: helpBeacon 2s ease-in-out infinite; transition: border-color .16s ease, background .16s ease, color .16s ease; }
     .help-examples-button:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 11%, var(--panel-raised)); color: var(--accent); }
     .help-examples-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .help-examples-button:hover, .help-examples-button:focus-visible, .help-examples-button[aria-expanded="true"] { animation: none; }
     .help-examples-button svg { width: 16px; height: 16px; color: var(--accent); }
     .execution-state, .execution-telemetry, .execution-right { display: flex; align-items: center; gap: 11px; }
     .execution-ready-state { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 9px; white-space: nowrap; }
@@ -1024,6 +1025,7 @@
 @keyframes sparkle { 0%, 100% { opacity: .4; transform: scale(.7); } 50% { opacity: 1; transform: scale(1.5); } }
 @keyframes listeningGlow { 0%, 100% { box-shadow: inset 0 0 0 1px transparent; } 50% { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--red) 30%, transparent), 0 0 14px color-mix(in srgb, var(--red) 12%, transparent); } }
 @keyframes statusPulse { 0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent), 0 0 7px color-mix(in srgb, var(--accent) 35%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 6%, transparent), 0 0 13px color-mix(in srgb, var(--accent) 70%, transparent); } }
+@keyframes helpBeacon { 0%, 100% { border-color: color-mix(in srgb, var(--accent) 38%, var(--line-bright)); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 18%, transparent); } 50% { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 24%, transparent); } }
 @keyframes progressSweep { 0% { right: 100%; left: 0; opacity: 0; } 12% { opacity: 1; } 55% { right: 0; left: 15%; } 100% { right: 0; left: 100%; opacity: .2; } }
 @keyframes examplesReveal { from { opacity: 0; transform: translateY(-4px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes examplesBackdrop { from { opacity: 0; } to { opacity: 1; } }
@@ -1153,6 +1155,7 @@
 
 @media (prefers-reduced-motion: reduce) {
     .sql-examples-backdrop, .sql-examples-panel { animation: none; }
+    .help-examples-button { animation: none; }
 }
 
 @media (max-width: 560px) {

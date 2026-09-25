@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { ClickHouseSystemTableDocumentation, Schema, SchemaTable } from '../../shared/types';
+import type { ClickHouseSystemTableDocumentation, Schema, SchemaDictionary, SchemaTable } from '../../shared/types';
 import {
     buildObjectExplorer,
     explorerCategoryId,
@@ -61,7 +61,7 @@ export function ObjectExplorer({ copy, connection, schema, schemaLoading, schema
     const [selectedId, setSelectedId] = useState<string | undefined>(() => recovered.selectedId);
     const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(recovered.expandedIds));
     const [copiedId, setCopiedId] = useState<string>();
-    const copyTimer = useRef<number>();
+    const copyTimer = useRef<number | undefined>(undefined);
 
     useEffect(() => () => {
         if (copyTimer.current !== undefined) window.clearTimeout(copyTimer.current);
@@ -218,7 +218,7 @@ function ObjectCategory({ label, kind, database, relations, level, query, expand
 function DictionaryCategory({ label, database, dictionaries, level, query, expanded, toggle, selectedId, onSelect }: {
     label: string;
     database: string;
-    dictionaries: readonly import('../../shared/types').SchemaDictionary[];
+    dictionaries: readonly SchemaDictionary[];
     level: number;
     query: string;
     expanded: (id: string, forced?: boolean) => boolean;
@@ -366,7 +366,7 @@ function SystemTableDocumentation({ connectionId, name, serverVersion }: { conne
     const [documentation, setDocumentation] = useState<ClickHouseSystemTableDocumentation>();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
-    const request = useRef<AbortController>();
+    const request = useRef<AbortController | undefined>(undefined);
 
     useEffect(() => () => request.current?.abort(), []);
 

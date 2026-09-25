@@ -196,6 +196,18 @@ export interface Copy {
         workspacePanels: string;
         schemaSearch: string;
         tableCount: string;
+        objects: string;
+        objectSearch: string;
+        objectCount: string;
+        noObjectsMatch: string;
+        views: string;
+        dictionaries: string;
+        columns: string;
+        previewRows: string;
+        generateSelect: string;
+        insertName: string;
+        copyName: string;
+        copied: string;
         loading: string;
         schemaPrivate: string;
         trustToInspect: string;
@@ -515,6 +527,18 @@ const english: Copy = {
         workspacePanels: 'More workspace panels',
         schemaSearch: 'Search tables, columns, and dictionaries…',
         tableCount: '{count} TABLES',
+        objects: 'Objects',
+        objectSearch: 'Search objects, columns, engines, and indexes…',
+        objectCount: '{count} OBJECTS',
+        noObjectsMatch: 'No objects match this search.',
+        views: 'Views',
+        dictionaries: 'Dictionaries',
+        columns: 'Columns',
+        previewRows: 'Preview rows',
+        generateSelect: 'Generate SELECT',
+        insertName: 'Insert name',
+        copyName: 'Copy name',
+        copied: 'Copied',
         loading: 'Loading…',
         schemaPrivate: 'Schema is private',
         trustToInspect: 'Trust the connection to inspect tables and columns.',
@@ -774,6 +798,19 @@ const workspaceCommonTranslations: Record<Exclude<Locale, 'en'>, WorkspaceCommon
     },
 };
 
+
+type ObjectExplorerTranslation = Pick<Copy['common'],
+    'objects' | 'objectSearch' | 'objectCount' | 'noObjectsMatch' | 'views' | 'dictionaries' | 'columns' |
+    'previewRows' | 'generateSelect' | 'insertName' | 'copyName' | 'copied'>;
+
+const objectExplorerTranslations: Record<Exclude<Locale, 'en'>, ObjectExplorerTranslation> = {
+    de: { objects: 'Objekte', objectSearch: 'Objekte, Spalten, Engines und Indizes suchen…', objectCount: '{count} OBJEKTE', noObjectsMatch: 'Keine Objekte entsprechen dieser Suche.', views: 'Views', dictionaries: 'Wörterbücher', columns: 'Spalten', previewRows: 'Zeilen ansehen', generateSelect: 'SELECT erzeugen', insertName: 'Name einfügen', copyName: 'Name kopieren', copied: 'Kopiert' },
+    es: { objects: 'Objetos', objectSearch: 'Buscar objetos, columnas, motores e índices…', objectCount: '{count} OBJETOS', noObjectsMatch: 'Ningún objeto coincide con esta búsqueda.', views: 'Vistas', dictionaries: 'Diccionarios', columns: 'Columnas', previewRows: 'Ver filas', generateSelect: 'Generar SELECT', insertName: 'Insertar nombre', copyName: 'Copiar nombre', copied: 'Copiado' },
+    nl: { objects: 'Objecten', objectSearch: 'Objecten, kolommen, engines en indexen zoeken…', objectCount: '{count} OBJECTEN', noObjectsMatch: 'Geen objecten komen overeen met deze zoekopdracht.', views: 'Views', dictionaries: 'Woordenboeken', columns: 'Kolommen', previewRows: 'Rijen bekijken', generateSelect: 'SELECT genereren', insertName: 'Naam invoegen', copyName: 'Naam kopiëren', copied: 'Gekopieerd' },
+    zh: { objects: '对象', objectSearch: '搜索对象、列、引擎和索引…', objectCount: '{count} 个对象', noObjectsMatch: '没有匹配的对象。', views: '视图', dictionaries: '字典', columns: '列', previewRows: '预览行', generateSelect: '生成 SELECT', insertName: '插入名称', copyName: '复制名称', copied: '已复制' },
+    ru: { objects: 'Объекты', objectSearch: 'Поиск объектов, столбцов, движков и индексов…', objectCount: 'ОБЪЕКТОВ: {count}', noObjectsMatch: 'Нет объектов, соответствующих поиску.', views: 'Представления', dictionaries: 'Словари', columns: 'Столбцы', previewRows: 'Просмотр строк', generateSelect: 'Создать SELECT', insertName: 'Вставить имя', copyName: 'Копировать имя', copied: 'Скопировано' },
+};
+
 const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common'],
     'explain' | 'explainPlan' | 'logicalPlan' | 'logicalPlanDescription' | 'planUnknownStep' | 'planDepthLimit' | 'pipelineGraph' | 'pipelineGraphDescription' |
     'pipelineGraphHint' | 'pipelineGraphTruncated' | 'pipelineZoomControls' | 'pipelineZoomOut' | 'pipelineZoomIn' | 'pipelineZoomReset' | 'pipelineZoomLevel' | 'pipelineFit' |
@@ -908,7 +945,7 @@ export function getCopy(locale: Locale): Copy {
     return {
         app: { ...mergeSection(english.app, translated), ...chrome.app },
         auth: { ...mergeSection(english.auth, translated), ...chrome.auth },
-        common: { ...mergeSection(english.common, translated), ...exampleCommonTranslations[locale], ...workspaceCommonTranslations[locale], ...explainCommonTranslations[locale] },
+        common: { ...mergeSection(english.common, translated), ...exampleCommonTranslations[locale], ...workspaceCommonTranslations[locale], ...objectExplorerTranslations[locale], ...explainCommonTranslations[locale] },
         chart: mergeSection(english.chart, translated),
     };
 }

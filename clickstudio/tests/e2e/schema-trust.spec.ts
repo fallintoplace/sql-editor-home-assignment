@@ -86,33 +86,35 @@ test('Revoking trust removes loaded schema from editor completion and hover', as
     await expect(page.locator('.sql-hover')).toHaveCount(0);
 });
 
-test('Schema inspector shows ClickHouse keys, storage, indexes, and dictionaries', async ({ page }) => {
+test('Object explorer shows ClickHouse metadata, searchable children, and generated SQL', async ({ page }) => {
     await mockLiveWorkspace(page, route => route.fulfill({ json: schema }));
-    const table = page.locator('.schema-table').filter({ hasText: 'events' });
-    await expect(table).toBeVisible();
-    await table.locator('summary').click();
 
-    await expect(table).toContainText('MergeTree');
-    await expect(table).toContainText('ORDER BY');
-    await expect(table).toContainText('(tenant_id, day)');
-    await expect(table).toContainText('PRIMARY KEY');
-    await expect(table).toContainText('PARTITION BY');
-    await expect(table).toContainText('SAMPLE BY');
-    await expect(table).toContainText('Configured');
-    await expect(table).toContainText('1.2M rows');
-    await expect(table).toContainText('1.5 GiB');
-    await expect(table).toContainText('18 active');
-    await expect(table).toContainText('by_day');
-    await expect(table).toContainText('tenant_bloom');
-    await expect(page.getByText('campaign_lookup', { exact: true })).toBeVisible();
-    await expect(page.getByText('18.2K entries')).toBeVisible();
+    await expect(page.getByRole('tree', { name: 'Objects' })).toBeVisible();
+    await expect(page.getByText('events', { exact: true }).first()).toBeVisible();
+    await expect(page.getByLabel('Selected object')).toContainText('MergeTree');
+    await expect(page.getByLabel('Selected object')).toContainText('ORDER BY');
+    await expect(page.getByLabel('Selected object')).toContainText('(tenant_id, day)');
+    await expect(page.getByLabel('Selected object')).toContainText('PRIMARY KEY');
+    await expect(page.getByLabel('Selected object')).toContainText('PARTITION BY');
+    await expect(page.getByLabel('Selected object')).toContainText('SAMPLE BY');
+    await expect(page.getByLabel('Selected object')).toContainText('Configured');
+    await expect(page.getByLabel('Selected object')).toContainText('1.2M rows');
+    await expect(page.getByLabel('Selected object')).toContainText('1.5 GiB');
+    await expect(page.getByLabel('Selected object')).toContainText('18 active');
+
+    await page.getByRole('button', { name: 'Generate SELECT', exact: true }).click();
+    await expect(page.locator('.cm-content')).toContainText('SELECT');
+    await expect(page.locator('.cm-content')).toContainText('`day`');
+    await expect(page.locator('.cm-content')).toContainText('FROM `analytics`.`events`');
 
     const search = page.getByTestId('schema-search');
     await search.fill('tenant_bloom');
-    await expect(page.locator('.schema-table')).toHaveCount(1);
+    await expect(page.getByText('tenant_bloom', { exact: true })).toBeVisible();
+
     await search.fill('campaign_lookup');
-    await expect(page.locator('.schema-table')).toHaveCount(0);
     await expect(page.getByText('campaign_lookup', { exact: true })).toBeVisible();
+    await page.getByText('campaign_lookup', { exact: true }).click();
+    await expect(page.getByLabel('Selected object')).toContainText('18.2K');
 });
 
 test('A schema response arriving after trust is revoked cannot restore editor metadata', async ({ page }) => {

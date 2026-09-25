@@ -4,7 +4,6 @@ import type { ApiError, AssistantAction, ProfilePipeline, Proposal, QueryDocumen
 import { DEFAULT_LIMITS } from '../shared/types';
 import { parseExplainPlan } from '../shared/explain-plan';
 import { parsePipelineResult } from '../shared/profile';
-import { filterSchemaTables, indexSchemaColumns } from '../shared/schema-browser';
 import { exportCsv, recommendChart } from '../shared/results';
 import { matchesDraft } from '../shared/evidence';
 import { formatSql, hasSqlComments, parameterNames, selectedStatement, splitSql } from '../shared/sql';
@@ -903,8 +902,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         ? sqlErrorRangeInDraft(active.sql, editorErrorContext.statementSql, editorErrorContext.sourceFrom, editorErrorContext.error)
         : undefined;
     const staleResult = Boolean(run && (!runSourceSql || run.connectionId !== connection.id || !matchesDraft(run, runSourceSql, active.parameters)));
-    const columnsByTable = useMemo(() => indexSchemaColumns(schema?.columns ?? []), [schema]);
-    const filteredTables = useMemo(() => filterSchemaTables(schema?.tables ?? [], columnsByTable, search), [schema, columnsByTable, search]);
     const saveStatusLabel = saveStatus.state === 'local' ? copy.common.localDraft : ({
         local: 'Local draft', checking: 'Checking save…', saving: 'Saving…', saved: `Saved r${active.baseRevision}`,
         changed: 'Unsaved changes', conflict: 'Newer revision available', deleted: 'Saved file in trash', unavailable: 'Save status unavailable',
@@ -1054,6 +1051,37 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const openDocument = (document: QueryDocument) => {
         addDraft(draftFromDocument(document));
     };
+    const openSqlDraft = (name: string, sql: string, run: boolean) => {
+        if (run && busy) { setError(copy.common.runActionWait); return; }
+        if (run && !trusted) { setError(copy.common.runActionTrustRequired); return; }
+        const draft = newDraft(name, sql);
+        if (!openNewDraft(draft)) return;
+        setDrawerOpen(false);
+        if (!run) {
+            window.requestAnimationFrame(() => editor.current?.focus());
+            return;
+        }
+        void perform(async () => {
+            const statements = splitSql(draft.sql);
+            if (statements.length !== 1) throw new Error('Generated object preview must contain exactly one SQL statement.');
+            const statement = statements[0]!;
+            const created = await post<Run>('/runs', {
+                clientRequestId: crypto.randomUUID(), connectionId: connection.id, documentId: draft.serverId,
+                sql: statement.sql, parameters: draft.parameters, parentRunId: draft.parentRunId, kind: 'query',
+                limits: { rows: connection.limits.rows || DEFAULT_LIMITS.rows, seconds: connection.limits.seconds || DEFAULT_LIMITS.seconds },
+                tags: { workspace: 'clickstudio', experience }, sourceFrom: statement.from, sourceTo: statement.to,
+            });
+            setRunForRun(created.id, created, true);
+            setPage(0);
+            update(draft.id, current => ({ ...current, activeRunId: created.id, scriptId: undefined, runIds: rememberRunIds(current.runIds, [created.id]) }));
+            setView('results');
+            setResultsCollapsed(false);
+            setExampleChartRunId(undefined);
+            if (!isFrontendDemoPreview)
+                setNotice(demoMode ? 'Sample preview generated. SQL was not sent to ClickHouse.' : 'Table preview submitted to the selected ClickHouse connection.');
+            void loadHistory().catch(() => undefined);
+        }, 'run');
+    };
     const inspectorProps = {
         copy: copy.common,
         inspector,
@@ -1064,8 +1092,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         schemaError,
         search,
         setSearch,
-        tables: filteredTables,
-        columnsByTable,
         history: sortedHistory,
         documents,
         revisions: revisionsDocumentId === active.serverId ? documentRevisions : [],
@@ -1083,6 +1109,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         onRefreshSchema: () => void loadSchema(true),
         onRefreshHistory: () => void loadHistory(),
         onInsert: (value: string) => editor.current?.insert(value),
+        onOpenSqlDraft: openSqlDraft,
         onOpenImport: () => setImportOpen(true),
         onExportResult: () => void exportCurrentCsv(),
         exportDisabled: run?.resultState !== 'reopenable',
@@ -1133,7 +1160,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         <div className="workspace-layout">
             <aside className="icon-rail" aria-label="Workspace tools">
                 <span className="rail-separator"/>
-                <RailButton icon="schema" label={experience === 'beginner' ? copy.common.tables : copy.common.schema} active={inspector === 'schema' && drawerOpen} onClick={() => showInspector('schema')}/>
+                <RailButton icon="schema" label={copy.common.objects} active={inspector === 'schema' && drawerOpen} onClick={() => showInspector('schema')}/>
                 {experience === 'expert' && <>
                     <RailButton icon="history" label={copy.common.history} active={inspector === 'history' && drawerOpen} onClick={() => showInspector('history')}/>
                     <RailButton icon="documents" label={copy.common.queries} active={inspector === 'documents' && drawerOpen} onClick={() => showInspector('documents')}/>

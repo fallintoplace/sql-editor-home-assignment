@@ -27,6 +27,7 @@
     "shared/workspace-view.ts",
     "web/local-files.ts",
     "shared/result-columns.ts",
-    "shared/schema-browser.ts"
+    "shared/schema-browser.ts",
+    "shared/object-explorer.ts"
   ]
 }

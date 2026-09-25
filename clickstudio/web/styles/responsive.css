@@ -97,6 +97,13 @@
     .document-tabs-scroll-button { width: 25px; }
     .workspace-help-backdrop { padding: 12px; }
     .workspace-help-panel { width: calc(100vw - 24px); height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); border-radius: 10px; }
+    .workspace-help-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+    .workspace-help-tabs { flex-direction: row; gap: 4px; overflow-x: auto; overflow-y: hidden; padding: 6px 8px; border-right: 0; border-bottom: 1px solid var(--line); }
+    .workspace-help-tab { min-width: max-content; min-height: 34px; flex: none; grid-template-columns: 16px auto; padding: 5px 8px; }
+    .workspace-help-tab > svg { width: 13px; height: 13px; }
+    .workspace-help-tab small { display: none; }
+    .workspace-help-content { min-height: 0; }
+    .workspace-help-tour, .workspace-help-feature-view { padding: 14px; }
     .sql-examples-toolbar { align-items: stretch; }
     .sql-example-search { min-width: 100%; flex-basis: 100%; }
     .sql-examples-layout { grid-template-columns: minmax(150px, .8fr) minmax(0, 1.2fr); }
@@ -128,7 +135,11 @@
     .workspace-help-header { padding: 13px 12px 10px; }
     .workspace-help-header p { max-width: 270px; }
     .workspace-help-tabs { padding: 6px 9px; }
-    .workspace-help-tab { flex: 1; }
+    .workspace-help-tab { flex: none; }
+    .workspace-help-tour, .workspace-help-feature-view { padding: 10px; }
+    .workspace-help-section-heading h3 { font-size: 17px; }
+    .workspace-help-feature-grid, .workspace-help-explain-grid { grid-template-columns: 1fr; }
+    .workspace-help-feature-card { min-height: 74px; }
     .sql-examples-toolbar { padding: 8px; }
     .sql-example-categories { width: 100%; }
     .sql-examples-layout { display: flex; flex-direction: column; }

@@ -8,7 +8,7 @@ import type { Copy } from '../i18n';
 
 type StructureView = 'flow' | 'ast' | 'analyzer';
 
-export function SqlFlowView({ copy, sql, sourceOffset, parseResult, parserEnabled, parserStatus, parseDurationMs, connectionId, parameters, analyzerAvailable, analyzerUnavailableReason, onRevealRange }: {
+export type SqlFlowViewProps = {
     copy: Copy['common'];
     sql: string;
     sourceOffset: number;
@@ -21,7 +21,9 @@ export function SqlFlowView({ copy, sql, sourceOffset, parseResult, parserEnable
     parserStatus: NativeParserStatus;
     parseDurationMs?: number;
     onRevealRange: (from: number, to: number) => void;
-}) {
+};
+
+export function SqlFlowView({ copy, sql, sourceOffset, parseResult, parserEnabled, parserStatus, parseDurationMs, connectionId, parameters, analyzerAvailable, analyzerUnavailableReason, onRevealRange }: SqlFlowViewProps) {
     const [view, setView] = useState<StructureView>('flow');
     const model = useMemo(() => buildSqlFlow(sql, parseResult, sourceOffset), [sql, parseResult, sourceOffset]);
     const duration = parseDurationMs === undefined ? undefined : `${parseDurationMs.toFixed(1)} ms`;

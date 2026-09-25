@@ -16,7 +16,7 @@ test('SQL examples open in a new tab without changing or running the current que
     await expect(page.locator('#sql-editor-content')).toBeHidden();
 
     await page.getByTestId('new-sql').click();
-    const dialog = page.getByRole('dialog', { name: 'Help & examples', exact: true });
+    const dialog = page.getByRole('dialog', { name: 'Explore ClickStudio', exact: true });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText('Sample data', { exact: true })).toBeVisible();
     await dialog.getByTestId('sql-example-search').fill('Top countries');
@@ -43,11 +43,31 @@ test('SQL examples search handles no matches and Escape restores focus', async (
     await trust(page);
     const trigger = page.getByTestId('new-sql');
     await trigger.click();
-    const dialog = page.getByRole('dialog', { name: 'Help & examples', exact: true });
+    const dialog = page.getByRole('dialog', { name: 'Explore ClickStudio', exact: true });
     const search = dialog.getByTestId('sql-example-search');
     await search.fill('query-with-no-matching-example');
     await expect(dialog.getByRole('status')).toHaveText('No examples match your search.');
     await search.press('Escape');
     await expect(dialog).toHaveCount(0);
     await expect(trigger).toBeFocused();
+});
+
+
+test('Help tour exposes ClickStudio native workflows from one place', async ({ page }) => {
+    await trust(page);
+    await page.getByRole('button', { name: 'Help', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Explore ClickStudio', exact: true });
+    await expect(dialog).toBeVisible();
+
+    for (const section of ['examples', 'query', 'explain', 'storage', 'dependencies', 'compare', 'reference'])
+        await expect(dialog.getByTestId('help-section-' + section)).toBeVisible();
+
+    await dialog.getByTestId('help-section-storage').click();
+    await expect(dialog.getByRole('button', { name: 'Parts', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Merges', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Mutations', exact: true })).toBeVisible();
+
+    await dialog.getByTestId('help-section-explain').click();
+    await expect(dialog.getByRole('button', { name: /EXPLAIN PLAN/ })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /EXPLAIN PIPELINE/ })).toBeVisible();
 });

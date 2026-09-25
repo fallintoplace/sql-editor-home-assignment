@@ -172,19 +172,47 @@ function offsetFromLineColumn(value: string, line: number | undefined, column: n
     return start + utf8ByteOffsetToUtf16Index(text, column - 1);
 }
 
+function clickHouseErrorLocation(message: string) {
+    const match = message.match(/^(.+?): failed at position \d+ \(([^)]*)\) \(line\s+(\d+),\s*col(?:umn)?\s+(\d+)\):/i);
+    if (!match)
+        return undefined;
+    const kind = match[1], line = Number(match[3]), column = Number(match[4]);
+    if (kind === undefined || !Number.isSafeInteger(line) || line < 1 || !Number.isSafeInteger(column) || column < 1)
+        return undefined;
+    return {
+        kind: kind.replace(/\s+\([^)]*\)$/, '').trim(),
+        token: (match[2] ?? '').trim(),
+        line,
+        column,
+    };
+}
+
+function compactNativeErrorMessage(error: NativeParseError, location: ReturnType<typeof clickHouseErrorLocation>): string {
+    const firstLine = (error.message.split(/\r?\n|Expected one of:/i, 1)[0] ?? '').trim();
+    const summary = location
+        ? `${location.kind} · line ${location.line}, column ${location.column}${location.token ? ` · near “${location.token.slice(0, 40)}${location.token.length > 40 ? '…' : ''}”` : ''}`
+        : firstLine.length > 160 ? `${firstLine.slice(0, 159)}…` : firstLine;
+    const expected = error.expected?.length
+        ? `Expected: ${error.expected.slice(0, 8).join(' · ')}${error.expected.length > 8 ? ' · …' : ''}`
+        : '';
+    return [summary || 'ClickHouse parser reported a syntax error.', expected].filter(Boolean).join('\n');
+}
+
 export function nativeDiagnosticForStatement(sql: string, statementFrom: number, error: NativeParseError): NativeDiagnostic {
+    const messageLocation = clickHouseErrorLocation(error.message);
     const localFrom = error.begin === undefined
-        ? offsetFromLineColumn(sql, error.line, error.column)
+        ? offsetFromLineColumn(sql, error.line ?? messageLocation?.line, error.column ?? messageLocation?.column)
         : utf8ByteOffsetToUtf16Index(sql, error.begin);
+    const unexpectedToken = messageLocation?.token && sql.startsWith(messageLocation.token, localFrom)
+        ? messageLocation.token
+        : undefined;
     const localTo = error.end === undefined
-        ? Math.min(sql.length, localFrom + 1)
+        ? Math.min(sql.length, localFrom + (unexpectedToken?.length ?? 1))
         : utf8ByteOffsetToUtf16Index(sql, error.end);
     return {
         from: statementFrom + localFrom,
         to: statementFrom + Math.max(localFrom, localTo),
-        message: error.expected?.length
-            ? `${error.message}\nExpected: ${error.expected.slice(0, 8).join(' · ')}${error.expected.length > 8 ? ' · …' : ''}`
-            : error.message,
+        message: compactNativeErrorMessage(error, messageLocation),
     };
 }
 

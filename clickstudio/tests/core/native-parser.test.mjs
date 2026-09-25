@@ -101,3 +101,35 @@ test('native diagnostics show a bounded expected-token hint', () => {
     const diagnostic = nativeDiagnosticForStatement('SELECT 1', 0, { message: 'Syntax error', expected });
     assert.equal(diagnostic.message, 'Syntax error\nExpected: FROM · WHERE · GROUP BY · HAVING · ORDER BY · LIMIT · SETTINGS · FORMAT · …');
 });
+
+test('native diagnostics compact ClickHouse syntax errors and underline the unexpected token', () => {
+    const sql = 'quantileWith (bid + ask) / 2 AS mid\nSELECT 1';
+    const diagnostic = nativeDiagnosticForStatement(sql, 0, {
+        message: 'Syntax error (query): failed at position 1 (quantileWith) (line 1, col 1): quantileWith (bid + ask) / 2 AS mid\nSELECT 1\n... Expected one of: Query, Query with output, SELECT query, SELECT query with UNION',
+    });
+    assert.deepEqual(diagnostic, {
+        from: 0,
+        to: 'quantileWith'.length,
+        message: 'Syntax error · line 1, column 1 · near “quantileWith”',
+    });
+});
+
+test('native diagnostics infer multiline UTF-8 positions from ClickHouse errors', () => {
+    const sql = "SELECT '你'\nquantileWith (bid)";
+    const tokenStart = sql.indexOf('quantileWith');
+    const diagnostic = nativeDiagnosticForStatement(sql, 12, {
+        message: 'Syntax error (query): failed at position 1 (quantileWith) (line 2, col 1): quantileWith (bid)',
+    });
+    assert.equal(diagnostic.from, 12 + tokenStart);
+    assert.equal(diagnostic.to, 12 + tokenStart + 'quantileWith'.length);
+    assert.match(diagnostic.message, /line 2, column 1/);
+});
+
+test('native diagnostics cap unstructured multiline parser messages', () => {
+    const diagnostic = nativeDiagnosticForStatement('SELECT 1', 0, {
+        message: `Parser error: ${'unexpected-token '.repeat(24)}\nExpected one of: ${'grammar '.repeat(80)}`,
+    });
+    assert.equal(diagnostic.message.length, 160);
+    assert.ok(diagnostic.message.endsWith('…'));
+    assert.ok(!diagnostic.message.includes('Expected one of:'));
+});

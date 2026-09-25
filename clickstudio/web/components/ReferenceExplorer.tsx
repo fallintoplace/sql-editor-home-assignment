@@ -215,11 +215,6 @@ export function ReferenceExplorer({ copy, connection, trusted, target, onTargetH
 
     return <section className="inspector-section object-explorer-section reference-explorer" onKeyDown={navigateResults}>
         {nativeProvider.kind === 'native' && !trusted ? <div className="inspector-empty"><Icon name="lock"/><strong>{copy.schemaPrivate}</strong><p>{copy.trustToInspect}</p></div> : <>
-            <div className="reference-source-banner" data-testid="reference-source">
-                <span className={cx('reference-source-light', isBundled ? 'is-bundled' : 'is-native')}/>
-                <span>{isBundled ? copy.referenceBundled : copy.referenceNative}</span>
-                {isBundled && <small>{copy.referenceBundledNote}</small>}
-            </div>
             {selected || entryLoading || entryError ? <div className="reference-detail-view">
                 <button type="button" className="reference-back" onClick={() => { entryRequest.current?.abort(); setSelected(undefined); setActiveEntry(undefined); setEntryLoading(false); setEntryError(''); }}><span>‹</span>{copy.referenceBack}</button>
                 {entryLoading && <div className="inspector-empty"><span className="loading-orbit"/><p>{copy.loading}</p></div>}
@@ -244,6 +239,11 @@ export function ReferenceExplorer({ copy, connection, trusted, target, onTargetH
                     </button>)}
                 </div>}
             </>}
+            <div className="reference-source-footer" data-testid="reference-source">
+                <span className={cx('reference-source-light', isBundled ? 'is-bundled' : 'is-native')}/>
+                <span className="reference-source-title">{isBundled ? copy.referenceBundled : copy.referenceNative}</span>
+                {isBundled && <small>{copy.referenceBundledNote}</small>}
+            </div>
         </>}
     </section>;
 }

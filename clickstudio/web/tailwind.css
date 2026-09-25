@@ -1377,10 +1377,11 @@
     .object-reference-actions { display: flex; flex-wrap: wrap; gap: 5px; }
     .object-reference-actions .toolbar-small { min-height: 29px; }
     .reference-explorer { --explorer-signal: var(--signal-accent); }
-    .reference-source-banner { display: flex; min-height: 32px; flex: none; align-items: center; gap: 7px; padding: 0 9px; border: 1px solid color-mix(in srgb, var(--explorer-signal) 20%, var(--line)); border-radius: 8px; background: color-mix(in srgb, var(--explorer-signal) 5%, var(--panel-raised)); color: var(--text-soft); font-size: 9px; font-weight: 650; }
-    .reference-source-banner small { margin-left: auto; color: var(--muted); font-size: 8px; font-weight: 450; }
-    .reference-source-light { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 12%, transparent), 0 0 9px color-mix(in srgb, var(--green) 50%, transparent); }
-    .reference-source-light.is-bundled { background: var(--amber); box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 12%, transparent), 0 0 9px color-mix(in srgb, var(--amber) 40%, transparent); }
+    .reference-source-footer { display: flex; min-height: 22px; flex: none; align-items: center; gap: 6px; overflow: hidden; margin-top: auto; padding: 0 7px; border: 1px solid color-mix(in srgb, var(--explorer-signal) 16%, var(--line)); border-radius: 6px; background: color-mix(in srgb, var(--explorer-signal) 4%, var(--panel-raised)); color: var(--text-soft); font-size: 8px; font-weight: 620; }
+    .reference-source-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .reference-source-footer small { min-width: 0; max-width: 55%; margin-left: auto; overflow: hidden; color: var(--muted); font-size: 7px; font-weight: 450; text-overflow: ellipsis; white-space: nowrap; }
+    .reference-source-light { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 12%, transparent), 0 0 6px color-mix(in srgb, var(--green) 50%, transparent); }
+    .reference-source-light.is-bundled { background: var(--amber); box-shadow: 0 0 0 2px color-mix(in srgb, var(--amber) 12%, transparent), 0 0 6px color-mix(in srgb, var(--amber) 40%, transparent); }
     .reference-search { width: 100%; }
     .reference-categories { display: flex; flex: none; gap: 4px; overflow-x: auto; padding: 2px 0 3px; scrollbar-width: thin; }
     .reference-categories button { min-height: 27px; flex: none; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; background: color-mix(in srgb, var(--panel-raised) 88%, transparent); color: var(--muted); font-size: 8px; font-weight: 620; cursor: pointer; transition: .16s ease; }

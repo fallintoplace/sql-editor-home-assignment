@@ -27,6 +27,10 @@ export default defineConfig([
       },
     },
     rules: {
+      "complexity": ["error", 25],
+      "max-depth": ["error", 6],
+      "max-params": ["error", 8],
+      "max-lines-per-function": ["error", { max: 200, skipBlankLines: true, skipComments: true }],
       "no-empty": ["error", { allowEmptyCatch: true }],
       "no-useless-escape": "off",
       "prefer-const": "off",

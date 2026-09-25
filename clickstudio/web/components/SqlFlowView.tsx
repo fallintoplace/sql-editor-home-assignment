@@ -1,8 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { NativeParseResult, NativeParserStatus } from '../../shared/native-parser';
 import { buildSqlFlow } from '../sql-flow';
+import { AstGraph } from './AstGraph';
 import { PipelineGraph } from './PipelineGraph';
 import type { Copy } from '../i18n';
+
+type StructureView = 'flow' | 'ast';
 
 export function SqlFlowView({ copy, sql, sourceOffset, parseResult, parserEnabled, parserStatus, parseDurationMs, onRevealRange }: {
     copy: Copy['common'];
@@ -14,20 +17,37 @@ export function SqlFlowView({ copy, sql, sourceOffset, parseResult, parserEnable
     parseDurationMs?: number;
     onRevealRange: (from: number, to: number) => void;
 }) {
+    const [view, setView] = useState<StructureView>('flow');
     const model = useMemo(() => buildSqlFlow(sql, parseResult, sourceOffset), [sql, parseResult, sourceOffset]);
     const duration = parseDurationMs === undefined ? undefined : `${parseDurationMs.toFixed(1)} ms`;
     const parserLabel = !parserEnabled ? copy.sqlFlowCodeMirror : parserStatus === 'loading' ? copy.sqlFlowParserStarting : parserStatus === 'unavailable' ? copy.sqlFlowParserUnavailable : model.mode === 'native AST' ? copy.sqlFlowNativeAst : copy.sqlFlowKeywordEstimate;
+    const astAvailable = Boolean(parserEnabled && parserStatus === 'ready' && !parseResult?.error && parseResult?.ast);
+    const astUnavailableReason = !parserEnabled ? copy.sqlFlowCodeMirror
+        : parserStatus === 'loading' ? copy.sqlFlowParserStarting
+            : parserStatus === 'unavailable' ? copy.sqlFlowParserUnavailable
+                : parseResult?.error?.message ?? parseResult?.ast_error ?? copy.sqlAstUnavailable;
 
     return <section className="sql-flow-view" aria-label={copy.visualizeSqlStructure}>
         <header className="sql-flow-heading">
-            <div><span className="eyebrow">{copy.sqlStructure.toUpperCase()}</span><h3>{copy.sqlFlowTitle}</h3><p>{copy.sqlFlowDescription}</p><p>{copy.sqlFlowClickStage}</p></div>
+            <div>
+                <span className="eyebrow">{copy.sqlStructure.toUpperCase()}</span>
+                <h3>{copy.sqlFlowTitle}</h3>
+                <p>{view === 'ast' ? copy.sqlAstDescription : copy.sqlFlowDescription}</p>
+                <p>{view === 'ast' ? copy.sqlAstClickNode : copy.sqlFlowClickStage}</p>
+            </div>
             <span className={`sql-flow-parser-state ${model.mode === 'native AST' ? 'is-native' : ''}`}><span className="status-light"/>{parserLabel}{duration && model.mode === 'native AST' ? ` · ${duration}` : ''}</span>
         </header>
-        {model.parserError && <div className="sql-flow-parse-note" role="status">{model.mode === 'native AST' ? copy.sqlFlowAstDetail : copy.sqlFlowSqlDetail}{model.parserError}</div>}
+        <div className="sql-flow-mode-tabs" role="group" aria-label={copy.sqlStructure}>
+            <button type="button" aria-pressed={view === 'flow'} className={view === 'flow' ? 'is-active' : ''} onClick={() => setView('flow')}>{copy.sqlFlowLogicalMode}</button>
+            <button type="button" aria-pressed={view === 'ast'} className={view === 'ast' ? 'is-active' : ''} disabled={!astAvailable && view !== 'ast'} title={!astAvailable ? astUnavailableReason : copy.sqlFlowNativeAst} onClick={() => setView('ast')}>{copy.sqlFlowNativeAst}</button>
+        </div>
+        {view === 'flow' && model.parserError && <div className="sql-flow-parse-note" role="status">{model.mode === 'native AST' ? copy.sqlFlowAstDetail : copy.sqlFlowSqlDetail}{model.parserError}</div>}
         {!sql.trim() ? <div className="pipeline-graph-empty">{copy.sqlFlowEmpty}</div>
-            : <PipelineGraph copy={copy} pipeline={model.pipeline} graphKind="sql-flow" heading={model.mode === 'native AST' ? copy.sqlFlowNativeHeading : copy.sqlFlowFallbackHeading} subheading={copy.sqlFlowGraphHint} onSelectNode={node => {
-                const range = model.sourceRanges.get(node.id);
-                if (range) onRevealRange(range.from, range.to);
-            }}/>}
+            : view === 'ast'
+                ? astAvailable ? <AstGraph ast={parseResult!.ast} copy={copy}/> : <div className="pipeline-graph-empty" role="status">{astUnavailableReason}</div>
+                : <PipelineGraph copy={copy} pipeline={model.pipeline} graphKind="sql-flow" heading={model.mode === 'native AST' ? copy.sqlFlowNativeHeading : copy.sqlFlowFallbackHeading} subheading={copy.sqlFlowGraphHint} onSelectNode={node => {
+                    const range = model.sourceRanges.get(node.id);
+                    if (range) onRevealRange(range.from, range.to);
+                }}/>} 
     </section>;
 }

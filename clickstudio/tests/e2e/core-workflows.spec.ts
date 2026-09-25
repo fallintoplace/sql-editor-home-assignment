@@ -256,6 +256,56 @@ test('Advanced parser inspector shows native AST, UTF-8 semantic highlights, and
     await expect(page.getByText('GROUP BY', { exact: true })).toBeVisible();
 });
 
+test('SQL structure switches from logical flow to native AST', async ({ page }) => {
+    const parserResponse = {
+        ast: {
+            type: 'SelectWithUnionQuery',
+            union_mode: 'UNION_DEFAULT',
+            list_of_selects: {
+                type: 'ExpressionList',
+                children: [{
+                    type: 'SelectQuery',
+                    select: {
+                        type: 'ExpressionList',
+                        children: [{
+                            type: 'Function',
+                            name: 'uniqExact',
+                            arguments: { type: 'ExpressionList', children: [{ type: 'Identifier', name: 'user_id' }] },
+                        }],
+                    },
+                    tables: {
+                        type: 'TablesInSelectQuery',
+                        children: [{ type: 'TableIdentifier', name_parts: ['analytics', 'events'] }],
+                    },
+                }],
+            },
+        },
+        highlights: [],
+    };
+    await page.addInitScript(parserWorkerStub('ready', parserResponse));
+    await page.goto('/');
+    await replaceSql(page, 'SELECT uniqExact(user_id) FROM analytics.events');
+
+    await page.getByRole('button', { name: 'Visualize SQL structure', exact: true }).click();
+    const structure = page.locator('.sql-flow-view');
+    const flow = structure.getByRole('button', { name: 'Logical flow', exact: true });
+    const nativeAst = structure.getByRole('button', { name: 'Native AST', exact: true });
+    await expect(flow).toHaveAttribute('aria-pressed', 'true');
+    await expect(nativeAst).toBeEnabled();
+
+    await nativeAst.click();
+    await expect(nativeAst).toHaveAttribute('aria-pressed', 'true');
+    await expect(structure.locator('[data-ast-node-type="SelectWithUnionQuery"]')).toBeVisible();
+    const selectList = structure.locator('[data-ast-node-path="$.list_of_selects.children[0].select"]');
+    await expect(selectList).toBeVisible();
+    await selectList.dblclick();
+
+    const fn = structure.locator('[data-ast-node-type="Function"]');
+    await expect(fn).toBeVisible();
+    await fn.click();
+    await expect(structure.locator('.ast-node-inspector')).toContainText('uniqExact');
+});
+
 test('A delayed native parse cannot replace parser details for newer SQL', async ({ page }) => {
     const oldSql = 'SELECT old_fn()';
     const newSql = 'SELECT new_fn()';

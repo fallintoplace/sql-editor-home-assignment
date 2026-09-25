@@ -553,6 +553,12 @@
     .sql-flow-parser-state { display: inline-flex; flex: none; align-items: center; gap: 7px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--muted); font-size: 8px; white-space: nowrap; }
     .sql-flow-parser-state.is-native { border-color: color-mix(in srgb, var(--green) 30%, var(--line)); color: var(--green); }
     .sql-flow-parse-note { padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--amber) 28%, var(--line)); border-radius: 8px; background: color-mix(in srgb, var(--amber) 7%, transparent); color: var(--amber); font-size: 8px; line-height: 1.5; }
+    .sql-flow-mode-tabs { display: inline-flex; width: max-content; max-width: 100%; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-raised); }
+    .sql-flow-mode-tabs button { min-height: 30px; padding: 0 11px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: 9px; font-weight: 700; cursor: pointer; transition: background .16s ease, color .16s ease, box-shadow .16s ease; }
+    .sql-flow-mode-tabs button:hover:not(:disabled) { color: var(--text); }
+    .sql-flow-mode-tabs button.is-active { background: color-mix(in srgb, var(--accent) 11%, var(--panel)); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 28%, var(--line)); }
+    .sql-flow-mode-tabs button:disabled { cursor: not-allowed; opacity: .46; }
+    .sql-flow-mode-tabs button:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent); outline-offset: 1px; }
     .pipeline-graph-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .pipeline-graph-heading > div { display: grid; gap: 4px; min-width: 0; }
     .pipeline-graph-heading > div > strong { color: var(--text-soft); font-family: var(--font-mono); font-size: 9px; }
@@ -594,6 +600,29 @@
     .pipeline-node-facts small { color: var(--muted); font-size: 7px; }
     .pipeline-node-facts strong { color: var(--text-soft); font-family: var(--font-mono); font-size: 9px; }
     .pipeline-graph-empty { padding: 13px; border: 1px dashed var(--line-bright); border-radius: 8px; color: var(--muted); font-size: 9px; text-align: center; }
+    .ast-graph-card { min-width: 0; }
+    .ast-graph-svg { display: block; min-width: 100%; }
+    .ast-graph-edges path { fill: none; stroke: color-mix(in srgb, var(--line-bright) 84%, transparent); stroke-width: 1.5; }
+    .ast-graph-node { cursor: pointer; outline: none; }
+    .ast-graph-node rect { fill: color-mix(in srgb, var(--panel-raised) 94%, transparent); stroke: var(--line-bright); stroke-width: 1; transition: fill .15s ease, stroke .15s ease, stroke-width .15s ease; }
+    .ast-graph-node:hover rect { fill: color-mix(in srgb, var(--accent) 5%, var(--panel-raised)); stroke: color-mix(in srgb, var(--accent) 28%, var(--line-bright)); }
+    .ast-graph-node:focus-visible rect, .ast-graph-node.is-selected rect { fill: color-mix(in srgb, var(--accent) 9%, var(--panel-raised)); stroke: var(--accent); stroke-width: 1.6; }
+    .ast-node-query rect { stroke: color-mix(in srgb, var(--accent) 34%, var(--line-bright)); }
+    .ast-node-function rect { stroke: color-mix(in srgb, var(--green) 34%, var(--line-bright)); }
+    .ast-node-identifier rect { stroke: color-mix(in srgb, var(--violet) 34%, var(--line-bright)); }
+    .ast-node-literal rect { stroke: color-mix(in srgb, var(--amber) 28%, var(--line-bright)); }
+    .ast-node-field { fill: var(--muted); font-family: var(--font-mono); font-size: 7px; font-weight: 650; letter-spacing: .035em; }
+    .ast-node-type { fill: var(--text); font-family: var(--font-mono); font-size: 10px; font-weight: 760; }
+    .ast-node-summary { fill: var(--text-soft); font-family: var(--font-mono); font-size: 8px; }
+    .ast-node-toggle { fill: var(--accent); font-family: var(--font-mono); font-size: 8px; font-weight: 800; }
+    .ast-expand-selected { width: auto !important; min-width: 62px !important; padding: 0 9px !important; }
+    .ast-node-inspector { grid-template-columns: minmax(0, 1fr) auto; }
+    .ast-node-path { display: block; max-width: min(100%, 720px); overflow: hidden; color: var(--muted); font-family: var(--font-mono); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+    .ast-node-properties { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px; margin: 0; }
+    .ast-node-properties > div { display: grid; min-width: 0; gap: 3px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 7px; background: color-mix(in srgb, var(--panel-raised) 82%, transparent); }
+    .ast-node-properties dt { overflow: hidden; color: var(--muted); font-family: var(--font-mono); font-size: 7px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .ast-node-properties dd { min-width: 0; margin: 0; }
+    .ast-node-properties code { display: block; overflow: hidden; color: var(--text-soft); font-family: var(--font-mono); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
     .explain-plan-view { display: grid; min-width: 0; min-height: 0; flex: 1; align-content: start; gap: 10px; overflow: auto; padding: 12px; }
     .explain-plan-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: linear-gradient(115deg, color-mix(in srgb, var(--accent) 7%, var(--panel-raised)), var(--panel-raised) 68%); }
     .explain-plan-mark { display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line)); border-radius: 9px; background: color-mix(in srgb, var(--accent) 8%, var(--panel)); color: var(--accent); font-family: var(--font-mono); font-size: 10px; font-weight: 750; }

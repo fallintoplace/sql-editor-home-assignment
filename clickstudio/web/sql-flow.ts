@@ -1,8 +1,9 @@
 import type { ProfilePipeline, ProfilePipelineEdge, ProfilePipelineNode } from '../shared/types.js';
 import { lexSql, type Token } from '../shared/sql.js';
+import { asNativeAstObject as object, nativeAstChildren as children, walkNativeAst, type NativeAstObject } from '../shared/native-ast.js';
 import type { NativeParseResult } from '../shared/native-parser.js';
 
-type AstObject = Record<string, unknown>;
+type AstObject = NativeAstObject;
 type SourceRange = { from: number; to: number };
 type ClauseName = 'WITH' | 'SELECT' | 'FROM' | 'PREWHERE' | 'WHERE' | 'GROUP BY' | 'HAVING' | 'WINDOW' | 'QUALIFY' | 'ORDER BY' | 'LIMIT' | 'OFFSET' | 'UNION';
 type ClauseSpan = SourceRange & { name: ClauseName };
@@ -33,15 +34,6 @@ const MAX_BRANCHES = 12;
 const MAX_SOURCES_PER_BRANCH = 10;
 const MAX_FLOW_NODES = 100;
 
-function object(value: unknown): AstObject | undefined {
-    return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as AstObject : undefined;
-}
-
-function children(value: unknown): unknown[] {
-    const items = object(value)?.children;
-    return Array.isArray(items) ? items : [];
-}
-
 function hasNode(value: unknown): boolean {
     return value !== undefined && value !== null;
 }
@@ -56,22 +48,9 @@ function identifierParts(value: AstObject): string[] {
     return typeof value.name === 'string' ? value.name.split('.') : [];
 }
 
-function walk(value: unknown, visit: (node: AstObject) => void, budget = { remaining: 20_000 }): void {
-    if (budget.remaining-- <= 0) return;
-    if (Array.isArray(value)) {
-        for (const item of value) walk(item, visit, budget);
-        return;
-    }
-    const node = object(value);
-    if (!node) return;
-    visit(node);
-    for (const [key, child] of Object.entries(node))
-        if (key !== 'value') walk(child, visit, budget);
-}
-
 function tableSources(query: AstObject, tokens: Token[], from: ClauseSpan | undefined, cteNames: Set<string>): Source[] {
     const sources: Source[] = [], seen = new Set<string>();
-    walk(query.tables, node => {
+    walkNativeAst(query.tables, node => {
         if (node.type !== 'TableIdentifier') return;
         const parts = identifierParts(node);
         if (!parts.length) return;
@@ -174,7 +153,7 @@ function joinKinds(branch: AstObject): string[] {
 
 function functionNames(value: unknown, predicate: (node: AstObject) => boolean): string[] {
     const result = new Set<string>();
-    walk(value, node => {
+    walkNativeAst(value, node => {
         if (node.type === 'Function' && typeof node.name === 'string' && predicate(node)) result.add(node.name);
     });
     return [...result].slice(0, 8);

@@ -1,8 +1,9 @@
 @import "tailwindcss";
 
 @theme {
-    --font-sans: "Inter", "SF Pro Display", ui-sans-serif, system-ui, sans-serif;
-    --font-mono: "Berkeley Mono", "SFMono-Regular", Consolas, monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", Roboto, "Helvetica Neue", Arial, ui-sans-serif, system-ui, sans-serif;
+    --font-display: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "SFMono-Regular", "SF Mono", "Cascadia Code", "Cascadia Mono", "Roboto Mono", "Ubuntu Mono", ui-monospace, Consolas, "Liberation Mono", monospace;
     --color-muted: var(--muted);
     --color-accent: var(--accent);
 }
@@ -50,6 +51,8 @@
     background: var(--page);
     color: var(--text);
     font-synthesis: none;
+    font-kerning: normal;
+    font-optical-sizing: auto;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -118,6 +121,7 @@
     html, body, #root { width: 100%; min-width: 320px; min-height: 100%; margin: 0; }
     body { min-height: 100vh; overflow: hidden; background: var(--page); }
     button, input, select, textarea { font: inherit; }
+    code, kbd, samp, pre { font-family: var(--font-mono); font-variant-ligatures: none; font-variant-numeric: tabular-nums; }
     button { color: inherit; }
     button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 78%, white); outline-offset: 2px; }
     ::selection { background: color-mix(in srgb, var(--accent) 40%, transparent); }
@@ -133,9 +137,9 @@
     .topbar { z-index: var(--z-app-chrome); display: flex; flex: none; align-items: center; gap: 21px; min-height: 68px; padding: 0 24px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--page-raised) 90%, transparent); box-shadow: 0 8px 30px #00000012; backdrop-filter: blur(22px); }
     .brand-lockup { display: inline-flex; flex: none; align-items: center; gap: 11px; }
     .brand-symbol { display: block; width: 30px; height: 30px; flex: none; object-fit: contain; }
-    .brand-name { position: relative; color: var(--text); font-size: 14px; font-weight: 720; letter-spacing: -.045em; line-height: 1; }
+    .brand-name { position: relative; color: var(--text); font-family: var(--font-display); font-size: 15px; font-weight: 720; letter-spacing: -.035em; line-height: 1; }
     .brand-name > span { color: var(--accent); }
-    .brand-name small { display: block; margin-top: 5px; color: var(--muted); font-size: 7px; font-weight: 700; letter-spacing: .19em; }
+    .brand-name small { display: block; margin-top: 5px; color: var(--muted); font-family: var(--font-sans); font-size: 8px; font-weight: 700; letter-spacing: .16em; }
     .topbar-divider { width: 1px; height: 31px; flex: none; background: var(--line); }
     .topbar-divider-short { height: 26px; }
     .topbar-spacer, .tabs-spacer, .rail-spacer { flex: 1; }
@@ -238,7 +242,7 @@
     .sql-examples-panel { position: relative; z-index: var(--z-dialog); display: flex; width: min(980px, calc(100vw - 48px)); height: min(720px, calc(100dvh - 48px)); min-width: 0; min-height: 240px; max-height: calc(100dvh - 48px); flex-direction: column; overflow: hidden; border: 1px solid var(--line-bright); border-radius: 15px; background: var(--panel-raised); color: var(--text); box-shadow: 0 22px 70px #00000055, 0 4px 16px #00000028; animation: examplesReveal .14s ease-out both; }
     .sql-examples-header { display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 17px 18px 13px; border-bottom: 1px solid var(--line); background: linear-gradient(110deg, color-mix(in srgb, var(--accent) 7%, var(--panel-raised)), var(--panel-raised) 70%); }
     .sql-examples-header .eyebrow, .sql-example-preview-heading .eyebrow { display: block; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
-    .sql-examples-header h2 { margin: 4px 0 3px; font-size: 16px; font-weight: 750; letter-spacing: -.02em; }
+    .sql-examples-header h2 { margin: 4px 0 3px; font-family: var(--font-display); font-size: 17px; font-weight: 750; letter-spacing: -.025em; }
     .sql-examples-header p, .sql-example-preview > p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
     .sql-examples-header-actions { display: flex; flex: none; align-items: center; gap: 8px; }
     .sql-example-blank { display: inline-flex; min-height: 30px; align-items: center; gap: 6px; padding: 0 9px; font-size: 9px; }
@@ -403,7 +407,7 @@
     .result-filter input:focus { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 10%, transparent); }
     .result-completeness { display: inline-flex; align-items: center; gap: 7px; }
     .data-table-scroll { min-height: 0; flex: 1; overflow: auto; border-top: 1px solid var(--line); }
-    .data-table { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; color: var(--text-soft); font-family: var(--font-mono); font-size: 10px; }
+    .data-table { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; color: var(--text-soft); font-family: var(--font-mono); font-size: 10px; font-variant-ligatures: none; font-variant-numeric: tabular-nums; }
     .data-table th { position: sticky; z-index: var(--z-local-raised); top: 0; min-width: 128px; max-width: 300px; padding: 9px 11px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line-bright); background: var(--panel-raised); color: var(--text); text-align: left; }
     .data-table th span, .data-table th small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .data-table th span { font-size: 9px; font-weight: 680; }
@@ -461,13 +465,13 @@
     .spark-one { top: 1px; right: 13px; }
     .spark-two { bottom: 10px; left: 2px; animation-delay: .7s; }
     .empty-workspace .eyebrow { color: var(--accent); }
-    .empty-workspace h3 { position: relative; margin: 0; color: var(--text); font-size: clamp(22px, 2vw, 31px); font-weight: 660; letter-spacing: -.06em; line-height: 1.05; }
+    .empty-workspace h3 { position: relative; margin: 0; color: var(--text); font-family: var(--font-display); font-size: clamp(22px, 2vw, 31px); font-weight: 660; letter-spacing: -.045em; line-height: 1.05; }
     .empty-workspace h3 em { color: var(--accent); font-style: normal; }
     .empty-workspace p { max-width: 390px; margin: 0 0 5px; color: var(--text-soft); font-size: 10px; line-height: 1.7; }
     .empty-workspace > .button-base { min-height: 34px; padding-inline: 14px; }
     .insights-view, .chart-workspace { min-height: 0; flex: 1; overflow: auto; padding: 17px 18px; }
     .insights-heading, .chart-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
-    .insights-heading h3, .chart-title-row h3 { margin: 5px 0 4px; font-size: 16px; font-weight: 650; letter-spacing: -.04em; }
+    .insights-heading h3, .chart-title-row h3 { margin: 5px 0 4px; font-family: var(--font-display); font-size: 17px; font-weight: 650; letter-spacing: -.03em; }
     .insights-heading p, .chart-title-row p { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.6; }
     .insight-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 16px; }
     .insight-metric { position: relative; display: grid; min-height: 82px; grid-template-columns: 24px 1fr; align-content: center; gap: 5px 9px; padding: 12px; border: 1px solid var(--line); border-radius: 11px; background: linear-gradient(140deg, var(--panel-raised), color-mix(in srgb, var(--panel) 85%, transparent)); transition: transform .2s ease, border-color .2s ease; }
@@ -651,7 +655,7 @@
     .inspector-pane { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; border-left: 1px solid var(--line); background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 90%, var(--page)), var(--page-raised)); animation: inspectorReveal .35s cubic-bezier(.2,.7,.2,1) both; }
     .inspector-pane.is-expert-browser.is-browser-tab-selected:not(.is-drawer) > .inspector-header { display: none; }
     .inspector-header { display: flex; min-height: 66px; flex: none; align-items: center; justify-content: space-between; gap: 8px; padding: 11px 16px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 80%, var(--page)); }
-    .inspector-header h2 { margin: 3px 0 0; font-size: 14px; font-weight: 680; letter-spacing: -.02em; }
+    .inspector-header h2 { margin: 3px 0 0; font-family: var(--font-display); font-size: 15px; font-weight: 680; letter-spacing: -.025em; }
     .inspector-tabs { display: flex; flex: none; gap: 5px; padding: 8px 13px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel-raised) 70%, transparent); }
     .inspector-tabs button { display: grid; width: 34px; height: 32px; place-items: center; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; transition: .18s ease; }
     .inspector-tabs button svg { width: 15px; height: 15px; }

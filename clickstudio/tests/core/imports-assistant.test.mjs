@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { parseCsv, parseInput, ImportService } from '../../.core-build/core/imports.js';
 import { AssistantService, buildContext } from '../../.core-build/core/assistant.js';
 import { evaluateProposal, runAssistantBenchmarks } from '../../.core-build/core/assistant-evaluation.js';
+import { selectAssistantReferenceDocs } from '../../.core-build/shared/reference-data.js';
 import { MemoryStore } from '../../.core-build/core/store.js';
 import { exportCsv, chartNumber, filterRows, sampleChartRows, MAX_CHART_RENDER_POINTS } from '../../.core-build/shared/results.js';
 import { owner, other, schema } from './helpers.mjs';
@@ -123,6 +124,34 @@ test('Evaluation report counts accepted and rejected proposals without exposing 
 test('Static semantic checks warn on schema references that need execution evidence', () => { const quality = evaluateProposal({ ...proposal, sql: 'SELECT * FROM missing_table' }, 'generate', { schema: { truncated: false, tables: [{ database: 'default', name: 'events' }] } }); assert.equal(quality.status, 'warn'); assert.equal(quality.checks.find(check => check.id === 'grounding').status, 'warn'); });
 test('Assistant benchmark suite stays green and deterministic', () => { const report = runAssistantBenchmarks(); assert.equal(report.total, 5); assert.equal(report.passed, 5); assert.equal(report.score, 100); });
 test('Context masks configured sensitive columns and result fields', () => { const result = { columns: [{ name: 'secret', type: 'String' }, { name: 'n', type: 'UInt64' }], rows: [['sensitive', '1']], completeness: 'complete', createdAt: 'now', queryId: 'q' }; const ctx = buildContext({ connectionId: 'local', sql: 'SELECT n', action: 'result', question: 'Explain', schema, result, sensitiveColumns: ['secret'] }); assert.ok(!ctx.payload.context.includes('sensitive')); assert.ok(ctx.payload.context.includes('"1"')); });
+test('Assistant reference retrieval selects docs for SQL functions and named tables', () => {
+    const docs = selectAssistantReferenceDocs('Explain quantileExact', 'SELECT quantileExact(0.5)(latency) FROM system.query_log', { schema, limit: 20 });
+    assert.ok(docs.length <= 4);
+    assert.ok(docs.some(entry => entry.name === 'quantileExact'));
+    assert.ok(docs.some(entry => entry.name === 'query_log' && entry.type === 'System Table'));
+    assert.ok(!docs.some(entry => entry.name === 'query_log' && entry.type === 'Server Setting'));
+    assert.equal(new Set(docs.map(entry => `${entry.type}:${entry.name}`)).size, docs.length);
+});
+test('Assistant reference retrieval ignores SQL literals and comments', () => {
+    const docs = selectAssistantReferenceDocs('', "SELECT 'quantileExact' AS note -- sum(1)\n/* uniqExact(id) */");
+    assert.deepEqual(docs, []);
+});
+test('Assistant reference retrieval ranks topic docs and avoids confusing user tables with system tables', () => {
+    const docs = selectAssistantReferenceDocs('Why does this query ignore the data skipping indexes?', 'SELECT value FROM events WHERE value = 42', { schema });
+    assert.ok(docs.some(entry => /index/i.test(`${entry.name} ${entry.description.slice(0, 300)}`)));
+    assert.ok(docs.some(entry => entry.name === 'data_skipping_index_types'));
+    assert.ok(!docs.some(entry => entry.name === 'events' && entry.type === 'System Table'));
+});
+test('Assistant context includes bounded documentation and shows its source in the preview', () => {
+    const documentation = Array.from({ length: 5 }, (_, index) => ({ name: `doc-${index}`, type: 'Function', description: 'x'.repeat(2500), serverVersion: 'offline-abc123', origin: 'bundled' }));
+    const ctx = buildContext({ connectionId: 'local', sql: 'SELECT 1', action: 'explain', question: 'Explain', schema, documentation });
+    const context = JSON.parse(ctx.payload.context);
+    assert.equal(context.referenceDocs.length, 4);
+    assert.equal(context.referenceDocs[0].description.length, 1800);
+    assert.ok(ctx.summary.some(item => item.includes('ClickHouse docs sent: Function doc-0')));
+    assert.ok(ctx.summary.some(item => item.includes('bounded to 4 of 5')));
+    assert.match(ctx.payload.instructions, /reference documentation/);
+});
 test('Credential-like literals in SQL are refused for AI sharing', () => assert.throws(() => buildContext({ connectionId: 'local', sql: "SELECT 'hello' -- password='dont-share'", action: 'generate', question: 'Explain', schema }), { code: 'CREDENTIAL_LIKE_CONTEXT' }));
 test('CSV exports protect formula-like cells and escape quotes', () => { const csv = exportCsv({ columns: [{ name: 'x', type: 'String' }], rows: [['=1+1'], ['a"b']] }); assert.ok(csv.includes("'=1+1")); assert.ok(csv.includes('"a""b"')); });
 test('CSV keeps numeric negatives numeric while protecting formula-like text', () => { const csv = exportCsv({ columns: [{ name: 'n', type: 'Int64' }, { name: 'label', type: 'String' }], rows: [['-42', '-42']] }); assert.ok(csv.includes("-42,'-42")); });

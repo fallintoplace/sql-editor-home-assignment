@@ -18,6 +18,7 @@ import { choice, identifier, integer, record, stringMap, text } from '../core/va
 import { exportCsv } from '../shared/results.js';
 import { buildQueryProfile } from '../shared/profile.js';
 import { isReferenceCategory } from '../shared/reference.js';
+import { selectAssistantReferenceDocs } from '../shared/reference-data.js';
 import { configuredSecrets, redactor, type Config } from './config.js';
 import { ClickHouseDriver } from './clickhouse.js';
 import { DemoDriver } from './demo.js';
@@ -53,6 +54,18 @@ const body = (req: Request) => record(req.body), id = (req: Request, name = 'id'
 function boolean(v: unknown, name: string) { requireThat(typeof v === 'boolean', 400, 'INVALID_REQUEST', `${name} must be a boolean`); return v; }
 function principal(res: Response): Principal { return res.locals.principal as Principal; }
 function number(v: unknown, fallback: number) { return v === undefined ? fallback : Number(v); }
+async function assistantReferenceDocs(driver: Driver, p: Principal, connectionId: string, question: string, sql: string, schema: Schema, database: string): Promise<ClickHouseDocumentationEntry[]> {
+    const candidates = selectAssistantReferenceDocs(question, sql, { schema, database });
+    const nativeAvailable = driver.connection(p, connectionId).manifest?.documentation.available === true;
+    return Promise.all(candidates.map(async candidate => {
+        if (!nativeAvailable) return candidate;
+        try {
+            return await driver.documentationEntry(connectionId, candidate.name, candidate.type) ?? candidate;
+        } catch {
+            return candidate;
+        }
+    }));
+}
 export function createApp(config: Config, overrides: {
     store?: Store;
     driver?: Driver;
@@ -272,6 +285,7 @@ export function createApp(config: Config, overrides: {
         canWrite(p);
         requireThat(authorized(p, connectionId), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before sharing context');
         const action = choice(v.action, ASSISTANT_ACTIONS, 400, 'ASSISTANT_ACTION', 'Unknown assistant action'), sql = text(v.sql, 'SQL', 200000, true), question = text(v.question, 'question', 4000, true), schema: Schema = await driver.schema(connectionId);
+        const connection = driver.connection(p, connectionId), documentation = await assistantReferenceDocs(driver, p, connectionId, question, sql, schema, connection.database);
         let run: Run | undefined;
         if (v.runId) {
             run = runs.get(p, identifier(v.runId, 'runId'));
@@ -279,7 +293,7 @@ export function createApp(config: Config, overrides: {
         }
         const result = v.includeResult === true && run ? runs.result(p, run.id) : undefined;
         const context = ai.prepare(p, { connectionId, action, question, sql, schema, result, evidenceSql: run?.sql, error: run?.error?.message,
-            serverVersion: driver.connection(p, connectionId).manifest?.serverVersion, rules: v.rules === undefined ? undefined : text(v.rules, 'workspace rules', 4000, true),
+            serverVersion: connection.manifest?.serverVersion, rules: v.rules === undefined ? undefined : text(v.rules, 'workspace rules', 4000, true), documentation,
             sensitiveColumns: config.sensitiveColumns, image: v.image === undefined ? undefined : text(v.image, 'image', 2900000) });
         if (!secretFree(context.payload)) {
             store.delete('ai-contexts', context.id);

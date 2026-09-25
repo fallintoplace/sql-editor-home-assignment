@@ -10,7 +10,7 @@ if (!referenceRoot || !sourceRevision) {
 }
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
-const outputPath = path.resolve(scriptDirectory, '../web/offline-reference-catalog.json');
+const outputPath = path.resolve(scriptDirectory, '../shared/offline-reference-catalog.json');
 const entries = [];
 
 async function markdownFiles(directory) {

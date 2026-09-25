@@ -88,6 +88,41 @@ test('Reference routes report unavailable native documentation instead of return
     assert.equal((await response.json() as { error: { code: string } }).error.code, 'CAPABILITY_UNAVAILABLE');
 });
 
+test('Assistant context includes relevant native ClickHouse documentation before consent', async (t) => {
+    const driver = new ReferenceDocsDemoDriver(), s = await start(undefined, undefined, undefined, driver);
+    t.after(() => s.stop());
+    await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' });
+
+    const response = await s.call('/assistant/context', {
+        connectionId: 'demo', action: 'explain', question: 'Explain quantileExact',
+        sql: 'SELECT quantileExact(0.5)(latency_ms) FROM events',
+    });
+    assert.equal(response.status, 201);
+    const prepared = await response.json() as { payload: { context: string }; summary: string[] };
+    const context = JSON.parse(prepared.payload.context) as { referenceDocs: Array<{ name: string; origin: string; serverVersion: string }> };
+    assert.ok(driver.entries.some(entry => entry.name === 'quantileExact' && entry.type === 'Aggregate Function'));
+    assert.equal(context.referenceDocs[0]?.name, 'quantileExact');
+    assert.equal(context.referenceDocs[0]?.origin, 'native');
+    assert.ok(prepared.summary.some(item => item.includes('server 24.6-test')));
+});
+
+test('Assistant context falls back to the bundled ClickHouse documentation', async (t) => {
+    const s = await start();
+    t.after(() => s.stop());
+    await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' });
+
+    const response = await s.call('/assistant/context', {
+        connectionId: 'demo', action: 'explain', question: 'Explain quantileExact',
+        sql: 'SELECT quantileExact(0.5)(latency_ms) FROM events',
+    });
+    assert.equal(response.status, 201);
+    const prepared = await response.json() as { payload: { context: string }; summary: string[] };
+    const context = JSON.parse(prepared.payload.context) as { referenceDocs: Array<{ name: string; origin: string; serverVersion: string }> };
+    assert.equal(context.referenceDocs[0]?.name, 'quantileExact');
+    assert.equal(context.referenceDocs[0]?.origin, 'bundled');
+    assert.match(context.referenceDocs[0]?.serverVersion ?? '', /^(?:Offline docs |Demo catalog)/);
+});
+
 test('Voice sessions require trust and keep the provider behind the server', async (t) => {
     const calls: unknown[] = [];
     const s = await start(undefined, { available: true, model: 'test-voice', createSession: async input => { calls.push(input); return { sdp: 'answer-sdp', model: 'test-voice' }; } });

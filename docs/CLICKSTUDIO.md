@@ -263,7 +263,7 @@ The assistant supports:
 - performance analysis;
 - review.
 
-The product presents the context prepared for the model, including the current SQL, selected schema context, and chosen result evidence.
+The product presents the context prepared for the model, including current SQL, selected schema, up to four relevant ClickHouse reference entries, and chosen result evidence. Native documentation from the selected server is preferred; the bundled offline reference is used when native docs are unavailable. The preview names the entries before consent.
 
 The workflow is:
 

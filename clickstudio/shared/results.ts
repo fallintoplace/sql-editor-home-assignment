@@ -36,6 +36,39 @@ export function chartNumber(value: Json | undefined): number | null {
         return null;
     return n;
 }
+export const MAX_HEATMAP_CELLS = 1200;
+export type HeatmapPreparation = {
+    xLabels: string[];
+    yLabels: string[];
+    cells: Map<string, number>;
+    present: Set<string>;
+    maximum: number;
+    tooLarge: boolean;
+    combinedRows: number;
+};
+export function heatmapCellKey(xLabel: string, yLabel: string): string {
+    return JSON.stringify([yLabel, xLabel]);
+}
+export function prepareHeatmap(rows: Row[], xIndex: number, yIndex: number, measureIndex: number, maxCells = MAX_HEATMAP_CELLS): HeatmapPreparation {
+    const xLabels = new Set<string>(), yLabels = new Set<string>(), cells = new Map<string, number>(), present = new Set<string>();
+    let maximum = 0, combinedRows = 0;
+    for (const row of rows) {
+        const xLabel = displayValue(row[xIndex]), yLabel = displayValue(row[yIndex]);
+        xLabels.add(xLabel);
+        yLabels.add(yLabel);
+        if (xLabels.size * yLabels.size > maxCells)
+            return { xLabels: [...xLabels], yLabels: [...yLabels], cells, present, maximum, tooLarge: true, combinedRows };
+        const key = heatmapCellKey(xLabel, yLabel);
+        if (present.has(key)) combinedRows++;
+        present.add(key);
+        const value = chartNumber(row[measureIndex]);
+        if (value === null) continue;
+        const combined = (cells.get(key) ?? 0) + value;
+        cells.set(key, combined);
+        maximum = Math.max(maximum, combined);
+    }
+    return { xLabels: [...xLabels], yLabels: [...yLabels], cells, present, maximum, tooLarge: false, combinedRows };
+}
 export type TimeBucketUnit = 'minute' | 'hour' | 'day' | 'week' | 'month';
 export interface RowCountPoint {
     timestamp: number;

@@ -33,18 +33,23 @@ test('Run, script, and explain actions stay visible beside the primary Run butto
     await expect(runScript).toBeFocused();
 });
 
-test('EXPLAIN PLAN opens a structured tree and keeps the raw result available', async ({ page }) => {
+test('EXPLAIN PLAN opens a graph with a tree view and keeps the raw result available', async ({ page }) => {
     await trust(page);
     await page.getByTestId('run-action-explain-plan').click();
 
-    const plan = page.getByRole('region', { name: 'Logical query plan', exact: true });
+    const plan = page.locator('.results-surface[aria-label="Logical query plan"]');
     await expect(plan).toContainText('Expression');
     await expect(plan).toContainText('ReadFromFixture');
     await expect(plan).toContainText('Fixture only; the SQL was not evaluated.');
     await expect(plan.locator('.explain-plan-heading')).not.toContainText('no runtime measurements');
-    await expect(plan.locator('.explain-plan-heading > strong')).toBeVisible();
+    await expect(plan.getByRole('button', { name: 'Graph', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(plan.locator('.explain-plan-heading-actions > strong')).toBeVisible();
     const headingHeight = await plan.locator('.explain-plan-heading').evaluate(element => element.getBoundingClientRect().height);
-    expect(headingHeight).toBeLessThan(48);
+    expect(headingHeight).toBeLessThan(56);
+    await plan.getByRole('button', { name: 'Tree', exact: true }).click();
+    await expect(plan.locator('.explain-plan-tree')).toBeVisible();
+    await plan.getByRole('button', { name: 'Graph', exact: true }).click();
+    await expect(plan.locator('.pipeline-graph-scroll')).toBeVisible();
 
     await page.getByRole('tab', { name: 'Results', exact: true }).click();
     await expect(page.getByRole('table', { name: 'Retained query rows' })).toBeVisible();
@@ -93,6 +98,14 @@ test('EXPLAIN PIPELINE opens an interactive ClickHouse operator graph', async ({
     expect(resultsMetrics.scrollHeight).toBeGreaterThan(resultsMetrics.clientHeight);
     await resultsContent.evaluate(element => { element.scrollTop = element.scrollHeight; });
     await expect(page.locator('.pipeline-node-inspector')).toBeInViewport();
+
+    const zoomBeforeEditorFocus = await controls.getByLabel('Zoom level').innerText();
+    const editor = page.locator('.cm-content');
+    await editor.click();
+    await page.keyboard.press('ControlOrMeta+a');
+    await expect(editor).toBeFocused();
+    await expect(filter).toHaveAttribute('aria-pressed', 'true');
+    await expect(controls.getByLabel('Zoom level')).toHaveText(zoomBeforeEditorFocus);
 });
 
 test('Advanced panels stay reachable through Ask AI and More', async ({ page }) => {

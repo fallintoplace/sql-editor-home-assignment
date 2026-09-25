@@ -1039,9 +1039,10 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const retainedSnapshot = run && snapshot?.runId === run.id ? snapshot : undefined;
     const explainPlanOutput = run?.kind === 'plan' ? retainedSnapshot?.rows[0]?.[0] : undefined;
     const explainPlan = useMemo(() => parseExplainPlan(explainPlanOutput), [explainPlanOutput]);
-    const pipelineResult = run?.kind === 'pipeline' && retainedSnapshot
-        ? parsePipelineResult(retainedSnapshot.rows.map(row => row[0]).filter((value): value is string => typeof value === 'string'))
-        : undefined;
+    const pipelineOutputRows = run?.kind === 'pipeline' ? retainedSnapshot?.rows : undefined;
+    const pipelineResult = useMemo(() => pipelineOutputRows
+        ? parsePipelineResult(pipelineOutputRows.map(row => row[0]).filter((value): value is string => typeof value === 'string'))
+        : undefined, [pipelineOutputRows]);
     const resultsTitle = visibleResultsView === 'sqlmap' ? copy.common.sqlStructure
         : visibleResultsView === 'plan' ? copy.common.logicalPlan
             : visibleResultsView === 'pipeline' ? copy.common.pipelineGraph : copy.common.results;

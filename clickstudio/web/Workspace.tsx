@@ -998,7 +998,10 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const canSplitPanels = Boolean((run || visibleResultsView === 'sqlmap')
         && queryMode === 'docked' && resultsMode === 'docked'
         && !queryCollapsed && !resultsCollapsed && !compactViewport);
-    const workspaceLayoutStyle = { '--query-row': `${panelLayout.splitRatio * 100}%` } as CSSProperties;
+    const splitGridTemplate = (ratio: number) => `minmax(205px, ${ratio}fr) minmax(185px, ${1 - ratio}fr)`;
+    const workspaceLayoutStyle: CSSProperties | undefined = canSplitPanels
+        ? { gridTemplateRows: splitGridTemplate(panelLayout.splitRatio) }
+        : undefined;
     const startPanelSplit = (event: PanelPointerStartEvent) => {
         const content = workspaceContentRef.current;
         if (!content || !canSplitPanels) return;
@@ -1006,15 +1009,16 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         event.stopPropagation();
         const rect = content.getBoundingClientRect();
         const computed = getComputedStyle(content);
-        const top = rect.top + (Number.parseFloat(computed.paddingTop) || 0);
-        const usableHeight = Math.max(1, rect.height
-            - (Number.parseFloat(computed.paddingTop) || 0)
-            - (Number.parseFloat(computed.paddingBottom) || 0));
+        const paddingTop = Number.parseFloat(computed.paddingTop) || 0;
+        const paddingBottom = Number.parseFloat(computed.paddingBottom) || 0;
+        const rowGap = Number.parseFloat(computed.rowGap) || 0;
+        const top = rect.top + paddingTop;
+        const usableHeight = Math.max(1, rect.height - paddingTop - paddingBottom - rowGap);
         let latest = panelLayout.splitRatio;
         document.body.classList.add('is-workspace-panel-gesturing');
         const move = (pointer: PointerEvent) => {
             latest = clampPanelSplitRatio((pointer.clientY - top) / usableHeight);
-            content.style.setProperty('--query-row', `${latest * 100}%`);
+            content.style.gridTemplateRows = splitGridTemplate(latest);
         };
         const stop = () => {
             window.removeEventListener('pointermove', move);
@@ -1253,7 +1257,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         (run || visibleResultsView === 'sqlmap') && resultsCollapsed && 'is-results-collapsed',
                         queryFloating && 'has-floating-query',
                         resultsFloating && 'has-floating-results',
-                        canSplitPanels && 'has-panel-split',
                     )}
                 >
                     <section
@@ -1335,25 +1338,24 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         {experience === 'expert' && <div className="editor-footer"><span>{active.sql.length.toLocaleString()} {copy.common.characters} <span className="footer-dot">·</span> {active.sql.split('\n').length} {copy.common.lines}</span></div>}
                         </div>
                         {queryMode === 'floating' && !queryCollapsed && <PanelResizeHandles onResize={(edge, event) => startPanelResize('query', edge, event)}/>}
+                        {canSplitPanels && <div
+                            className="workspace-panel-splitter"
+                            role="separator"
+                            aria-label="Resize query and output panels"
+                            aria-orientation="horizontal"
+                            aria-valuemin={25}
+                            aria-valuemax={75}
+                            aria-valuenow={Math.round(panelLayout.splitRatio * 100)}
+                            tabIndex={0}
+                            onPointerDown={startPanelSplit}
+                            onKeyDown={event => {
+                                if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                                event.preventDefault();
+                                const delta = event.key === 'ArrowUp' ? -0.05 : 0.05;
+                                setPanelLayout(current => ({ ...current, splitRatio: clampPanelSplitRatio(current.splitRatio + delta) }));
+                            }}
+                        ><span/></div>}
                     </section>
-
-                    {canSplitPanels && <div
-                        className="workspace-panel-splitter"
-                        role="separator"
-                        aria-label="Resize query and output panels"
-                        aria-orientation="horizontal"
-                        aria-valuemin={25}
-                        aria-valuemax={75}
-                        aria-valuenow={Math.round(panelLayout.splitRatio * 100)}
-                        tabIndex={0}
-                        onPointerDown={startPanelSplit}
-                        onKeyDown={event => {
-                            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-                            event.preventDefault();
-                            const delta = event.key === 'ArrowUp' ? -0.05 : 0.05;
-                            setPanelLayout(current => ({ ...current, splitRatio: clampPanelSplitRatio(current.splitRatio + delta) }));
-                        }}
-                    ><span/></div>}
 
                     {(run || visibleResultsView === 'sqlmap') && <section
                         ref={resultsPanelRef}

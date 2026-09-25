@@ -304,12 +304,8 @@
     .workspace-content.has-run.has-floating-query,
     .workspace-content.has-run.has-floating-results,
     .workspace-content:not(.has-run).has-floating-query { grid-template-rows: minmax(0, 1fr); }
-    .workspace-content.has-run.has-panel-split { grid-template-rows: minmax(205px, var(--query-row, 54%)) 10px minmax(185px, 1fr); gap: 0; }
-    .workspace-content.has-run.has-panel-split > .editor-surface { grid-row: 1; }
-    .workspace-content.has-run.has-panel-split > .workspace-panel-splitter { grid-row: 2; }
-    .workspace-content.has-run.has-panel-split > .results-surface { grid-row: 3; }
-    .workspace-panel-splitter { position: relative; display: grid; min-height: 10px; place-items: center; cursor: row-resize; touch-action: none; }
-    .workspace-panel-splitter::before { width: min(140px, 28%); height: 2px; border-radius: 99px; background: var(--line-bright); content: ""; transition: width .16s ease, background .16s ease, box-shadow .16s ease; }
+    .workspace-panel-splitter { position: absolute; right: 0; bottom: 0; left: 0; z-index: var(--z-local-intersection); display: grid; height: 10px; place-items: end center; cursor: row-resize; touch-action: none; }
+    .workspace-panel-splitter::before { width: min(140px, 28%); height: 2px; margin-bottom: 1px; border-radius: 99px; background: var(--line-bright); content: ""; transition: width .16s ease, background .16s ease, box-shadow .16s ease; }
     .workspace-panel-splitter:hover::before, .workspace-panel-splitter:focus-visible::before { width: min(190px, 38%); background: color-mix(in srgb, var(--accent) 62%, var(--line-bright)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent); }
     .workspace-panel-splitter:focus-visible { outline: none; }
     .editor-surface, .results-surface { position: relative; display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: 0 12px 36px #00000012, inset 0 1px #ffffff05; transition: border-color .2s ease, box-shadow .2s ease; }

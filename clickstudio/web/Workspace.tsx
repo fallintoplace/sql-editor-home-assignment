@@ -50,6 +50,13 @@ function safeSelectedStatement(sql: string, from: number, to: number) {
 function safeStatementCount(sql: string) {
     try { return splitSql(sql).length; } catch { return undefined; }
 }
+type HelpStatement = { sql: string; from: number };
+function helpStatementSql(statement: HelpStatement | undefined, fallback: string) { return statement?.sql ?? fallback; }
+function helpStatementOffset(statement: HelpStatement | undefined) { return statement?.from ?? 0; }
+function helpParseResult<T>(statement: { result: T } | undefined) { return statement?.result; }
+function revealEditorRange(editor: { current: EditorHandle | null }, from: number, to: number) { editor.current?.revealRange(from, to); }
+function insertEditorText(editor: { current: EditorHandle | null }, value: string) { editor.current?.insert(value); }
+function focusEditor(editor: { current: EditorHandle | null }) { editor.current?.focus(); }
 type FailedQueryError = { draftId: string; draftSql: string; statementSql: string; sourceFrom: number; error: ApiError };
 const TOAST_TIMEOUT_MS = 10_000;
 
@@ -843,9 +850,9 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         trusted={trusted}
                         queryEngine={{
                             copy: copy.common,
-                            sql: sqlMapStatement?.sql ?? active.sql,
-                            sourceOffset: sqlMapStatement?.from ?? 0,
-                            parseResult: sqlMapParseStatement?.result,
+                            sql: helpStatementSql(sqlMapStatement, active.sql),
+                            sourceOffset: helpStatementOffset(sqlMapStatement),
+                            parseResult: helpParseResult(sqlMapParseStatement),
                             parserEnabled: nativeParserEnabled,
                             parserStatus: nativeParserStatus,
                             parseDurationMs: nativeParseSnapshot?.elapsedMs,
@@ -855,7 +862,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             analyzerUnavailableReason: queryTreeUnavailableReason,
                             onRevealRange: (from, to) => {
                                 closeHelpPanel(false);
-                                window.requestAnimationFrame(() => editor.current?.revealRange(from, to));
+                                window.requestAnimationFrame(() => revealEditorRange(editor, from, to));
                             },
                         }}
                         busy={Boolean(busy)}
@@ -871,9 +878,9 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             queryLogAvailable: connection.manifest?.queryLog.available === true,
                         }}
                         onReferenceInsert={value => {
-                            editor.current?.insert(value);
+                            insertEditorText(editor, value);
                             closeHelpPanel(false);
-                            window.requestAnimationFrame(() => editor.current?.focus());
+                            window.requestAnimationFrame(() => focusEditor(editor));
                         }}
                         onOpenExample={example => {
                             const draft = createExampleDraft(example);

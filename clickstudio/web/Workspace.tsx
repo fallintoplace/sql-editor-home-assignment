@@ -1161,6 +1161,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             <aside className="icon-rail" aria-label="Workspace tools">
                 <span className="rail-separator"/>
                 <RailButton icon="schema" label={copy.common.objects} active={inspector === 'schema' && drawerOpen} onClick={() => showInspector('schema')}/>
+                <RailButton icon="reference" label={copy.common.reference} active={inspector === 'reference' && drawerOpen} onClick={() => showInspector('reference')}/>
                 {experience === 'expert' && <>
                     <RailButton icon="history" label={copy.common.history} active={inspector === 'history' && drawerOpen} onClick={() => showInspector('history')}/>
                     <RailButton icon="documents" label={copy.common.queries} active={inspector === 'documents' && drawerOpen} onClick={() => showInspector('documents')}/>

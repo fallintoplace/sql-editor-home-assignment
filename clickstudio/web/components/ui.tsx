@@ -16,6 +16,7 @@ const iconPaths = {
     projection: <><rect x="4" y="7" width="13" height="13" rx="2"/><path d="M8 4h12v12"/></>,
     index: <><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></>,
     dictionary: <><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 0 4 22V5.5Z"/><path d="M4 6h12M8 9h8m-8 4h6"/></>,
+    reference: <><path d="M5 3.5h9l5 5V21H5z"/><path d="M14 3.5v5h5M8 12h8m-8 3h8m-8 3h5"/></>,
     moon: <path d="M20.9 13A8.9 8.9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"/>,
     sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></>,
     history: <><path d="M3 12a9 9 0 1 0 2.64-6.36L3 8"/><path d="M3 3v5h5m4-1v5l3 2"/></>,
@@ -95,4 +96,4 @@ export function formatCount(value: string | number): string {
     return Number.isFinite(number) ? new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(number) : String(value);
 }
 
-export function inspectorLabel(value: Inspector): string { return ({ schema: 'Schema explorer', history: 'Run history', documents: 'Documents', revisions: 'Version history', details: 'Run details', profile: 'Query profile', pipeline: 'Pipeline', parser: 'ClickHouse parser', assistant: 'AI copilot' })[value]; }
+export function inspectorLabel(value: Inspector): string { return ({ schema: 'Schema explorer', reference: 'Reference', history: 'Run history', documents: 'Documents', revisions: 'Version history', details: 'Run details', profile: 'Query profile', pipeline: 'Pipeline', parser: 'ClickHouse parser', assistant: 'AI copilot' })[value]; }

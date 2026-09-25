@@ -107,15 +107,20 @@ export interface Schema {
     columns: SchemaColumn[];
     tables: SchemaTable[];
     dictionaries?: SchemaDictionary[];
-    systemTableDocumentationNames?: string[];
     warnings: string[];
     metadataWarnings?: string[];
     truncated: boolean;
 }
-export interface ClickHouseSystemTableDocumentation {
+export type ReferenceCategory = 'all' | 'functions' | 'types' | 'engines' | 'settings' | 'system';
+export interface ClickHouseDocumentationSummary {
     name: string;
+    type: string;
+    source?: string;
+}
+export interface ClickHouseDocumentationEntry extends ClickHouseDocumentationSummary {
     description: string;
     serverVersion: string;
+    origin: 'native' | 'bundled';
 }
 export interface Principal {
     id: string;

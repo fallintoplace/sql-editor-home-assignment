@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { ClickHouseSystemTableDocumentation, Schema, SchemaDictionary, SchemaTable } from '../../shared/types';
+import type { Schema, SchemaDictionary, SchemaTable } from '../../shared/types';
 import {
     buildObjectExplorer,
     explorerCategoryId,
@@ -16,7 +16,6 @@ import {
     type ExplorerSelection,
 } from '../../shared/object-explorer';
 import { quoteIdentifier } from '../../shared/sql';
-import { api, message } from '../api';
 import type { Connected } from '../workspace-types';
 import type { Copy } from '../i18n';
 import { Button, cx, formatBytes, formatCount, Icon } from './ui';
@@ -33,6 +32,7 @@ type ObjectExplorerProps = {
     onRefreshSchema: () => void;
     onInsert: (value: string) => void;
     onOpenSqlDraft: (name: string, sql: string, run: boolean) => void;
+    onOpenReference: (name: string, type: string) => void;
     compact?: boolean;
 };
 
@@ -55,7 +55,7 @@ function recoverUiState(key: string): ExplorerUiState {
     }
 }
 
-export function ObjectExplorer({ copy, connection, schema, schemaLoading, schemaError, search, setSearch, trusted, onRefreshSchema, onInsert, onOpenSqlDraft, compact = false }: ObjectExplorerProps) {
+export function ObjectExplorer({ copy, connection, schema, schemaLoading, schemaError, search, setSearch, trusted, onRefreshSchema, onInsert, onOpenSqlDraft, onOpenReference, compact = false }: ObjectExplorerProps) {
     const model = useMemo(() => buildObjectExplorer(schema, search, connection.database), [schema, search, connection.database]);
     const storageKey = uiStateKey(connection.id);
     const recovered = useMemo(() => recoverUiState(storageKey), [storageKey]);
@@ -176,7 +176,7 @@ export function ObjectExplorer({ copy, connection, schema, schemaLoading, schema
     return <section className={cx('inspector-section object-explorer-section', compact && 'is-compact', showCompactDetails && 'is-detail-mode')}>
         {showCompactDetails ? <div className="object-compact-details">
             <button type="button" className="object-back-button" onClick={browseObjects}><span>‹</span>{copy.objects}</button>
-            <ObjectDetails copy={copy} connection={connection} selection={selected} trusted={trusted} copiedId={copiedId} systemTableDocumentationNames={schema?.systemTableDocumentationNames} onInsert={onInsert} onCopy={copyText} onOpenSqlDraft={onOpenSqlDraft}/>
+            <ObjectDetails copy={copy} selection={selected} trusted={trusted} copiedId={copiedId} onInsert={onInsert} onCopy={copyText} onOpenSqlDraft={onOpenSqlDraft} onOpenReference={onOpenReference}/>
         </div> : <>
         <div className="inspector-search object-search"><Icon name="search"/><input data-testid="schema-search" value={search} onChange={event => changeSearch(event.target.value)} placeholder={copy.objectSearch} aria-label={copy.objectSearch}/>{search && <button type="button" className="object-search-clear" aria-label="Clear object search" onClick={() => changeSearch('')}>×</button>}</div>
         <div className="schema-heading object-heading"><span>{copy.objectCount.replace('{count}', (model.query ? model.visibleObjects : model.totalObjects).toLocaleString())}</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshSchema} disabled={schemaLoading || !trusted}>{schemaLoading ? copy.loading : copy.refresh}</Button></div>
@@ -200,7 +200,7 @@ export function ObjectExplorer({ copy, connection, schema, schemaLoading, schema
                     })}
                 </div>
             </div> : <div className="object-empty-search"><strong>{copy.noObjectsMatch}</strong><span>{search ? 'Try a different name, type, engine, index, or column.' : copy.metadataUnavailable}</span></div>}
-            {!compact && detailsOpen && selected && <ObjectDetails copy={copy} connection={connection} selection={selected} trusted={trusted} copiedId={copiedId} systemTableDocumentationNames={schema.systemTableDocumentationNames} onClose={browseObjects} onInsert={onInsert} onCopy={copyText} onOpenSqlDraft={onOpenSqlDraft}/>}
+            {!compact && detailsOpen && selected && <ObjectDetails copy={copy} selection={selected} trusted={trusted} copiedId={copiedId} onClose={browseObjects} onInsert={onInsert} onCopy={copyText} onOpenSqlDraft={onOpenSqlDraft} onOpenReference={onOpenReference}/>}
         </>}
         </>}
     </section>;
@@ -262,17 +262,16 @@ function ObjectLeafRow({ level, selected, glyph, label, meta, onSelect, onInsert
     </div>;
 }
 
-function ObjectDetails({ copy, connection, selection, trusted, copiedId, systemTableDocumentationNames, onClose, onInsert, onCopy, onOpenSqlDraft }: {
+function ObjectDetails({ copy, selection, trusted, copiedId, onClose, onInsert, onCopy, onOpenSqlDraft, onOpenReference }: {
     copy: Copy['common'];
-    connection: Connected;
     selection: ExplorerSelection;
     trusted: boolean;
     copiedId?: string;
-    systemTableDocumentationNames?: readonly string[];
     onClose?: () => void;
     onInsert: (value: string) => void;
     onCopy: (value: string, id: string) => void;
     onOpenSqlDraft: (name: string, sql: string, run: boolean) => void;
+    onOpenReference: (name: string, type: string) => void;
 }) {
     if (selection.kind === 'relation') {
         const { table, columns } = selection;
@@ -285,8 +284,11 @@ function ObjectDetails({ copy, connection, selection, trusted, copiedId, systemT
                 <Button variant="ghost" className="toolbar-small" onClick={() => onInsert(qualified)}>{copy.insertName}</Button>
                 <Button variant="ghost" className="toolbar-small" onClick={() => void onCopy(qualified, selection.id)}>{copiedId === selection.id ? copy.copied : copy.copyName}</Button>
             </div>
+            <div className="object-reference-actions">
+                {table.engine && <Button variant="secondary" className="toolbar-small" onClick={() => onOpenReference(table.engine, 'Table Engine')}>{copy.referenceTableEngine}</Button>}
+                {table.database === 'system' && <Button variant="ghost" className="toolbar-small" onClick={() => onOpenReference(table.name, 'System Table')}>{copy.referenceSystemTable}</Button>}
+            </div>
             <TableMetadata table={table}/>
-            {table.database === 'system' && systemTableDocumentationNames?.includes(table.name) && connection.dataSource !== 'fixture' && connection.trusted && connection.manifest?.documentation.available !== false && <SystemTableDocumentation connectionId={connection.id} name={table.name} serverVersion={connection.manifest?.serverVersion ?? 'current server'}/>}
         </section>;
     }
 
@@ -369,43 +371,5 @@ function TableMetadata({ table }: { table: SchemaTable }) {
         {(keys.length > 0 || hasKeyMetadata) && <div className="schema-key-list">{keys.length ? keys.map(([label, value]) => <div className="schema-key" key={label}><span>{label}</span><code>{value}</code></div>) : <div className="schema-metadata-empty">No table keys configured</div>}</div>}
         {table.ttlConfigured !== undefined && <div className={cx('schema-ttl', table.ttlConfigured ? 'is-configured' : 'is-empty')}><span>TTL</span><strong>{table.ttlConfigured ? 'Configured' : 'None'}</strong></div>}
         {table.materializedViewTarget && <div className="schema-view-target"><span>WRITES TO</span><code>{table.materializedViewTarget}</code></div>}
-    </div>;
-}
-
-function SystemTableDocumentation({ connectionId, name, serverVersion }: { connectionId: string; name: string; serverVersion: string }) {
-    const [open, setOpen] = useState(false);
-    const [documentation, setDocumentation] = useState<ClickHouseSystemTableDocumentation>();
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-    const request = useRef<AbortController | undefined>(undefined);
-
-    useEffect(() => () => request.current?.abort(), []);
-
-    const toggle = async () => {
-        if (open) { setOpen(false); return; }
-        setOpen(true);
-        if (documentation || loading) return;
-        const controller = new AbortController();
-        request.current = controller;
-        setLoading(true);
-        setError('');
-        try {
-            const result = await api<ClickHouseSystemTableDocumentation>(`/connections/${encodeURIComponent(connectionId)}/documentation?name=${encodeURIComponent(name)}`, { signal: controller.signal });
-            if (!controller.signal.aborted) setDocumentation(result);
-        } catch (caught) {
-            if (!controller.signal.aborted) setError(message(caught));
-        } finally {
-            if (!controller.signal.aborted) setLoading(false);
-        }
-    };
-
-    return <div className="grid gap-2">
-        <Button variant="secondary" className="w-full justify-start" aria-expanded={open} onClick={() => void toggle()}>{open ? 'Hide ClickHouse documentation' : 'Read ClickHouse documentation'}</Button>
-        {open && <article aria-label={`ClickHouse documentation for ${name}`} className="grid gap-2 rounded-lg border border-[var(--line)] bg-[var(--page-raised)] p-2.5">
-            <div className="flex items-center justify-between gap-2 text-[7px] font-bold tracking-[.1em] text-[var(--muted)]"><span>SERVER DOCUMENTATION</span><span>ClickHouse {documentation?.serverVersion ?? serverVersion}</span></div>
-            {loading && <p className="text-[9px] text-[var(--muted)]">Loading documentation…</p>}
-            {error && <p role="alert" className="text-[9px] text-[var(--amber)]">{error}</p>}
-            {documentation && <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words font-sans text-[9px] leading-relaxed text-[var(--text-soft)]">{documentation.description}</pre>}
-        </article>}
     </div>;
 }

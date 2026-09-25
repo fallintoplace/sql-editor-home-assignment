@@ -70,7 +70,6 @@ test('Schema wire guard accepts complete optional metadata', () => {
             keyColumns: 'id', attributeColumns: 'name', elementCount: '10',
             memoryBytes: '128', lastSuccessfulUpdate: '2026-09-25T00:00:00.000Z',
         }],
-        systemTableDocumentationNames: ['tables'],
         metadataWarnings: ['Metadata is partial'],
     };
     assert.equal(isSchema(schema), true);

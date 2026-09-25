@@ -3,6 +3,11 @@ import { test, expect } from '@playwright/test';
 import { openWorkspacePanel } from './helpers.js';
 
 test('Static Vercel preview loads the native parser and exports retained sample results', async ({ page }) => {
+    const documentationRequests: string[] = [];
+    page.on('request', request => {
+        const payload = `${request.url()}\n${request.postData() ?? ''}`;
+        if (payload.includes('system.documentation')) documentationRequests.push(payload);
+    });
     const wasmResponsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/assets/clickhouse-parser.wasm');
     await page.goto('/');
 
@@ -19,6 +24,27 @@ test('Static Vercel preview loads the native parser and exports retained sample 
     await page.getByRole('dialog', { name: 'Data source options' })
         .getByRole('button', { name: /Sample data/ }).click();
 
+    await page.getByRole('button', { name: 'Reference', exact: true }).click();
+    await expect(page.getByTestId('reference-source')).toContainText('Bundled demo reference');
+    await page.getByTestId('reference-search').fill('MergeTree');
+    const mergeTree = page.getByRole('option', { name: /MergeTree Table Engine/ }).first();
+    await expect(mergeTree).toBeVisible();
+    await mergeTree.click();
+    const article = page.getByRole('article', { name: 'Table Engine: MergeTree' });
+    await expect(article).toContainText('MergeTree family');
+    await expect(article.locator('.reference-markdown code')).toContainText('ORDER BY');
+    await article.getByRole('button', { name: 'Insert name', exact: true }).click();
+    await expect(page.locator('.cm-content')).toContainText('MergeTree');
+    expect(documentationRequests).toEqual([]);
+
+    await page.getByRole('button', { name: 'Objects', exact: true }).click();
+    await page.getByTestId('schema-search').fill('events');
+    const table = page.getByRole('button', { name: 'events MergeTree', exact: true });
+    await expect(table).toBeVisible();
+    await table.click();
+    await page.getByRole('button', { name: 'Engine reference', exact: true }).click();
+    await expect(page.getByRole('article', { name: 'Table Engine: MergeTree' })).toBeVisible();
+
     const [download] = await Promise.all([
         page.waitForEvent('download'),
         page.locator('.inspector-footer').getByRole('button', { name: 'Export', exact: true }).click(),
@@ -26,6 +52,33 @@ test('Static Vercel preview loads the native parser and exports retained sample 
     const csv = await readFile(await download.path(), 'utf8');
     expect(csv.split('\r\n')[0]).toContain('day');
     expect(csv).toContain('events');
+});
+
+test('Static Vercel preview searches native Playground docs with bound query parameters', async ({ page }) => {
+    const requests: Array<{ url: string; sql: string }> = [];
+    await page.route('https://sql-clickhouse.clickhouse.com:8443/**', async route => {
+        const request = route.request();
+        const sql = request.postData() ?? '';
+        if (!sql.includes('system.documentation')) return route.continue();
+        requests.push({ url: request.url(), sql });
+        const details = sql.includes('version() AS serverVersion');
+        const columns = details ? ['name', 'type', 'description', 'source', 'serverVersion'] : ['name', 'type', 'source'];
+        const values = details ? ['MergeTree', 'Table Engine', 'MergeTree docs. Use `ORDER BY` for the sorting key.', 'src/Storages/MergeTree', '24.6-test'] : ['MergeTree', 'Table Engine', 'src/Storages/MergeTree'];
+        const body = [JSON.stringify(columns), JSON.stringify(columns.map(() => 'String')), JSON.stringify(values), ''].join('\n');
+        await route.fulfill({ status: 200, headers: { 'content-type': 'text/plain; charset=utf-8', 'access-control-allow-origin': '*' }, body });
+    });
+
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Reference', exact: true }).click();
+    await page.getByTestId('reference-search').fill('MergeTree');
+    const mergeTree = page.getByRole('option', { name: /MergeTree Table Engine/ }).first();
+    await expect(mergeTree).toBeVisible();
+    await mergeTree.click();
+    const article = page.getByRole('article', { name: 'Table Engine: MergeTree' });
+    await expect(article).toContainText('MergeTree docs.');
+    await expect(article.locator('.reference-markdown code')).toContainText('ORDER BY');
+    expect(requests.some(request => request.sql.includes('{search:String}') && new URL(request.url).searchParams.get('param_search') === 'MergeTree')).toBe(true);
+    expect(requests.some(request => request.sql.includes('name = {name:String}') && new URL(request.url).searchParams.get('param_name') === 'MergeTree')).toBe(true);
 });
 
 test('Playground examples preview real SQL and open a draft without executing it', async ({ page }) => {

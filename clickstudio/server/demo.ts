@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from 'node:timers/promises';
-import type { ClickHouseSystemTableDocumentation, Connection, Principal, Progress, Run, Schema } from '../shared/types.js';
+import type { ClickHouseDocumentationEntry, ClickHouseDocumentationSummary, Connection, Principal, Progress, ReferenceCategory, Run, Schema } from '../shared/types.js';
 import { DEFAULT_LIMITS } from '../shared/types.js';
 import { AppError } from '../core/errors.js';
 /** Explicit UI/test fixtures, not a SQL emulator and never an automatic fallback for a real database. */
@@ -30,7 +30,11 @@ export class DemoDriver {
             warnings: ['These are deterministic fixtures, not live database results.'],
         };
     }
-    async systemTableDocumentation(id: string, _name: string): Promise<ClickHouseSystemTableDocumentation | undefined> {
+    async searchDocumentation(id: string, _query: string, _category: ReferenceCategory): Promise<ClickHouseDocumentationSummary[]> {
+        this.connection({ id: 'local-owner', role: 'owner' }, id);
+        return [];
+    }
+    async documentationEntry(id: string, _name: string, _type: string): Promise<ClickHouseDocumentationEntry | undefined> {
         this.connection({ id: 'local-owner', role: 'owner' }, id);
         return undefined;
     }

@@ -152,7 +152,7 @@ function validateQuery(sql: string) {
         throw new PlaygroundError('READ_ONLY_SQL', 'The public Playground connection accepts read-only SQL only.');
 }
 
-async function executePlaygroundQuery(sql: string, signal: AbortSignal | undefined, maxRows: number, maxBytes: number): Promise<PlaygroundQueryResult> {
+async function executePlaygroundQuery(sql: string, signal: AbortSignal | undefined, maxRows: number, maxBytes: number, queryParams: Record<string, string> = {}): Promise<PlaygroundQueryResult> {
     if (!sql.trim()) throw new PlaygroundError('EMPTY_QUERY', 'Write a SQL statement before running it.');
     validateQuery(sql);
 
@@ -166,6 +166,7 @@ async function executePlaygroundQuery(sql: string, signal: AbortSignal | undefin
         const queryId = crypto.randomUUID();
         const response = await playgroundClient.query({
             query: sql,
+            query_params: queryParams,
             format: PLAYGROUND_FORMAT,
             query_id: queryId,
             abort_signal: controller.signal,
@@ -208,6 +209,10 @@ async function executePlaygroundQuery(sql: string, signal: AbortSignal | undefin
 
 export function queryPlayground(sql: string, signal?: AbortSignal) {
     return executePlaygroundQuery(sql, signal, MAX_RESULT_ROWS, MAX_RESPONSE_BYTES);
+}
+
+export function queryPlaygroundWithParams(sql: string, queryParams: Record<string, string>, signal?: AbortSignal) {
+    return executePlaygroundQuery(sql, signal, MAX_RESULT_ROWS, MAX_RESPONSE_BYTES, queryParams);
 }
 
 const tablesSql = `SELECT database, name, engine, sorting_key, primary_key, partition_key, sampling_key,

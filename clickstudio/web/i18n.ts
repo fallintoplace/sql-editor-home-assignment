@@ -197,6 +197,33 @@ export interface Copy {
         schemaSearch: string;
         tableCount: string;
         objects: string;
+        reference: string;
+        referenceSearch: string;
+        referenceAll: string;
+        referenceFunctions: string;
+        referenceTypes: string;
+        referenceEngines: string;
+        referenceSettings: string;
+        referenceSystem: string;
+        referencePopular: string;
+        referenceNoMatches: string;
+        referenceNative: string;
+        referenceBundled: string;
+        referenceSource: string;
+        referenceBack: string;
+        referenceEntryUnavailable: string;
+        referenceRetry: string;
+        referenceBundledNote: string;
+        referenceCategories: string;
+        referenceMatches: string;
+        referenceEmptyHint: string;
+        referenceResults: string;
+        referenceKeyboard: string;
+        referenceInsert: string;
+        referenceCopy: string;
+        referenceTableEngine: string;
+        referenceSystemTable: string;
+        clearSearch: string;
         objectSearch: string;
         objectCount: string;
         noObjectsMatch: string;
@@ -528,6 +555,33 @@ const english: Copy = {
         schemaSearch: 'Search tables, columns, and dictionaries…',
         tableCount: '{count} TABLES',
         objects: 'Objects',
+        reference: 'Reference',
+        referenceSearch: 'Search ClickHouse…',
+        referenceAll: 'All',
+        referenceFunctions: 'Functions',
+        referenceTypes: 'Types',
+        referenceEngines: 'Engines',
+        referenceSettings: 'Settings',
+        referenceSystem: 'System',
+        referencePopular: 'Popular',
+        referenceNoMatches: 'No reference entries match this search.',
+        referenceNative: 'Native ClickHouse reference',
+        referenceBundled: 'Bundled demo reference',
+        referenceSource: 'SOURCE',
+        referenceBack: 'Back to results',
+        referenceEntryUnavailable: 'This entry is not documented by the selected server.',
+        referenceRetry: 'Retry',
+        referenceBundledNote: 'Sample entries are included with ClickStudio.',
+        referenceCategories: 'Reference categories',
+        referenceMatches: '{count} matches',
+        referenceEmptyHint: 'Try another name or category.',
+        referenceResults: 'Reference results',
+        referenceKeyboard: '↑ ↓ move · Enter open · Esc back',
+        referenceInsert: 'Insert name',
+        referenceCopy: 'Copy name',
+        referenceTableEngine: 'Engine reference',
+        referenceSystemTable: 'System table reference',
+        clearSearch: 'Clear search',
         objectSearch: 'Search objects, columns, engines, and indexes…',
         objectCount: '{count} OBJECTS',
         noObjectsMatch: 'No objects match this search.',
@@ -799,6 +853,21 @@ const workspaceCommonTranslations: Record<Exclude<Locale, 'en'>, WorkspaceCommon
 };
 
 
+type ReferenceTranslation = Pick<Copy['common'],
+    'reference' | 'referenceSearch' | 'referenceAll' | 'referenceFunctions' | 'referenceTypes' | 'referenceEngines' |
+    'referenceSettings' | 'referenceSystem' | 'referencePopular' | 'referenceNoMatches' | 'referenceNative' |
+    'referenceBundled' | 'referenceSource' | 'referenceBack' | 'referenceEntryUnavailable' | 'referenceRetry' |
+    'referenceBundledNote' | 'referenceCategories' | 'referenceMatches' | 'referenceEmptyHint' | 'referenceResults' |
+    'referenceKeyboard' | 'referenceInsert' | 'referenceCopy' | 'referenceTableEngine' | 'referenceSystemTable' | 'clearSearch'>;
+
+const referenceTranslations: Record<Exclude<Locale, 'en'>, ReferenceTranslation> = {
+    de: { reference: 'Referenz', referenceSearch: 'ClickHouse durchsuchen…', referenceAll: 'Alle', referenceFunctions: 'Funktionen', referenceTypes: 'Typen', referenceEngines: 'Engines', referenceSettings: 'Einstellungen', referenceSystem: 'System', referencePopular: 'Beliebt', referenceNoMatches: 'Keine Referenzeinträge entsprechen dieser Suche.', referenceNative: 'Native ClickHouse-Referenz', referenceBundled: 'Enthaltene Demo-Referenz', referenceSource: 'QUELLE', referenceBack: 'Zurück zu den Ergebnissen', referenceEntryUnavailable: 'Dieser Eintrag ist auf dem ausgewählten Server nicht dokumentiert.', referenceRetry: 'Erneut versuchen', referenceBundledNote: 'Beispiele sind in ClickStudio enthalten.', referenceCategories: 'Referenzkategorien', referenceMatches: '{count} Treffer', referenceEmptyHint: 'Versuchen Sie einen anderen Namen oder eine andere Kategorie.', referenceResults: 'Referenzergebnisse', referenceKeyboard: '↑ ↓ bewegen · Enter öffnen · Esc zurück', referenceInsert: 'Namen einfügen', referenceCopy: 'Namen kopieren', referenceTableEngine: 'Engine-Referenz', referenceSystemTable: 'Systemtabellen-Referenz', clearSearch: 'Suche löschen' },
+    es: { reference: 'Referencia', referenceSearch: 'Buscar en ClickHouse…', referenceAll: 'Todo', referenceFunctions: 'Funciones', referenceTypes: 'Tipos', referenceEngines: 'Motores', referenceSettings: 'Ajustes', referenceSystem: 'Sistema', referencePopular: 'Populares', referenceNoMatches: 'No hay entradas de referencia que coincidan.', referenceNative: 'Referencia nativa de ClickHouse', referenceBundled: 'Referencia de demostración incluida', referenceSource: 'ORIGEN', referenceBack: 'Volver a los resultados', referenceEntryUnavailable: 'El servidor seleccionado no documenta esta entrada.', referenceRetry: 'Reintentar', referenceBundledNote: 'ClickStudio incluye ejemplos.', referenceCategories: 'Categorías de referencia', referenceMatches: '{count} resultados', referenceEmptyHint: 'Prueba con otro nombre o categoría.', referenceResults: 'Resultados de referencia', referenceKeyboard: '↑ ↓ mover · Enter abrir · Esc volver', referenceInsert: 'Insertar nombre', referenceCopy: 'Copiar nombre', referenceTableEngine: 'Referencia del motor', referenceSystemTable: 'Referencia de tabla del sistema', clearSearch: 'Borrar búsqueda' },
+    nl: { reference: 'Referentie', referenceSearch: 'Zoek in ClickHouse…', referenceAll: 'Alle', referenceFunctions: 'Functies', referenceTypes: 'Typen', referenceEngines: 'Engines', referenceSettings: 'Instellingen', referenceSystem: 'Systeem', referencePopular: 'Populair', referenceNoMatches: 'Geen referentie-items gevonden.', referenceNative: 'Native ClickHouse-referentie', referenceBundled: 'Ingebouwde demoreferentie', referenceSource: 'BRON', referenceBack: 'Terug naar resultaten', referenceEntryUnavailable: 'Deze vermelding is niet gedocumenteerd op de gekozen server.', referenceRetry: 'Opnieuw proberen', referenceBundledNote: 'ClickStudio bevat voorbeelditems.', referenceCategories: 'Referentiecategorieën', referenceMatches: '{count} resultaten', referenceEmptyHint: 'Probeer een andere naam of categorie.', referenceResults: 'Referentieresultaten', referenceKeyboard: '↑ ↓ verplaatsen · Enter openen · Esc terug', referenceInsert: 'Naam invoegen', referenceCopy: 'Naam kopiëren', referenceTableEngine: 'Engine-referentie', referenceSystemTable: 'Systeemtabellen-referentie', clearSearch: 'Zoekopdracht wissen' },
+    zh: { reference: '参考', referenceSearch: '搜索 ClickHouse…', referenceAll: '全部', referenceFunctions: '函数', referenceTypes: '类型', referenceEngines: '引擎', referenceSettings: '设置', referenceSystem: '系统', referencePopular: '热门', referenceNoMatches: '没有匹配的参考条目。', referenceNative: 'ClickHouse 原生参考', referenceBundled: '内置演示参考', referenceSource: '来源', referenceBack: '返回结果', referenceEntryUnavailable: '所选服务器没有此条目的文档。', referenceRetry: '重试', referenceBundledNote: 'ClickStudio 内含示例条目。', referenceCategories: '参考类别', referenceMatches: '{count} 条匹配', referenceEmptyHint: '尝试其他名称或类别。', referenceResults: '参考结果', referenceKeyboard: '↑ ↓ 移动 · Enter 打开 · Esc 返回', referenceInsert: '插入名称', referenceCopy: '复制名称', referenceTableEngine: '引擎参考', referenceSystemTable: '系统表参考', clearSearch: '清除搜索' },
+    ru: { reference: 'Справочник', referenceSearch: 'Поиск в ClickHouse…', referenceAll: 'Все', referenceFunctions: 'Функции', referenceTypes: 'Типы', referenceEngines: 'Движки', referenceSettings: 'Настройки', referenceSystem: 'Система', referencePopular: 'Популярное', referenceNoMatches: 'Подходящие записи не найдены.', referenceNative: 'Справочник ClickHouse', referenceBundled: 'Встроенный демо-справочник', referenceSource: 'ИСТОЧНИК', referenceBack: 'Вернуться к результатам', referenceEntryUnavailable: 'На выбранном сервере нет документации для этой записи.', referenceRetry: 'Повторить', referenceBundledNote: 'В ClickStudio есть примеры записей.', referenceCategories: 'Категории справочника', referenceMatches: 'Совпадений: {count}', referenceEmptyHint: 'Попробуйте другое имя или категорию.', referenceResults: 'Результаты справочника', referenceKeyboard: '↑ ↓ переместить · Enter открыть · Esc назад', referenceInsert: 'Вставить имя', referenceCopy: 'Копировать имя', referenceTableEngine: 'Описание движка', referenceSystemTable: 'Описание системной таблицы', clearSearch: 'Очистить поиск' },
+};
+
 type ObjectExplorerTranslation = Pick<Copy['common'],
     'objects' | 'objectSearch' | 'objectCount' | 'noObjectsMatch' | 'views' | 'dictionaries' | 'columns' |
     'previewRows' | 'generateSelect' | 'insertName' | 'copyName' | 'copied'>;
@@ -945,7 +1014,7 @@ export function getCopy(locale: Locale): Copy {
     return {
         app: { ...mergeSection(english.app, translated), ...chrome.app },
         auth: { ...mergeSection(english.auth, translated), ...chrome.auth },
-        common: { ...mergeSection(english.common, translated), ...exampleCommonTranslations[locale], ...workspaceCommonTranslations[locale], ...objectExplorerTranslations[locale], ...explainCommonTranslations[locale] },
+        common: { ...mergeSection(english.common, translated), ...exampleCommonTranslations[locale], ...workspaceCommonTranslations[locale], ...referenceTranslations[locale], ...objectExplorerTranslations[locale], ...explainCommonTranslations[locale] },
         chart: mergeSection(english.chart, translated),
     };
 }

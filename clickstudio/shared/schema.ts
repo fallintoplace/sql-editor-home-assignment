@@ -135,7 +135,6 @@ export function isSchema(value: unknown): value is Schema {
         && Array.isArray(value.tables)
         && value.tables.every(isSchemaTable)
         && (value.dictionaries === undefined || Array.isArray(value.dictionaries) && value.dictionaries.every(isSchemaDictionary))
-        && (value.systemTableDocumentationNames === undefined || isStringArray(value.systemTableDocumentationNames))
         && isStringArray(value.warnings)
         && (value.metadataWarnings === undefined || isStringArray(value.metadataWarnings))
         && typeof value.truncated === 'boolean';

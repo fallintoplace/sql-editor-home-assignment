@@ -8,7 +8,7 @@ import { MemoryStore } from '../../core/store.js';
 import { DemoDriver } from '../../server/demo.js';
 import type { VoiceService } from '../../server/voice.js';
 import type { ImportJob } from '../../core/imports.js';
-import type { QueryDocument, Run, Published } from '../../shared/types.js';
+import type { ClickHouseDocumentationEntry, ClickHouseDocumentationSummary, QueryDocument, ReferenceCategory, Run, Published } from '../../shared/types.js';
 async function start(token?: string, voice?: VoiceService, parserWasm?: () => Promise<Uint8Array>, driver = new DemoDriver()) {
     const config = loadConfig({ DEMO_MODE: 'true', CLICKSTUDIO_TOKEN: token });
     const service = createApp(config, { store: new MemoryStore(), driver, voice, parserWasm });
@@ -31,6 +31,63 @@ class NoQueryLogDemoDriver extends DemoDriver {
         throw new Error('Query-log evidence must not be required for pipeline inspection');
     }
 }
+class ReferenceDocsDemoDriver extends DemoDriver {
+    readonly searches: Array<{ id: string; query: string; category: ReferenceCategory }> = [];
+    readonly entries: Array<{ id: string; name: string; type: string }> = [];
+    override connection(principal: Parameters<DemoDriver['connection']>[0], id: string) {
+        const connection = super.connection(principal, id);
+        return { ...connection, manifest: { ...connection.manifest!, documentation: { available: true } } };
+    }
+    override async searchDocumentation(id: string, query: string, category: ReferenceCategory): Promise<ClickHouseDocumentationSummary[]> {
+        this.searches.push({ id, query, category });
+        return [{ name: 'MergeTree', type: 'Table Engine', source: 'system.documentation' }];
+    }
+    override async documentationEntry(id: string, name: string, type: string): Promise<ClickHouseDocumentationEntry | undefined> {
+        this.entries.push({ id, name, type });
+        return { name, type, source: 'system.documentation', description: '# Native docs', serverVersion: '24.6-test', origin: 'native' };
+    }
+}
+
+test('Reference routes require trust, validate bounded filters, and preserve entry type identity', async (t) => {
+    const driver = new ReferenceDocsDemoDriver(), s = await start(undefined, undefined, undefined, driver);
+    t.after(() => s.stop());
+    assert.equal((await s.call('/connections/demo/documentation/search')).status, 403);
+    assert.equal(driver.searches.length, 0);
+    await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' });
+
+    assert.equal((await s.call('/connections/demo/documentation/search?category=unknown')).status, 400);
+    assert.equal((await s.call(`/connections/demo/documentation/search?${new URLSearchParams({ query: 'x'.repeat(129) })}`)).status, 400);
+    assert.equal((await s.call('/connections/demo/documentation/search?category=all&category=engines')).status, 400);
+    assert.equal(driver.searches.length, 0);
+
+    const searchText = "%' OR 1 = 1 --";
+    const search = await s.call(`/connections/demo/documentation/search?${new URLSearchParams({ query: searchText, category: 'engines' })}`);
+    assert.equal(search.status, 200);
+    assert.deepEqual(await search.json(), [{ name: 'MergeTree', type: 'Table Engine', source: 'system.documentation' }]);
+    assert.deepEqual(driver.searches, [{ id: 'demo', query: searchText, category: 'engines' }]);
+
+    assert.equal((await s.call('/connections/demo/documentation/entry?name=MergeTree')).status, 400);
+    const entry = await s.call(`/connections/demo/documentation/entry?${new URLSearchParams({ name: 'MergeTree', type: 'Table Engine' })}`);
+    assert.equal(entry.status, 200);
+    assert.deepEqual(await entry.json(), { name: 'MergeTree', type: 'Table Engine', source: 'system.documentation', description: '# Native docs', serverVersion: '24.6-test', origin: 'native' });
+
+    const legacy = await s.call('/connections/demo/documentation?name=query_log');
+    assert.equal(legacy.status, 200);
+    assert.deepEqual(driver.entries.slice(-2), [
+        { id: 'demo', name: 'MergeTree', type: 'Table Engine' },
+        { id: 'demo', name: 'query_log', type: 'System Table' },
+    ]);
+});
+
+test('Reference routes report unavailable native documentation instead of returning empty results', async (t) => {
+    const s = await start();
+    t.after(() => s.stop());
+    await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' });
+    const response = await s.call('/connections/demo/documentation/search');
+    assert.equal(response.status, 409);
+    assert.equal((await response.json() as { error: { code: string } }).error.code, 'CAPABILITY_UNAVAILABLE');
+});
+
 test('Voice sessions require trust and keep the provider behind the server', async (t) => {
     const calls: unknown[] = [];
     const s = await start(undefined, { available: true, model: 'test-voice', createSession: async input => { calls.push(input); return { sdp: 'answer-sdp', model: 'test-voice' }; } });

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { AssistantAction, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Run, Schema } from '../../shared/types';
 import { AssistantWorkflow } from './AssistantWorkflow';
 import { Button, cx, formatBytes, Icon, inspectorLabel, Status } from './ui';
@@ -7,6 +7,7 @@ import type { AssistantContext, Connected, Inspector } from '../workspace-types'
 import type { NativeParseSnapshot, NativeParserStatus } from '../../shared/native-parser';
 import { NativeParserInspector } from './NativeParserInspector';
 import { ObjectExplorer } from './ObjectExplorer';
+import { ReferenceExplorer } from './ReferenceExplorer';
 import type { Copy } from '../i18n';
 
 export type InspectorPaneProps = {
@@ -91,26 +92,33 @@ const inspectorTabs = [
 export function InspectorPane({ copy, inspector, setInspector, connection, schema, schemaLoading, schemaError, search, setSearch, history, documents, revisions, revisionsDocumentId, revisionLoading, revisionError, currentRevision, unsavedDraft, canRestoreRevision, run, profile, pipeline, onRefreshSchema, onRefreshHistory, onInsert, onOpenSqlDraft, onOpenImport, onExportResult, exportDisabled, onOpenRun, onOpenDocument, onLoadProfile, onLoadPipeline, onOpenGraph, connectionId, sql, trusted, runId, onRefreshDocuments, onRefreshRevisions, onRestoreRevision, assistantAction, onAssistantAction, assistantQuestion, onAssistantQuestion, assistantContext, assistantProposal, assistantBusy, assistantError, nativeParserEnabled, nativeParserStatus, nativeParseSnapshot, onRetryParser, includeResult, onIncludeResult, onVoiceInput, voiceListening, voiceError, onPreview, onRequestProposal, onDecideProposal, onRunQuery, runDisabled, expert = false, drawer = false, onClose }: InspectorPaneProps) {
     const visibleDocuments = documents.filter(document => document.connectionId === connectionId && !document.deletedAt);
     const [selectedRevisionNumber, setSelectedRevisionNumber] = useState<number>();
+    const [referenceTarget, setReferenceTarget] = useState<{ name: string; type: string }>();
     const firstRevisionNumber = revisions[0]?.revision;
     useEffect(() => { setSelectedRevisionNumber(currentRevision ?? firstRevisionNumber); }, [revisionsDocumentId, currentRevision, firstRevisionNumber]);
     const selectedRevision = revisions.find(revision => revision.revision === selectedRevisionNumber) ?? revisions[0];
     const closeButton = drawer && <Button variant="ghost" className="icon-only" aria-label="Close inspector" onClick={onClose}><Icon name="close"/></Button>;
-    const title = inspector === 'schema' ? copy.objects : inspector === 'documents' ? copy.queries : inspectorLabel(inspector);
+    const title = inspector === 'schema' ? copy.objects : inspector === 'reference' ? copy.reference : inspector === 'documents' ? copy.queries : inspectorLabel(inspector);
 
     const objectDrawer = drawer && inspector === 'schema';
+    useEffect(() => { setReferenceTarget(undefined); }, [connection.id]);
+    const openReference = (name: string, type: string) => { setReferenceTarget({ name, type }); setInspector('reference'); };
+    const clearReferenceTarget = useCallback(() => setReferenceTarget(undefined), []);
 
-    return <aside className={cx('inspector-pane', expert && 'is-expert-browser', expert && (inspector === 'schema' || inspector === 'documents') && 'is-browser-tab-selected', drawer && 'is-drawer animate-drawer', objectDrawer && 'is-object-drawer')}>
+    return <aside className={cx('inspector-pane', expert && 'is-expert-browser', expert && (inspector === 'schema' || inspector === 'reference' || inspector === 'documents') && 'is-browser-tab-selected', drawer && 'is-drawer animate-drawer', objectDrawer && 'is-object-drawer')}>
         <header className="inspector-header"><div><span className="eyebrow">{expert ? copy.browse : copy.workspaceInspector}</span><h2>{title}</h2></div>{closeButton}</header>
         {!objectDrawer && (expert ? <nav className="inspector-tabs is-browser-tabs" aria-label={copy.workspaceBrowser}>
             <button type="button" aria-label={copy.objects} aria-pressed={inspector === 'schema'} onClick={() => setInspector('schema')}><Icon name="schema"/><span>{copy.objects}</span></button>
+            <button type="button" aria-label={copy.reference} aria-pressed={inspector === 'reference'} onClick={() => { setReferenceTarget(undefined); setInspector('reference'); }}><Icon name="reference"/><span>{copy.reference}</span></button>
             <button type="button" aria-label={copy.queries} aria-pressed={inspector === 'documents'} onClick={() => setInspector('documents')}><Icon name="documents"/><span>{copy.queries}</span></button>
             <InspectorMoreMenu copy={copy} inspector={inspector} onSelect={setInspector} items={inspectorTabs.filter(item => item.id === 'history' || item.id === 'revisions' || item.id === 'parser' || Boolean(run) && (item.id === 'details' || item.id === 'pipeline'))} />
         </nav> : <nav className="inspector-tabs is-browser-tabs" aria-label={copy.workspaceBrowser}>
             <button type="button" aria-label={copy.objects} aria-pressed={inspector === 'schema'} onClick={() => setInspector('schema')}><Icon name="schema"/><span>{copy.objects}</span></button>
+            <button type="button" aria-label={copy.reference} aria-pressed={inspector === 'reference'} onClick={() => { setReferenceTarget(undefined); setInspector('reference'); }}><Icon name="reference"/><span>{copy.reference}</span></button>
             <InspectorMoreMenu copy={copy} inspector={inspector} onSelect={setInspector} items={inspectorTabs.filter(item => item.id === 'history' || item.id === 'documents' || item.id === 'revisions')} />
         </nav>)}
         <div className="inspector-content">
-            {inspector === 'schema' && <ObjectExplorer key={connection.id} copy={copy} connection={connection} schema={schema} schemaLoading={schemaLoading} schemaError={schemaError} search={search} setSearch={setSearch} trusted={trusted} onRefreshSchema={onRefreshSchema} onInsert={onInsert} compact={drawer} onOpenSqlDraft={onOpenSqlDraft}/>}
+            {inspector === 'schema' && <ObjectExplorer key={connection.id} copy={copy} connection={connection} schema={schema} schemaLoading={schemaLoading} schemaError={schemaError} search={search} setSearch={setSearch} trusted={trusted} onRefreshSchema={onRefreshSchema} onInsert={onInsert} compact={drawer} onOpenSqlDraft={onOpenSqlDraft} onOpenReference={openReference}/>}
+            {inspector === 'reference' && <ReferenceExplorer copy={copy} connection={connection} trusted={trusted} target={referenceTarget} onTargetHandled={clearReferenceTarget} onInsert={onInsert}/>}
             {inspector === 'history' && <section className="inspector-section"><div className="schema-heading"><span>RECENT RUNS</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshHistory}>↻ Refresh</Button></div>{history.length ? history.slice(0, 30).map(item => <button type="button" className="history-card" key={item.id} onClick={() => onOpenRun(item)}><span className={cx('run-state-mark', `state-${item.status}`)}/><span className="history-card-copy"><strong>{item.sql.replace(/\s+/g, ' ').slice(0, 58)}</strong><small>{new Date(item.createdAt).toLocaleString()} <i>·</i> {Math.round(item.elapsedMs)} ms <i>·</i> {item.rowCount.toLocaleString()} rows</small></span><span className="history-open">↗</span></button>) : <div className="inspector-empty"><Icon name="history"/><strong>No runs yet</strong><p>Your recent ClickHouse executions appear here.</p></div>}</section>}
             {inspector === 'documents' && <section className="inspector-section"><div className="schema-heading"><span>SAVED DOCUMENTS</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshDocuments}>↻ Refresh</Button></div>{visibleDocuments.length ? visibleDocuments.map(document => <button type="button" className="document-card" key={document.id} onClick={() => onOpenDocument(document)}><span className="file-type-icon small">SQL</span><span><strong>{document.name}</strong><small>revision {document.revision} · {new Date(document.updatedAt).toLocaleDateString()}</small></span><span className="history-open">↗</span></button>) : <div className="inspector-empty"><Icon name="documents"/><strong>Nothing saved yet</strong><p>Save the current query to keep a named revision on this connection.</p></div>}</section>}
             {inspector === 'revisions' && <section className="inspector-section revision-history-section">

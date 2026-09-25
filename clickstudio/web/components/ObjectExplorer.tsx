@@ -138,33 +138,33 @@ export function ObjectExplorer({ copy, connection, schema, schemaLoading, schema
 
         return <div className="object-tree-branch" key={relation.id}>
             <div role="treeitem" aria-level={level} aria-expanded={hasChildren ? relationExpanded : undefined} aria-selected={selectedId === relation.id} className={cx('object-tree-row', 'is-object', selectedId === relation.id && 'is-selected')} style={{ paddingLeft: `${Math.max(0, level - 1) * 10}px` }}>
-                <button type="button" className="object-tree-toggle" aria-label={relationExpanded ? copy.collapse : copy.expand} disabled={!hasChildren} onClick={() => hasChildren && toggle(relation.id)}><span className={cx(relationExpanded && 'is-open')}>{hasChildren ? '›' : ''}</span></button>
-                <button type="button" className="object-tree-main" onClick={() => selectObject(relation.id)}>
-                    <span className={cx('object-kind-glyph', relation.kind === 'view' && 'is-view')}>{relation.kind === 'view' ? '◇' : '▦'}</span>
+                <button type="button" className="object-tree-toggle" aria-label={relationExpanded ? copy.collapse : copy.expand} disabled={!hasChildren} onClick={() => hasChildren && toggle(relation.id)}><span className={cx(relationExpanded && 'is-open')}>{hasChildren && <Icon name="chevron"/>}</span></button>
+                <button type="button" className="object-tree-main" title={`${relation.table.database}.${relation.table.name}`} onClick={() => selectObject(relation.id)}>
+                    <span className={cx('object-kind-glyph', relation.kind === 'view' && 'is-view')}><Icon name={relation.kind === 'view' ? 'view' : 'table'}/></span>
                     <span className="object-tree-label"><strong>{relation.table.name}</strong><small>{relation.table.engine}</small></span>
                 </button>
-                <button type="button" className="object-tree-inline-action" title={copy.insertTableName} aria-label={`${copy.insertTableName}: ${relation.table.name}`} onClick={() => onInsert(qualifiedTableName(relation.table))}>+</button>
+                <button type="button" className="object-tree-inline-action" title={copy.insertTableName} aria-label={`${copy.insertTableName}: ${relation.table.name}`} onClick={() => onInsert(qualifiedTableName(relation.table))}><Icon name="plus"/></button>
             </div>
             {relationExpanded && hasChildren && <div role="group" className="object-tree-children">
                 {relation.columns.length > 0 && <>
-                    <ExplorerGroupRow level={level + 1} label={copy.columns} count={relation.columns.length} expanded={columnsExpanded} onToggle={() => toggle(columnGroupId)} />
+                    <ExplorerGroupRow level={level + 1} label={copy.columns} count={relation.columns.length} expanded={columnsExpanded} onToggle={() => toggle(columnGroupId)} kind="column" />
                     {columnsExpanded && <div role="group">{columns.map(column => {
                         const id = explorerColumnId(relation.table.database, relation.table.name, column.name);
-                        return <ObjectLeafRow key={id} level={level + 2} selected={selectedId === id} glyph="·" label={column.name} meta={column.type} onSelect={() => selectObject(id)} onInsert={() => onInsert(quoteIdentifier(column.name))} insertLabel="Insert column name"/>;
+                        return <ObjectLeafRow key={id} level={level + 2} selected={selectedId === id} glyph="column" label={column.name} meta={column.type} onSelect={() => selectObject(id)} onInsert={() => onInsert(quoteIdentifier(column.name))} insertLabel="Insert column name"/>;
                     })}</div>}
                 </>}
                 {(relation.table.projections?.length ?? 0) > 0 && <>
-                    <ExplorerGroupRow level={level + 1} label={copy.projections} count={relation.table.projections!.length} expanded={projectionsExpanded} onToggle={() => toggle(projectionGroupId)} />
+                    <ExplorerGroupRow level={level + 1} label={copy.projections} count={relation.table.projections!.length} expanded={projectionsExpanded} onToggle={() => toggle(projectionGroupId)} kind="projection" />
                     {projectionsExpanded && <div role="group">{projections.map(projection => {
                         const id = explorerProjectionId(relation.table.database, relation.table.name, projection.name);
-                        return <ObjectLeafRow key={id} level={level + 2} selected={selectedId === id} glyph="P" label={projection.name} meta={projection.type} onSelect={() => selectObject(id)}/>;
+                        return <ObjectLeafRow key={id} level={level + 2} selected={selectedId === id} glyph="projection" label={projection.name} meta={projection.type} onSelect={() => selectObject(id)}/>;
                     })}</div>}
                 </>}
                 {(relation.table.skipIndexes?.length ?? 0) > 0 && <>
-                    <ExplorerGroupRow level={level + 1} label={copy.skipIndexes} count={relation.table.skipIndexes!.length} expanded={indexesExpanded} onToggle={() => toggle(indexGroupId)} />
+                    <ExplorerGroupRow level={level + 1} label={copy.skipIndexes} count={relation.table.skipIndexes!.length} expanded={indexesExpanded} onToggle={() => toggle(indexGroupId)} kind="index" />
                     {indexesExpanded && <div role="group">{indexes.map(index => {
                         const id = explorerSkipIndexId(relation.table.database, relation.table.name, index.name);
-                        return <ObjectLeafRow key={id} level={level + 2} selected={selectedId === id} glyph="I" label={index.name} meta={index.type} onSelect={() => selectObject(id)}/>;
+                        return <ObjectLeafRow key={id} level={level + 2} selected={selectedId === id} glyph="index" label={index.name} meta={index.type} onSelect={() => selectObject(id)}/>;
                     })}</div>}
                 </>}
             </div>}
@@ -220,7 +220,7 @@ function ObjectCategory({ label, kind, database, relations, level, query, expand
     const id = explorerCategoryId(database, kind);
     const open = expanded(id, Boolean(query));
     return <div className="object-tree-branch">
-        <ExplorerGroupRow level={level} label={label} count={relations.length} expanded={open} onToggle={() => toggle(id)}/>
+        <ExplorerGroupRow level={level} label={label} count={relations.length} expanded={open} onToggle={() => toggle(id)} kind={kind}/>
         {open && <div role="group">{relations.map(relation => renderRelation(relation, level + 1))}</div>}
     </div>;
 }
@@ -239,26 +239,26 @@ function DictionaryCategory({ label, database, dictionaries, level, query, expan
     const id = explorerCategoryId(database, 'dictionary');
     const open = expanded(id, Boolean(query));
     return <div className="object-tree-branch">
-        <ExplorerGroupRow level={level} label={label} count={dictionaries.length} expanded={open} onToggle={() => toggle(id)}/>
+        <ExplorerGroupRow level={level} label={label} count={dictionaries.length} expanded={open} onToggle={() => toggle(id)} kind="dictionary"/>
         {open && <div role="group">{dictionaries.map(dictionary => {
             const dictionaryId = explorerDictionaryId(dictionary.database, dictionary.name);
-            return <ObjectLeafRow key={dictionaryId} level={level + 1} selected={selectedId === dictionaryId} glyph="◆" label={dictionary.name} meta={dictionary.type || dictionary.status} onSelect={() => onSelect(dictionaryId)}/>;
+            return <ObjectLeafRow key={dictionaryId} level={level + 1} selected={selectedId === dictionaryId} glyph="dictionary" label={dictionary.name} meta={dictionary.type || dictionary.status} onSelect={() => onSelect(dictionaryId)}/>;
         })}</div>}
     </div>;
 }
 
-function ExplorerGroupRow({ level, label, count, expanded, onToggle, database = false }: { level: number; label: string; count: number; expanded: boolean; onToggle: () => void; database?: boolean }) {
+function ExplorerGroupRow({ level, label, count, expanded, onToggle, database = false, kind = 'table' }: { level: number; label: string; count: number; expanded: boolean; onToggle: () => void; database?: boolean; kind?: 'table' | 'view' | 'dictionary' | 'column' | 'projection' | 'index' }) {
     return <div role="treeitem" aria-level={level} aria-expanded={expanded} className={cx('object-tree-row', 'is-group', database && 'is-database')} style={{ paddingLeft: `${Math.max(0, level - 1) * 10}px` }}>
-        <button type="button" className="object-tree-toggle" aria-label={expanded ? `Collapse ${label}` : `Expand ${label}`} onClick={onToggle}><span className={cx(expanded && 'is-open')}>›</span></button>
-        <button type="button" className="object-tree-main" onClick={onToggle}><span className="object-kind-glyph">{database ? '◉' : '⌁'}</span><span className="object-tree-label"><strong>{label}</strong></span><small className="object-tree-count">{count.toLocaleString()}</small></button>
+        <button type="button" className="object-tree-toggle" aria-label={expanded ? `Collapse ${label}` : `Expand ${label}`} onClick={onToggle}><span className={cx(expanded && 'is-open')}><Icon name="chevron"/></span></button>
+        <button type="button" className="object-tree-main" title={label} onClick={onToggle}><span className={cx('object-kind-glyph', database && 'is-database')}><Icon name={database ? 'database' : kind}/></span><span className="object-tree-label"><strong>{label}</strong></span><small className="object-tree-count">{count.toLocaleString()}</small></button>
     </div>;
 }
 
-function ObjectLeafRow({ level, selected, glyph, label, meta, onSelect, onInsert, insertLabel }: { level: number; selected: boolean; glyph: string; label: string; meta?: string; onSelect: () => void; onInsert?: () => void; insertLabel?: string }) {
+function ObjectLeafRow({ level, selected, glyph, label, meta, onSelect, onInsert, insertLabel }: { level: number; selected: boolean; glyph: 'column' | 'projection' | 'index' | 'dictionary'; label: string; meta?: string; onSelect: () => void; onInsert?: () => void; insertLabel?: string }) {
     return <div role="treeitem" aria-level={level} aria-selected={selected} className={cx('object-tree-row', 'is-object', 'is-leaf', selected && 'is-selected')} style={{ paddingLeft: `${Math.max(0, level - 1) * 10}px` }}>
         <span className="object-tree-toggle object-tree-spacer"/>
-        <button type="button" className="object-tree-main" onClick={onSelect}><span className="object-kind-glyph">{glyph}</span><span className="object-tree-label"><strong>{label}</strong>{meta && <small>{meta}</small>}</span></button>
-        {onInsert && <button type="button" className="object-tree-inline-action" title={insertLabel} aria-label={`${insertLabel}: ${label}`} onClick={onInsert}>+</button>}
+        <button type="button" className="object-tree-main" title={meta ? `${label} · ${meta}` : label} onClick={onSelect}><span className="object-kind-glyph"><Icon name={glyph}/></span><span className="object-tree-label"><strong>{label}</strong>{meta && <small>{meta}</small>}</span></button>
+        {onInsert && <button type="button" className="object-tree-inline-action" title={insertLabel} aria-label={`${insertLabel}: ${label}`} onClick={onInsert}><Icon name="plus"/></button>}
     </div>;
 }
 

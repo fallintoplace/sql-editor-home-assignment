@@ -805,7 +805,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         setResultsCollapsed,
         hasOutput: Boolean(run || visibleResultsView === 'sqlmap'),
     });
-    const sqlMapStatement = safeSelectedStatement    const sqlMapStatement = safeSelectedStatement(active.sql, active.from, active.from);
+    const sqlMapStatement = safeSelectedStatement(active.sql, active.from, active.from);
     const sqlMapParseStatement = sqlMapStatement && nativeParseSnapshot?.statements.find(statement =>
         statement.from === sqlMapStatement.from && statement.to === sqlMapStatement.to && active.sql.slice(statement.from, statement.to) === statement.sql);
     const resultTabs: readonly ResultsView[] = run?.kind === 'explain'

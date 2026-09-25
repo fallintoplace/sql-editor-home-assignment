@@ -91,7 +91,8 @@ test('Closing and reopening a result tab does not execute SQL again', async ({ p
 });
 
 
-test('SQL tabs stay readable and keep the active tab in view', async ({ page }) => {
+test('overflowing SQL tabs keep controls visible and expose scroll buttons', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.setViewportSize({ width: 900, height: 800 });
     await trust(page);
 
@@ -110,8 +111,17 @@ test('SQL tabs stay readable and keep the active tab in view', async ({ page }) 
     }
 
     const tabList = page.getByRole('tablist', { name: 'SQL documents', exact: true });
+    const newSql = page.getByTestId('new-sql');
+    const scrollLeft = page.getByTestId('scroll-sql-tabs-left');
+    const scrollRight = page.getByTestId('scroll-sql-tabs-right');
     const activeTab = page.getByRole('tab', { name: names.at(-1)!, exact: true });
+
+    await expect(newSql).toBeVisible();
+    await expect(scrollLeft).toBeVisible();
+    await expect(scrollRight).toBeVisible();
     await expect(activeTab).toBeVisible();
+    await expect(scrollLeft).toBeEnabled();
+    await expect(scrollRight).toBeDisabled();
 
     const layout = await tabList.evaluate(node => {
         const active = node.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
@@ -121,7 +131,7 @@ test('SQL tabs stay readable and keep the active tab in view', async ({ page }) 
         return {
             clientWidth: node.clientWidth,
             scrollWidth: node.scrollWidth,
-            overflowX: getComputedStyle(node).overflowX,
+            scrollLeft: node.scrollLeft,
             activeWidth: activeRect.width,
             activeFlexShrink: getComputedStyle(active).flexShrink,
             activeLeft: activeRect.left,
@@ -131,10 +141,14 @@ test('SQL tabs stay readable and keep the active tab in view', async ({ page }) 
         };
     });
 
-    expect(layout.overflowX).toBe('auto');
     expect(layout.activeFlexShrink).toBe('0');
     expect(layout.activeWidth).toBeGreaterThanOrEqual(160);
     expect(layout.scrollWidth).toBeGreaterThan(layout.clientWidth);
     expect(layout.activeLeft).toBeGreaterThanOrEqual(layout.containerLeft - 1);
     expect(layout.activeRight).toBeLessThanOrEqual(layout.containerRight + 1);
+
+    await scrollLeft.click();
+    await expect.poll(() => tabList.evaluate(node => node.scrollLeft)).toBeLessThan(layout.scrollLeft);
+    await expect(scrollRight).toBeEnabled();
+    await expect(newSql).toBeVisible();
 });

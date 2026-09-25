@@ -123,9 +123,56 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const workspaceRef = useRef(workspace);
     workspaceRef.current = workspace;
     const active = workspace.tabs.find(tab => tab.id === workspace.activeId) ?? workspace.tabs[0]!;
+    const tabScrollerRef = useRef<HTMLDivElement>(null);
+    const [tabScrollState, setTabScrollState] = useState({ overflow: false, canScrollLeft: false, canScrollRight: false });
+    const tabLayoutKey = workspace.tabs.map(tab => `${tab.id}\u0000${tab.name}`).join('\u0001');
+    const updateTabScrollState = useCallback(() => {
+        const scroller = tabScrollerRef.current;
+        if (!scroller) return;
+        const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+        const next = {
+            overflow: maxScrollLeft > 1,
+            canScrollLeft: scroller.scrollLeft > 1,
+            canScrollRight: scroller.scrollLeft < maxScrollLeft - 1,
+        };
+        setTabScrollState(current => current.overflow === next.overflow
+            && current.canScrollLeft === next.canScrollLeft
+            && current.canScrollRight === next.canScrollRight ? current : next);
+    }, []);
+    const scrollTabs = useCallback((direction: -1 | 1) => {
+        const scroller = tabScrollerRef.current;
+        if (!scroller) return;
+        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        scroller.scrollBy({
+            left: direction * Math.max(180, scroller.clientWidth * 0.65),
+            behavior: reducedMotion ? 'auto' : 'smooth',
+        });
+        if (reducedMotion) window.requestAnimationFrame(updateTabScrollState);
+    }, [updateTabScrollState]);
     useEffect(() => {
-        document.getElementById(`document-tab-${active.id}`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    }, [active.id]);
+        const handleResize = () => updateTabScrollState();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, [updateTabScrollState]);
+    useEffect(() => {
+        const frame = window.requestAnimationFrame(updateTabScrollState);
+        return () => window.cancelAnimationFrame(frame);
+    }, [tabLayoutKey, updateTabScrollState]);
+    useEffect(() => {
+        const frame = window.requestAnimationFrame(() => {
+            const scroller = tabScrollerRef.current;
+            const tab = document.getElementById(`document-tab-${active.id}`);
+            if (!scroller || !tab) return;
+            const scrollerRect = scroller.getBoundingClientRect();
+            const tabRect = tab.getBoundingClientRect();
+            if (tabRect.left < scrollerRect.left)
+                scroller.scrollBy({ left: tabRect.left - scrollerRect.left - 6 });
+            else if (tabRect.right > scrollerRect.right)
+                scroller.scrollBy({ left: tabRect.right - scrollerRect.right + 6 });
+            updateTabScrollState();
+        });
+        return () => window.cancelAnimationFrame(frame);
+    }, [active.id, active.name, updateTabScrollState]);
     const activeRunId = active.activeRunId;
     const activeRunIdRef = useRef(activeRunId);
     activeRunIdRef.current = activeRunId;
@@ -926,7 +973,14 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             {experience === 'expert' && <InspectorPane {...inspectorProps}/>}
 
             <main className="workspace-main">
-                <div className="document-tabs" role="tablist" aria-label="SQL documents">
+                <div className={cx('document-tabs', tabScrollState.overflow && 'has-tab-overflow')}>
+                    <div
+                        ref={tabScrollerRef}
+                        className="document-tabs-scroll"
+                        role="tablist"
+                        aria-label="SQL documents"
+                        onScroll={updateTabScrollState}
+                    >
                     {workspace.tabs.map((draft, index) => <div key={draft.id} id={`document-tab-${draft.id}`} className={cx('document-tab', draft.id === active.id && 'is-active')} role="tab" aria-label={draft.name} aria-selected={draft.id === active.id} aria-controls="sql-document-panel" tabIndex={draft.id === active.id ? 0 : -1} onClick={() => setWorkspace(current => ({ ...current, activeId: draft.id }))} onKeyDown={event => {
                         if (event.target !== event.currentTarget) return;
                         if (event.key === 'F2') {
@@ -968,6 +1022,28 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             return unsaved ? <span className="tab-unsaved" title={status.label} aria-hidden="true"/> : null;
                         })()}<button type="button" aria-label={`Close ${draft.name}`} onClick={event => { event.stopPropagation(); setWorkspace(current => closeDraft(current, draft.id)); }}>×</button>
                     </div>)}
+                    </div>
+                    <div className="document-tab-actions">
+                        {tabScrollState.overflow && <>
+                            <button
+                                className="document-tabs-scroll-button is-left"
+                                data-testid="scroll-sql-tabs-left"
+                                type="button"
+                                aria-label="Scroll SQL tabs left"
+                                title="More SQL tabs to the left"
+                                disabled={!tabScrollState.canScrollLeft}
+                                onClick={() => scrollTabs(-1)}
+                            ><Icon name="chevron"/></button>
+                            <button
+                                className="document-tabs-scroll-button is-right"
+                                data-testid="scroll-sql-tabs-right"
+                                type="button"
+                                aria-label="Scroll SQL tabs right"
+                                title="More SQL tabs to the right"
+                                disabled={!tabScrollState.canScrollRight}
+                                onClick={() => scrollTabs(1)}
+                            ><Icon name="chevron"/></button>
+                        </>}
                     <button className="new-tab-button new-tab-labeled" data-testid="new-sql" type="button" aria-label={copy.common.newSql} title={copy.common.newSql} aria-haspopup="dialog" aria-expanded={examplesOpen} aria-controls="sql-examples-panel" onClick={event => openExamples(event.currentTarget)}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
                     <SqlExamplesMenu open={examplesOpen} onClose={closeExamples} examples={sqlExamples} sourceLabel={connectionLabel} copy={copy.common} locale={locale} onOpenExample={example => {
                         const draft = createExampleDraft(example);
@@ -985,9 +1061,9 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         window.requestAnimationFrame(() => editor.current?.focus());
                         return true;
                     }}/>}
-                    <div className="tabs-spacer"/>
                     <span className="draft-status" data-save-state={saveStatus.state} title={`${saveStatus.label}. ${saveStatus.detail}`}><span className={cx('status-light', saveStatus.state === 'saved' ? 'is-trusted' : ['changed', 'conflict', 'deleted', 'unavailable'].includes(saveStatus.state) ? 'is-warning' : '')}/>{saveStatusLabel}</span>
                     {active.serverId && <Button variant="ghost" className="revision-history-trigger" aria-label={`Version history for ${active.name}`} aria-pressed={inspector === 'revisions'} title="View saved versions" onClick={() => showInspector('revisions')}><Icon name="history"/><span>Versions</span></Button>}
+                    </div>
                 </div>
 
                 <div id="sql-document-panel" role="tabpanel" aria-labelledby={`document-tab-${active.id}`} tabIndex={0} className={cx('workspace-content', experience === 'beginner' && 'beginner-workspace-content', run && 'has-run', visibleResultsView === 'sqlmap' && 'has-sql-map', queryCollapsed && 'is-query-collapsed', (run || visibleResultsView === 'sqlmap') && resultsCollapsed && 'is-results-collapsed')}>

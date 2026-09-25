@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Connection, SchemaTable } from '../../shared/types';
 import type { Copy } from '../i18n';
-import { PartsExplorer } from './PartsExplorer';
+import { StorageExplorer } from './StorageExplorer';
 
 export function MergeTreePartsPanel({ connection, copy, tables, schemaLoading, trusted, active }: {
     connection: Pick<Connection, 'id' | 'dataSource'>;
@@ -43,7 +43,7 @@ export function MergeTreePartsPanel({ connection, copy, tables, schemaLoading, t
         </div>
         {!trusted && <p className="help-parts-access-note">{copy.helpPartsRequiresTrust}</p>}
         {trusted && schemaLoading && <p className="help-parts-empty" role="status">{copy.helpLoadingTables}</p>}
-        {trusted && showExplorer && !schemaLoading && selectedTable && <PartsExplorer embedded connection={connection} table={selectedTable} copy={copy}/>}
+        {trusted && showExplorer && !schemaLoading && selectedTable && <StorageExplorer embedded active={active} connection={connection} table={selectedTable} copy={copy}/>}
         {trusted && !schemaLoading && !selectedTable && <p className="help-parts-empty" role="status">{copy.helpNoMergeTreeTables}</p>}
     </div>;
 }

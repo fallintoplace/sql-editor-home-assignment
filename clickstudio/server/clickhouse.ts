@@ -1,3 +1,4 @@
+import { loadNativeExplorer, type NativeExplorerRequest } from '../shared/native-explorers.js';
 import { createClient, type ClickHouseClient } from '@clickhouse/client';
 import { randomUUID } from 'node:crypto';
 import type { ClickHouseDocumentationEntry, ClickHouseDocumentationSummary, Connection, Json, Manifest, Principal, Progress, ReferenceCategory, Run, Schema } from '../shared/types.js';
@@ -43,10 +44,10 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
         const cap = /TOO_MANY_ROWS_OR_BYTES|LIMIT_EXCEEDED|MEMORY_LIMIT_EXCEEDED/i.test(message);
         return new AppError(denied ? 403 : cap ? 413 : 502, denied ? 'CLICKHOUSE_PERMISSION' : cap ? 'SERVER_RESOURCE_LIMIT' : 'CLICKHOUSE_ERROR', message, undefined, position ? Math.max(0, Number(position) - 1) : undefined);
     }
-    private async rows<T>(id: string, sql: string, parameters: Record<string, string> = {}): Promise<T[]> {
+    private async rows<T>(id: string, sql: string, parameters: Record<string, string> = {}, signal?: AbortSignal): Promise<T[]> {
         try {
             const set = await this.client(id).query({ query: sql, format: 'JSONEachRow', query_params: parameters, query_id: `clickstudio-inspect-${randomUUID()}`,
-                abort_signal: AbortSignal.timeout(10000), clickhouse_settings: { readonly: '1', max_execution_time: 8, max_result_rows: '6000', max_result_bytes: '3000000', result_overflow_mode: 'throw', max_threads: 2 } });
+                abort_signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000), clickhouse_settings: { readonly: '1', max_execution_time: 8, max_result_rows: '6000', max_result_bytes: '3000000', result_overflow_mode: 'throw', max_threads: 2 } });
             return await set.json<T>();
         }
         catch (error) {
@@ -314,6 +315,9 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
     async queryTree(id: string, sql: string, parameters: Record<string, string> = {}): Promise<string[]> {
         const rows = await this.rows<Record<string, unknown>>(id, `EXPLAIN QUERY TREE\n${sql}`, parameters);
         return rows.map(row => String(Object.values(row)[0] ?? '')).filter(Boolean);
+    }
+    async nativeExplorer(id: string, request: NativeExplorerRequest, signal?: AbortSignal) {
+        return loadNativeExplorer(request, (sql, parameters) => this.rows(id, sql, parameters, signal), signal);
     }
     async tableParts(id: string, database: string, table: string): Promise<MergeTreePartsSnapshot> {
         const parameters = { database, table };

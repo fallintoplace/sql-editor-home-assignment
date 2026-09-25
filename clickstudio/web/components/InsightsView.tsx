@@ -1,9 +1,10 @@
+import { RunComparisonLauncher, type RunComparisonProps } from './RunComparison';
 import type { ProfilePipeline, QueryProfile, Run } from '../../shared/types';
 import { PipelineGraph } from './PipelineGraph';
 import { Button, formatBytes, Icon } from './ui';
 import type { IconName } from './ui';
 
-export function InsightsView({ run, profile, pipeline, pipelineAvailable, onLoad, onLoadPipeline, loading }: { run: Run; profile?: QueryProfile; pipeline?: ProfilePipeline; pipelineAvailable: boolean; onLoad: () => void; onLoadPipeline: () => void; loading: boolean }) {
+export function InsightsView({ comparison, run, profile, pipeline, pipelineAvailable, onLoad, onLoadPipeline, loading }: { comparison?: RunComparisonProps; run: Run; profile?: QueryProfile; pipeline?: ProfilePipeline; pipelineAvailable: boolean; onLoad: () => void; onLoadPipeline: () => void; loading: boolean }) {
     const summary = profile?.summary;
     const plan = pipeline ?? profile?.pipeline;
     const hasClickHousePlan = plan?.source === 'explain_pipeline';
@@ -20,6 +21,7 @@ export function InsightsView({ run, profile, pipeline, pipelineAvailable, onLoad
     const estimatedStages = plan?.nodes.filter(node => node.status === 'estimated').length ?? 0;
     return <div className="insights-view animate-enter">
         <div className="insights-heading"><div><span className="eyebrow">EXECUTION INSIGHTS</span><h3>What happened when this ran?</h3><p>Measurements come from this run's execution and ClickHouse query log.</p></div>{!profile && <Button variant="secondary" onClick={onLoad} disabled={loading}>{loading ? 'Loading…' : 'Load execution details'}</Button>}</div>
+        {comparison && <RunComparisonLauncher {...comparison}/>}
         <div className="insight-metrics">{metrics.map(metric => <article className="insight-metric" key={metric.label}><span className="insight-icon"><Icon name={metric.icon}/></span><span className="eyebrow">{metric.label}</span><strong>{metric.value}</strong></article>)}</div>
         <section className="run-analysis" aria-label="Run and query plan comparison">
             <div className="run-analysis-heading"><div><span className="eyebrow">RUN + EXPLAIN</span><strong>Measured execution, then its plan</strong></div>{pipelineAvailable && <Button variant="secondary" className="toolbar-small" onClick={onLoadPipeline} disabled={loading}>{loading ? 'Loading…' : hasClickHousePlan ? 'Refresh pipeline' : 'Load ClickHouse pipeline'}</Button>}</div>

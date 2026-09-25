@@ -81,7 +81,7 @@ test('Generated table SQL is quoted, bounded, and uses explicit columns when pra
     assert.equal(tableQuerySql(table, columns, 'select'), 'SELECT\n    `tenant_id`,\n    `email`\nFROM `analytics`.`events`\nLIMIT 100;');
 
     const manyColumns = Array.from({ length: 25 }, (_, index) => ({ database: 'analytics', table: 'events', name: `c${index}`, type: 'UInt8', defaultKind: '', comment: '' }));
-    assert.match(tableQuerySql(table, manyColumns, 'select'), /SELECT\n    \*\nFROM/);
+    assert.match(tableQuerySql(table, manyColumns, 'select'), /SELECT\n {4}\*\nFROM/);
 });
 
 test('Undefined schema produces an empty explorer model', () => {

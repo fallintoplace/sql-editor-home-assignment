@@ -159,6 +159,43 @@ SELECT
     estimated_visitors,
     round(abs(toFloat64(exact_visitors) - estimated_visitors) / nullIf(exact_visitors, 0) * 100, 2) AS difference_pct
 FROM visitor_counts`, chart: { kind: 'table', x: 0, ys: [], title: 'Exact vs estimated visitors' } },
+    { id: 'preview-starter-monthly-revenue', name: 'Monthly revenue.sql', sql: `SELECT
+    toStartOfMonth(order_time) AS month,
+    countIf(order_status = 'completed') AS completed_orders,
+    round(sumIf(total, order_status = 'completed'), 2) AS revenue
+FROM orders
+WHERE order_time >= now() - INTERVAL 12 MONTH
+GROUP BY month
+ORDER BY month`, chart: { kind: 'line', x: 0, ys: [2], title: 'Monthly revenue' } },
+    { id: 'preview-starter-channel-conversion', name: 'Conversion by channel.sql', sql: `SELECT
+    channel,
+    count() AS sessions,
+    countIf(converted = 1) AS conversions,
+    round(conversions / nullIf(sessions, 0) * 100, 1) AS conversion_rate_pct
+FROM sessions
+WHERE started_at >= now() - INTERVAL 30 DAY
+GROUP BY channel
+ORDER BY conversions DESC`, chart: { kind: 'bar', x: 0, ys: [3], title: 'Conversion rate by channel' } },
+    { id: 'preview-starter-signup-cohorts', name: 'Signup cohorts by plan.sql', sql: `SELECT
+    toStartOfMonth(created_at) AS cohort_month,
+    plan,
+    count() AS new_users,
+    round(avg(lifetime_value), 2) AS average_lifetime_value
+FROM users
+WHERE created_at >= now() - INTERVAL 6 MONTH
+GROUP BY cohort_month, plan
+ORDER BY cohort_month, plan`, chart: { kind: 'line', x: 0, ys: [2], groupBy: 1, title: 'Signup cohorts by plan' } },
+    { id: 'preview-starter-product-page-conversion', name: 'Product page conversion.sql', sql: `SELECT
+    page_path,
+    countIf(event_type = 'page_view') AS page_views,
+    uniqExactIf(user_id, event_type = 'purchase') AS purchasers,
+    round(purchasers / nullIf(page_views, 0) * 100, 2) AS conversion_rate_pct
+FROM events
+WHERE page_path LIKE '/products/%'
+  AND event_time >= now() - INTERVAL 30 DAY
+GROUP BY page_path
+ORDER BY purchasers DESC
+LIMIT 10`, chart: { kind: 'bar', x: 0, ys: [3], title: 'Product page conversion' } },
 ];
 export const DEMO_PREVIEW_INITIAL_STARTERS = DEMO_PREVIEW_STARTERS.filter(starter => starter.initial);
 const DEMO_PREVIEW_STARTER_VERSIONS = [
@@ -314,6 +351,14 @@ function dateDaysAgo(daysAgo: number) {
     return new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+function monthStart(monthsAgo: number) {
+    const date = new Date();
+    date.setUTCDate(1);
+    date.setUTCHours(0, 0, 0, 0);
+    date.setUTCMonth(date.getUTCMonth() - monthsAgo);
+    return date.toISOString().slice(0, 10);
+}
+
 function dailyRows(): PreviewRows {
     const rows = Array.from({ length: 30 }, (_, index) => {
         const daysAgo = 29 - index;
@@ -377,6 +422,10 @@ const demoResultRows: Record<string, PreviewRows> = {
     'preview-starter-latest-event': recentEventRows(),
     'preview-starter-top-pages-country': { columns: [{ name: 'country', type: 'String' }, { name: 'page_path', type: 'String' }, { name: 'page_views', type: 'UInt64' }, { name: 'visitors', type: 'UInt64' }], rows: [['United States', '/pricing', 3240, 1940], ['United States', '/docs/sql', 2860, 1710], ['United States', '/blog/clickhouse', 1940, 1280], ['United Kingdom', '/docs/sql', 1620, 980], ['United Kingdom', '/pricing', 1480, 910], ['United Kingdom', '/blog/clickhouse', 1140, 740], ['Germany', '/docs/sql', 1320, 810], ['Germany', '/pricing', 1080, 640], ['Germany', '/blog/clickhouse', 920, 580]] },
     'preview-starter-distinct-estimates': { columns: [{ name: 'exact_visitors', type: 'UInt64' }, { name: 'estimated_visitors', type: 'UInt64' }, { name: 'difference_pct', type: 'Float64' }], rows: [[84216, 84102, 0.14]] },
+    'preview-starter-monthly-revenue': { columns: [{ name: 'month', type: 'Date' }, { name: 'completed_orders', type: 'UInt64' }, { name: 'revenue', type: 'Decimal(18, 2)' }], rows: [[monthStart(5), 284, 38420.5], [monthStart(4), 312, 42118.2], [monthStart(3), 298, 39749.8], [monthStart(2), 346, 46792.4], [monthStart(1), 371, 51280.75], [monthStart(0), 354, 49886.1]] },
+    'preview-starter-channel-conversion': { columns: [{ name: 'channel', type: 'String' }, { name: 'sessions', type: 'UInt64' }, { name: 'conversions', type: 'UInt64' }, { name: 'conversion_rate_pct', type: 'Float64' }], rows: [['Organic search', 28600, 2402, 8.4], ['Direct', 22400, 1142, 5.1], ['Paid search', 17800, 1602, 9], ['Referral', 11600, 731, 6.3], ['Email', 9400, 902, 9.6], ['Social', 6200, 316, 5.1]] },
+    'preview-starter-signup-cohorts': { columns: [{ name: 'cohort_month', type: 'Date' }, { name: 'plan', type: 'String' }, { name: 'new_users', type: 'UInt64' }, { name: 'average_lifetime_value', type: 'Decimal(18, 2)' }], rows: [[monthStart(5), 'Free', 1320, 0], [monthStart(5), 'Starter', 840, 48.5], [monthStart(4), 'Free', 1480, 0], [monthStart(4), 'Starter', 920, 52.8], [monthStart(3), 'Free', 1590, 0], [monthStart(3), 'Growth', 246, 284.6], [monthStart(2), 'Free', 1680, 0], [monthStart(2), 'Growth', 284, 302.4], [monthStart(1), 'Free', 1840, 0], [monthStart(1), 'Starter', 1120, 61.2], [monthStart(0), 'Free', 1760, 0], [monthStart(0), 'Growth', 318, 326.8]] },
+    'preview-starter-product-page-conversion': { columns: [{ name: 'page_path', type: 'String' }, { name: 'page_views', type: 'UInt64' }, { name: 'purchasers', type: 'UInt64' }, { name: 'conversion_rate_pct', type: 'Float64' }], rows: [['/products/analytics', 18420, 1286, 6.98], ['/products/cloud', 14280, 1154, 8.08], ['/products/observability', 9860, 624, 6.33], ['/products/ingestion', 7420, 518, 6.98]] },
 };
 const demoStarterIdBySql = new Map(DEMO_PREVIEW_STARTERS.map(starter => [normalizePreviewSql(starter.sql), starter.id]));
 

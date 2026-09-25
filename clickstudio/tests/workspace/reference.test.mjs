@@ -46,10 +46,11 @@ test('Reference identifiers keep types distinct when names overlap', () => {
     assert.notEqual(referenceId({ name: 'MergeTree', type: 'Table Engine' }), referenceId({ name: 'MergeTree', type: 'Function' }));
 });
 
-test('Bundled references are explicit demo entries with a small bounded catalog', () => {
-    assert.ok(BUNDLED_REFERENCE.length <= 30);
-    assert.ok(BUNDLED_REFERENCE.length >= 10);
+test('Bundled references include practical SQL examples in a bounded offline catalog', () => {
+    assert.equal(BUNDLED_REFERENCE.length, 30);
+    assert.equal(new Set(BUNDLED_REFERENCE.map(referenceId)).size, BUNDLED_REFERENCE.length);
     assert.ok(BUNDLED_REFERENCE.every(entry => entry.origin === 'bundled' && entry.serverVersion === 'Demo catalog'));
+    assert.ok(BUNDLED_REFERENCE.every(entry => entry.description.includes('```sql')));
     assert.match(findBundledReference('query_log', 'System Table').description, /query_log/);
     assert.equal(findBundledReference('query_log', 'Table Engine'), undefined);
 });
@@ -59,6 +60,9 @@ test('Bundled search ranks popular entries and preserves category boundaries', (
     assert.deepEqual(all.slice(0, 3).map(entry => entry.name), ['quantileExact', 'uniq', 'MergeTree']);
     assert.ok(searchBundledReference('', 'engines').every(entry => entry.type.includes('Engine')));
     assert.ok(searchBundledReference('system.query_log', 'system').some(entry => entry.name === 'query_log'));
+    assert.ok(searchBundledReference('system.columns', 'system').some(entry => entry.name === 'columns'));
+    assert.ok(searchBundledReference('max_execution_time', 'settings').some(entry => entry.name === 'max_execution_time'));
+    assert.ok(searchBundledReference('AggregatingMergeTree', 'engines').some(entry => entry.name === 'AggregatingMergeTree'));
     assert.ok(searchBundledReference('distinct values', 'functions').some(entry => entry.name === 'uniq'));
     assert.deepEqual(searchBundledReference('no such reference', 'all'), []);
 });

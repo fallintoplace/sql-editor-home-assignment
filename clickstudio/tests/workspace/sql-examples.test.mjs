@@ -151,6 +151,31 @@ test('SQL examples use safe generic queries until a real connection schema is av
     assert.equal(examples.some(example => example.name.includes('system.') || example.name.includes('information_schema.')), false);
 });
 
+test('Offline examples cover common analytics patterns with bounded chart columns', () => {
+    const examples = sqlExamplesFor({ id: 'demo', dataSource: 'fixture' });
+    const byId = new Map(examples.map(example => [example.id, example]));
+    const cases = [
+        ['preview-starter-monthly-revenue', 'FROM orders', 'line', 3],
+        ['preview-starter-channel-conversion', 'FROM sessions', 'bar', 4],
+        ['preview-starter-signup-cohorts', 'FROM users', 'line', 4],
+        ['preview-starter-product-page-conversion', 'FROM events', 'bar', 4],
+    ];
+
+    for (const [id, table, kind, columnCount] of cases) {
+        const example = byId.get(id);
+        assert.ok(example, `missing ${id}`);
+        assert.ok(example.sql.includes(table));
+        assert.match(example.sql, /^(?:SELECT|WITH)\b/);
+        assert.doesNotMatch(example.sql, /\b(?:INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|TRUNCATE|OPTIMIZE|KILL)\b/i);
+        assert.equal(example.chart.kind, kind);
+        assert.ok([example.chart.x, ...example.chart.ys, ...(example.chart.groupBy === undefined ? [] : [example.chart.groupBy])]
+            .every(index => Number.isInteger(index) && index >= 0 && index < columnCount));
+    }
+
+    assert.equal(new Set(examples.map(example => example.id)).size, examples.length);
+    assert.ok(examples.length > 13);
+});
+
 test('Schema examples expose only the first six non-system tables', () => {
     const connection = { id: 'production', dataSource: 'clickhouse' };
     const schema = {

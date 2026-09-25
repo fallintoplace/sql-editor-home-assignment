@@ -393,6 +393,10 @@ const demoStarterDetails: Record<string, Pick<SqlExample, 'description' | 'categ
     'preview-starter-latest-event': { description: 'Use argMax to find each user’s most recent event and page.', category: 'clickhouse' },
     'preview-starter-top-pages-country': { description: 'Use LIMIT BY to find the top three pages in each country.', category: 'clickhouse' },
     'preview-starter-distinct-estimates': { description: 'Compare an exact visitor count with a fast approximate count.', category: 'clickhouse' },
+    'preview-starter-monthly-revenue': { description: 'Compare completed orders and revenue month by month with conditional aggregates.', category: 'timeSeries' },
+    'preview-starter-channel-conversion': { description: 'Use countIf to calculate conversions and conversion rate for each channel.', category: 'clickhouse' },
+    'preview-starter-signup-cohorts': { description: 'Group new accounts into monthly cohorts and compare their plans and lifetime value.', category: 'timeSeries' },
+    'preview-starter-product-page-conversion': { description: 'Compare product page views with unique purchasers using conditional aggregates.', category: 'aggregation' },
 };
 
 const demoExamples: SqlExample[] = DEMO_PREVIEW_STARTERS.map(starter => ({

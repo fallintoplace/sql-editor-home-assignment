@@ -17,6 +17,7 @@
   },
   "include": [
     "web/workspace-state.ts",
+    "web/workspace-layout.ts",
     "web/workspace-persistence.ts",
     "web/demo-preview.ts",
     "web/sql-examples.ts",

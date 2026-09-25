@@ -1,0 +1,68 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {
+    PANEL_MARGIN,
+    PANEL_MIN_HEIGHT,
+    PANEL_MIN_WIDTH,
+    clampPanelSplitRatio,
+    defaultWorkspacePanelLayout,
+    movePanelGeometry,
+    normalizePanelGeometry,
+    recoverWorkspacePanelLayout,
+    resizePanelGeometry,
+} from '../../.workspace-build/web/workspace-layout.js';
+
+const viewport = { width: 1440, height: 900 };
+
+test('panel geometry stays recoverable inside the viewport', () => {
+    const value = normalizePanelGeometry({ x: -900, y: 1200, width: 3000, height: 1800 }, viewport);
+    assert.deepEqual(value, { x: PANEL_MARGIN, y: PANEL_MARGIN, width: 1424, height: 884 });
+});
+
+test('dragging keeps the complete panel on screen', () => {
+    const start = { x: 100, y: 100, width: 600, height: 400 };
+    assert.deepEqual(movePanelGeometry(start, 5000, 5000, viewport), { x: 832, y: 492, width: 600, height: 400 });
+});
+
+test('resizing supports every edge without shrinking below the usable minimum', () => {
+    const start = { x: 200, y: 180, width: 700, height: 420 };
+    const west = resizePanelGeometry(start, 'w', 600, 0, viewport);
+    assert.equal(west.x, 420);
+    assert.equal(west.width, PANEL_MIN_WIDTH);
+    assert.equal(west.x + west.width, start.x + start.width);
+
+    const north = resizePanelGeometry(start, 'n', 0, 500, viewport);
+    assert.equal(north.y, 340);
+    assert.equal(north.height, PANEL_MIN_HEIGHT);
+    assert.equal(north.y + north.height, start.y + start.height);
+
+    const southEast = resizePanelGeometry(start, 'se', 1000, 1000, viewport);
+    assert.equal(southEast.x + southEast.width, viewport.width - PANEL_MARGIN);
+    assert.equal(southEast.y + southEast.height, viewport.height - PANEL_MARGIN);
+});
+
+test('saved layouts are validated and normalized on recovery', () => {
+    const recovered = recoverWorkspacePanelLayout(JSON.stringify({
+        splitRatio: 0.99,
+        query: { mode: 'floating', geometry: { x: 3000, y: 2000, width: 650, height: 400 } },
+        results: { mode: 'wat', geometry: { x: 10, y: 10, width: 10, height: 10 } },
+    }), viewport);
+    assert.equal(recovered.splitRatio, 0.75);
+    assert.equal(recovered.query.mode, 'floating');
+    assert.equal(recovered.query.geometry.x + recovered.query.geometry.width, viewport.width - PANEL_MARGIN);
+    assert.equal(recovered.results.mode, 'docked');
+    assert.equal(recovered.results.geometry.width, PANEL_MIN_WIDTH);
+    assert.equal(recovered.results.geometry.height, PANEL_MIN_HEIGHT);
+});
+
+test('bad storage falls back to a stable docked layout', () => {
+    const recovered = recoverWorkspacePanelLayout('{broken', viewport);
+    const expected = defaultWorkspacePanelLayout(viewport);
+    assert.deepEqual(recovered, expected);
+});
+
+test('split ratio stays useful for both docked panels', () => {
+    assert.equal(clampPanelSplitRatio(-1), 0.25);
+    assert.equal(clampPanelSplitRatio(0.6), 0.6);
+    assert.equal(clampPanelSplitRatio(2), 0.75);
+});

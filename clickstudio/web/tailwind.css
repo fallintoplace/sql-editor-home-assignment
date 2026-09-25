@@ -301,7 +301,39 @@
     .workspace-content.has-run.is-results-collapsed { grid-template-rows: minmax(0, 1fr) auto; }
     .workspace-content.has-run.is-query-collapsed.is-results-collapsed { grid-template-rows: auto auto; align-content: start; }
     .workspace-content:not(.has-run).is-query-collapsed { grid-template-rows: auto; align-content: start; }
+    .workspace-content.has-run.has-floating-query,
+    .workspace-content.has-run.has-floating-results,
+    .workspace-content:not(.has-run).has-floating-query { grid-template-rows: minmax(0, 1fr); }
+    .workspace-content.has-run.has-panel-split { grid-template-rows: minmax(205px, var(--query-row, 54%)) 10px minmax(185px, 1fr); gap: 0; }
+    .workspace-content.has-run.has-panel-split > .editor-surface { grid-row: 1; }
+    .workspace-content.has-run.has-panel-split > .workspace-panel-splitter { grid-row: 2; }
+    .workspace-content.has-run.has-panel-split > .results-surface { grid-row: 3; }
+    .workspace-panel-splitter { position: relative; display: grid; min-height: 10px; place-items: center; cursor: row-resize; touch-action: none; }
+    .workspace-panel-splitter::before { width: min(140px, 28%); height: 2px; border-radius: 99px; background: var(--line-bright); content: ""; transition: width .16s ease, background .16s ease, box-shadow .16s ease; }
+    .workspace-panel-splitter:hover::before, .workspace-panel-splitter:focus-visible::before { width: min(190px, 38%); background: color-mix(in srgb, var(--accent) 62%, var(--line-bright)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent); }
+    .workspace-panel-splitter:focus-visible { outline: none; }
     .editor-surface, .results-surface { position: relative; display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); box-shadow: 0 12px 36px #00000012, inset 0 1px #ffffff05; transition: border-color .2s ease, box-shadow .2s ease; }
+    .editor-surface.is-floating, .results-surface.is-floating { position: fixed; margin: 0; border-color: var(--line-bright); box-shadow: 0 28px 90px #00000066, 0 0 0 1px #ffffff08; }
+    .editor-surface.is-floating.is-front, .results-surface.is-floating.is-front { border-color: color-mix(in srgb, var(--accent) 34%, var(--line-bright)); box-shadow: 0 32px 100px #00000073, 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent); }
+    .editor-surface.is-floating.is-collapsed, .results-surface.is-floating.is-collapsed { min-height: 54px; height: 54px !important; }
+    .editor-surface.is-maximized, .results-surface.is-maximized { border-radius: 11px; }
+    .workspace-panel-drag-handle { cursor: move; touch-action: none; }
+    .workspace-panel-drag-handle button, .workspace-panel-drag-handle input, .workspace-panel-drag-handle select { cursor: pointer; touch-action: auto; }
+    .workspace-panel-drag-handle input { cursor: text; }
+    .workspace-panel-resize-handle { position: absolute; z-index: var(--z-local-intersection); display: block; touch-action: none; }
+    .workspace-panel-resize-handle.edge-n, .workspace-panel-resize-handle.edge-s { right: 10px; left: 10px; height: 8px; cursor: ns-resize; }
+    .workspace-panel-resize-handle.edge-n { top: 0; }
+    .workspace-panel-resize-handle.edge-s { bottom: 0; }
+    .workspace-panel-resize-handle.edge-e, .workspace-panel-resize-handle.edge-w { top: 10px; bottom: 10px; width: 8px; cursor: ew-resize; }
+    .workspace-panel-resize-handle.edge-e { right: 0; }
+    .workspace-panel-resize-handle.edge-w { left: 0; }
+    .workspace-panel-resize-handle.edge-ne, .workspace-panel-resize-handle.edge-nw, .workspace-panel-resize-handle.edge-se, .workspace-panel-resize-handle.edge-sw { width: 14px; height: 14px; }
+    .workspace-panel-resize-handle.edge-ne { top: 0; right: 0; cursor: nesw-resize; }
+    .workspace-panel-resize-handle.edge-nw { top: 0; left: 0; cursor: nwse-resize; }
+    .workspace-panel-resize-handle.edge-se { right: 0; bottom: 0; cursor: nwse-resize; }
+    .workspace-panel-resize-handle.edge-sw { bottom: 0; left: 0; cursor: nesw-resize; }
+    body.is-workspace-panel-gesturing { user-select: none; }
+    .panel-window-button { width: 29px; min-width: 29px; min-height: 29px; padding: 0; }
     .panel-content { display: flex; min-width: 0; min-height: 0; flex: 1; flex-direction: column; }
     .panel-content[hidden] { display: none; }
     .results-content-scrollable { overflow: auto; scrollbar-gutter: stable; }

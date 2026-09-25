@@ -121,6 +121,88 @@ test('Query and result panels collapse to their headings', async ({ page }) => {
     await expect(page.locator('#query-results-content')).toBeVisible();
 });
 
+
+test('Desktop workspace panels float, resize, maximize, and dock without losing content', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 1000 });
+    await trust(page);
+    const results = await runQuery(page);
+    const queryPanel = page.locator('.editor-surface');
+    const editor = page.locator('#sql-editor-content .cm-content');
+
+    await page.getByRole('button', { name: 'Pop out query panel', exact: true }).click();
+    await expect(queryPanel).toHaveClass(/is-floating/);
+    await expect(editor).toContainText('SELECT');
+
+    const beforeDrag = await queryPanel.boundingBox();
+    const dragTarget = await queryPanel.locator('.file-type-icon').boundingBox();
+    expect(beforeDrag).not.toBeNull();
+    expect(dragTarget).not.toBeNull();
+    await page.mouse.move(dragTarget!.x + dragTarget!.width / 2, dragTarget!.y + dragTarget!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(dragTarget!.x + 150, dragTarget!.y + 90, { steps: 5 });
+    await page.mouse.up();
+    const afterDrag = await queryPanel.boundingBox();
+    expect(afterDrag).not.toBeNull();
+    expect(afterDrag!.x).toBeGreaterThan(beforeDrag!.x + 60);
+    expect(afterDrag!.y).toBeGreaterThan(beforeDrag!.y + 30);
+
+    const resizeHandle = await queryPanel.locator('.workspace-panel-resize-handle.edge-se').boundingBox();
+    expect(resizeHandle).not.toBeNull();
+    await page.mouse.move(resizeHandle!.x + resizeHandle!.width / 2, resizeHandle!.y + resizeHandle!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(resizeHandle!.x + 120, resizeHandle!.y + 80, { steps: 5 });
+    await page.mouse.up();
+    const afterResize = await queryPanel.boundingBox();
+    expect(afterResize).not.toBeNull();
+    expect(afterResize!.width).toBeGreaterThan(afterDrag!.width + 70);
+    expect(afterResize!.height).toBeGreaterThan(afterDrag!.height + 40);
+
+    await page.getByRole('button', { name: 'Maximize query panel', exact: true }).click();
+    const maximized = await queryPanel.boundingBox();
+    expect(maximized).not.toBeNull();
+    expect(maximized!.width).toBeGreaterThan(1360);
+    expect(maximized!.height).toBeGreaterThan(960);
+
+    await page.getByRole('button', { name: 'Restore query panel', exact: true }).click();
+    await page.getByRole('button', { name: 'Dock query panel', exact: true }).click();
+    await expect(queryPanel).not.toHaveClass(/is-floating/);
+    await expect(editor).toContainText('SELECT');
+
+    await page.getByRole('button', { name: 'Pop out output panel', exact: true }).click();
+    await expect(results).toHaveClass(/is-floating/);
+    await expect(results.getByRole('table', { name: 'Retained query rows' })).toBeVisible();
+    await page.getByRole('button', { name: 'Dock output panel', exact: true }).click();
+    await expect(results).not.toHaveClass(/is-floating/);
+});
+
+test('Desktop docked query and output panels resize with the splitter', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 1000 });
+    await trust(page);
+    const results = await runQuery(page);
+    const queryPanel = page.locator('.editor-surface');
+    const splitter = page.getByRole('separator', { name: 'Resize query and output panels', exact: true });
+    await expect(splitter).toBeVisible();
+
+    const queryBefore = await queryPanel.boundingBox();
+    const resultsBefore = await results.boundingBox();
+    const splitBox = await splitter.boundingBox();
+    expect(queryBefore).not.toBeNull();
+    expect(resultsBefore).not.toBeNull();
+    expect(splitBox).not.toBeNull();
+
+    await page.mouse.move(splitBox!.x + splitBox!.width / 2, splitBox!.y + splitBox!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(splitBox!.x + splitBox!.width / 2, splitBox!.y + 100, { steps: 5 });
+    await page.mouse.up();
+
+    const queryAfter = await queryPanel.boundingBox();
+    const resultsAfter = await results.boundingBox();
+    expect(queryAfter).not.toBeNull();
+    expect(resultsAfter).not.toBeNull();
+    expect(queryAfter!.height).toBeGreaterThan(queryBefore!.height + 45);
+    expect(resultsAfter!.height).toBeLessThan(resultsBefore!.height - 45);
+});
+
 test('Native parser can be retried after a temporary worker failure', async ({ page }) => {
     await page.addInitScript(parserWorkerStub('unavailable'));
     await trust(page);

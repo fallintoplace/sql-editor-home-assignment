@@ -1,0 +1,133 @@
+export type WorkspacePanelId = 'query' | 'results';
+export type WorkspacePanelMode = 'docked' | 'floating' | 'maximized';
+export type PanelResizeEdge = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw';
+
+export type ViewportSize = { width: number; height: number };
+export type PanelGeometry = { x: number; y: number; width: number; height: number };
+export type WorkspacePanelState = { mode: WorkspacePanelMode; geometry: PanelGeometry };
+export type WorkspacePanelLayout = {
+    version: 1;
+    splitRatio: number;
+    query: WorkspacePanelState;
+    results: WorkspacePanelState;
+};
+
+export const WORKSPACE_LAYOUT_STORAGE_KEY = 'clickstudio:workspace-layout:v1';
+export const PANEL_MARGIN = 8;
+export const PANEL_MIN_WIDTH = 480;
+export const PANEL_MIN_HEIGHT = 260;
+export const PANEL_SPLIT_MIN = 0.25;
+export const PANEL_SPLIT_MAX = 0.75;
+
+const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+const clamp = (value: number, minimum: number, maximum: number) => Math.min(Math.max(value, minimum), maximum);
+
+function geometryLimits(viewport: ViewportSize) {
+    const width = Math.max(1, viewport.width);
+    const height = Math.max(1, viewport.height);
+    const maxWidth = Math.max(1, width - PANEL_MARGIN * 2);
+    const maxHeight = Math.max(1, height - PANEL_MARGIN * 2);
+    return {
+        width,
+        height,
+        maxWidth,
+        maxHeight,
+        minWidth: Math.min(PANEL_MIN_WIDTH, maxWidth),
+        minHeight: Math.min(PANEL_MIN_HEIGHT, maxHeight),
+    };
+}
+
+export function normalizePanelGeometry(geometry: PanelGeometry, viewport: ViewportSize): PanelGeometry {
+    const limits = geometryLimits(viewport);
+    const width = clamp(geometry.width, limits.minWidth, limits.maxWidth);
+    const height = clamp(geometry.height, limits.minHeight, limits.maxHeight);
+    const maxX = Math.max(PANEL_MARGIN, limits.width - width - PANEL_MARGIN);
+    const maxY = Math.max(PANEL_MARGIN, limits.height - height - PANEL_MARGIN);
+    return {
+        x: clamp(geometry.x, PANEL_MARGIN, maxX),
+        y: clamp(geometry.y, PANEL_MARGIN, maxY),
+        width,
+        height,
+    };
+}
+
+export function defaultPanelGeometry(panel: WorkspacePanelId, viewport: ViewportSize): PanelGeometry {
+    const limits = geometryLimits(viewport);
+    const widthScale = panel === 'query' ? 0.72 : 0.76;
+    const heightScale = panel === 'query' ? 0.62 : 0.58;
+    const width = clamp(limits.width * widthScale, limits.minWidth, limits.maxWidth);
+    const height = clamp(limits.height * heightScale, limits.minHeight, limits.maxHeight);
+    const x = panel === 'query' ? PANEL_MARGIN + 24 : limits.width - width - PANEL_MARGIN - 24;
+    const y = panel === 'query' ? PANEL_MARGIN + 56 : limits.height - height - PANEL_MARGIN - 48;
+    return normalizePanelGeometry({ x, y, width, height }, viewport);
+}
+
+export function movePanelGeometry(geometry: PanelGeometry, dx: number, dy: number, viewport: ViewportSize): PanelGeometry {
+    return normalizePanelGeometry({ ...geometry, x: geometry.x + dx, y: geometry.y + dy }, viewport);
+}
+
+export function resizePanelGeometry(geometry: PanelGeometry, edge: PanelResizeEdge, dx: number, dy: number, viewport: ViewportSize): PanelGeometry {
+    const limits = geometryLimits(viewport);
+    let left = geometry.x;
+    let top = geometry.y;
+    let right = geometry.x + geometry.width;
+    let bottom = geometry.y + geometry.height;
+
+    if (edge.includes('w')) left = clamp(left + dx, PANEL_MARGIN, right - limits.minWidth);
+    if (edge.includes('e')) right = clamp(right + dx, left + limits.minWidth, limits.width - PANEL_MARGIN);
+    if (edge.includes('n')) top = clamp(top + dy, PANEL_MARGIN, bottom - limits.minHeight);
+    if (edge.includes('s')) bottom = clamp(bottom + dy, top + limits.minHeight, limits.height - PANEL_MARGIN);
+
+    return normalizePanelGeometry({ x: left, y: top, width: right - left, height: bottom - top }, viewport);
+}
+
+export function clampPanelSplitRatio(value: number): number {
+    return clamp(value, PANEL_SPLIT_MIN, PANEL_SPLIT_MAX);
+}
+
+function panelState(value: unknown, panel: WorkspacePanelId, viewport: ViewportSize): WorkspacePanelState {
+    const fallback = defaultPanelGeometry(panel, viewport);
+    if (!value || typeof value !== 'object') return { mode: 'docked', geometry: fallback };
+    const candidate = value as Partial<WorkspacePanelState>;
+    const mode = candidate.mode === 'floating' || candidate.mode === 'maximized' || candidate.mode === 'docked'
+        ? candidate.mode
+        : 'docked';
+    const raw = candidate.geometry;
+    const geometry = raw && finite(raw.x) && finite(raw.y) && finite(raw.width) && finite(raw.height)
+        ? normalizePanelGeometry(raw, viewport)
+        : fallback;
+    return { mode, geometry };
+}
+
+export function defaultWorkspacePanelLayout(viewport: ViewportSize): WorkspacePanelLayout {
+    return {
+        version: 1,
+        splitRatio: 0.54,
+        query: { mode: 'docked', geometry: defaultPanelGeometry('query', viewport) },
+        results: { mode: 'docked', geometry: defaultPanelGeometry('results', viewport) },
+    };
+}
+
+export function normalizeWorkspacePanelLayout(layout: WorkspacePanelLayout, viewport: ViewportSize): WorkspacePanelLayout {
+    return {
+        version: 1,
+        splitRatio: clampPanelSplitRatio(layout.splitRatio),
+        query: { ...layout.query, geometry: normalizePanelGeometry(layout.query.geometry, viewport) },
+        results: { ...layout.results, geometry: normalizePanelGeometry(layout.results.geometry, viewport) },
+    };
+}
+
+export function recoverWorkspacePanelLayout(raw: string | null, viewport: ViewportSize): WorkspacePanelLayout {
+    if (!raw) return defaultWorkspacePanelLayout(viewport);
+    try {
+        const candidate = JSON.parse(raw) as { splitRatio?: unknown; query?: unknown; results?: unknown };
+        return {
+            version: 1,
+            splitRatio: finite(candidate.splitRatio) ? clampPanelSplitRatio(candidate.splitRatio) : 0.54,
+            query: panelState(candidate.query, 'query', viewport),
+            results: panelState(candidate.results, 'results', viewport),
+        };
+    } catch {
+        return defaultWorkspacePanelLayout(viewport);
+    }
+}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import type { ApiError, AssistantAction, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Result, Run, RunKind, Schema, Script } from '../shared/types';
 import { DEFAULT_LIMITS } from '../shared/types';
 import { parseExplainPlan } from '../shared/explain-plan';
@@ -36,6 +37,18 @@ import { localizeSqlExample } from './sql-examples-locales';
 import { sqlErrorRangeInDraft, type SqlErrorRange } from './sql-error';
 import type { Copy, ExperienceLevel, Locale } from './i18n';
 import type { AssistantContext, BusyAction, Connected, Inspector, ResultsView, SpeechRecognitionLike } from './workspace-types';
+import {
+    WORKSPACE_LAYOUT_STORAGE_KEY,
+    clampPanelSplitRatio,
+    movePanelGeometry,
+    normalizeWorkspacePanelLayout,
+    recoverWorkspacePanelLayout,
+    resizePanelGeometry,
+    type PanelGeometry,
+    type PanelResizeEdge,
+    type WorkspacePanelId,
+    type WorkspacePanelMode,
+} from './workspace-layout';
 
 const stateKey = (connectionId: string) => `clickstudio:workspace:${connectionId}:v1`;
 function safeSelectedStatement(sql: string, from: number, to: number) {
@@ -45,6 +58,29 @@ function safeStatementCount(sql: string) {
     try { return splitSql(sql).length; } catch { return undefined; }
 }
 type FailedQueryError = { draftId: string; draftSql: string; statementSql: string; sourceFrom: number; error: ApiError };
+type PanelPointerStartEvent = {
+    clientX: number;
+    clientY: number;
+    target: EventTarget | null;
+    preventDefault: () => void;
+    stopPropagation: () => void;
+};
+
+const PANEL_RESIZE_EDGES: readonly PanelResizeEdge[] = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
+const panelViewport = () => ({ width: window.innerWidth, height: window.innerHeight });
+const panelTargetIsInteractive = (target: EventTarget | null) =>
+    target instanceof Element && Boolean(target.closest('button, input, select, textarea, a, [role="tab"], [role="button"]'));
+
+function PanelResizeHandles({ onResize }: { onResize: (edge: PanelResizeEdge, event: PanelPointerStartEvent) => void }) {
+    return <>{PANEL_RESIZE_EDGES.map(edge =>
+        <span
+            key={edge}
+            aria-hidden="true"
+            className={`workspace-panel-resize-handle edge-${edge}`}
+            data-edge={edge}
+            onPointerDown={event => onResize(edge, event)}
+        />)}</>;
+}
 function apiErrorDetail(error: unknown): ApiError {
     if (error instanceof RequestError) return error.detail;
     const candidate = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : undefined;
@@ -198,6 +234,15 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [exampleChartRunId, setExampleChartRunId] = useState<string>();
     const [queryCollapsed, setQueryCollapsed] = useState(false);
     const [resultsCollapsed, setResultsCollapsed] = useState(false);
+    const [panelLayout, setPanelLayout] = useState(() => {
+        let stored: string | null = null;
+        try { stored = window.localStorage.getItem(WORKSPACE_LAYOUT_STORAGE_KEY); } catch {}
+        return recoverWorkspacePanelLayout(stored, panelViewport());
+    });
+    const [activeFloatingPanel, setActiveFloatingPanel] = useState<WorkspacePanelId>('query');
+    const queryPanelRef = useRef<HTMLElement>(null);
+    const resultsPanelRef = useRef<HTMLElement>(null);
+    const workspaceContentRef = useRef<HTMLDivElement>(null);
     const [inspector, setInspector] = useState<Inspector>('schema');
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [compactViewport, setCompactViewport] = useState(() => window.matchMedia('(max-width: 850px)').matches);
@@ -265,6 +310,14 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         };
         media.addEventListener('change', update);
         return () => media.removeEventListener('change', update);
+    }, []);
+    useEffect(() => {
+        try { window.localStorage.setItem(WORKSPACE_LAYOUT_STORAGE_KEY, JSON.stringify(panelLayout)); } catch {}
+    }, [panelLayout]);
+    useEffect(() => {
+        const normalize = () => setPanelLayout(current => normalizeWorkspacePanelLayout(current, panelViewport()));
+        window.addEventListener('resize', normalize);
+        return () => window.removeEventListener('resize', normalize);
     }, []);
     const trustedRef = useRef(trusted);
     trustedRef.current = trusted;
@@ -856,6 +909,124 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         changed: 'Unsaved changes', conflict: 'Newer revision available', deleted: 'Saved file in trash', unavailable: 'Save status unavailable',
     } as const)[saveStatus.state];
     const visibleResultsView = experience === 'beginner' && view === 'insights' ? 'results' : view;
+    const queryMode = compactViewport ? 'docked' : panelLayout.query.mode;
+    const resultsMode = compactViewport ? 'docked' : panelLayout.results.mode;
+    const queryFloating = queryMode !== 'docked';
+    const resultsFloating = resultsMode !== 'docked';
+
+    const panelElement = (panel: WorkspacePanelId) => panel === 'query' ? queryPanelRef.current : resultsPanelRef.current;
+    const applyPanelGeometry = (element: HTMLElement, geometry: PanelGeometry) => {
+        element.style.left = `${geometry.x}px`;
+        element.style.top = `${geometry.y}px`;
+        element.style.width = `${geometry.width}px`;
+        element.style.height = `${geometry.height}px`;
+    };
+    const panelStyle = (panel: WorkspacePanelId, mode: WorkspacePanelMode): CSSProperties | undefined => {
+        if (mode === 'docked') return undefined;
+        const zIndex = activeFloatingPanel === panel ? 480 : 470;
+        if (mode === 'maximized') {
+            return { left: 8, top: 8, width: 'calc(100vw - 16px)', height: 'calc(100dvh - 16px)', zIndex };
+        }
+        const geometry = panelLayout[panel].geometry;
+        return { left: geometry.x, top: geometry.y, width: geometry.width, height: geometry.height, zIndex };
+    };
+    const setPanelExpanded = (panel: WorkspacePanelId) => {
+        if (panel === 'query') setQueryCollapsed(false);
+        else setResultsCollapsed(false);
+    };
+    const togglePanelFloating = (panel: WorkspacePanelId) => {
+        if (compactViewport) return;
+        setPanelExpanded(panel);
+        setActiveFloatingPanel(panel);
+        setPanelLayout(current => ({
+            ...current,
+            [panel]: {
+                ...current[panel],
+                mode: current[panel].mode === 'docked' ? 'floating' : 'docked',
+            },
+        }));
+    };
+    const togglePanelMaximized = (panel: WorkspacePanelId) => {
+        if (compactViewport) return;
+        setPanelExpanded(panel);
+        setActiveFloatingPanel(panel);
+        setPanelLayout(current => ({
+            ...current,
+            [panel]: {
+                ...current[panel],
+                mode: current[panel].mode === 'maximized' ? 'floating' : 'maximized',
+            },
+        }));
+    };
+    const beginPanelGeometryGesture = (
+        panel: WorkspacePanelId,
+        event: PanelPointerStartEvent,
+        update: (start: PanelGeometry, dx: number, dy: number) => PanelGeometry,
+    ) => {
+        const element = panelElement(panel);
+        if (!element || compactViewport || panelLayout[panel].mode !== 'floating') return;
+        event.preventDefault();
+        event.stopPropagation();
+        setActiveFloatingPanel(panel);
+        const start = panelLayout[panel].geometry;
+        const startX = event.clientX;
+        const startY = event.clientY;
+        let latest = start;
+        document.body.classList.add('is-workspace-panel-gesturing');
+        const move = (pointer: PointerEvent) => {
+            latest = update(start, pointer.clientX - startX, pointer.clientY - startY);
+            applyPanelGeometry(element, latest);
+        };
+        const stop = () => {
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', stop);
+            window.removeEventListener('pointercancel', stop);
+            document.body.classList.remove('is-workspace-panel-gesturing');
+            setPanelLayout(current => ({ ...current, [panel]: { ...current[panel], geometry: latest } }));
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', stop);
+        window.addEventListener('pointercancel', stop);
+    };
+    const startPanelDrag = (panel: WorkspacePanelId, event: PanelPointerStartEvent) => {
+        if (panelTargetIsInteractive(event.target)) return;
+        beginPanelGeometryGesture(panel, event, (start, dx, dy) => movePanelGeometry(start, dx, dy, panelViewport()));
+    };
+    const startPanelResize = (panel: WorkspacePanelId, edge: PanelResizeEdge, event: PanelPointerStartEvent) => {
+        beginPanelGeometryGesture(panel, event, (start, dx, dy) => resizePanelGeometry(start, edge, dx, dy, panelViewport()));
+    };
+    const canSplitPanels = Boolean((run || visibleResultsView === 'sqlmap')
+        && queryMode === 'docked' && resultsMode === 'docked'
+        && !queryCollapsed && !resultsCollapsed && !compactViewport);
+    const workspaceLayoutStyle = { '--query-row': `${panelLayout.splitRatio * 100}%` } as CSSProperties;
+    const startPanelSplit = (event: PanelPointerStartEvent) => {
+        const content = workspaceContentRef.current;
+        if (!content || !canSplitPanels) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const rect = content.getBoundingClientRect();
+        const computed = getComputedStyle(content);
+        const top = rect.top + (Number.parseFloat(computed.paddingTop) || 0);
+        const usableHeight = Math.max(1, rect.height
+            - (Number.parseFloat(computed.paddingTop) || 0)
+            - (Number.parseFloat(computed.paddingBottom) || 0));
+        let latest = panelLayout.splitRatio;
+        document.body.classList.add('is-workspace-panel-gesturing');
+        const move = (pointer: PointerEvent) => {
+            latest = clampPanelSplitRatio((pointer.clientY - top) / usableHeight);
+            content.style.setProperty('--query-row', `${latest * 100}%`);
+        };
+        const stop = () => {
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', stop);
+            window.removeEventListener('pointercancel', stop);
+            document.body.classList.remove('is-workspace-panel-gesturing');
+            setPanelLayout(current => ({ ...current, splitRatio: latest }));
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', stop);
+        window.addEventListener('pointercancel', stop);
+    };
     const sqlMapStatement = safeSelectedStatement(active.sql, active.from, active.from);
     const sqlMapParseStatement = sqlMapStatement && nativeParseSnapshot?.statements.find(statement =>
         statement.from === sqlMapStatement.from && statement.to === sqlMapStatement.to && active.sql.slice(statement.from, statement.to) === statement.sql);
@@ -1066,9 +1237,38 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     </div>
                 </div>
 
-                <div id="sql-document-panel" role="tabpanel" aria-labelledby={`document-tab-${active.id}`} tabIndex={0} className={cx('workspace-content', experience === 'beginner' && 'beginner-workspace-content', run && 'has-run', visibleResultsView === 'sqlmap' && 'has-sql-map', queryCollapsed && 'is-query-collapsed', (run || visibleResultsView === 'sqlmap') && resultsCollapsed && 'is-results-collapsed')}>
-                    <section className={cx('editor-surface', queryCollapsed && 'is-collapsed')}>
-                        <div className="editor-heading">
+                <div
+                    ref={workspaceContentRef}
+                    id="sql-document-panel"
+                    role="tabpanel"
+                    aria-labelledby={`document-tab-${active.id}`}
+                    tabIndex={0}
+                    style={workspaceLayoutStyle}
+                    className={cx(
+                        'workspace-content',
+                        experience === 'beginner' && 'beginner-workspace-content',
+                        run && 'has-run',
+                        visibleResultsView === 'sqlmap' && 'has-sql-map',
+                        queryCollapsed && 'is-query-collapsed',
+                        (run || visibleResultsView === 'sqlmap') && resultsCollapsed && 'is-results-collapsed',
+                        queryFloating && 'has-floating-query',
+                        resultsFloating && 'has-floating-results',
+                        canSplitPanels && 'has-panel-split',
+                    )}
+                >
+                    <section
+                        ref={queryPanelRef}
+                        className={cx('editor-surface', queryCollapsed && 'is-collapsed', queryFloating && 'is-floating', queryMode === 'maximized' && 'is-maximized', activeFloatingPanel === 'query' && queryFloating && 'is-front')}
+                        style={panelStyle('query', queryMode)}
+                        onPointerDownCapture={() => { if (queryFloating) setActiveFloatingPanel('query'); }}
+                    >
+                        <div
+                            className={cx('editor-heading', queryFloating && 'workspace-panel-drag-handle')}
+                            onPointerDown={event => startPanelDrag('query', event)}
+                            onDoubleClick={event => {
+                                if (queryFloating && !panelTargetIsInteractive(event.target)) togglePanelMaximized('query');
+                            }}
+                        >
                             <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">{copy.common.query}</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label></div>
                         <div className="editor-heading-actions">
                             {experience === 'expert' && <>
@@ -1101,6 +1301,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                     >{copy.common.builtInFormatter}</Button>
                                 </div>
                             </>}
+                            {!compactViewport && <Button variant="ghost" className="panel-window-button" aria-label={queryFloating ? 'Dock query panel' : 'Pop out query panel'} title={queryFloating ? 'Dock query panel' : 'Pop out query panel'} onClick={() => togglePanelFloating('query')}><Icon name={queryFloating ? 'dock' : 'popout'}/></Button>}
+                            {queryFloating && <Button variant="ghost" className="panel-window-button" aria-label={queryMode === 'maximized' ? 'Restore query panel' : 'Maximize query panel'} title={queryMode === 'maximized' ? 'Restore query panel' : 'Maximize query panel'} onClick={() => togglePanelMaximized('query')}><Icon name={queryMode === 'maximized' ? 'restore' : 'maximize'}/></Button>}
                             <Button variant="ghost" className="panel-collapse-button" aria-label={queryCollapsed ? copy.common.expandQuery : copy.common.collapseQuery} aria-expanded={!queryCollapsed} aria-controls="sql-editor-content" title={queryCollapsed ? copy.common.expandQuery : copy.common.collapseQuery} onClick={() => setQueryCollapsed(value => !value)}><Icon className="panel-toggle-icon" name="chevron"/></Button>
                         </div>
                         </div>
@@ -1132,10 +1334,41 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             : parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => patch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
                         {experience === 'expert' && <div className="editor-footer"><span>{active.sql.length.toLocaleString()} {copy.common.characters} <span className="footer-dot">·</span> {active.sql.split('\n').length} {copy.common.lines}</span></div>}
                         </div>
+                        {queryMode === 'floating' && !queryCollapsed && <PanelResizeHandles onResize={(edge, event) => startPanelResize('query', edge, event)}/>}
                     </section>
 
-                    {(run || visibleResultsView === 'sqlmap') && <section className={cx('results-surface', experience === 'expert' && 'results-expert', resultsCollapsed && 'is-collapsed')} aria-label={resultsPanelLabel}>
-                        <div className="results-header">
+                    {canSplitPanels && <div
+                        className="workspace-panel-splitter"
+                        role="separator"
+                        aria-label="Resize query and output panels"
+                        aria-orientation="horizontal"
+                        aria-valuemin={25}
+                        aria-valuemax={75}
+                        aria-valuenow={Math.round(panelLayout.splitRatio * 100)}
+                        tabIndex={0}
+                        onPointerDown={startPanelSplit}
+                        onKeyDown={event => {
+                            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+                            event.preventDefault();
+                            const delta = event.key === 'ArrowUp' ? -0.05 : 0.05;
+                            setPanelLayout(current => ({ ...current, splitRatio: clampPanelSplitRatio(current.splitRatio + delta) }));
+                        }}
+                    ><span/></div>}
+
+                    {(run || visibleResultsView === 'sqlmap') && <section
+                        ref={resultsPanelRef}
+                        className={cx('results-surface', experience === 'expert' && 'results-expert', resultsCollapsed && 'is-collapsed', resultsFloating && 'is-floating', resultsMode === 'maximized' && 'is-maximized', activeFloatingPanel === 'results' && resultsFloating && 'is-front')}
+                        style={panelStyle('results', resultsMode)}
+                        aria-label={resultsPanelLabel}
+                        onPointerDownCapture={() => { if (resultsFloating) setActiveFloatingPanel('results'); }}
+                    >
+                        <div
+                            className={cx('results-header', resultsFloating && 'workspace-panel-drag-handle')}
+                            onPointerDown={event => startPanelDrag('results', event)}
+                            onDoubleClick={event => {
+                                if (resultsFloating && !panelTargetIsInteractive(event.target)) togglePanelMaximized('results');
+                            }}
+                        >
                             <div className="results-title">
                                 <span className="results-mark"><Icon name={visibleResultsView === 'sqlmap' || visibleResultsView === 'pipeline' ? 'pipeline' : 'chart'}/></span>
                                 <div><span className="eyebrow">{resultsEyebrow}</span><h2>{resultsTitle}</h2></div>
@@ -1147,6 +1380,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                     if (tab === 'chart' || tab === 'plan' || tab === 'pipeline') void perform(loadSnapshot, 'save');
                                     if (tab === 'insights') void perform(loadProfile, 'save');
                                 }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : tab === 'sqlmap' ? copy.common.sqlMap : tab === 'plan' ? copy.common.logicalPlan : tab === 'pipeline' ? copy.common.pipelineGraph : copy.common.insights}{tab === 'chart' && retainedSnapshot && <span className="suggested-dot"/>}</button>)}</div>}
+                                {!compactViewport && <Button variant="ghost" className="panel-window-button" aria-label={resultsFloating ? 'Dock output panel' : 'Pop out output panel'} title={resultsFloating ? 'Dock output panel' : 'Pop out output panel'} onClick={() => togglePanelFloating('results')}><Icon name={resultsFloating ? 'dock' : 'popout'}/></Button>}
+                                {resultsFloating && <Button variant="ghost" className="panel-window-button" aria-label={resultsMode === 'maximized' ? 'Restore output panel' : 'Maximize output panel'} title={resultsMode === 'maximized' ? 'Restore output panel' : 'Maximize output panel'} onClick={() => togglePanelMaximized('results')}><Icon name={resultsMode === 'maximized' ? 'restore' : 'maximize'}/></Button>}
                                 <Button variant="ghost" className="panel-collapse-button" aria-label={`${resultsCollapsed ? copy.common.expand : copy.common.collapse} ${resultsPanelLabel}`} aria-expanded={!resultsCollapsed} aria-controls="query-results-content" title={resultsCollapsed ? copy.common.expandOutput : copy.common.collapseOutput} onClick={() => setResultsCollapsed(value => !value)}><Icon className="panel-toggle-icon" name="chevron"/></Button>
                             </div>
                         </div>
@@ -1166,6 +1401,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             {run && visibleResultsView === 'chart' && snapshotChart?.config.kind === 'table' ? <div className="chart-table-fallback"><div className="chart-table-notice" role="status">{copy.chart.fallbackNoMeasure}</div><ResultGrid key={`${run.id}-chart-table`} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/></div> : run && visibleResultsView === 'chart' && <ChartView result={retainedSnapshot} loading={!retainedSnapshot && run.resultState === 'reopenable'} chart={active.chart} onChart={chart => patch({ chart })} copy={copy} locale={locale}/>}
                             {run && visibleResultsView === 'insights' && <InsightsView run={run} profile={profile} pipeline={pipeline} pipelineAvailable={Boolean(trusted && connection.manifest?.pipeline.available)} onLoad={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} loading={busy === 'save'}/>}
                         </div>
+                        {resultsMode === 'floating' && !resultsCollapsed && <PanelResizeHandles onResize={(edge, event) => startPanelResize('results', edge, event)}/>}
                     </section>}
                 </div>
             </main>

@@ -1,25 +1,25 @@
 # ClickStudio
 
-A local-first ClickHouse SQL workbench built with React, Click UI, CodeMirror, and a bounded server API. ClickStudio keeps SQL, parameters, execution limits, results, and query evidence tied to each run instead of treating the editor as disposable text.
+A local-first ClickHouse SQL workbench built with React, Click UI, CodeMirror, and a bounded server API. ClickStudio keeps SQL, parameters, execution limits, results, and query evidence tied to each run so every analysis step stays easy to inspect and revisit.
 
 ## Reviewer tour
 
-If you are reviewing this as an interview project, the shortest useful path is:
+For a fast review:
 
-1. Start the **sample workspace** below and run through the editor, results, charts, and EXPLAIN views.
-2. Read [Engineering decisions and tradeoffs](docs/ENGINEERING-NOTES.md) for the reasoning behind the server boundary, result model, ClickHouse permissions, exact numeric handling, fixtures, and persistence choices.
-3. Use [Project scope](docs/PROJECT-STATUS.md) to see what is implemented and what is intentionally left out.
-4. Use the longer [setup and implementation reference](docs/CLICKSTUDIO.md) only when you want a specific detail.
+1. Start the **sample workspace** and explore the editor, results, charts, and EXPLAIN views.
+2. Read [Engineering choices](docs/ENGINEERING-NOTES.md) for the architecture and product reasoning.
+3. Open [Project highlights](docs/PROJECT-STATUS.md) for the implemented feature set and technical focus.
+4. Use the [setup and implementation reference](docs/CLICKSTUDIO.md) for deeper details.
 
-The project is intentionally broader than a bare text editor, but the core idea is simple: make ClickHouse query execution **inspectable, bounded, and tied to durable evidence** without hiding the underlying SQL or database behavior.
+The core idea is simple: make ClickHouse query execution **inspectable, bounded, and connected to durable evidence** while keeping the SQL and database behavior visible.
 
 ## Quick start
 
-Requires **Node.js 22.12+**, npm, and Docker only for the live ClickHouse path.
+Requires **Node.js 22.12+** and npm. Docker powers the live ClickHouse path.
 
 ### Sample workspace
 
-Use this when you want to explore the interface without starting a database:
+Use the deterministic sample workspace for the fastest product tour:
 
 ```sh
 npm run setup
@@ -29,7 +29,7 @@ DEMO_MODE=true npm run dev
 
 Open `http://localhost:5173` and choose **Start exploring**.
 
-Sample mode uses deterministic fixtures. It does not execute or interpret the SQL you type, and it never replaces a failed real database connection with fake data.
+Sample mode provides stable fixture responses for repeatable UI exploration and browser testing.
 
 ### Local ClickHouse
 
@@ -56,41 +56,39 @@ ORDER BY day;
 
 Use the Run actions beside **Run statement** to inspect **EXPLAIN INDEXES**, **EXPLAIN PLAN**, or **EXPLAIN PIPELINE** for the current statement.
 
-Keep `.env` private. Database credentials and optional model-provider credentials stay on the server.
+Database and optional model-provider credentials stay on the server.
 
 ## Examples
 
 The repository includes copy-pasteable examples that match the bundled local setup:
 
 - [`clickstudio/examples/analysis.sql`](clickstudio/examples/analysis.sql) covers a table-free query, the seeded dataset, exact ClickHouse numeric values, schema inspection, parameters, and plan/pipeline workflows.
-- [`clickstudio/examples/import.csv`](clickstudio/examples/import.csv) can be imported into the allowlisted `default.import_events` table.
-- [`clickstudio/examples/connections.json`](clickstudio/examples/connections.json) shows the operator-owned multi-connection configuration format.
+- [`clickstudio/examples/import.csv`](clickstudio/examples/import.csv) can be imported into `default.import_events`.
+- [`clickstudio/examples/connections.json`](clickstudio/examples/connections.json) shows the multi-connection configuration format.
 
 In the editor, **Ctrl/Cmd+Enter** runs the selection or current statement. **Ctrl/Cmd+Shift+Enter** runs the script. **Ctrl/Cmd+K** or **Ctrl/Cmd+P** opens the command palette.
 
-## What it includes
+## Highlights
 
 - Run read-only SQL and inspect typed, paginated results.
 - Format and validate ClickHouse SQL in the editor.
 - Run scripts and inspect each statement separately.
-- Inspect the selected database and ClickHouse system tables, including native system-table documentation from the connected server.
+- Explore databases, tables, columns, and native ClickHouse system-table documentation.
 - Import CSV, JSON, or NDJSON through preview, mapping, and explicit row-count confirmation.
 - Track execution progress, cancel queries, and reopen retained evidence.
 - Save query documents, build charts, and inspect query history.
-- Inspect index pruning, logical plans, and execution pipelines with interactive graph views where the connected server supports them.
-- Review assistant context and SQL proposals before applying them. The assistant never runs SQL automatically.
-
-Real connections require explicit review and trust before query execution. Sample results are fixtures, not live ClickHouse measurements.
+- Explore index pruning, logical plans, and execution pipelines through interactive graph views.
+- Review assistant context and SQL proposals before applying and running them.
 
 ## Validation
 
-For the main local quality gate:
+Run the main local quality gate:
 
 ```sh
 npm run check
 ```
 
-That delegates to the ClickStudio review suite, including syntax checks, TypeScript, ESLint, coverage gates, and the production build.
+It covers syntax checks, TypeScript, ESLint, coverage gates, and the production build.
 
 For focused browser coverage:
 
@@ -99,7 +97,7 @@ cd clickstudio
 npm run test:e2e:core
 ```
 
-For live ClickHouse integration checks, start the bundled database and run:
+For live ClickHouse integration checks:
 
 ```sh
 cd clickstudio
@@ -110,8 +108,7 @@ npm run eval
 ## Documentation
 
 - [Documentation index](docs/README.md) - reviewer-oriented map of the repository docs.
-- [Engineering decisions and tradeoffs](docs/ENGINEERING-NOTES.md) - the recommended technical interview read.
-- [Project scope](docs/PROJECT-STATUS.md) - implemented features and deliberate boundaries.
-- [Setup and implementation reference](docs/CLICKSTUDIO.md) - detailed reference for setup and behavior.
-
-The project is intentionally local-first and single-owner. A production multi-user deployment would need a different auth and persistence model; those boundaries are discussed in the engineering notes rather than presented as unfinished interview requirements.
+- [Engineering choices](docs/ENGINEERING-NOTES.md) - architecture and implementation reasoning.
+- [Project highlights](docs/PROJECT-STATUS.md) - implemented capabilities and technical focus.
+- [Setup and implementation reference](docs/CLICKSTUDIO.md) - detailed setup and behavior.
+- [Product exploration](docs/product-roadmap/) - broader product ideas and future directions.

@@ -1037,7 +1037,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             ? ['results', 'pipeline']
             : experience === 'beginner' ? ['results', 'chart', 'sqlmap'] : ['results', 'chart', 'sqlmap', 'insights'];
     const retainedSnapshot = run && snapshot?.runId === run.id ? snapshot : undefined;
-    const explainPlan = run?.kind === 'plan' ? parseExplainPlan(retainedSnapshot?.rows[0]?.[0]) : undefined;
+    const explainPlanOutput = run?.kind === 'plan' ? retainedSnapshot?.rows[0]?.[0] : undefined;
+    const explainPlan = useMemo(() => parseExplainPlan(explainPlanOutput), [explainPlanOutput]);
     const pipelineResult = run?.kind === 'pipeline' && retainedSnapshot
         ? parsePipelineResult(retainedSnapshot.rows.map(row => row[0]).filter((value): value is string => typeof value === 'string'))
         : undefined;

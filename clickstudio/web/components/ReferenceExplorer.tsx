@@ -44,9 +44,13 @@ export function ReferenceExplorer({ copy, connection, trusted, target, onTargetH
     const [visibleResultCount, setVisibleResultCount] = useState(REFERENCE_PAGE_SIZE);
     const [retryToken, setRetryToken] = useState(0);
     const resultListRef = useRef<HTMLDivElement | null>(null);
+    const lastVisibleResultRef = useRef<HTMLButtonElement | null>(null);
     const searchRequest = useRef<AbortController | undefined>(undefined);
     const entryRequest = useRef<AbortController | undefined>(undefined);
     const lastTarget = useRef('');
+    const canLoadMore = (nativeProvider.kind !== 'native' || trusted)
+        && !loading && !selected && !entryLoading && !entryError
+        && results.length > visibleResultCount;
 
     useEffect(() => {
         setForceBundled(false);
@@ -101,6 +105,21 @@ export function ReferenceExplorer({ copy, connection, trusted, target, onTargetH
         setActiveIndex(0);
         setVisibleResultCount(REFERENCE_PAGE_SIZE);
     }, [results]);
+
+    useEffect(() => {
+        const list = resultListRef.current;
+        const lastVisibleResult = lastVisibleResultRef.current;
+        if (!list || !lastVisibleResult || !canLoadMore) return;
+
+        const observer = new IntersectionObserver(entries => {
+            if (!entries.some(entry => entry.isIntersecting)) return;
+            setVisibleResultCount(count => count === visibleResultCount
+                ? Math.min(results.length, count + REFERENCE_PAGE_SIZE)
+                : count);
+        }, { root: list, rootMargin: '0px 0px 80px 0px' });
+        observer.observe(lastVisibleResult);
+        return () => observer.disconnect();
+    }, [canLoadMore, results.length, visibleResultCount]);
 
     useEffect(() => {
         resultListRef.current?.querySelector<HTMLElement>(`[data-reference-index="${activeIndex}"]`)?.scrollIntoView({ block: 'nearest' });
@@ -193,7 +212,6 @@ export function ReferenceExplorer({ copy, connection, trusted, target, onTargetH
     const isBundled = provider.kind === 'bundled';
     const resultTitle = query ? copy.referenceMatches.replace('{count}', results.length.toLocaleString()) : copy.referenceBrowse;
     const visibleResults = results.slice(0, visibleResultCount);
-    const remainingResults = results.length - visibleResults.length;
 
     return <section className="inspector-section object-explorer-section reference-explorer" onKeyDown={navigateResults}>
         {nativeProvider.kind === 'native' && !trusted ? <div className="inspector-empty"><Icon name="lock"/><strong>{copy.schemaPrivate}</strong><p>{copy.trustToInspect}</p></div> : <>
@@ -220,12 +238,11 @@ export function ReferenceExplorer({ copy, connection, trusted, target, onTargetH
                 {loading && <div className="inspector-empty"><span className="loading-orbit"/><p>{copy.loading}</p></div>}
                 {!loading && !error && !results.length && <div className="object-empty-search"><strong>{copy.referenceNoMatches}</strong><span>{copy.referenceEmptyHint}</span></div>}
                 {!loading && results.length > 0 && <div ref={resultListRef} className="reference-results" role="listbox" aria-label={copy.referenceResults} aria-activedescendant={visibleResults[activeIndex] ? `reference-option-${activeIndex}` : undefined}>
-                    {visibleResults.map((entry, index) => <button id={`reference-option-${index}`} data-reference-index={index} key={referenceId(entry)} type="button" role="option" aria-selected={index === activeIndex} className={cx('reference-result', index === activeIndex && 'is-active')} onMouseEnter={() => setActiveIndex(index)} onClick={() => { setActiveIndex(index); void openEntry(entry); }}>
+                    {visibleResults.map((entry, index) => <button ref={canLoadMore && index === visibleResults.length - 1 ? lastVisibleResultRef : undefined} id={`reference-option-${index}`} data-reference-index={index} key={referenceId(entry)} type="button" role="option" aria-selected={index === activeIndex} className={cx('reference-result', index === activeIndex && 'is-active')} onMouseEnter={() => setActiveIndex(index)} onClick={() => { setActiveIndex(index); void openEntry(entry); }}>
                         <span className="reference-result-glyph"><Icon name={entry.type === 'System Table' ? 'table' : entry.type.includes('Engine') ? 'database' : entry.type.includes('Type') ? 'column' : 'documents'}/></span>
                         <span className="reference-result-copy"><strong>{entry.type === 'System Table' ? `system.${entry.name}` : entry.name}</strong><small>{entry.type}</small></span><span className="history-open">›</span>
                     </button>)}
                 </div>}
-                {!loading && remainingResults > 0 && <Button variant="ghost" className="reference-load-more" onClick={() => setVisibleResultCount(count => Math.min(results.length, count + REFERENCE_PAGE_SIZE))}>{copy.referenceLoadMore.replace('{count}', Math.min(remainingResults, REFERENCE_PAGE_SIZE).toLocaleString())}</Button>}
             </>}
         </>}
     </section>;

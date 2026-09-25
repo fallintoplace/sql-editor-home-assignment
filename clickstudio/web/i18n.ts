@@ -211,7 +211,6 @@ export interface Copy {
         referenceFormats: string;
         referenceSql: string;
         referenceBrowse: string;
-        referenceLoadMore: string;
         referencePopular: string;
         referenceNoMatches: string;
         referenceNative: string;
@@ -575,7 +574,6 @@ const english: Copy = {
         referenceFormats: 'Formats',
         referenceSql: 'SQL',
         referenceBrowse: 'Browse full catalog',
-        referenceLoadMore: 'Show {count} more',
         referencePopular: 'Popular',
         referenceNoMatches: 'No reference entries match this search.',
         referenceNative: 'Native ClickHouse reference',
@@ -880,14 +878,14 @@ const referenceTranslations: Record<Exclude<Locale, 'en'>, ReferenceTranslation>
     ru: { reference: 'Справочник', referenceSearch: 'Поиск в ClickHouse…', referenceAll: 'Все', referenceFunctions: 'Функции', referenceTypes: 'Типы', referenceEngines: 'Движки', referenceSettings: 'Настройки', referenceSystem: 'Система', referencePopular: 'Популярное', referenceNoMatches: 'Подходящие записи не найдены.', referenceNative: 'Справочник ClickHouse', referenceBundled: 'Встроенный демо-справочник', referenceSource: 'ИСТОЧНИК', referenceBack: 'Вернуться к результатам', referenceEntryUnavailable: 'На выбранном сервере нет документации для этой записи.', referenceRetry: 'Повторить', referenceBundledNote: 'В ClickStudio есть примеры записей.', referenceCategories: 'Категории справочника', referenceMatches: 'Совпадений: {count}', referenceEmptyHint: 'Попробуйте другое имя или категорию.', referenceResults: 'Результаты справочника', referenceInsert: 'Вставить имя', referenceCopy: 'Копировать имя', referenceTableEngine: 'Описание движка', referenceSystemTable: 'Описание системной таблицы', clearSearch: 'Очистить поиск' },
 };
 
-type ReferenceCatalogTranslation = Pick<Copy['common'], 'referenceFormats' | 'referenceSql' | 'referenceBrowse' | 'referenceLoadMore' | 'referenceBundled' | 'referenceBundledNote'>;
+type ReferenceCatalogTranslation = Pick<Copy['common'], 'referenceFormats' | 'referenceSql' | 'referenceBrowse' | 'referenceBundled' | 'referenceBundledNote'>;
 
 const referenceCatalogTranslations: Record<Exclude<Locale, 'en'>, ReferenceCatalogTranslation> = {
-    de: { referenceFormats: 'Formate', referenceSql: 'SQL', referenceBrowse: 'Vollständigen Katalog durchsuchen', referenceLoadMore: '{count} weitere anzeigen', referenceBundled: 'Offline-ClickHouse-Referenz', referenceBundledNote: 'Vollständiger Offline-Katalog mit SQL-Beispielen.' },
-    es: { referenceFormats: 'Formatos', referenceSql: 'SQL', referenceBrowse: 'Explorar catálogo completo', referenceLoadMore: 'Mostrar {count} más', referenceBundled: 'Referencia offline de ClickHouse', referenceBundledNote: 'Catálogo offline completo con ejemplos SQL.' },
-    nl: { referenceFormats: 'Formaten', referenceSql: 'SQL', referenceBrowse: 'Volledige catalogus bekijken', referenceLoadMore: '{count} meer tonen', referenceBundled: 'Offline ClickHouse-referentie', referenceBundledNote: 'Volledige offlinecatalogus met SQL-voorbeelden.' },
-    zh: { referenceFormats: '格式', referenceSql: 'SQL', referenceBrowse: '浏览完整目录', referenceLoadMore: '再显示 {count} 个', referenceBundled: '离线 ClickHouse 参考', referenceBundledNote: '完整离线目录，包含 SQL 示例。' },
-    ru: { referenceFormats: 'Форматы', referenceSql: 'SQL', referenceBrowse: 'Весь каталог', referenceLoadMore: 'Показать ещё: {count}', referenceBundled: 'Офлайн-справочник ClickHouse', referenceBundledNote: 'Полный офлайн-каталог с примерами SQL.' },
+    de: { referenceFormats: 'Formate', referenceSql: 'SQL', referenceBrowse: 'Vollständigen Katalog durchsuchen', referenceBundled: 'Offline-ClickHouse-Referenz', referenceBundledNote: 'Vollständiger Offline-Katalog mit SQL-Beispielen.' },
+    es: { referenceFormats: 'Formatos', referenceSql: 'SQL', referenceBrowse: 'Explorar catálogo completo', referenceBundled: 'Referencia offline de ClickHouse', referenceBundledNote: 'Catálogo offline completo con ejemplos SQL.' },
+    nl: { referenceFormats: 'Formaten', referenceSql: 'SQL', referenceBrowse: 'Volledige catalogus bekijken', referenceBundled: 'Offline ClickHouse-referentie', referenceBundledNote: 'Volledige offlinecatalogus met SQL-voorbeelden.' },
+    zh: { referenceFormats: '格式', referenceSql: 'SQL', referenceBrowse: '浏览完整目录', referenceBundled: '离线 ClickHouse 参考', referenceBundledNote: '完整离线目录，包含 SQL 示例。' },
+    ru: { referenceFormats: 'Форматы', referenceSql: 'SQL', referenceBrowse: 'Весь каталог', referenceBundled: 'Офлайн-справочник ClickHouse', referenceBundledNote: 'Полный офлайн-каталог с примерами SQL.' },
 };
 
 type ObjectExplorerTranslation = Pick<Copy['common'],

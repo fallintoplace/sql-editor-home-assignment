@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { AssistantAction, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Run, Schema } from '../../shared/types';
 import { AssistantWorkflow } from './AssistantWorkflow';
-import { Button, cx, formatBytes, formatCount, Icon, inspectorLabel, Status } from './ui';
+import { Button, cx, formatBytes, Icon, inspectorLabel, Status } from './ui';
 import type { IconName } from './ui';
 import type { AssistantContext, Connected, Inspector } from '../workspace-types';
 import type { NativeParseSnapshot, NativeParserStatus } from '../../shared/native-parser';

@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Download } from '@playwright/test';
-import type { Result } from '../../shared/types';
+import type { Result } from '../../shared/types.js';
 import { trust } from './helpers.js';
 
 function countRuns(page: Page) {

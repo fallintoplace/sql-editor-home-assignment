@@ -628,8 +628,8 @@ test('Cancelling a long-running query reaches a terminal cancelled state', async
 });
 
 test('Cancellation stays available while execution profile loading is pending', async ({ page }) => {
-    let releaseProfile = () => undefined;
-    const profileGate = new Promise<void>(resolve => { releaseProfile = resolve; });
+    let releaseProfile: () => void = () => {};
+    const profileGate = new Promise<void>(resolve => { releaseProfile = () => resolve(); });
     await page.route(url => /\/api\/runs\/[^/]+\/profile$/.test(url.pathname), async route => {
         await profileGate;
         await route.continue();

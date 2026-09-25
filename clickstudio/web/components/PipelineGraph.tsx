@@ -243,6 +243,13 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
         setSelectedId(node.id);
         onSelectNode?.(node);
     };
+    const focusNodeElement = (nodeId: string) => {
+        for (const element of graphViewport.current?.querySelectorAll<SVGGElement>('[data-node-id]') ?? []) {
+            if (element.dataset.nodeId !== nodeId) continue;
+            element.focus();
+            return;
+        }
+    };
     const zoomTo = (nextZoom: number) => {
         const viewport = graphViewport.current;
         if (!viewport) {
@@ -262,9 +269,22 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
         });
     };
     const onNodeKeyDown = (event: KeyboardEvent<SVGGElement>, node: ProfilePipelineNode) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            chooseNode(node);
+            return;
+        }
+        if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
         event.preventDefault();
-        chooseNode(node);
+        const currentIndex = layout.nodes.findIndex(({ node: candidate }) => candidate.id === node.id);
+        if (currentIndex < 0) return;
+        const direction = event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? -1 : 1;
+        const next = layout.nodes[(currentIndex + direction + layout.nodes.length) % layout.nodes.length];
+        if (!next) return;
+        chooseNode(next.node);
+        focusNodeElement(next.node.id);
+        const viewport = graphViewport.current;
+        if (viewport) centerGraphNode(viewport, next, zoom, 'smooth');
     };
     const fitGraph = () => {
         const viewport = graphViewport.current;
@@ -294,6 +314,11 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
             ? { graph: copy?.logicalPlan ?? 'Logical query plan', item: copy?.planStep ?? 'steps', selected: copy?.planSelectedStep ?? 'Selected step', action: copy?.planInspectStep ?? 'Inspect step', details: copy?.planStepDetails ?? 'Selected plan step details' }
         : { graph: copy?.pipelineGraph ?? 'Execution plan graph', item: copy?.sqlFlowOperators ?? 'operators', selected: copy?.selectedOperator ?? 'Selected operator', action: copy?.inspectOperator ?? 'Inspect operator', details: copy?.selectedOperatorDetails ?? 'Selected operator details' };
     const connectionLabel = graphKind === 'sql-flow' ? copy?.sqlFlowConnections ?? 'connections' : 'connections';
+    const viewportLabel = graphKind === 'sql-flow'
+        ? copy?.sqlMap ?? 'Scrollable SQL flow graph'
+        : graphKind === 'explain-plan'
+            ? `${copy?.logicalPlan ?? 'Logical query plan'} · ${copy?.planGraphView ?? 'Graph'}`
+            : 'Scrollable operator graph';
 
     return <div className="pipeline-graph-card grid gap-3 rounded-xl border p-3" role="group" aria-label={terminology.graph}>
         {graphKind !== 'explain-plan' && <div className="pipeline-graph-heading">
@@ -314,7 +339,7 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
                 <span>{copy?.pipelineFit ?? 'Fit graph'}</span>
             </button>
         </div>
-        <div ref={graphViewport} className="pipeline-graph-scroll overflow-auto" role="region" aria-label={graphKind === 'sql-flow' ? copy?.sqlMap ?? 'Scrollable SQL flow graph' : graphKind === 'explain-plan' ? copy?.logicalPlan ?? 'Scrollable query plan graph' : 'Scrollable operator graph'}>
+        <div ref={graphViewport} className="pipeline-graph-scroll overflow-auto" role="region" aria-label={viewportLabel}>
             <svg className="pipeline-graph-svg" width={Math.round(graphWidth * zoom)} height={Math.round(graphHeight * zoom)} viewBox={`0 0 ${graphWidth} ${graphHeight}`} role="group" aria-label={graphKind === 'sql-flow' ? copy?.sqlFlowGraphHint ?? 'Click a stage to inspect it' : graphKind === 'explain-plan' ? copy?.planGraphHint ?? 'Select a step to inspect its properties.' : copy?.pipelineGraphHint ?? 'Click an operator to inspect it'}>
                 <defs>
                     <pattern id={gridId} width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 H 0 V 32" className="pipeline-graph-grid-line"/></pattern>
@@ -345,7 +370,7 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
                     const related = focusedGraph?.nodeIds.has(node.id) ?? false;
                     const status = graphKind === 'execution' && node.status === 'planned' ? copy?.plannedStatus ?? node.status : node.status;
                     const focusState = focusedGraph ? active ? ' is-selected' : related ? ' is-related' : ' is-muted' : '';
-                    return <g key={node.id} role="button" tabIndex={0} aria-label={`${terminology.action} ${label}`} aria-pressed={active} data-node-id={node.id} className={`pipeline-graph-node pipeline-node-${node.kind}${focusState}`} transform={`translate(${x - nodeWidth / 2} ${y - nodeHeight / 2})`} onClick={() => chooseNode(node)} onKeyDown={event => onNodeKeyDown(event, node)}>
+                    return <g key={node.id} role="button" tabIndex={active ? 0 : -1} aria-label={`${terminology.action} ${label}`} aria-pressed={active} data-node-id={node.id} className={`pipeline-graph-node pipeline-node-${node.kind}${focusState}`} transform={`translate(${x - nodeWidth / 2} ${y - nodeHeight / 2})`} onClick={event => { chooseNode(node); event.currentTarget.focus(); }} onKeyDown={event => onNodeKeyDown(event, node)}>
                         <title>{label}</title>
                         <rect className="pipeline-node-shadow" x="10" y="10" width={nodeWidth} height={nodeHeight} rx="11"/>
                         <path className="pipeline-node-side" d={`M 0 ${nodeHeight - 1} H ${nodeWidth} L ${nodeWidth + 10} ${nodeHeight + 9} H 10 Z`}/>

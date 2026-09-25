@@ -1,0 +1,137 @@
+
+    /* Unified ClickHouse object explorer */
+    .object-explorer-section { --explorer-signal: var(--signal-accent); position: relative; isolation: isolate; display: flex; height: 100%; min-height: 0; flex-direction: column; gap: 10px; overflow: hidden; padding: 12px; background: radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--explorer-signal) 9%, transparent), transparent 45%), linear-gradient(155deg, color-mix(in srgb, var(--panel-raised) 42%, var(--panel)), var(--panel)); }
+    .object-explorer-section::before { position: absolute; z-index: 0; inset: 0; pointer-events: none; background-image: linear-gradient(color-mix(in srgb, var(--explorer-signal) 5%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--explorer-signal) 5%, transparent) 1px, transparent 1px); background-size: 24px 24px; mask-image: linear-gradient(to bottom, #000 0, transparent 72%); content: ""; }
+    .object-explorer-section::after { position: absolute; z-index: 0; top: 0; left: 12px; width: 88px; height: 1px; pointer-events: none; background: linear-gradient(90deg, transparent, var(--explorer-signal), transparent); box-shadow: 0 0 10px color-mix(in srgb, var(--explorer-signal) 52%, transparent); content: ""; }
+    .object-explorer-section > * { position: relative; z-index: 1; }
+    .object-search, .object-heading { flex: none; }
+    .object-search { min-height: 38px; padding: 0 7px 0 10px; border-color: color-mix(in srgb, var(--explorer-signal) 24%, var(--line-bright)); border-radius: 10px; background: linear-gradient(145deg, color-mix(in srgb, var(--explorer-signal) 7%, var(--panel-raised)), var(--panel-raised)); box-shadow: inset 0 1px #ffffff09; transition: border-color .16s ease, box-shadow .16s ease, background .16s ease; }
+    .object-search:focus-within { border-color: color-mix(in srgb, var(--explorer-signal) 70%, var(--line-bright)); background: var(--panel-raised); box-shadow: 0 0 0 3px color-mix(in srgb, var(--explorer-signal) 13%, transparent), 0 0 18px color-mix(in srgb, var(--explorer-signal) 10%, transparent); }
+    .object-search > svg { width: 16px; height: 16px; color: var(--explorer-signal); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--explorer-signal) 45%, transparent)); }
+    .object-search input { min-width: 0; font-size: 11px; }
+    .object-search input::placeholder { color: color-mix(in srgb, var(--muted) 80%, transparent); }
+    .object-search-clear { display: grid; width: 27px; height: 27px; flex: none; place-items: center; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--muted); font-size: 15px; cursor: pointer; }
+    .object-search-clear:hover, .object-search-clear:focus-visible { border-color: color-mix(in srgb, var(--explorer-signal) 25%, var(--line)); background: color-mix(in srgb, var(--explorer-signal) 9%, var(--panel)); color: var(--explorer-signal); outline: none; }
+    .schema-heading.object-heading { min-height: 27px; gap: 8px; padding: 0 2px 5px; border-bottom: 1px solid color-mix(in srgb, var(--explorer-signal) 18%, var(--line)); }
+    .schema-heading.object-heading > span { color: var(--muted); font-family: var(--font-mono); font-size: 9px; font-weight: 760; letter-spacing: .13em; text-transform: uppercase; }
+    .object-heading .toolbar-small { color: var(--explorer-signal); }
+    .object-heading .toolbar-small:hover:not(:disabled) { background: color-mix(in srgb, var(--explorer-signal) 10%, var(--panel)); }
+    .object-tree-scroll { min-height: 150px; flex: 1; overflow: auto; padding: 5px; border: 1px solid color-mix(in srgb, var(--explorer-signal) 20%, var(--line)); border-radius: 12px; background: linear-gradient(155deg, color-mix(in srgb, var(--panel-raised) 88%, transparent), color-mix(in srgb, var(--panel) 94%, transparent)); box-shadow: inset 0 1px #ffffff08, 0 10px 24px #0000000b; scrollbar-color: color-mix(in srgb, var(--explorer-signal) 35%, var(--muted)) transparent; scrollbar-gutter: stable; }
+    .object-tree { display: grid; gap: 2px; min-width: 0; }
+    .object-tree-branch { min-width: 0; }
+    .object-tree-row { position: relative; display: flex; min-width: 0; min-height: 33px; align-items: center; border: 1px solid transparent; border-radius: 8px; color: var(--text-soft); transition: border-color .16s ease, background .16s ease, color .16s ease, box-shadow .16s ease; }
+    .object-tree-row:hover, .object-tree-row:focus-within { border-color: color-mix(in srgb, var(--explorer-signal) 15%, transparent); background: color-mix(in srgb, var(--explorer-signal) 6%, var(--panel-hover)); color: var(--text); }
+    .object-tree-row.is-selected { border-color: color-mix(in srgb, var(--explorer-signal) 29%, var(--line)); background: linear-gradient(100deg, color-mix(in srgb, var(--explorer-signal) 13%, var(--panel-raised)), color-mix(in srgb, var(--accent) 5%, var(--panel))); color: var(--text); box-shadow: inset 2px 0 var(--explorer-signal), 0 0 16px color-mix(in srgb, var(--explorer-signal) 8%, transparent); }
+    .object-tree-row.is-database { margin-top: 2px; font-weight: 650; }
+    .object-tree-toggle { display: grid; width: 25px; height: 29px; flex: none; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+    .object-tree-toggle:disabled { cursor: default; opacity: .35; }
+    .object-tree-toggle:not(:disabled):hover, .object-tree-toggle:not(:disabled):focus-visible { background: color-mix(in srgb, var(--explorer-signal) 12%, transparent); color: var(--explorer-signal); outline: none; }
+    .object-tree-toggle > span { display: grid; place-items: center; line-height: 1; }
+    .object-tree-toggle > span > svg { width: 14px; height: 14px; transform: rotate(-90deg); transition: transform .16s ease; }
+    .object-tree-toggle > span.is-open > svg { transform: rotate(0); }
+    .object-tree-spacer { pointer-events: none; }
+    .object-tree-main { display: flex; min-width: 0; min-height: 31px; flex: 1; align-items: center; gap: 8px; padding: 2px 5px 2px 1px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+    .object-tree-main:focus-visible { border-radius: 6px; outline: 2px solid color-mix(in srgb, var(--explorer-signal) 72%, transparent); outline-offset: -2px; }
+    .object-kind-glyph { display: grid; width: 22px; height: 22px; flex: none; place-items: center; border: 1px solid color-mix(in srgb, var(--explorer-signal) 28%, var(--line)); border-radius: 7px; background: linear-gradient(145deg, color-mix(in srgb, var(--explorer-signal) 13%, var(--panel-raised)), color-mix(in srgb, var(--explorer-signal) 4%, var(--panel))); color: var(--explorer-signal); box-shadow: inset 0 1px #ffffff0a, 0 0 10px color-mix(in srgb, var(--explorer-signal) 5%, transparent); }
+    .object-kind-glyph > svg { width: 13px; height: 13px; stroke-width: 1.8; }
+    .object-kind-glyph.is-view { border-color: color-mix(in srgb, var(--violet) 35%, var(--line)); background: color-mix(in srgb, var(--violet) 9%, var(--panel-raised)); color: var(--violet); }
+    .object-kind-glyph.is-database { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); background: color-mix(in srgb, var(--accent) 10%, var(--panel-raised)); color: var(--accent); box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 10%, transparent); }
+    .object-tree-row.is-group:not(.is-database) .object-kind-glyph { width: 20px; height: 20px; border-color: color-mix(in srgb, var(--explorer-signal) 18%, var(--line)); background: color-mix(in srgb, var(--explorer-signal) 5%, var(--panel)); }
+    .object-tree-label { display: grid; min-width: 0; flex: 1; gap: 2px; }
+    .object-tree-label strong { overflow: hidden; color: inherit; font-family: var(--font-mono); font-size: 10.5px; font-weight: 580; letter-spacing: -.015em; text-overflow: ellipsis; white-space: nowrap; }
+    .object-tree-row.is-group:not(.is-database) .object-tree-label strong { color: var(--muted); font-family: var(--font-sans); font-size: 9px; font-weight: 760; letter-spacing: .1em; text-transform: uppercase; }
+    .object-tree-row.is-database .object-tree-label strong { font-family: var(--font-sans); font-size: 11px; font-weight: 720; letter-spacing: .015em; }
+    .object-tree-label small { overflow: hidden; color: var(--muted); font-family: var(--font-mono); font-size: 8.5px; text-overflow: ellipsis; white-space: nowrap; }
+    .object-tree-count { display: inline-flex; min-width: 23px; height: 19px; flex: none; align-items: center; justify-content: center; padding: 0 6px; border: 1px solid color-mix(in srgb, var(--explorer-signal) 20%, var(--line)); border-radius: 6px; background: color-mix(in srgb, var(--explorer-signal) 7%, var(--panel-raised)); color: var(--explorer-signal); font-family: var(--font-mono); font-size: 8px; font-variant-numeric: tabular-nums; }
+    .object-tree-inline-action { display: grid; width: 25px; height: 25px; flex: none; place-items: center; margin-right: 3px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--muted); opacity: 0; cursor: pointer; transition: opacity .14s ease, border-color .14s ease, background .14s ease, color .14s ease, box-shadow .14s ease; }
+    .object-tree-inline-action svg { width: 13px; height: 13px; }
+    .object-tree-row:hover .object-tree-inline-action, .object-tree-row:focus-within .object-tree-inline-action, .object-tree-inline-action:focus-visible { opacity: 1; }
+    .object-tree-inline-action:hover, .object-tree-inline-action:focus-visible { border-color: color-mix(in srgb, var(--explorer-signal) 36%, var(--line)); background: color-mix(in srgb, var(--explorer-signal) 13%, var(--panel)); color: var(--explorer-signal); box-shadow: 0 0 12px color-mix(in srgb, var(--explorer-signal) 12%, transparent); outline: none; }
+    .object-tree-children { min-width: 0; }
+    .object-empty-search { display: grid; min-height: 150px; place-items: center; align-content: center; gap: 5px; padding: 18px; border: 1px dashed color-mix(in srgb, var(--explorer-signal) 35%, var(--line-bright)); border-radius: 10px; background: color-mix(in srgb, var(--explorer-signal) 4%, var(--panel-raised)); color: var(--muted); text-align: center; }
+    .object-empty-search strong { color: var(--text-soft); font-size: 10px; }
+    .object-empty-search span { max-width: 240px; font-size: 8px; line-height: 1.5; }
+    .object-details { position: relative; display: grid; max-height: min(46%, 410px); flex: none; gap: 9px; overflow: auto; padding: 12px; border: 1px solid color-mix(in srgb, var(--explorer-signal) 22%, var(--line)); border-radius: 11px; background: radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--explorer-signal) 9%, transparent), transparent 50%), linear-gradient(145deg, color-mix(in srgb, var(--panel-raised) 88%, var(--panel)), var(--panel)); box-shadow: inset 0 1px #ffffff09, 0 8px 22px #00000010; }
+    .object-details-close { position: absolute; top: 7px; right: 7px; display: grid; width: 26px; height: 26px; place-items: center; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--muted); font-size: 15px; cursor: pointer; }
+    .object-details-close:hover, .object-details-close:focus-visible { border-color: color-mix(in srgb, var(--explorer-signal) 28%, var(--line)); background: color-mix(in srgb, var(--explorer-signal) 9%, var(--panel)); color: var(--explorer-signal); outline: none; }
+    .object-compact-details { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 8px; }
+    .object-back-button { display: flex; min-height: 36px; flex: none; align-items: center; gap: 7px; padding: 0 4px; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--explorer-signal) 20%, var(--line)); background: transparent; color: var(--text-soft); font-size: 10px; font-weight: 680; cursor: pointer; }
+    .object-back-button span { color: var(--explorer-signal); font-size: 20px; line-height: 1; }
+    .object-back-button:hover, .object-back-button:focus-visible { color: var(--text); outline: none; }
+    .object-explorer-section.is-detail-mode { padding-top: 4px; }
+    .object-explorer-section.is-detail-mode .object-details { max-height: none; flex: 1; padding: 8px 2px 12px; border-top: 0; }
+    .is-object-drawer .inspector-header { min-height: 52px; padding: 8px 12px; }
+    .is-object-drawer .inspector-header .eyebrow { display: none; }
+    .is-object-drawer .inspector-content { overflow: hidden; }
+    .is-object-drawer .inspector-footer { display: none; }
+    .object-details-hero { display: grid; min-width: 0; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 3px 7px; }
+    .object-kind-badge { padding: 3px 6px; border: 1px solid color-mix(in srgb, var(--explorer-signal) 34%, var(--line)); border-radius: 5px; background: color-mix(in srgb, var(--explorer-signal) 9%, transparent); color: var(--explorer-signal); font-size: 7px; font-weight: 800; letter-spacing: .1em; }
+    .object-kind-badge.is-view { border-color: color-mix(in srgb, #9c8fe7 35%, var(--line)); color: #9c8fe7; }
+    .object-kind-badge.is-dictionary { border-color: color-mix(in srgb, var(--green) 35%, var(--line)); color: var(--green); }
+    .object-details-hero > strong { overflow: hidden; color: var(--text); font-family: var(--font-display); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+    .object-details-hero > code, .object-details-hero > small { grid-column: 1 / -1; overflow: hidden; color: var(--muted); font-family: var(--font-mono); font-size: 8px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
+    .object-details-hero > small { font-family: var(--font-sans); }
+    .object-action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+    .object-action-grid.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .object-action-grid .toolbar-small { min-width: 0; justify-content: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .object-fact-list { display: grid; gap: 5px; }
+    .object-fact { display: grid; gap: 4px; padding: 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--page-raised); }
+    .object-fact > span { color: var(--explorer-signal); font-size: 8px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+    .object-fact > code { overflow-wrap: anywhere; color: var(--text-soft); font-family: var(--font-mono); font-size: 9px; line-height: 1.5; }
+    .object-reference-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+    .object-reference-actions .toolbar-small { min-height: 29px; }
+    .reference-explorer { --explorer-signal: var(--signal-accent); }
+    .reference-source-footer { display: flex; min-height: 22px; flex: none; align-items: center; gap: 6px; overflow: hidden; margin-top: auto; padding: 0 7px; border: 1px solid color-mix(in srgb, var(--explorer-signal) 16%, var(--line)); border-radius: 6px; background: color-mix(in srgb, var(--explorer-signal) 4%, var(--panel-raised)); color: var(--text-soft); font-size: 8px; font-weight: 620; }
+    .reference-source-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .reference-source-footer small { min-width: 0; max-width: 55%; margin-left: auto; overflow: hidden; color: var(--muted); font-size: 7px; font-weight: 450; text-overflow: ellipsis; white-space: nowrap; }
+    .reference-source-light { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 2px color-mix(in srgb, var(--green) 12%, transparent), 0 0 6px color-mix(in srgb, var(--green) 50%, transparent); }
+    .reference-source-light.is-bundled { background: var(--amber); box-shadow: 0 0 0 2px color-mix(in srgb, var(--amber) 12%, transparent), 0 0 6px color-mix(in srgb, var(--amber) 40%, transparent); }
+    .reference-search { width: 100%; }
+    .reference-categories { display: flex; flex: none; gap: 4px; overflow-x: auto; padding: 2px 0 3px; scrollbar-width: thin; }
+    .reference-categories button { min-height: 27px; flex: none; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; background: color-mix(in srgb, var(--panel-raised) 88%, transparent); color: var(--muted); font-size: 8px; font-weight: 620; cursor: pointer; transition: .16s ease; }
+    .reference-categories button:hover { border-color: color-mix(in srgb, var(--explorer-signal) 35%, var(--line)); color: var(--text-soft); }
+    .reference-categories button[aria-pressed="true"] { border-color: color-mix(in srgb, var(--explorer-signal) 48%, var(--line)); background: color-mix(in srgb, var(--explorer-signal) 10%, var(--panel-raised)); color: var(--explorer-signal); box-shadow: inset 0 1px #ffffff08; }
+    .reference-list-heading { display: flex; min-height: 24px; flex: none; align-items: center; justify-content: space-between; gap: 8px; padding: 0 2px 4px; border-bottom: 1px solid color-mix(in srgb, var(--explorer-signal) 18%, var(--line)); color: var(--muted); font-family: var(--font-mono); font-size: 8px; font-weight: 760; letter-spacing: .12em; text-transform: uppercase; }
+    .reference-list-heading small { color: var(--explorer-signal); font-size: 8px; letter-spacing: 0; }
+    .reference-results { display: grid; min-height: 130px; flex: 1; align-content: start; gap: 2px; overflow: auto; padding: 4px; border: 1px solid color-mix(in srgb, var(--explorer-signal) 18%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--panel-raised) 82%, transparent); scrollbar-color: color-mix(in srgb, var(--explorer-signal) 35%, var(--muted)) transparent; scrollbar-gutter: stable; }
+    .reference-result { display: flex; min-width: 0; min-height: 38px; align-items: center; gap: 8px; padding: 4px 7px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--text-soft); text-align: left; cursor: pointer; transition: .14s ease; }
+    .reference-result:hover, .reference-result.is-active { border-color: color-mix(in srgb, var(--explorer-signal) 28%, var(--line)); background: color-mix(in srgb, var(--explorer-signal) 8%, var(--panel)); color: var(--text); }
+    .reference-result:focus-visible { outline: 2px solid color-mix(in srgb, var(--explorer-signal) 68%, transparent); outline-offset: -2px; }
+    .reference-result-glyph { display: grid; width: 23px; height: 23px; flex: none; place-items: center; border: 1px solid color-mix(in srgb, var(--explorer-signal) 23%, var(--line)); border-radius: 7px; background: color-mix(in srgb, var(--explorer-signal) 7%, var(--panel)); color: var(--explorer-signal); }
+    .reference-result-glyph svg { width: 13px; height: 13px; }
+    .reference-result-copy { display: grid; min-width: 0; flex: 1; gap: 2px; }
+    .reference-result-copy strong { overflow: hidden; font-family: var(--font-mono); font-size: 9px; font-weight: 630; text-overflow: ellipsis; white-space: nowrap; }
+    .reference-result-copy small { overflow: hidden; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+    .reference-detail-view { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 8px; overflow: hidden; }
+    .reference-back { display: flex; min-height: 34px; flex: none; align-items: center; gap: 7px; padding: 0 4px; border: 0; border-bottom: 1px solid color-mix(in srgb, var(--explorer-signal) 18%, var(--line)); background: transparent; color: var(--text-soft); font-size: 9px; font-weight: 670; text-align: left; cursor: pointer; }
+    .reference-back:hover, .reference-back:focus-visible { color: var(--explorer-signal); outline: none; }
+    .reference-back span { color: var(--explorer-signal); font-size: 19px; line-height: 1; }
+    .reference-entry { display: grid; min-height: 0; flex: 1; align-content: start; gap: 10px; overflow: auto; padding: 11px; border: 1px solid color-mix(in srgb, var(--explorer-signal) 20%, var(--line)); border-radius: 10px; background: radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--explorer-signal) 7%, transparent), transparent 50%), var(--panel-raised); }
+    .reference-entry-heading { display: grid; gap: 4px; }
+    .reference-entry-heading > span { color: var(--explorer-signal); font-size: 8px; font-weight: 760; letter-spacing: .1em; text-transform: uppercase; }
+    .reference-entry-heading h3 { margin: 0; overflow-wrap: anywhere; color: var(--text); font-family: var(--font-display); font-size: 15px; font-weight: 690; letter-spacing: -.025em; }
+    .reference-entry-heading small { color: var(--muted); font-family: var(--font-mono); font-size: 8px; }
+    .reference-entry-actions { display: flex; gap: 5px; }
+    .reference-markdown { min-width: 0; color: var(--text-soft); font-size: 9px; line-height: 1.7; overflow-wrap: anywhere; }
+    .reference-markdown > :first-child { margin-top: 0; }
+    .reference-markdown > :last-child { margin-bottom: 0; }
+    .reference-markdown h1, .reference-markdown h2, .reference-markdown h3, .reference-markdown h4 { margin: 15px 0 6px; color: var(--text); font-size: 11px; font-weight: 680; }
+    .reference-markdown p, .reference-markdown ul, .reference-markdown ol, .reference-markdown blockquote { margin: 8px 0; }
+    .reference-markdown ul, .reference-markdown ol { padding-left: 18px; }
+    .reference-markdown li + li { margin-top: 3px; }
+    .reference-markdown a { color: var(--explorer-signal); text-decoration: underline; text-underline-offset: 2px; }
+    .reference-markdown code { padding: 1px 4px; border: 1px solid var(--line); border-radius: 4px; background: color-mix(in srgb, var(--page) 74%, var(--panel)); color: var(--text); font-family: var(--font-mono); font-size: .92em; }
+    .reference-markdown pre { overflow: auto; padding: 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--page); }
+    .reference-markdown pre code { padding: 0; border: 0; background: transparent; }
+    .reference-markdown table { display: block; max-width: 100%; overflow: auto; border-collapse: collapse; font-size: 8px; }
+    .reference-markdown th, .reference-markdown td { padding: 5px 7px; border: 1px solid var(--line); text-align: left; }
+    .reference-markdown th { background: color-mix(in srgb, var(--explorer-signal) 7%, var(--panel)); color: var(--text); }
+    .reference-entry-source { display: grid; gap: 4px; padding-top: 7px; border-top: 1px solid var(--line); }
+    .reference-entry-source span { color: var(--muted); font-size: 7px; font-weight: 760; letter-spacing: .1em; }
+    .reference-entry-source code { overflow-wrap: anywhere; color: var(--text-soft); font-family: var(--font-mono); font-size: 8px; }
+    .reference-entry-source a { overflow-wrap: anywhere; color: var(--explorer-signal); font-family: var(--font-mono); font-size: 8px; }
+    @media (max-width: 850px) {
+        .object-explorer-section { gap: 9px; padding: 10px; }
+        .object-details { max-height: 48%; }
+        .object-tree-inline-action { opacity: 1; }
+    }

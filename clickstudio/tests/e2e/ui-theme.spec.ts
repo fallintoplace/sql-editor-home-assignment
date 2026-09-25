@@ -1,8 +1,26 @@
 import { test, expect, type Page } from '@playwright/test';
 
 const themes = [
-    { value: 'click-dark', dark: true, surface: '#101010', chrome: '#101010', logoColor: '#fff' },
-    { value: 'click-light', dark: false, surface: '#e9eee9', chrome: '#f5f6f1', logoColor: '#161616' },
+    {
+        value: 'click-dark',
+        dark: true,
+        surface: '#151515',
+        panel: '#212121',
+        accent: '#faff69',
+        action: '#eef400',
+        chrome: '#151515',
+        logoColor: '#fff',
+    },
+    {
+        value: 'click-light',
+        dark: false,
+        surface: '#f6f7fa',
+        panel: '#ffffff',
+        accent: '#686b00',
+        action: '#eef400',
+        chrome: '#ffffff',
+        logoColor: '#161616',
+    },
 ] as const;
 
 function themeOption(page: Page, value: string) {
@@ -17,12 +35,21 @@ for (const theme of themes) test(`${theme.value} applies its palette and survive
     await option.click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme.value);
 
-    const palette = await page.locator('html').evaluate(element => ({
-        colorScheme: getComputedStyle(element).colorScheme,
-        surface: getComputedStyle(element).getPropertyValue('--page').trim(),
-    }));
+    const palette = await page.locator('html').evaluate(element => {
+        const styles = getComputedStyle(element);
+        return {
+            colorScheme: styles.colorScheme,
+            surface: styles.getPropertyValue('--page').trim(),
+            panel: styles.getPropertyValue('--panel').trim(),
+            accent: styles.getPropertyValue('--accent').trim(),
+            action: styles.getPropertyValue('--accent-action').trim(),
+        };
+    });
     expect(palette.colorScheme).toBe(theme.dark ? 'dark' : 'light');
     expect(palette.surface).toBe(theme.surface);
+    expect(palette.panel).toBe(theme.panel);
+    expect(palette.accent).toBe(theme.accent);
+    expect(palette.action).toBe(theme.action);
     await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute('content', theme.chrome);
     const logoSvg = await page.locator('.brand-symbol').evaluate(image => decodeURIComponent(image.getAttribute('src')?.split(',')[1] ?? ''));
     expect(logoSvg).toContain(`fill: ${theme.logoColor}`);

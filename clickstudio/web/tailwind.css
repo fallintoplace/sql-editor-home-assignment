@@ -10,26 +10,26 @@
 
 :root {
     color-scheme: dark;
-    --page: #101010;
-    --page-raised: #151515;
-    --panel: #1a1a1a;
-    --panel-raised: #212121;
-    --panel-hover: #292929;
-    --line: #303030;
-    --line-bright: #454545;
-    --text: #f5f5f2;
-    --text-soft: #d0d0cb;
-    --muted: #999995;
-    --accent: #eaff00;
-    --accent-strong: #f1ff45;
-    --accent-action: #eaff00;
-    --accent-ink: #171811;
-    --green: #73d9a1;
-    --amber: #ffbd4a;
-    --red: #ff7970;
-    --violet: #c7d64a;
-    --editor-selection: #eaff0045;
-    --shadow: 0 24px 76px #000a;
+    --page: #151515;
+    --page-raised: #1d1d1d;
+    --panel: #212121;
+    --panel-raised: #282828;
+    --panel-hover: #323232;
+    --line: #323232;
+    --line-bright: #414141;
+    --text: #f9f9f9;
+    --text-soft: #dfdfdf;
+    --muted: #a0a0a0;
+    --accent: #faff69;
+    --accent-strong: #faff69;
+    --accent-action: #eef400;
+    --accent-ink: #151515;
+    --green: #33ff44;
+    --amber: #ff7729;
+    --red: #ff2323;
+    --violet: #bb33ff;
+    --editor-selection: #faff6940;
+    --shadow: 0 24px 76px #00000099;
     --radius: 14px;
     --z-underlay: -1;
     --z-local-control: 1;
@@ -60,26 +60,26 @@
 
 :root[data-theme="click-light"] {
     color-scheme: light;
-    --page: #e9eee9;
-    --page-raised: #f4f7f3;
-    --panel: #fcfdfb;
-    --panel-raised: #f1f5f0;
-    --panel-hover: #e8eee7;
-    --line: #cbd6cc;
-    --line-bright: #b7c5b9;
-    --text: #18211d;
-    --text-soft: #3d4b42;
-    --muted: #5f6e64;
-    --accent: #5c6800;
-    --accent-strong: #e6f36a;
-    --accent-action: #d5e633;
-    --accent-ink: #171916;
-    --green: #18754a;
-    --amber: #966300;
-    --red: #b63e39;
-    --violet: #707b13;
-    --editor-selection: #dce94e77;
-    --shadow: 0 22px 64px #1b2a1c1a;
+    --page: #f6f7fa;
+    --page-raised: #ffffff;
+    --panel: #ffffff;
+    --panel-raised: #fbfcff;
+    --panel-hover: #f6f7fa;
+    --line: #e6e7e9;
+    --line-bright: #cccfd3;
+    --text: #161517;
+    --text-soft: #373439;
+    --muted: #696e79;
+    --accent: #686b00;
+    --accent-strong: #faff69;
+    --accent-action: #eef400;
+    --accent-ink: #151515;
+    --green: #008a0b;
+    --amber: #a33c00;
+    --red: #c10000;
+    --violet: #7b279d;
+    --editor-selection: #faff6966;
+    --shadow: 0 22px 64px #1615171f;
 }
 
 :root[data-theme="click-dark"] .application,

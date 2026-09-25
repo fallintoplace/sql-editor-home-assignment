@@ -6,8 +6,8 @@ export type Theme = 'click-dark' | 'click-light';
 export type ExperienceLevel = 'beginner' | 'expert';
 
 export const themeAppearance: Record<Theme, { dark: boolean; chromeColor: string }> = {
-    'click-dark': { dark: true, chromeColor: '#101010' },
-    'click-light': { dark: false, chromeColor: '#f5f6f1' },
+    'click-dark': { dark: true, chromeColor: '#151515' },
+    'click-light': { dark: false, chromeColor: '#ffffff' },
 };
 
 export interface Copy {

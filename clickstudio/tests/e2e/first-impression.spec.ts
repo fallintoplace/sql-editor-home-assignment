@@ -52,7 +52,17 @@ test('EXPLAIN PIPELINE opens an interactive ClickHouse operator graph', async ({
     await page.getByTestId('run-action-explain-pipeline').click();
 
     const graph = page.getByRole('region', { name: 'Scrollable operator graph', exact: true });
-    const controls = page.getByRole('group', { name: 'Graph zoom controls', exact: true });
+    const controls = page.getByRole('group', { name: 'Graph view controls', exact: true });
+    const initiallySelected = graph.locator('[data-node-id][aria-pressed="true"]');
+    await expect(initiallySelected).toBeVisible();
+    const selectedIsInGraphViewport = await graph.evaluate(element => {
+        const selectedNode = element.querySelector('[data-node-id][aria-pressed="true"]');
+        if (!selectedNode) return false;
+        const viewport = element.getBoundingClientRect();
+        const node = selectedNode.getBoundingClientRect();
+        return node.right > viewport.left && node.left < viewport.right && node.bottom > viewport.top && node.top < viewport.bottom;
+    });
+    expect(selectedIsInGraphViewport).toBe(true);
     const filter = graph.locator('[data-node-id]').filter({ hasText: 'FilterTransform' });
     await expect(filter).toBeVisible();
     await filter.click();
@@ -69,7 +79,7 @@ test('EXPLAIN PIPELINE opens an interactive ClickHouse operator graph', async ({
     const initialWidth = Number(await svg.getAttribute('width'));
     await controls.getByRole('button', { name: 'Zoom in', exact: true }).click();
     await expect.poll(async () => Number(await svg.getAttribute('width'))).toBeGreaterThan(initialWidth);
-    await controls.getByRole('button', { name: 'Reset zoom', exact: true }).click();
+    await controls.getByRole('button', { name: 'Focus node', exact: true }).click();
     await expect(controls.getByLabel('Zoom level')).toHaveText('100%');
     await controls.getByRole('button', { name: 'Fit graph', exact: true }).click();
     await expect(controls.getByLabel('Zoom level')).not.toHaveText('100%');

@@ -127,6 +127,14 @@ function pathFor(points: PositionedEdge['points']) {
     return points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ');
 }
 
+function centerGraphNode(viewport: HTMLDivElement, node: PositionedNode, scale: number, behavior: ScrollBehavior = 'auto') {
+    viewport.scrollTo({
+        left: Math.max(0, node.x * scale - viewport.clientWidth / 2),
+        top: Math.max(0, node.y * scale - viewport.clientHeight / 2),
+        behavior,
+    });
+}
+
 function focusPipeline(pipeline: ProfilePipeline, selectedId?: string) {
     if (!selectedId) return undefined;
     const incoming = new Map(pipeline.nodes.map(node => [node.id, new Set<string>()]));
@@ -209,9 +217,17 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
     const graphWidth = Math.max(480, layout.width);
     const graphHeight = Math.max(160, layout.height);
     useEffect(() => {
-        setSelectedId(pipeline.nodes[0]?.id);
+        const initialNodeId = pipeline.nodes[0]?.id;
+        setSelectedId(initialNodeId);
         setZoom(1);
-    }, [pipeline]);
+        if (graphKind !== 'execution' || !initialNodeId) return;
+        const initialNode = layout.nodes.find(({ node }) => node.id === initialNodeId);
+        const frame = window.requestAnimationFrame(() => {
+            const viewport = graphViewport.current;
+            if (viewport && initialNode) centerGraphNode(viewport, initialNode, 1);
+        });
+        return () => window.cancelAnimationFrame(frame);
+    }, [pipeline, layout, graphKind]);
     const selected = pipeline.nodes.find(node => node.id === selectedId) ?? pipeline.nodes[0];
     const graphId = `pipeline-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
     const markerId = `${graphId}-arrow`;
@@ -225,6 +241,24 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
         setSelectedId(node.id);
         onSelectNode?.(node);
     };
+    const zoomTo = (nextZoom: number) => {
+        const viewport = graphViewport.current;
+        if (!viewport) {
+            setZoom(nextZoom);
+            return;
+        }
+        const centerX = (viewport.scrollLeft + viewport.clientWidth / 2) / zoom;
+        const centerY = (viewport.scrollTop + viewport.clientHeight / 2) / zoom;
+        setZoom(nextZoom);
+        window.requestAnimationFrame(() => {
+            const currentViewport = graphViewport.current;
+            if (!currentViewport) return;
+            currentViewport.scrollTo({
+                left: Math.max(0, centerX * nextZoom - currentViewport.clientWidth / 2),
+                top: Math.max(0, centerY * nextZoom - currentViewport.clientHeight / 2),
+            });
+        });
+    };
     const onNodeKeyDown = (event: KeyboardEvent<SVGGElement>, node: ProfilePipelineNode) => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         event.preventDefault();
@@ -237,6 +271,17 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
         const availableHeight = Math.max(1, viewport.clientHeight - 24);
         setZoom(Math.min(1, availableWidth / graphWidth, availableHeight / graphHeight));
         viewport.scrollTo({ top: 0, left: 0 });
+    };
+    const focusSelectedNode = () => {
+        if (!selected) return;
+        const node = layout.nodes.find(({ node: candidate }) => candidate.id === selected.id);
+        const viewport = graphViewport.current;
+        if (!node || !viewport) return;
+        setZoom(1);
+        window.requestAnimationFrame(() => {
+            const currentViewport = graphViewport.current;
+            if (currentViewport) centerGraphNode(currentViewport, node, 1, 'smooth');
+        });
     };
 
     if (!pipeline.nodes.length) return <div className="pipeline-graph-empty">{graphKind === 'sql-flow' ? copy?.sqlFlowNoStages ?? 'No SQL stages were found in this statement.' : copy?.pipelineNoOutput ?? 'This pipeline did not return any operator nodes.'}</div>;
@@ -252,12 +297,18 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
             <small>{subheading ?? (pipeline.source === 'explain_pipeline' ? copy?.pipelineGraphDescription ?? 'Planned topology · runtime counters are run-level' : 'Estimated from SQL structure')}</small>
         </div>
         {pipeline.truncated && <p className="pipeline-graph-warning" role="status">{graphKind === 'sql-flow' ? copy?.sqlFlowTruncatedWarning ?? 'This query is large. The graph shows a bounded set of SQL stages.' : copy?.pipelineGraphTruncated ?? 'This plan is large. The graph shows a bounded set of operators.'}</p>}
-        <div className="pipeline-graph-controls" role="group" aria-label={copy?.pipelineZoomControls ?? 'Graph zoom controls'}>
-            <button type="button" aria-label={copy?.pipelineZoomOut ?? 'Zoom out'} title={copy?.pipelineZoomOut ?? 'Zoom out'} disabled={zoom <= 0.02} onClick={() => setZoom(current => Math.max(0.02, current / 1.2))}>−</button>
-            <button type="button" className="pipeline-zoom-reset" aria-label={copy?.pipelineZoomReset ?? 'Reset zoom'} title={copy?.pipelineZoomReset ?? 'Reset zoom'} onClick={() => setZoom(1)}>100%</button>
+        <div className="pipeline-graph-controls" role="group" aria-label={copy?.pipelineZoomControls ?? 'Graph view controls'}>
+            <button type="button" aria-label={copy?.pipelineZoomOut ?? 'Zoom out'} title={copy?.pipelineZoomOut ?? 'Zoom out'} disabled={zoom <= 0.02} onClick={() => zoomTo(Math.max(0.02, zoom / 1.2))}>−</button>
             <output aria-label={copy?.pipelineZoomLevel ?? 'Zoom level'}>{Math.round(zoom * 100)}%</output>
-            <button type="button" aria-label={copy?.pipelineZoomIn ?? 'Zoom in'} title={copy?.pipelineZoomIn ?? 'Zoom in'} disabled={zoom >= 2.5} onClick={() => setZoom(current => Math.min(2.5, current * 1.2))}>+</button>
-            <button type="button" className="pipeline-zoom-fit" aria-label={copy?.pipelineFit ?? 'Fit graph'} title={copy?.pipelineFit ?? 'Fit graph'} onClick={fitGraph}>{copy?.pipelineFit ?? 'Fit graph'}</button>
+            <button type="button" aria-label={copy?.pipelineZoomIn ?? 'Zoom in'} title={copy?.pipelineZoomIn ?? 'Zoom in'} disabled={zoom >= 2.5} onClick={() => zoomTo(Math.min(2.5, zoom * 1.2))}>+</button>
+            <button type="button" className="pipeline-control-action pipeline-focus-node" aria-label={copy?.pipelineFocusNode ?? 'Focus node'} title={copy?.pipelineFocusNode ?? 'Focus node'} onClick={focusSelectedNode}>
+                <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="8" cy="8" r="4.25"/><path d="M8 1.5v2.2m0 8.6v2.2M1.5 8h2.2m8.6 0h2.2"/></svg>
+                <span>{copy?.pipelineFocusNode ?? 'Focus node'}</span>
+            </button>
+            <button type="button" className="pipeline-control-action pipeline-zoom-fit" aria-label={copy?.pipelineFit ?? 'Fit graph'} title={copy?.pipelineFit ?? 'Fit graph'} onClick={fitGraph}>
+                <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 2H2v4m0-4 4 4m4-4h4v4m0-4-4 4M2 10v4h4m-4 0 4-4m8 4h-4m4 0v-4m0 4-4-4"/></svg>
+                <span>{copy?.pipelineFit ?? 'Fit graph'}</span>
+            </button>
         </div>
         <div ref={graphViewport} className="pipeline-graph-scroll overflow-auto" role="region" aria-label={graphKind === 'sql-flow' ? copy?.sqlMap ?? 'Scrollable SQL flow graph' : 'Scrollable operator graph'}>
             <svg className="pipeline-graph-svg" width={Math.round(graphWidth * zoom)} height={Math.round(graphHeight * zoom)} viewBox={`0 0 ${graphWidth} ${graphHeight}`} role="group" aria-label={graphKind === 'sql-flow' ? copy?.sqlFlowGraphHint ?? 'Click a stage to inspect it' : copy?.pipelineGraphHint ?? 'Click an operator to inspect it'}>

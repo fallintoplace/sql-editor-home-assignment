@@ -108,6 +108,7 @@ export interface Copy {
         pipelineZoomIn: string;
         pipelineZoomReset: string;
         pipelineZoomLevel: string;
+        pipelineFocusNode: string;
         pipelineFit: string;
         pipelineInputs: string;
         pipelineOutputs: string;
@@ -471,7 +472,7 @@ const english: Copy = {
         pipelineGraphDescription: 'Planned processor topology from EXPLAIN PIPELINE. Runtime is shown separately.',
         pipelineGraphHint: 'Select an operator to inspect its details.',
         pipelineGraphTruncated: 'This plan is large. The graph shows a bounded set of operators.',
-        pipelineZoomControls: 'Graph zoom controls', pipelineZoomOut: 'Zoom out', pipelineZoomIn: 'Zoom in', pipelineZoomReset: 'Reset zoom', pipelineZoomLevel: 'Zoom level', pipelineFit: 'Fit graph',
+        pipelineZoomControls: 'Graph view controls', pipelineZoomOut: 'Zoom out', pipelineZoomIn: 'Zoom in', pipelineZoomReset: 'Reset zoom', pipelineZoomLevel: 'Zoom level', pipelineFocusNode: 'Focus node', pipelineFit: 'Fit graph',
         pipelineInputs: 'Inputs',
         pipelineOutputs: 'Outputs',
         pipelineRunDuration: 'Run duration',
@@ -902,7 +903,7 @@ const objectExplorerTranslations: Record<Exclude<Locale, 'en'>, ObjectExplorerTr
 
 const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common'],
     'explain' | 'explainPlan' | 'logicalPlan' | 'logicalPlanDescription' | 'planUnknownStep' | 'planDepthLimit' | 'pipelineGraph' | 'pipelineGraphDescription' |
-    'pipelineGraphHint' | 'pipelineGraphTruncated' | 'pipelineZoomControls' | 'pipelineZoomOut' | 'pipelineZoomIn' | 'pipelineZoomReset' | 'pipelineZoomLevel' | 'pipelineFit' |
+    'pipelineGraphHint' | 'pipelineGraphTruncated' | 'pipelineZoomControls' | 'pipelineZoomOut' | 'pipelineZoomIn' | 'pipelineZoomReset' | 'pipelineZoomLevel' | 'pipelineFocusNode' | 'pipelineFit' |
     'pipelineInputs' | 'pipelineOutputs' | 'pipelineRunDuration' | 'pipelineRunRows' | 'pipelineRunBytes' |
     'planNodeCount' | 'planProperties' | 'planNoOutput' | 'planLoading' | 'planTruncated' | 'pipelineNoOutput' |
     'selectedOperator' | 'inspectOperator' | 'selectedOperatorDetails' | 'parallelism' | 'plannedStatus'>> = {
@@ -912,7 +913,7 @@ const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common
         pipelineGraph: 'ClickHouse-Pipeline', pipelineGraphDescription: 'Geplante Prozessortopologie aus EXPLAIN PIPELINE. Laufzeitdaten werden separat angezeigt.',
         planUnknownStep: 'Unbekannter Schritt', planDepthLimit: 'Tiefenlimit des Plans erreicht',
         pipelineGraphHint: 'Operator auswählen, um Details anzuzeigen.', pipelineGraphTruncated: 'Der Plan ist groß. Das Diagramm zeigt eine begrenzte Anzahl von Operatoren.',
-        pipelineZoomControls: 'Diagramm-Zoomsteuerung', pipelineZoomOut: 'Verkleinern', pipelineZoomIn: 'Vergrößern', pipelineZoomReset: 'Zoom zurücksetzen', pipelineZoomLevel: 'Zoomstufe', pipelineFit: 'Diagramm einpassen',
+        pipelineZoomControls: 'Diagrammansicht steuern', pipelineZoomOut: 'Verkleinern', pipelineZoomIn: 'Vergrößern', pipelineZoomReset: 'Zoom zurücksetzen', pipelineZoomLevel: 'Zoomstufe', pipelineFocusNode: 'Knoten fokussieren', pipelineFit: 'Diagramm einpassen',
         pipelineInputs: 'Eingaben', pipelineOutputs: 'Ausgaben', pipelineRunDuration: 'Ausführungsdauer', pipelineRunRows: 'Ausgeführte Zeilen', pipelineRunBytes: 'Ausgeführte Bytes',
         planNodeCount: '{count} Schritte', planProperties: 'Eigenschaften',
         planNoOutput: 'ClickHouse hat keinen JSON-Plan zurückgegeben. Unter Ergebnisse finden Sie die rohe Ausgabe.',
@@ -927,7 +928,7 @@ const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common
         pipelineGraph: 'Pipeline de ClickHouse', pipelineGraphDescription: 'Topología planificada de procesadores de EXPLAIN PIPELINE. El tiempo de ejecución se muestra aparte.',
         planUnknownStep: 'Paso desconocido', planDepthLimit: 'Se alcanzó el límite de profundidad del plan',
         pipelineGraphHint: 'Selecciona un operador para ver sus detalles.', pipelineGraphTruncated: 'El plan es grande. El gráfico muestra un número limitado de operadores.',
-        pipelineZoomControls: 'Controles de zoom del gráfico', pipelineZoomOut: 'Alejar', pipelineZoomIn: 'Acercar', pipelineZoomReset: 'Restablecer zoom', pipelineZoomLevel: 'Nivel de zoom', pipelineFit: 'Ajustar gráfico',
+        pipelineZoomControls: 'Controles de vista del gráfico', pipelineZoomOut: 'Alejar', pipelineZoomIn: 'Acercar', pipelineZoomReset: 'Restablecer zoom', pipelineZoomLevel: 'Nivel de zoom', pipelineFocusNode: 'Centrar nodo', pipelineFit: 'Ajustar gráfico',
         pipelineInputs: 'Entradas', pipelineOutputs: 'Salidas', pipelineRunDuration: 'Duración de ejecución', pipelineRunRows: 'Filas de ejecución', pipelineRunBytes: 'Bytes de ejecución',
         planNodeCount: '{count} pasos', planProperties: 'propiedades',
         planNoOutput: 'ClickHouse no devolvió un plan JSON. Abre Resultados para ver la salida sin procesar.',
@@ -942,7 +943,7 @@ const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common
         pipelineGraph: 'ClickHouse-pipeline', pipelineGraphDescription: 'Geplande processortopologie uit EXPLAIN PIPELINE. Runtime wordt apart getoond.',
         planUnknownStep: 'Onbekende stap', planDepthLimit: 'Dieptelimiet van het plan bereikt',
         pipelineGraphHint: 'Selecteer een operator om details te bekijken.', pipelineGraphTruncated: 'Dit plan is groot. De grafiek toont een beperkt aantal operators.',
-        pipelineZoomControls: 'Diagramzoomknoppen', pipelineZoomOut: 'Uitzoomen', pipelineZoomIn: 'Inzoomen', pipelineZoomReset: 'Zoom resetten', pipelineZoomLevel: 'Zoomniveau', pipelineFit: 'Diagram passend maken',
+        pipelineZoomControls: 'Grafiekweergave', pipelineZoomOut: 'Uitzoomen', pipelineZoomIn: 'Inzoomen', pipelineZoomReset: 'Zoom resetten', pipelineZoomLevel: 'Zoomniveau', pipelineFocusNode: 'Node focussen', pipelineFit: 'Diagram passend maken',
         pipelineInputs: 'Invoer', pipelineOutputs: 'Uitvoer', pipelineRunDuration: 'Uitvoertijd', pipelineRunRows: 'Uitvoerrijen', pipelineRunBytes: 'Uitvoerbytes',
         planNodeCount: '{count} stappen', planProperties: 'eigenschappen',
         planNoOutput: 'ClickHouse heeft geen JSON-plan teruggegeven. Open Resultaten voor de ruwe uitvoer.',
@@ -957,7 +958,7 @@ const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common
         pipelineGraph: 'ClickHouse 执行管线', pipelineGraphDescription: '来自 EXPLAIN PIPELINE 的计划处理器拓扑。运行时数据单独显示。',
         planUnknownStep: '未知步骤', planDepthLimit: '已达到计划深度上限',
         pipelineGraphHint: '选择算子以查看详情。', pipelineGraphTruncated: '计划较大，图中仅显示有限数量的算子。',
-        pipelineZoomControls: '图表缩放控件', pipelineZoomOut: '缩小', pipelineZoomIn: '放大', pipelineZoomReset: '重置缩放', pipelineZoomLevel: '缩放级别', pipelineFit: '适配图表',
+        pipelineZoomControls: '图表视图控件', pipelineZoomOut: '缩小', pipelineZoomIn: '放大', pipelineZoomReset: '重置缩放', pipelineZoomLevel: '缩放级别', pipelineFocusNode: '聚焦节点', pipelineFit: '适配图表',
         pipelineInputs: '输入', pipelineOutputs: '输出', pipelineRunDuration: '运行时长', pipelineRunRows: '运行行数', pipelineRunBytes: '运行字节数',
         planNodeCount: '{count} 个步骤', planProperties: '属性',
         planNoOutput: 'ClickHouse 未返回 JSON 计划。打开“结果”查看原始输出。',
@@ -972,7 +973,7 @@ const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common
         pipelineGraph: 'Конвейер ClickHouse', pipelineGraphDescription: 'Планируемая топология процессоров из EXPLAIN PIPELINE. Показатели выполнения отображаются отдельно.',
         planUnknownStep: 'Неизвестный шаг', planDepthLimit: 'Достигнута предельная глубина плана',
         pipelineGraphHint: 'Выберите оператор, чтобы посмотреть сведения.', pipelineGraphTruncated: 'План большой. На графе показано ограниченное число операторов.',
-        pipelineZoomControls: 'Управление масштабом графика', pipelineZoomOut: 'Уменьшить', pipelineZoomIn: 'Увеличить', pipelineZoomReset: 'Сбросить масштаб', pipelineZoomLevel: 'Масштаб', pipelineFit: 'Вписать график',
+        pipelineZoomControls: 'Управление видом графика', pipelineZoomOut: 'Уменьшить', pipelineZoomIn: 'Увеличить', pipelineZoomReset: 'Сбросить масштаб', pipelineZoomLevel: 'Масштаб', pipelineFocusNode: 'К выбранному узлу', pipelineFit: 'Вписать график',
         pipelineInputs: 'Входы', pipelineOutputs: 'Выходы', pipelineRunDuration: 'Время выполнения', pipelineRunRows: 'Строки выполнения', pipelineRunBytes: 'Байты выполнения',
         planNodeCount: '{count} шагов', planProperties: 'свойства',
         planNoOutput: 'ClickHouse не вернул JSON-план. Откройте «Результаты», чтобы увидеть исходный вывод.',

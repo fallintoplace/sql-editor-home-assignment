@@ -1,8 +1,8 @@
-# Project scope
+# Project highlights
 
-ClickStudio is a local-first ClickHouse SQL editor built as an interview project. The implementation focuses on the parts of a SQL workspace that are technically interesting to make correct: execution boundaries, ClickHouse-specific result handling, editor state, query evidence, imports, and explainability.
+ClickStudio is a local-first ClickHouse SQL editor built as an interview project. It focuses on a rich SQL workflow, ClickHouse-specific behavior, and clear execution evidence.
 
-## Implemented
+## Implemented capabilities
 
 - Read-only query execution with server-side limits and query IDs.
 - Multi-statement scripts with statement-level results.
@@ -10,42 +10,35 @@ ClickStudio is a local-first ClickHouse SQL editor built as an interview project
 - Schema and object exploration, including ClickHouse system-table documentation.
 - Typed results, filtering, export, charts, and retained query history.
 - ClickHouse-specific EXPLAIN INDEXES, EXPLAIN PLAN, and EXPLAIN PIPELINE views.
-- CSV, JSON, and NDJSON import with preview, mapping, an allowlisted writer, and explicit confirmation.
+- CSV, JSON, and NDJSON import with preview, mapping, a dedicated writer, and explicit confirmation.
 - Saved query revisions and bounded published snapshots.
-- Optional assistant proposals that are reviewed before they can change SQL and never execute automatically.
-- Deterministic sample mode for UI review without a database.
+- Optional assistant proposals with review, apply, and run steps.
+- Deterministic sample mode for fast UI exploration.
 - Unit, workspace, browser, and live ClickHouse integration coverage.
 
-## Deliberate boundaries
+## Technical focus
 
-This is not intended to demonstrate every subsystem needed by a commercial multi-user SQL platform.
+The most interesting areas to inspect are:
 
-The current version is:
+1. server-mediated database execution;
+2. execution-scoped retained results;
+3. exact ClickHouse numeric handling across the JavaScript boundary;
+4. ClickHouse-native permission layering;
+5. deterministic fixture architecture;
+6. structured EXPLAIN graph views;
+7. lightweight local persistence;
+8. layered validation from unit tests through live ClickHouse integration.
 
-- **single-owner**, rather than organization/role based;
-- **single-process**, with small local persistence rather than a transactional application database;
-- **bounded-result**, rather than an unlimited streaming analytics client;
-- **explicitly configured**, rather than a hosted connection/secret-management service;
-- **local-first**, rather than a production SaaS deployment.
+See [Engineering choices](ENGINEERING-NOTES.md) for the reasoning behind these areas.
 
-Those choices keep the project centered on the editor and ClickHouse workflow while still making the boundaries visible in the implementation.
+## Product shape
 
-## What I would discuss in a review
+The project currently uses a local-first, single-owner architecture with lightweight persistence and explicit connection configuration.
 
-The most useful technical areas to inspect are:
-
-1. why database execution is mediated by the server instead of the browser;
-2. why runs and retained results are modeled independently from mutable editor text;
-3. how ClickHouse UInt64 and Decimal values avoid JavaScript precision loss;
-4. why application SQL checks complement rather than replace ClickHouse permissions;
-5. how fixture mode stays deterministic without pretending to execute arbitrary SQL;
-6. how raw EXPLAIN results are preserved while also producing interactive graph views;
-7. why the persistence model is intentionally simpler than the one I would choose for a multi-user production system.
-
-See [Engineering decisions and tradeoffs](ENGINEERING-NOTES.md) for the short version of those choices.
+That shape keeps setup simple and makes the core SQL workflow easy to evaluate. The architecture also provides clear extension points for shared persistence, organization-level authorization, managed connections, and larger-result workflows.
 
 ## Running and validating
 
-Start with the [repository README](../README.md). The longer [setup and implementation reference](CLICKSTUDIO.md) contains detailed behavior and operational notes.
+Start with the [repository README](../README.md). The [setup and implementation reference](CLICKSTUDIO.md) contains detailed behavior and configuration.
 
 The GitHub Actions workflow at [`.github/workflows/clickstudio.yml`](../.github/workflows/clickstudio.yml) runs the project quality and integration checks.

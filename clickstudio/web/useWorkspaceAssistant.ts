@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 
 import type { AssistantAction, Proposal } from '../shared/types';
 import { message, post } from './api';
 import { checkpoint, type Draft, type WorkspaceState } from './workspace-state';
-import type { AssistantContext, Locale, SpeechRecognitionLike } from './workspace-types';
+import type { Locale } from './i18n';
+import type { AssistantContext, SpeechRecognitionLike } from './workspace-types';
 import { useScopedValue } from './useScopedValue';
 
 function assistantContextKey(

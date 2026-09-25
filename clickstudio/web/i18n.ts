@@ -58,6 +58,7 @@ export interface Copy {
         assistant: string;
         results: string;
         chart: string;
+        map: string;
         insights: string;
         newSql: string;
         restore: string;

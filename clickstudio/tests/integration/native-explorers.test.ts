@@ -36,6 +36,7 @@ test('LIVE ClickHouse: native metadata queries work with the configured reader',
     assert.ok(table, 'Integration setup includes a MergeTree table');
     const graph = await driver.nativeExplorer(connection.id, { kind: 'lineage', database: table.database });
     assert.equal(graph.kind, 'lineage'); assert.equal(graph.source, 'clickhouse');
+    assert.equal(graph.notes.some(note => note.includes('Refresh telemetry is unavailable')), false);
     for (const kind of ['merges', 'mutations'] as const) {
         const snapshot = await driver.nativeExplorer(connection.id, { kind, database: table.database, table: table.name });
         assert.equal(snapshot.kind, kind); assert.equal(snapshot.source, 'clickhouse');

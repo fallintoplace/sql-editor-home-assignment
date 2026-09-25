@@ -33,11 +33,18 @@ export function lineageTablesQuery(columns: ReadonlySet<string>): string {
         FROM system.tables AS t WHERE database = {database:String} AND is_temporary = 0
         ORDER BY engine = 'MaterializedView' DESC, length(t.dependencies_table) > 0 DESC, name LIMIT ${LINEAGE_TABLE_LIMIT + 1}`;
 }
-const refreshQuery = `SELECT database, view, status, toString(last_success_time, 'UTC') AS last_success_time,
-    toString(last_success_duration_ms) AS last_success_duration_ms,
-    toString(last_refresh_time, 'UTC') AS last_refresh_time, toString(next_refresh_time, 'UTC') AS next_refresh_time,
-    progress, toString(read_rows) AS read_rows, toString(written_rows) AS written_rows, leftUTF8(exception, 4096) AS exception
-    FROM system.view_refreshes WHERE database = {database:String} ORDER BY view LIMIT ${LINEAGE_TABLE_LIMIT + 1}`;
+export function refreshActivityQuery(columns: ReadonlySet<string>): string {
+    const timestamps = ['last_success_time', 'last_refresh_time', 'next_refresh_time'];
+    const counters = ['last_success_duration_ms', 'read_rows', 'written_rows'];
+    const fields = [
+        ...timestamps.map(name => `${columns.has(name) ? `toString(r.${name}, 'UTC')` : 'NULL'} AS ${name}`),
+        ...counters.map(name => `${columns.has(name) ? `toString(r.${name})` : 'NULL'} AS ${name}`),
+        `${columns.has('progress') ? 'r.progress' : 'NULL'} AS progress`,
+        `${columns.has('exception') ? 'leftUTF8(r.exception, 4096)' : "''"} AS exception`,
+    ];
+    return `SELECT database, view, status, ${fields.join(', ')} FROM system.view_refreshes AS r
+        WHERE database = {database:String} ORDER BY view LIMIT ${LINEAGE_TABLE_LIMIT + 1}`;
+}
 
 /** The reader accepts only these fixed queries and bound parameters, never user SQL. */
 export async function loadNativeExplorer(request: NativeExplorerRequest, read: MetadataReader, signal?: AbortSignal): Promise<NativeExplorerSnapshot> {
@@ -57,7 +64,10 @@ export async function loadNativeExplorer(request: NativeExplorerRequest, read: M
     const rows = await read(lineageTablesQuery(columns), parameters);
     signal?.throwIfAborted();
     let refreshes: Awaited<ReturnType<MetadataReader>> = [];
-    try { refreshes = await read(refreshQuery, parameters); }
+    try {
+        const refreshColumns = await read("SELECT name FROM system.columns WHERE database = 'system' AND table = 'view_refreshes' LIMIT 100", {});
+        refreshes = await read(refreshActivityQuery(new Set(refreshColumns.map(row => metadataText(row.name)))), parameters);
+    }
     catch {
         signal?.throwIfAborted();
         notes.push('Refresh telemetry is unavailable to this reader or ClickHouse version. No refresh state is inferred.');

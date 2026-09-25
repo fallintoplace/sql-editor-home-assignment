@@ -73,7 +73,7 @@
 .native-run-pickers { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
 .native-run-picker { display: grid; gap: 8px; min-width: 180px; flex: 1; color: var(--muted); }
 .native-run-picker select { width: 100%; min-width: 0; }
-.native-comparison-table-scroll { overflow-x: auto; }
+.native-comparison-table-scroll { overflow-x: auto; flex-shrink: 0; }
 .native-comparison-table { width: 100%; border-collapse: collapse; text-align: left; font-variant-numeric: tabular-nums; }
 .native-comparison-table th, .native-comparison-table td { padding: 14px 12px; border-bottom: 1px solid var(--line); }
 .native-comparison-table thead { color: var(--muted); font-size: 11px; text-transform: uppercase; }

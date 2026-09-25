@@ -22,7 +22,7 @@ try {
     }
     await command('GRANT SELECT ON default.events TO clickstudio_reader');
     await command('GRANT SELECT ON default.import_events TO clickstudio_reader');
-    for (const table of ['columns', 'tables', 'databases', 'processes'])
+    for (const table of ['columns', 'tables', 'databases', 'processes', 'merges', 'mutations', 'view_refreshes'])
         await command(`GRANT SELECT ON system.${table} TO clickstudio_reader`);
     await command('GRANT INSERT ON default.import_events TO clickstudio_writer');
     // Do not grant global query_log access: it can reveal other users’ SQL. That capability is opt-in.

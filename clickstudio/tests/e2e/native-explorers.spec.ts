@@ -56,6 +56,8 @@ test('Run comparison selects two retained runs without executing another query',
     await expect(dialog.locator('.native-comparison-table')).toContainText('Client-observed elapsed time');
     await dialog.getByRole('button', { name: 'Swap ⇄', exact: true }).click();
     await expect(dialog.locator('.native-comparison-table')).toContainText('Retained result rows');
+    await expect(dialog.getByRole('rowheader', { name: /Client-observed elapsed time/ })).toBeInViewport();
+    expect((await dialog.locator('.native-comparison-table-scroll').boundingBox())?.height).toBeGreaterThan(200);
     await page.screenshot({ path: info.outputPath('clickstudio-run-comparison.png') });
     expect(submissions).toBe(0);
 });

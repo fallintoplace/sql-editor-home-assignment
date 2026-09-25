@@ -26,4 +26,10 @@ The comparison shows SQL, parameters, configured limits, and pipelines previousl
 
 ## Hosted preview
 
-The Vercel preview uses the browser Playground reader for live metadata. Permission errors and empty system tables remain explicit. Sample mode includes labelled, static materialized-view, merge, and mutation examples; fixtures are never substituted for failed live reads. Run comparison uses retained history available to the selected connection.
+The hosted preview uses the browser Playground reader for live metadata. Permission errors and empty system tables remain explicit. Sample mode includes labelled, static materialized-view, merge, and mutation examples; fixtures are never substituted for failed live reads. Run comparison uses retained history available to the selected connection.
+
+## Reader setup
+
+For the bundled local server, rerun `npm run db:setup` after updating. The setup grants the application reader SELECT on `system.merges`, `system.mutations`, and `system.view_refreshes` in addition to its existing catalog access. The web app continues to use its reader credentials; setup is an operator-only command.
+
+For an existing connection, the administrator can grant access to the specific metadata tables needed for each view. Query-log access remains separately opt-in because it can expose SQL from other users. ClickStudio never changes grants on a connected server.

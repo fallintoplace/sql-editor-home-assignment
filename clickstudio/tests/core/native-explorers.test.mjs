@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { metadataInteger, metadataTime, metadataProgress, metadataFlag } from '../../.core-build/shared/native-metadata.js';
 import { materializedViewDefinition } from '../../.core-build/shared/materialized-view-definition.js';
 import { buildMaterializedViewLineage, layoutLineage, tableReferenceId } from '../../.core-build/shared/materialized-view-lineage.js';
-import { loadNativeExplorer, lineageTablesQuery, mergeActivityQuery, mutationActivityQuery } from '../../.core-build/shared/native-explorers.js';
+import { loadNativeExplorer, lineageTablesQuery, mergeActivityQuery, mutationActivityQuery, refreshActivityQuery } from '../../.core-build/shared/native-explorers.js';
 import { nativeExplorerFixture } from '../../.core-build/shared/native-explorer-fixtures.js';
 import { parseMergeActivity, parseMutationActivity, mutationStatus } from '../../.core-build/shared/storage-activity.js';
 import { nativeCount, nativeBytes } from '../../.core-build/shared/native-format.js';
@@ -91,4 +91,15 @@ test('Mutation zero remaining does not mean finished or provide a percentage', (
 test('Fixtures are explicitly labelled and never generated for arbitrary live objects', () => {
     for (const kind of ['lineage', 'merges', 'mutations']) assert.equal(nativeExplorerFixture({ kind, database: 'demo', table: 'events' }).source, 'fixture');
     assert.throws(() => nativeExplorerFixture({ kind: 'lineage', database: 'production' }));
+});
+
+test('Older refresh schemas retain timestamps without inventing missing durations', () => {
+    const old = refreshActivityQuery(new Set(['last_success_time', 'last_refresh_time', 'next_refresh_time']));
+    assert.match(old, /toString\(r.last_success_time, 'UTC'\)/);
+    assert.match(old, /NULL AS last_success_duration_ms/);
+    assert.match(old, /NULL AS progress/);
+    assert.match(old, /LIMIT 251/);
+    const modern = refreshActivityQuery(new Set(['last_success_duration_ms', 'progress', 'read_rows']));
+    assert.match(modern, /toString\(r.last_success_duration_ms\)/);
+    assert.match(modern, /r.progress AS progress/);
 });

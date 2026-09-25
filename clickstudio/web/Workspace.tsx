@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
 import type { ApiError, AssistantAction, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Result, Run, RunKind, Schema, Script } from '../shared/types';
 import { DEFAULT_LIMITS } from '../shared/types';
 import { parseExplainPlan } from '../shared/explain-plan';
@@ -31,6 +30,8 @@ import type { NativeParseSnapshot, NativeParserStatus } from '../shared/native-p
 import { useWorkspacePersistence } from './useWorkspacePersistence';
 import { useRunEvidence } from './useRunEvidence';
 import { useResultSnapshot } from './useResultSnapshot';
+import { useWorkspaceTabs } from './useWorkspaceTabs';
+import { PanelResizeHandles, panelTargetIsInteractive, useWorkspacePanels } from './useWorkspacePanels';
 import { useScriptExecution } from './useScriptExecution';
 import { useScopedValue } from './useScopedValue';
 import { sqlExamplesFor, type SqlExample } from './sql-examples';
@@ -38,18 +39,7 @@ import { localizeSqlExample } from './sql-examples-locales';
 import { sqlErrorRangeInDraft, type SqlErrorRange } from './sql-error';
 import type { Copy, ExperienceLevel, Locale } from './i18n';
 import type { AssistantContext, BusyAction, Connected, Inspector, ResultsView, SpeechRecognitionLike } from './workspace-types';
-import {
-    WORKSPACE_LAYOUT_STORAGE_KEY,
-    clampPanelSplitRatio,
-    movePanelGeometry,
-    normalizeWorkspacePanelLayout,
-    recoverWorkspacePanelLayout,
-    resizePanelGeometry,
-    type PanelGeometry,
-    type PanelResizeEdge,
-    type WorkspacePanelId,
-    type WorkspacePanelMode,
-} from './workspace-layout';
+import { clampPanelSplitRatio } from './workspace-layout';
 
 const stateKey = (connectionId: string) => `clickstudio:workspace:${connectionId}:v1`;
 function safeSelectedStatement(sql: string, from: number, to: number) {
@@ -59,29 +49,6 @@ function safeStatementCount(sql: string) {
     try { return splitSql(sql).length; } catch { return undefined; }
 }
 type FailedQueryError = { draftId: string; draftSql: string; statementSql: string; sourceFrom: number; error: ApiError };
-type PanelPointerStartEvent = {
-    clientX: number;
-    clientY: number;
-    target: EventTarget | null;
-    preventDefault: () => void;
-    stopPropagation: () => void;
-};
-
-const PANEL_RESIZE_EDGES: readonly PanelResizeEdge[] = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'];
-const panelViewport = () => ({ width: window.innerWidth, height: window.innerHeight });
-const panelTargetIsInteractive = (target: EventTarget | null) =>
-    target instanceof Element && Boolean(target.closest('button, input, select, textarea, a, [role="tab"], [role="button"]'));
-
-function PanelResizeHandles({ onResize }: { onResize: (edge: PanelResizeEdge, event: PanelPointerStartEvent) => void }) {
-    return <>{PANEL_RESIZE_EDGES.map(edge =>
-        <span
-            key={edge}
-            aria-hidden="true"
-            className={`workspace-panel-resize-handle edge-${edge}`}
-            data-edge={edge}
-            onPointerDown={event => onResize(edge, event)}
-        />)}</>;
-}
 function apiErrorDetail(error: unknown): ApiError {
     if (error instanceof RequestError) return error.detail;
     const candidate = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : undefined;
@@ -154,62 +121,13 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             ],
         };
     });
-    const [renamingTabId, setRenamingTabId] = useState<string>();
-    const [tabRenameValue, setTabRenameValue] = useState('');
-    const cancelTabRenameOnBlur = useRef(false);
     const workspaceRef = useRef(workspace);
     workspaceRef.current = workspace;
-    const active = workspace.tabs.find(tab => tab.id === workspace.activeId) ?? workspace.tabs[0]!;
-    const tabScrollerRef = useRef<HTMLDivElement>(null);
-    const [tabScrollState, setTabScrollState] = useState({ overflow: false, canScrollLeft: false, canScrollRight: false });
-    const tabLayoutKey = workspace.tabs.map(tab => `${tab.id}\u0000${tab.name}`).join('\u0001');
-    const updateTabScrollState = useCallback(() => {
-        const scroller = tabScrollerRef.current;
-        if (!scroller) return;
-        const maxScrollLeft = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
-        const next = {
-            overflow: maxScrollLeft > 1,
-            canScrollLeft: scroller.scrollLeft > 1,
-            canScrollRight: scroller.scrollLeft < maxScrollLeft - 1,
-        };
-        setTabScrollState(current => current.overflow === next.overflow
-            && current.canScrollLeft === next.canScrollLeft
-            && current.canScrollRight === next.canScrollRight ? current : next);
-    }, []);
-    const scrollTabs = useCallback((direction: -1 | 1) => {
-        const scroller = tabScrollerRef.current;
-        if (!scroller) return;
-        const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        scroller.scrollBy({
-            left: direction * Math.max(180, scroller.clientWidth * 0.65),
-            behavior: reducedMotion ? 'auto' : 'smooth',
-        });
-        if (reducedMotion) window.requestAnimationFrame(updateTabScrollState);
-    }, [updateTabScrollState]);
-    useEffect(() => {
-        const handleResize = () => updateTabScrollState();
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, [updateTabScrollState]);
-    useEffect(() => {
-        const frame = window.requestAnimationFrame(updateTabScrollState);
-        return () => window.cancelAnimationFrame(frame);
-    }, [tabLayoutKey, updateTabScrollState]);
-    useEffect(() => {
-        const frame = window.requestAnimationFrame(() => {
-            const scroller = tabScrollerRef.current;
-            const tab = document.getElementById(`document-tab-${active.id}`);
-            if (!scroller || !tab) return;
-            const scrollerRect = scroller.getBoundingClientRect();
-            const tabRect = tab.getBoundingClientRect();
-            if (tabRect.left < scrollerRect.left)
-                scroller.scrollBy({ left: tabRect.left - scrollerRect.left - 6 });
-            else if (tabRect.right > scrollerRect.right)
-                scroller.scrollBy({ left: tabRect.right - scrollerRect.right + 6 });
-            updateTabScrollState();
-        });
-        return () => window.cancelAnimationFrame(frame);
-    }, [active.id, active.name, updateTabScrollState]);
+    const {
+        active, tabScrollerRef, tabScrollState, scrollTabs,
+        renamingTabId, tabRenameValue, setTabRenameValue,
+        beginTabRename, finishTabRename, cancelTabRename,
+    } = useWorkspaceTabs(workspace, setWorkspace);
     const activeRunId = active.activeRunId;
     const activeRunIdRef = useRef(activeRunId);
     activeRunIdRef.current = activeRunId;
@@ -235,15 +153,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [exampleChartRunId, setExampleChartRunId] = useState<string>();
     const [queryCollapsed, setQueryCollapsed] = useState(false);
     const [resultsCollapsed, setResultsCollapsed] = useState(false);
-    const [panelLayout, setPanelLayout] = useState(() => {
-        let stored: string | null = null;
-        try { stored = window.localStorage.getItem(WORKSPACE_LAYOUT_STORAGE_KEY); } catch {}
-        return recoverWorkspacePanelLayout(stored, panelViewport());
-    });
-    const [activeFloatingPanel, setActiveFloatingPanel] = useState<WorkspacePanelId>('query');
-    const queryPanelRef = useRef<HTMLElement>(null);
-    const resultsPanelRef = useRef<HTMLElement>(null);
-    const workspaceContentRef = useRef<HTMLDivElement>(null);
     const [inspector, setInspector] = useState<Inspector>('schema');
     const [drawerOpen, setDrawerOpen] = useState(false);
     const [compactViewport, setCompactViewport] = useState(() => window.matchMedia('(max-width: 850px)').matches);
@@ -311,14 +220,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         };
         media.addEventListener('change', update);
         return () => media.removeEventListener('change', update);
-    }, []);
-    useEffect(() => {
-        try { window.localStorage.setItem(WORKSPACE_LAYOUT_STORAGE_KEY, JSON.stringify(panelLayout)); } catch {}
-    }, [panelLayout]);
-    useEffect(() => {
-        const normalize = () => setPanelLayout(current => normalizeWorkspacePanelLayout(current, panelViewport()));
-        window.addEventListener('resize', normalize);
-        return () => window.removeEventListener('resize', normalize);
     }, []);
     const trustedRef = useRef(trusted);
     trustedRef.current = trusted;
@@ -449,27 +350,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         setWorkspace(current => ({ ...current, tabs: current.tabs.map(draft => draft.id === id ? change(draft) : draft) }));
     }, []);
     const patch = useCallback((values: Partial<Draft>) => update(active.id, draft => ({ ...draft, ...values })), [active.id, update]);
-    const beginTabRename = (draft: Draft) => {
-        cancelTabRenameOnBlur.current = false;
-        setTabRenameValue(draft.name);
-        setRenamingTabId(draft.id);
-    };
-    const finishTabRename = (draftId: string, value: string, restoreFocus = false) => {
-        if (cancelTabRenameOnBlur.current) {
-            cancelTabRenameOnBlur.current = false;
-        } else {
-            const name = value.trim();
-            if (name) update(draftId, draft => draft.name === name ? draft : { ...draft, name });
-        }
-        setRenamingTabId(current => current === draftId ? undefined : current);
-        if (restoreFocus) window.requestAnimationFrame(() => document.getElementById(`document-tab-${draftId}`)?.focus());
-    };
-    const cancelTabRename = (draftId: string) => {
-        cancelTabRenameOnBlur.current = true;
-        setRenamingTabId(current => current === draftId ? undefined : current);
-        window.requestAnimationFrame(() => document.getElementById(`document-tab-${draftId}`)?.focus());
-    };
-    const formatActiveSql = useCallback(async (formatter: 'wasm' | 'builtin') => {
+    const formatActiveSql = useCallback    const formatActiveSql = useCallback(async (formatter: 'wasm' | 'builtin') => {
         const draftId = active.id, sourceSql = active.sql;
         const applyBuiltIn = () => setWorkspace(current => current.activeId !== draftId ? current : ({ ...current,
             tabs: current.tabs.map(draft => draft.id === draftId && draft.sql === sourceSql ? { ...draft, sql: formatSql(sourceSql) } : draft),
@@ -909,128 +790,22 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         changed: 'Unsaved changes', conflict: 'Newer revision available', deleted: 'Saved file in trash', unavailable: 'Save status unavailable',
     } as const)[saveStatus.state];
     const visibleResultsView = experience === 'beginner' && view === 'insights' ? 'results' : view;
-    const queryMode = compactViewport ? 'docked' : panelLayout.query.mode;
-    const resultsMode = compactViewport ? 'docked' : panelLayout.results.mode;
-    const queryFloating = queryMode !== 'docked';
-    const resultsFloating = resultsMode !== 'docked';
-
-    const panelElement = (panel: WorkspacePanelId) => panel === 'query' ? queryPanelRef.current : resultsPanelRef.current;
-    const applyPanelGeometry = (element: HTMLElement, geometry: PanelGeometry) => {
-        element.style.left = `${geometry.x}px`;
-        element.style.top = `${geometry.y}px`;
-        element.style.width = `${geometry.width}px`;
-        element.style.height = `${geometry.height}px`;
-    };
-    const panelStyle = (panel: WorkspacePanelId, mode: WorkspacePanelMode): CSSProperties | undefined => {
-        if (mode === 'docked') return undefined;
-        const zIndex = activeFloatingPanel === panel ? 480 : 470;
-        if (mode === 'maximized') {
-            return { left: 8, top: 8, width: 'calc(100vw - 16px)', height: 'calc(100dvh - 16px)', zIndex };
-        }
-        const geometry = panelLayout[panel].geometry;
-        return { left: geometry.x, top: geometry.y, width: geometry.width, height: geometry.height, zIndex };
-    };
-    const setPanelExpanded = (panel: WorkspacePanelId) => {
-        if (panel === 'query') setQueryCollapsed(false);
-        else setResultsCollapsed(false);
-    };
-    const togglePanelFloating = (panel: WorkspacePanelId) => {
-        if (compactViewport) return;
-        setPanelExpanded(panel);
-        setActiveFloatingPanel(panel);
-        setPanelLayout(current => ({
-            ...current,
-            [panel]: {
-                ...current[panel],
-                mode: current[panel].mode === 'docked' ? 'floating' : 'docked',
-            },
-        }));
-    };
-    const togglePanelMaximized = (panel: WorkspacePanelId) => {
-        if (compactViewport) return;
-        setPanelExpanded(panel);
-        setActiveFloatingPanel(panel);
-        setPanelLayout(current => ({
-            ...current,
-            [panel]: {
-                ...current[panel],
-                mode: current[panel].mode === 'maximized' ? 'floating' : 'maximized',
-            },
-        }));
-    };
-    const beginPanelGeometryGesture = (
-        panel: WorkspacePanelId,
-        event: PanelPointerStartEvent,
-        update: (start: PanelGeometry, dx: number, dy: number) => PanelGeometry,
-    ) => {
-        const element = panelElement(panel);
-        if (!element || compactViewport || panelLayout[panel].mode !== 'floating') return;
-        event.preventDefault();
-        event.stopPropagation();
-        setActiveFloatingPanel(panel);
-        const start = panelLayout[panel].geometry;
-        const startX = event.clientX;
-        const startY = event.clientY;
-        let latest = start;
-        document.body.classList.add('is-workspace-panel-gesturing');
-        const move = (pointer: PointerEvent) => {
-            latest = update(start, pointer.clientX - startX, pointer.clientY - startY);
-            applyPanelGeometry(element, latest);
-        };
-        const stop = () => {
-            window.removeEventListener('pointermove', move);
-            window.removeEventListener('pointerup', stop);
-            window.removeEventListener('pointercancel', stop);
-            document.body.classList.remove('is-workspace-panel-gesturing');
-            setPanelLayout(current => ({ ...current, [panel]: { ...current[panel], geometry: latest } }));
-        };
-        window.addEventListener('pointermove', move);
-        window.addEventListener('pointerup', stop);
-        window.addEventListener('pointercancel', stop);
-    };
-    const startPanelDrag = (panel: WorkspacePanelId, event: PanelPointerStartEvent) => {
-        if (panelTargetIsInteractive(event.target)) return;
-        beginPanelGeometryGesture(panel, event, (start, dx, dy) => movePanelGeometry(start, dx, dy, panelViewport()));
-    };
-    const startPanelResize = (panel: WorkspacePanelId, edge: PanelResizeEdge, event: PanelPointerStartEvent) => {
-        beginPanelGeometryGesture(panel, event, (start, dx, dy) => resizePanelGeometry(start, edge, dx, dy, panelViewport()));
-    };
-    const canSplitPanels = Boolean((run || visibleResultsView === 'sqlmap')
-        && queryMode === 'docked' && resultsMode === 'docked'
-        && !queryCollapsed && !resultsCollapsed && !compactViewport);
-    const workspaceLayoutStyle = canSplitPanels
-        ? { '--query-panel-basis': `${panelLayout.splitRatio * 100}%` } as CSSProperties
-        : undefined;
-    const startPanelSplit = (event: PanelPointerStartEvent) => {
-        const content = workspaceContentRef.current;
-        if (!content || !canSplitPanels) return;
-        event.preventDefault();
-        event.stopPropagation();
-        const rect = content.getBoundingClientRect();
-        const computed = getComputedStyle(content);
-        const paddingTop = Number.parseFloat(computed.paddingTop) || 0;
-        const paddingBottom = Number.parseFloat(computed.paddingBottom) || 0;
-        const splitterHeight = 10;
-        const top = rect.top + paddingTop;
-        const usableHeight = Math.max(1, rect.height - paddingTop - paddingBottom - splitterHeight);
-        let latest = panelLayout.splitRatio;
-        document.body.classList.add('is-workspace-panel-gesturing');
-        const move = (pointer: PointerEvent) => {
-            latest = clampPanelSplitRatio((pointer.clientY - top) / usableHeight);
-            content.style.setProperty('--query-panel-basis', `${latest * 100}%`);
-        };
-        const stop = () => {
-            window.removeEventListener('pointermove', move);
-            window.removeEventListener('pointerup', stop);
-            window.removeEventListener('pointercancel', stop);
-            document.body.classList.remove('is-workspace-panel-gesturing');
-            setPanelLayout(current => ({ ...current, splitRatio: latest }));
-        };
-        window.addEventListener('pointermove', move);
-        window.addEventListener('pointerup', stop);
-        window.addEventListener('pointercancel', stop);
-    };
-    const sqlMapStatement = safeSelectedStatement(active.sql, active.from, active.from);
+    const {
+        panelLayout, setPanelLayout, activeFloatingPanel, setActiveFloatingPanel,
+        queryPanelRef, resultsPanelRef, workspaceContentRef,
+        queryMode, resultsMode, queryFloating, resultsFloating,
+        panelStyle, togglePanelFloating, togglePanelMaximized,
+        startPanelDrag, startPanelResize, canSplitPanels,
+        workspaceLayoutStyle, startPanelSplit,
+    } = useWorkspacePanels({
+        compactViewport,
+        queryCollapsed,
+        setQueryCollapsed,
+        resultsCollapsed,
+        setResultsCollapsed,
+        hasOutput: Boolean(run || visibleResultsView === 'sqlmap'),
+    });
+    const sqlMapStatement = safeSelectedStatement    const sqlMapStatement = safeSelectedStatement(active.sql, active.from, active.from);
     const sqlMapParseStatement = sqlMapStatement && nativeParseSnapshot?.statements.find(statement =>
         statement.from === sqlMapStatement.from && statement.to === sqlMapStatement.to && active.sql.slice(statement.from, statement.to) === statement.sql);
     const resultTabs: readonly ResultsView[] = run?.kind === 'explain'

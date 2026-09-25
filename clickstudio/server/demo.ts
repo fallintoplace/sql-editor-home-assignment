@@ -1,3 +1,5 @@
+import { nativeExplorerFixture } from '../shared/native-explorer-fixtures.js';
+import type { NativeExplorerRequest } from '../shared/native-explorers.js';
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { ClickHouseDocumentationEntry, ClickHouseDocumentationSummary, Connection, Principal, Progress, ReferenceCategory, Run, Schema } from '../shared/types.js';
 import { DEFAULT_LIMITS } from '../shared/types.js';
@@ -107,6 +109,11 @@ export class DemoDriver {
             '  JOIN TREE',
             '    TABLE id: 5, table_name: demo.events',
         ];
+    }
+    async nativeExplorer(id: string, request: NativeExplorerRequest, signal?: AbortSignal) {
+        this.connection({ id: 'local-owner', role: 'owner' }, id);
+        signal?.throwIfAborted();
+        return nativeExplorerFixture(request);
     }
     async tableParts(id: string, database: string, table: string): Promise<MergeTreePartsSnapshot> {
         this.connection({ id: 'local-owner', role: 'owner' }, id);

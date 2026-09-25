@@ -244,7 +244,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             applyBuiltIn();
     }, [active.id, active.sql, nativeParserEnabled, nativeParserStatus]);
 
-    const { run, setRunForRun, page, setPage, resultPage, snapshot, setSnapshotForRun, profile, setProfileForRun, pipeline, setPipelineForRun, eventState } = useRunEvidence({
+    const { run, setRunForRun, page, setPage, resultPage, snapshot, setSnapshotForRun, profile, setProfileForRun, pipeline, setPipelineForRun, profilesByRun, pipelinesByRun, eventState } = useRunEvidence({
         activeRunId,
         connectionId: connection.id,
         loadHistory,
@@ -684,6 +684,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         run,
         profile,
         pipeline,
+        comparisonProfiles: profilesByRun,
+        comparisonPipelines: pipelinesByRun,
         onRefreshSchema: () => void loadSchema(true),
         onRefreshHistory: () => void loadHistory(),
         onInsert: (value: string) => editor.current?.insert(value),
@@ -1011,7 +1013,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                 : <div className="pipeline-graph-empty" role="status">{copy.common.pipelineNoOutput}</div>)}
                             {run && visibleResultsView === 'runtime' && <ExplainAnalyzeView evidence={analyzeEvidence} loading={!retainedSnapshot && run.resultState === 'reopenable'} copy={copy.common}/>}
                             {run && visibleResultsView === 'chart' && snapshotChart?.config.kind === 'table' ? <div className="chart-table-fallback"><div className="chart-table-notice" role="status">{copy.chart.fallbackNoMeasure}</div><ResultGrid key={`${run.id}-chart-table`} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/></div> : run && visibleResultsView === 'chart' && <ChartView result={retainedSnapshot} loading={!retainedSnapshot && run.resultState === 'reopenable'} chart={active.chart} onChart={chart => patch({ chart })} copy={copy} locale={locale}/>}
-                            {run && visibleResultsView === 'insights' && <InsightsView run={run} profile={profile} pipeline={pipeline} pipelineAvailable={Boolean(trusted && connection.manifest?.pipeline.available)} onLoad={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} loading={busy === 'save'}/>}
+                            {run && visibleResultsView === 'insights' && <InsightsView comparison={{ connectionId: connection.id, trusted, history, initialRun: run, profiles: profilesByRun, pipelines: pipelinesByRun, queryLogAvailable: connection.manifest?.queryLog.available === true }} run={run} profile={profile} pipeline={pipeline} pipelineAvailable={Boolean(trusted && connection.manifest?.pipeline.available)} onLoad={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} loading={busy === 'save'}/>}
                         </div>
                         {resultsMode === 'floating' && !resultsCollapsed && <PanelResizeHandles onResize={(edge, event) => startPanelResize('results', edge, event)}/>}
                     </section>}

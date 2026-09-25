@@ -15,8 +15,8 @@ export function useRunEvidence({ activeRunId, connectionId, loadHistory, setErro
     const [run, setRunForRun] = useScopedValue<Run>(activeRunId);
     const [resultPageState, setResultPageForRun] = useScopedValue<{ page: number; value: ResultPage }>(activeRunId);
     const [snapshot, setSnapshotForRun] = useScopedValue<Result>(activeRunId);
-    const [profile, setProfileForRun] = useScopedValue<QueryProfile>(activeRunId);
-    const [pipeline, setPipelineForRun] = useScopedValue<ProfilePipeline>(activeRunId);
+    const [profile, setProfileForRun, profilesByRun] = useScopedValue<QueryProfile>(activeRunId);
+    const [pipeline, setPipelineForRun, pipelinesByRun] = useScopedValue<ProfilePipeline>(activeRunId);
     const [page, setPage] = useState(0);
     const [eventState, setEventState] = useState<RunEventState>('idle');
     const resultPage = resultPageState?.page === page ? resultPageState.value : undefined;
@@ -78,5 +78,5 @@ export function useRunEvidence({ activeRunId, connectionId, loadHistory, setErro
         return () => { closed = true; window.clearInterval(timer); };
     }, [activeRunId, connectionId, eventState, loadHistory, running, setRunForRun]);
 
-    return { run, setRunForRun, page, setPage, resultPage, snapshot, setSnapshotForRun, profile, setProfileForRun, pipeline, setPipelineForRun, eventState };
+    return { run, setRunForRun, page, setPage, resultPage, snapshot, setSnapshotForRun, profile, setProfileForRun, pipeline, setPipelineForRun, profilesByRun, pipelinesByRun, eventState };
 }

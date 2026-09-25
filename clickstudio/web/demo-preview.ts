@@ -1,3 +1,4 @@
+import { nativeExplorerFixture } from '../shared/native-explorer-fixtures.js';
 import type { QueryDocument, Result, ResultPage, Run, Script } from '../shared/types.js';
 import { splitSql } from '../shared/sql.js';
 import { sqlForRunKind } from '../shared/explain-plan.js';
@@ -238,6 +239,14 @@ export class DemoPreviewApi {
         if (pathname === '/session') return { principal: { id: owner, role: 'owner' }, requiresLogin: false, demo: true };
         if (pathname === '/connections' && method === 'GET') return [connection(this.trusted), PLAYGROUND_CONNECTION];
         if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'schema') return schema;
+        if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'native-explorer' && method === 'POST') {
+            if (!this.trusted) throw new Error('Trust this connection before inspecting native metadata.');
+            if (typeof body.database !== 'string') throw new Error('A database is required.');
+            if (body.kind === 'lineage') return nativeExplorerFixture({ kind: 'lineage', database: body.database });
+            if ((body.kind === 'merges' || body.kind === 'mutations') && typeof body.table === 'string')
+                return nativeExplorerFixture({ kind: body.kind, database: body.database, table: body.table });
+            throw new Error('Unknown native explorer request.');
+        }
         if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'table-parts' && method === 'POST') {
             if (body.database !== 'demo' || body.table !== 'events') throw new Error('The selected table is not available in this sample.');
             return parseMergeTreeParts('demo', 'events', demoMergeTreePartRows());

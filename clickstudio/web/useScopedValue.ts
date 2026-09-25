@@ -13,5 +13,5 @@ export function useScopedValue<T>(key: string | undefined) {
             return { ...current, [target]: value };
         });
     }, []);
-    return [value, setForKey] as const;
+    return [value, setForKey, scoped] as const;
 }

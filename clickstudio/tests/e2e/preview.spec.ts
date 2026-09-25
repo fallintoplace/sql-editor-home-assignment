@@ -134,3 +134,21 @@ test('Charts filter opens a localized chart example in a new SQL tab without exe
     await expect(page.locator('.execution-bar')).toHaveAttribute('data-run-status', 'ready');
     expect(exampleSqlRequests).toEqual([]);
 });
+
+test('Static preview includes materialized views and storage activity in sample mode', async ({ page }) => {
+    await page.goto('/');
+    await page.locator('.connection-trigger').click();
+    await page.getByRole('dialog', { name: 'Data source options' }).getByRole('button', { name: /Sample data/ }).click();
+    await page.getByRole('button', { name: 'Objects', exact: true }).click();
+    await page.getByRole('button', { name: 'View dependencies', exact: true }).click();
+    const graph = page.getByRole('dialog', { name: 'Materialized view dependencies', exact: true });
+    await expect(graph).toContainText('SAMPLE DATA');
+    await expect(graph.locator('.native-lineage-node')).toHaveCount(5);
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'events MergeTree', exact: true }).click();
+    await page.getByRole('button', { name: 'Visualize parts', exact: true }).click();
+    const storage = page.getByRole('dialog', { name: 'MergeTree parts', exact: true });
+    await storage.getByRole('button', { name: 'Merges', exact: true }).click();
+    await expect(storage).toContainText('67%');
+    await expect(storage).toContainText('SAMPLE DATA');
+});

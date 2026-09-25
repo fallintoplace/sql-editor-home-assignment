@@ -17,7 +17,7 @@ export function useWorkspaceData({
     activeServerId?: string;
     setWorkspace: Dispatch<SetStateAction<WorkspaceState>>;
     workspaceRef: { current: WorkspaceState };
-    setError: Dispatch<SetStateAction<string>>;
+    setError: (message: string) => void;
 }) {
     const [schema, setSchema] = useState<Schema>();
     const [schemaLoading, setSchemaLoading] = useState(false);

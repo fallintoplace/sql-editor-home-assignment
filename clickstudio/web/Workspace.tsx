@@ -53,6 +53,8 @@ function safeStatementCount(sql: string) {
     try { return splitSql(sql).length; } catch { return undefined; }
 }
 type FailedQueryError = { draftId: string; draftSql: string; statementSql: string; sourceFrom: number; error: ApiError };
+const TOAST_TIMEOUT_MS = 10_000;
+
 function apiErrorDetail(error: unknown): ApiError {
     if (error instanceof RequestError) return error.detail;
     const candidate = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : undefined;
@@ -127,9 +129,33 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     }, []);
     const [busy, setBusy] = useState<BusyAction>('');
     const [cancelling, setCancelling] = useState(false);
-    const [error, setError] = useState('');
+    const [error, setErrorState] = useState('');
+    const errorTimerRef = useRef<number | undefined>(undefined);
+    const setError = useCallback((message: string) => {
+        if (errorTimerRef.current !== undefined) window.clearTimeout(errorTimerRef.current);
+        errorTimerRef.current = undefined;
+        setErrorState(message);
+        if (message) errorTimerRef.current = window.setTimeout(() => {
+            errorTimerRef.current = undefined;
+            setErrorState('');
+        }, TOAST_TIMEOUT_MS);
+    }, []);
     const [failedQueryError, setFailedQueryError] = useState<FailedQueryError>();
-    const [notice, setNotice] = useState('');
+    const [notice, setNoticeState] = useState('');
+    const noticeTimerRef = useRef<number | undefined>(undefined);
+    const setNotice = useCallback((message: string) => {
+        if (noticeTimerRef.current !== undefined) window.clearTimeout(noticeTimerRef.current);
+        noticeTimerRef.current = undefined;
+        setNoticeState(message);
+        if (message) noticeTimerRef.current = window.setTimeout(() => {
+            noticeTimerRef.current = undefined;
+            setNoticeState('');
+        }, TOAST_TIMEOUT_MS);
+    }, []);
+    useEffect(() => () => {
+        if (errorTimerRef.current !== undefined) window.clearTimeout(errorTimerRef.current);
+        if (noticeTimerRef.current !== undefined) window.clearTimeout(noticeTimerRef.current);
+    }, []);
     const [search, setSearch] = useState('');
     const storageError = useWorkspacePersistence(key, workspace);
     const parameters = useMemo(() => {

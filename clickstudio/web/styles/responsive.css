@@ -107,7 +107,9 @@
     .editor-mode-label { gap: 6px; font-size: 8px; }
     .editor-footer { font-size: 7px; }
     .execution-bar { min-height: 40px; flex-wrap: wrap; gap: 7px 12px; padding: 6px 10px; }
-    .help-examples-button { min-height: 27px; }
+    .help-button { min-height: 27px; }
+    .help-center-backdrop { padding: 12px; }
+    .help-center-panel { width: calc(100vw - 24px); max-height: calc(100dvh - 24px); }
     .execution-telemetry { justify-content: flex-start; }
     .execution-right code { max-width: 90px; }
     .toast-stack { right: 10px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); width: calc(100vw - 20px); }
@@ -134,13 +136,22 @@
     .sql-example-option { padding: 8px 7px; }
     .sql-example-option-meta { flex-wrap: wrap; }
     .sql-example-preview pre { font-size: 8px; }
-    .help-examples-button { width: 29px; min-height: 29px; padding: 0; }
-    .help-examples-button span { display: none; }
+    .help-button { width: 29px; min-height: 29px; padding: 0; }
+    .help-button span { display: none; }
+    .help-center-backdrop { padding: 8px; }
+    .help-center-panel { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); border-radius: 10px; }
+    .help-center-header { padding: 13px 12px 10px; }
+    .help-center-header p { max-width: 270px; }
+    .help-center-content { padding: 9px; }
+    .help-feature-card, .help-center-lower { grid-template-columns: minmax(0, 1fr); }
+    .help-feature-card { gap: 12px; padding: 11px; }
+    .help-parts-illustration { min-height: 170px; }
+    .help-center-note { min-height: 125px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .sql-examples-backdrop, .sql-examples-panel { animation: none; }
-    .help-examples-button { animation: none; }
+    .help-button, .help-center-backdrop, .help-center-panel { animation: none; }
 }
 
 @media (max-width: 560px) {

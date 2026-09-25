@@ -14,7 +14,8 @@ import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { ImportWizard } from './components/ImportWizard';
 import { SqlExamplesMenu } from './components/SqlExamplesMenu';
 import { ExplainAnalyzeView } from './components/ExplainAnalyzeView';
-import { HelpExamplesButton } from './components/HelpExamplesButton';
+import { HelpButton } from './components/HelpButton';
+import { HelpCenter } from './components/HelpCenter';
 import { RestoreSqlMenu } from './components/RestoreSqlMenu';
 import { OverlayPortal } from './components/OverlayPortal';
 import { ChartView, InsightsView, ResultGrid } from './components/ResultViews';
@@ -104,6 +105,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [importOpen, setImportOpen] = useState(false);
     const [examplesOpen, setExamplesOpen] = useState(false);
     const examplesOpenerRef = useRef<HTMLButtonElement | null>(null);
+    const [helpOpen, setHelpOpen] = useState(false);
+    const helpOpenerRef = useRef<HTMLButtonElement | null>(null);
     const openExamples = useCallback((opener: HTMLButtonElement) => {
         examplesOpenerRef.current = opener;
         setExamplesOpen(true);
@@ -111,6 +114,14 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const closeExamples = useCallback((restoreFocus = true) => {
         setExamplesOpen(false);
         if (restoreFocus) window.requestAnimationFrame(() => examplesOpenerRef.current?.focus());
+    }, []);
+    const openHelp = useCallback((opener: HTMLButtonElement) => {
+        helpOpenerRef.current = opener;
+        setHelpOpen(true);
+    }, []);
+    const closeHelp = useCallback((restoreFocus = true) => {
+        setHelpOpen(false);
+        if (restoreFocus) window.requestAnimationFrame(() => helpOpenerRef.current?.focus());
     }, []);
     const [busy, setBusy] = useState<BusyAction>('');
     const [cancelling, setCancelling] = useState(false);
@@ -991,6 +1002,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             {drawerOpen && (experience === 'beginner' || compactViewport) && <OverlayPortal><><button className="drawer-backdrop" type="button" aria-label="Close panel" onClick={() => setDrawerOpen(false)}/><InspectorPane {...inspectorProps} drawer onClose={() => setDrawerOpen(false)} onInsert={value => { editor.current?.insert(value); setDrawerOpen(false); }} onOpenDocument={document => { openDocument(document); setDrawerOpen(false); }}/></></OverlayPortal>}
         </div>
         <ImportWizard open={importOpen} connectionId={connection.id} trusted={trusted} demoMode={demoMode} onClose={() => setImportOpen(false)} onImported={() => { void loadSchema(); setNotice('Import complete. The destination schema was refreshed.'); }}/>
-        <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} cancelling={cancelling} scriptRunning={script?.status === 'running'} copy={copy.common} helpButton={<HelpExamplesButton copy={copy.common} open={examplesOpen} onOpen={openExamples}/>}/>
+        <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} cancelling={cancelling} scriptRunning={script?.status === 'running'} copy={copy.common} helpButton={<HelpButton copy={copy.common} open={helpOpen} onOpen={openHelp}/>}/>
+        <HelpCenter open={helpOpen} copy={copy.common} onClose={closeHelp} onOpenObjects={() => showInspector('schema')}/>
     </div>;
 }

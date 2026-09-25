@@ -322,6 +322,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const trustedRef = useRef(trusted);
     trustedRef.current = trusted;
     const schemaRequestRef = useRef(0), historyRequestRef = useRef(0), documentsRequestRef = useRef(0), revisionsRequestRef = useRef(0);
+    const snapshotRequestRef = useRef(new Map<string, Promise<Result>>());
     const invalidateWorkspaceRequests = useCallback(() => {
         schemaRequestRef.current++;
         historyRequestRef.current++;
@@ -808,11 +809,21 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const loadSnapshot = useCallback(async () => {
         if (!activeRunId || snapshot?.runId === activeRunId || !run || run.resultState !== 'reopenable') return;
         const runId = activeRunId;
-        const full = await api<Result>(`/runs/${encodeURIComponent(runId)}/snapshot`);
-        setSnapshotForRun(runId, full);
-        if (activeRunIdRef.current !== runId || workspaceRef.current.activeId !== active.id) return;
-        const suggestion = recommendChart(full.columns, full.rows);
-        if (active.chart.kind === 'table' && suggestion.config.kind !== 'table') patch({ chart: suggestion.config });
+        let request = snapshotRequestRef.current.get(runId);
+        if (!request) {
+            request = api<Result>(`/runs/${encodeURIComponent(runId)}/snapshot`);
+            snapshotRequestRef.current.set(runId, request);
+        }
+        try {
+            const full = await request;
+            setSnapshotForRun(runId, full);
+            if (activeRunIdRef.current !== runId || workspaceRef.current.activeId !== active.id) return;
+            const suggestion = recommendChart(full.columns, full.rows);
+            if (active.chart.kind === 'table' && suggestion.config.kind !== 'table') patch({ chart: suggestion.config });
+        } finally {
+            if (snapshotRequestRef.current.get(runId) === request)
+                snapshotRequestRef.current.delete(runId);
+        }
     }, [active.chart.kind, active.id, activeRunId, patch, run, setSnapshotForRun, snapshot]);
 
     useEffect(() => {
@@ -827,7 +838,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     }, [activeRunId, exampleChartRunId, loadSnapshot, run, setError, snapshot?.runId]);
 
     useEffect(() => {
-        if (!run || (view !== 'indexes' && view !== 'plan' && view !== 'pipeline') || !terminal(run) || run.resultState !== 'reopenable' || snapshot?.runId === run.id) return;
+        if (!run || !['chart', 'indexes', 'plan', 'pipeline'].includes(view) || !terminal(run) || run.resultState !== 'reopenable' || snapshot?.runId === run.id) return;
         void loadSnapshot().catch(caught => setError(message(caught)));
     }, [loadSnapshot, run, setError, snapshot?.runId, view]);
 
@@ -1418,7 +1429,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             <div className="results-actions">
                                 {run && <div className="results-tabs" role="tablist" aria-label={copy.common.workspaceOutput}>{resultTabs.map(tab => <button key={tab} role="tab" aria-selected={visibleResultsView === tab} type="button" onClick={() => {
                                     setView(tab);
-                                    if (tab === 'chart' || tab === 'indexes' || tab === 'plan' || tab === 'pipeline') void perform(loadSnapshot, 'save');
                                     if (tab === 'insights') void perform(loadProfile, 'save');
                                 }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : tab === 'sqlmap' ? copy.common.sqlMap : tab === 'indexes' ? copy.common.explain : tab === 'plan' ? copy.common.logicalPlan : tab === 'pipeline' ? copy.common.pipelineGraph : copy.common.insights}{tab === 'chart' && retainedSnapshot && <span className="suggested-dot"/>}</button>)}</div>}
                                 {!compactViewport && <Button variant="ghost" className="panel-window-button" aria-label={resultsFloating ? 'Dock output panel' : 'Pop out output panel'} title={resultsFloating ? 'Dock output panel' : 'Pop out output panel'} onClick={() => togglePanelFloating('results')}><Icon name={resultsFloating ? 'dock' : 'popout'}/></Button>}

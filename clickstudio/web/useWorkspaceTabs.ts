@@ -90,6 +90,7 @@ export function useWorkspaceTabs(workspace: WorkspaceState, setWorkspace: Dispat
         active,
         tabScrollerRef,
         tabScrollState,
+        updateTabScrollState,
         scrollTabs,
         renamingTabId,
         tabRenameValue,

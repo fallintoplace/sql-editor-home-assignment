@@ -67,6 +67,79 @@ The editor uses Click UI controls, CodeMirror 6, TanStack Query and ECharts. It 
 
 The schema explorer includes the selected database and ClickHouse system tables. Expand a system table and choose **Read ClickHouse documentation** to fetch its documentation from the connected server. The response shows the server version; fixture mode does not simulate native documentation.
 
+
+### Example workflows
+
+The repository keeps runnable examples in [`clickstudio/examples/analysis.sql`](../clickstudio/examples/analysis.sql). They are intentionally small enough to paste into a fresh tab and inspect statement by statement.
+
+**Table-free smoke test**
+
+```sql
+SELECT
+    toDate('2026-01-01') + toUInt32(number) AS day,
+    toUInt64((number + 1) * 10) AS events
+FROM numbers(7)
+ORDER BY day;
+```
+
+This works against a fresh ClickHouse server and is a good first check for result typing, charts, export, and retained evidence.
+
+**Seeded local data**
+
+After `npm run db:setup`, the bundled fixture has seven rows in `default.events`:
+
+```sql
+SELECT
+    day,
+    events,
+    sum(events) OVER (ORDER BY day) AS running_events
+FROM default.events
+ORDER BY day;
+```
+
+This gives the table and chart views multiple numeric series without requiring any writes from the editor.
+
+**Named parameters**
+
+ClickHouse parameter syntax is preserved and values are bound by the server:
+
+```sql
+SELECT day, events
+FROM default.events
+WHERE events >= {minimum:UInt64}
+ORDER BY day;
+```
+
+Provide `minimum=30` in the editor's parameter control before running it. A missing parameter is rejected explicitly instead of being interpolated into SQL.
+
+**Scripts**
+
+Put multiple read-only statements in one tab and choose **Run script**, or use **Ctrl/Cmd+Shift+Enter**:
+
+```sql
+SELECT count() AS days FROM default.events;
+
+SELECT sum(events) AS total_events FROM default.events;
+```
+
+Each statement keeps its own result. The UI stops the script on the first error.
+
+**Index, plan, and pipeline inspection**
+
+Keep the current statement as normal `SELECT` SQL and use the Run actions beside **Run statement**:
+
+- **EXPLAIN INDEXES** shows ClickHouse-reported index checks and pruning counts such as parts and granules.
+- **EXPLAIN PLAN** shows the logical query plan and supports graph and tree inspection.
+- **EXPLAIN PIPELINE** shows the planned processor topology and parallel lanes.
+
+These views describe ClickHouse plan output. They are not measured per-node runtime timings. Retained run metrics remain separate.
+
+**Import fixture**
+
+[`clickstudio/examples/import.csv`](../clickstudio/examples/import.csv) matches the bundled `default.import_events(day Date, events UInt64)` table. Choose **Import**, review the parsed rows and mapping, then confirm the exact `INSERT N ROWS` phrase. Previewing the file does not write to ClickHouse.
+
+For additional connections, [`clickstudio/examples/connections.json`](../clickstudio/examples/connections.json) shows the supported operator-owned profile shape and environment-secret references.
+
 A run always gets a server-generated query ID. Its SQL, parameters, execution identity, limits, timestamps and result state remain available independently of the editor. An edit does not update the old result. Opening historical SQL creates a child draft rather than replacing the current draft. An AI apply, publication, or experiment uses the same document and checkpoint model.
 
 Results preserve column names and ClickHouse type metadata separately from row arrays, including duplicate column names. UInt64 and Decimal output is requested as strings to avoid JavaScript integer precision loss. Table filtering and statistics describe retained rows only. Tables render 200 rows per page; this is bounded pagination, **not a claim of full row virtualization**. Chart coordinates are JavaScript numbers and unsafe integer coordinates are omitted. The table/JSON remains authoritative for exact values.

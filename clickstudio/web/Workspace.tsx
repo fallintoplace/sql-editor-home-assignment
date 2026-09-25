@@ -6,6 +6,7 @@ import { parseExplainAnalyze } from '../shared/explain-analyze';
 import { parseExplainIndexAnalysis } from '../shared/explain-indexes';
 import { parsePipelineResult } from '../shared/profile';
 import { exportCsv, recommendChart } from '../shared/results';
+import { recommendGeo } from '../shared/geo';
 import { matchesDraft } from '../shared/evidence';
 import { formatSql, hasSqlComments, parameterNames, selectedStatement, splitSql } from '../shared/sql';
 import { api, download, isFrontendDemoPreview, message, post, RequestError } from './api';
@@ -17,7 +18,7 @@ import { ExplainAnalyzeView } from './components/ExplainAnalyzeView';
 import { HelpButton } from './components/HelpButton';
 import { RestoreSqlMenu } from './components/RestoreSqlMenu';
 import { OverlayPortal } from './components/OverlayPortal';
-import { ChartView, InsightsView, ResultGrid } from './components/ResultViews';
+import { ChartView, GeoView, InsightsView, ResultGrid } from './components/ResultViews';
 import { ExplainPlanView } from './components/ExplainPlanView';
 import { ExplainIndexesView } from './components/ExplainIndexesView';
 import { PipelineGraph } from './components/PipelineGraph';
@@ -492,7 +493,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     }, [activeRunId, exampleChartRunId, loadSnapshot, run, setError, snapshot?.runId]);
 
     useEffect(() => {
-        if (!run || !['chart', 'indexes', 'plan', 'pipeline', 'runtime'].includes(view) || !terminal(run) || run.resultState !== 'reopenable' || snapshot?.runId === run.id) return;
+        if (!run || !['chart', 'map', 'indexes', 'plan', 'pipeline', 'runtime'].includes(view) || !terminal(run) || run.resultState !== 'reopenable' || snapshot?.runId === run.id) return;
         void loadSnapshot().catch(caught => setError(message(caught)));
     }, [loadSnapshot, run, setError, snapshot?.runId, view]);
 
@@ -573,7 +574,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         local: 'Local draft', checking: 'Checking save…', saving: 'Saving…', saved: `Saved r${active.baseRevision}`,
         changed: 'Unsaved changes', conflict: 'Newer revision available', deleted: 'Saved file in trash', unavailable: 'Save status unavailable',
     } as const)[saveStatus.state];
-    const visibleResultsView = experience === 'beginner' && view === 'insights' ? 'results' : view;
+    const requestedResultsView = experience === 'beginner' && view === 'insights' ? 'results' : view;
     const {
         panelLayout, setPanelLayout, activeFloatingPanel, setActiveFloatingPanel,
         queryPanelRef, resultsPanelRef, workspaceContentRef,
@@ -587,7 +588,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         setQueryCollapsed,
         resultsCollapsed,
         setResultsCollapsed,
-        hasOutput: Boolean(run || visibleResultsView === 'sqlmap'),
+        hasOutput: Boolean(run || requestedResultsView === 'sqlmap'),
     });
     const sqlMapStatement = safeSelectedStatement(active.sql, active.from, active.from);
     const queryTreeCapability = connection.manifest?.queryTree ?? connection.manifest?.explain;
@@ -597,6 +598,10 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             : queryTreeCapability?.reason;
     const sqlMapParseStatement = sqlMapStatement && nativeParseSnapshot?.statements.find(statement =>
         statement.from === sqlMapStatement.from && statement.to === sqlMapStatement.to && active.sql.slice(statement.from, statement.to) === statement.sql);
+    const geoAvailable = run?.kind === 'query' && Boolean(recommendGeo(run.columns));
+    const queryResultTabs: readonly ResultsView[] = experience === 'beginner'
+        ? geoAvailable ? ['results', 'chart', 'map', 'sqlmap'] : ['results', 'chart', 'sqlmap']
+        : geoAvailable ? ['results', 'chart', 'map', 'sqlmap', 'insights'] : ['results', 'chart', 'sqlmap', 'insights'];
     const resultTabs: readonly ResultsView[] = run?.kind === 'explain'
         ? ['results', 'indexes']
         : run?.kind === 'plan'
@@ -605,7 +610,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             ? ['results', 'pipeline']
         : run?.kind === 'analyze'
             ? ['results', 'runtime']
-            : experience === 'beginner' ? ['results', 'chart', 'sqlmap'] : ['results', 'chart', 'sqlmap', 'insights'];
+            : queryResultTabs;
+    const visibleResultsView = resultTabs.includes(requestedResultsView) ? requestedResultsView : 'results';
     const retainedSnapshot = run && snapshot?.runId === run.id ? snapshot : undefined;
     const explainPlanOutput = run?.kind === 'plan' ? retainedSnapshot?.rows[0]?.[0] : undefined;
     const explainPlan = useMemo(() => parseExplainPlan(explainPlanOutput), [explainPlanOutput]);
@@ -618,13 +624,14 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const analyzeOutput = run?.kind === 'analyze' ? retainedSnapshot?.rows.map(row => row[0]).filter((value): value is string => typeof value === 'string').join('\n') : undefined;
     const analyzeEvidence = useMemo(() => parseExplainAnalyze(analyzeOutput), [analyzeOutput]);
     const resultsTitle = visibleResultsView === 'sqlmap' ? copy.common.sqlStructure
+        : visibleResultsView === 'map' ? copy.common.map
         : visibleResultsView === 'indexes' ? copy.common.explain
             : visibleResultsView === 'plan' ? copy.common.logicalPlan
             : visibleResultsView === 'pipeline' ? copy.common.pipelineGraph
             : visibleResultsView === 'runtime' ? copy.common.runtimeGraph : copy.common.results;
     const resultsEyebrow = visibleResultsView === 'sqlmap' ? copy.common.queryVisualization : copy.common.workspaceOutput;
     const resultsPanelLabel = visibleResultsView === 'sqlmap' ? copy.common.sqlStructure
-        : visibleResultsView === 'plan' || visibleResultsView === 'pipeline' || visibleResultsView === 'indexes' || visibleResultsView === 'runtime' ? resultsTitle : copy.common.queryResults;
+        : visibleResultsView === 'map' || visibleResultsView === 'plan' || visibleResultsView === 'pipeline' || visibleResultsView === 'indexes' || visibleResultsView === 'runtime' ? resultsTitle : copy.common.queryResults;
     const snapshotChart = retainedSnapshot ? recommendChart(retainedSnapshot.columns, retainedSnapshot.rows) : undefined;
     const openDocument = (document: QueryDocument) => {
         addDraft(draftFromDocument(document));
@@ -991,7 +998,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                 {run && <div className="results-tabs" role="tablist" aria-label={copy.common.workspaceOutput}>{resultTabs.map(tab => <button key={tab} role="tab" aria-selected={visibleResultsView === tab} type="button" onClick={() => {
                                     setView(tab);
                                     if (tab === 'insights') void perform(loadProfile, 'save');
-                                }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : tab === 'sqlmap' ? copy.common.sqlMap : tab === 'indexes' ? copy.common.explain : tab === 'plan' ? copy.common.logicalPlan : tab === 'pipeline' ? copy.common.pipelineGraph : tab === 'runtime' ? copy.common.runtimeGraph : copy.common.insights}{tab === 'chart' && retainedSnapshot && <span className="suggested-dot"/>}</button>)}</div>}
+                                }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : tab === 'map' ? copy.common.map : tab === 'sqlmap' ? copy.common.sqlMap : tab === 'indexes' ? copy.common.explain : tab === 'plan' ? copy.common.logicalPlan : tab === 'pipeline' ? copy.common.pipelineGraph : tab === 'runtime' ? copy.common.runtimeGraph : copy.common.insights}{tab === 'chart' && retainedSnapshot && <span className="suggested-dot"/>}</button>)}</div>}
                                 {!compactViewport && <Button variant="ghost" className="panel-window-button" aria-label={resultsFloating ? 'Dock output panel' : 'Pop out output panel'} title={resultsFloating ? 'Dock output panel' : 'Pop out output panel'} onClick={() => togglePanelFloating('results')}><Icon name={resultsFloating ? 'dock' : 'popout'}/></Button>}
                                 {resultsFloating && <Button variant="ghost" className="panel-window-button" aria-label={resultsMode === 'maximized' ? 'Restore output panel' : 'Maximize output panel'} title={resultsMode === 'maximized' ? 'Restore output panel' : 'Maximize output panel'} onClick={() => togglePanelMaximized('results')}><Icon name={resultsMode === 'maximized' ? 'restore' : 'maximize'}/></Button>}
                                 <Button variant="ghost" className="panel-collapse-button" aria-label={`${resultsCollapsed ? copy.common.expand : copy.common.collapse} ${resultsPanelLabel}`} aria-expanded={!resultsCollapsed} aria-controls="query-results-content" title={resultsCollapsed ? copy.common.expandOutput : copy.common.collapseOutput} onClick={() => setResultsCollapsed(value => !value)}><Icon className="panel-toggle-icon" name="chevron"/></Button>
@@ -1013,6 +1020,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                 : <div className="pipeline-graph-empty" role="status">{copy.common.pipelineNoOutput}</div>)}
                             {run && visibleResultsView === 'runtime' && <ExplainAnalyzeView evidence={analyzeEvidence} loading={!retainedSnapshot && run.resultState === 'reopenable'} copy={copy.common}/>}
                             {run && visibleResultsView === 'chart' && snapshotChart?.config.kind === 'table' ? <div className="chart-table-fallback"><div className="chart-table-notice" role="status">{copy.chart.fallbackNoMeasure}</div><ResultGrid key={`${run.id}-chart-table`} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/></div> : run && visibleResultsView === 'chart' && <ChartView result={retainedSnapshot} loading={!retainedSnapshot && run.resultState === 'reopenable'} chart={active.chart} onChart={chart => patch({ chart })} copy={copy} locale={locale}/>}
+                            {run && visibleResultsView === 'map' && <GeoView result={retainedSnapshot} loading={!retainedSnapshot && run.resultState === 'reopenable'} locale={locale}/>}
                             {run && visibleResultsView === 'insights' && <InsightsView comparison={{ connectionId: connection.id, trusted, history, initialRun: run, profiles: profilesByRun, pipelines: pipelinesByRun, queryLogAvailable: connection.manifest?.queryLog.available === true }} run={run} profile={profile} pipeline={pipeline} pipelineAvailable={Boolean(trusted && connection.manifest?.pipeline.available)} onLoad={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} loading={busy === 'save'}/>}
                         </div>
                         {resultsMode === 'floating' && !resultsCollapsed && <PanelResizeHandles onResize={(edge, event) => startPanelResize('results', edge, event)}/>}

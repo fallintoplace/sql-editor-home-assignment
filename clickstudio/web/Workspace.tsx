@@ -123,6 +123,9 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const workspaceRef = useRef(workspace);
     workspaceRef.current = workspace;
     const active = workspace.tabs.find(tab => tab.id === workspace.activeId) ?? workspace.tabs[0]!;
+    useEffect(() => {
+        document.getElementById(`document-tab-${active.id}`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }, [active.id]);
     const activeRunId = active.activeRunId;
     const activeRunIdRef = useRef(activeRunId);
     activeRunIdRef.current = activeRunId;

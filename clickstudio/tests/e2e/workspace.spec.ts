@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { trust, trustCurrentConnection } from './helpers.js';
+import { openBlankSql, trust, trustCurrentConnection } from './helpers.js';
 
 function countRunRequests(page: Page) {
     let count = 0;
@@ -88,4 +88,53 @@ test('Closing and reopening a result tab does not execute SQL again', async ({ p
     await expect(page.getByRole('textbox', { name: 'value:UInt64', exact: true })).toHaveValue('9007199254740993');
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
     expect(runs()).toBe(1);
+});
+
+
+test('SQL tabs stay readable and keep the active tab in view', async ({ page }) => {
+    await page.setViewportSize({ width: 900, height: 800 });
+    await trust(page);
+
+    const names = [
+        'Johnson & Johnson price history.sql',
+        'Taxi trips by weekday and hour.sql',
+        'EUR/USD monthly midpoint.sql',
+        'Amazon customer review health.sql',
+        'Service latency SLO.sql',
+        'EUR/USD Pro market view.sql',
+    ];
+
+    for (const [index, name] of names.entries()) {
+        await page.getByRole('textbox', { name: 'SQL document name', exact: true }).fill(name);
+        if (index < names.length - 1) await openBlankSql(page);
+    }
+
+    const tabList = page.getByRole('tablist', { name: 'SQL documents', exact: true });
+    const activeTab = page.getByRole('tab', { name: names.at(-1)!, exact: true });
+    await expect(activeTab).toBeVisible();
+
+    const layout = await tabList.evaluate(node => {
+        const active = node.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+        if (!active) throw new Error('Active SQL tab not found');
+        const containerRect = node.getBoundingClientRect();
+        const activeRect = active.getBoundingClientRect();
+        return {
+            clientWidth: node.clientWidth,
+            scrollWidth: node.scrollWidth,
+            overflowX: getComputedStyle(node).overflowX,
+            activeWidth: activeRect.width,
+            activeFlexShrink: getComputedStyle(active).flexShrink,
+            activeLeft: activeRect.left,
+            activeRight: activeRect.right,
+            containerLeft: containerRect.left,
+            containerRight: containerRect.right,
+        };
+    });
+
+    expect(layout.overflowX).toBe('auto');
+    expect(layout.activeFlexShrink).toBe('0');
+    expect(layout.activeWidth).toBeGreaterThanOrEqual(160);
+    expect(layout.scrollWidth).toBeGreaterThan(layout.clientWidth);
+    expect(layout.activeLeft).toBeGreaterThanOrEqual(layout.containerLeft - 1);
+    expect(layout.activeRight).toBeLessThanOrEqual(layout.containerRight + 1);
 });

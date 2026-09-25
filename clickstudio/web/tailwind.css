@@ -205,8 +205,8 @@
     .rail-tooltip { position: absolute; z-index: var(--z-tooltip); top: 50%; left: calc(100% + 11px); width: max-content; padding: 7px 9px; border: 1px solid var(--line-bright); border-radius: 7px; background: var(--panel-raised); color: var(--text); font-size: 10px; box-shadow: var(--shadow); opacity: 0; pointer-events: none; transform: translate(-4px, -50%); transition: .16s ease; }
     .rail-icon-button:hover .rail-tooltip { opacity: 1; transform: translate(0, -50%); }
     .workspace-main { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; }
-    .document-tabs { display: flex; min-height: 40px; flex: none; align-items: stretch; gap: 2px; padding: 4px 10px 0; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--page-raised) 82%, transparent); }
-    .document-tab { position: relative; display: flex; min-width: 115px; max-width: 230px; align-items: center; gap: 7px; padding: 0 9px; border: 1px solid transparent; border-bottom: 0; border-radius: 7px 7px 0 0; color: var(--muted); font-size: 10px; cursor: pointer; transition: .18s ease; }
+    .document-tabs { display: flex; min-height: 40px; flex: none; align-items: stretch; gap: 2px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; padding: 4px 10px 0; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--page-raised) 82%, transparent); scrollbar-width: thin; }
+    .document-tab { position: relative; display: flex; width: max-content; min-width: 160px; max-width: 340px; flex: 0 0 auto; align-items: center; gap: 7px; padding: 0 9px; border: 1px solid transparent; border-bottom: 0; border-radius: 7px 7px 0 0; color: var(--muted); font-size: 10px; cursor: pointer; transition: .18s ease; }
     .document-tab:hover { background: var(--panel); color: var(--text-soft); }
     .document-tab.is-active { border-color: var(--line); background: var(--panel); color: var(--text); box-shadow: inset 0 1px color-mix(in srgb, var(--accent) 74%, transparent); }
     .document-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -1030,7 +1030,7 @@
     .workspace-content.has-run { grid-template-rows: minmax(260px, 1fr) minmax(225px, .9fr); }
     .beginner-workspace-content { grid-template-rows: minmax(320px, 1fr) minmax(170px, .7fr); }
     .document-tabs { padding-right: 6px; padding-left: 6px; }
-    .document-tab { min-width: 85px; max-width: 145px; gap: 5px; padding: 0 7px; font-size: 9px; }
+    .document-tab { min-width: 140px; max-width: 260px; gap: 5px; padding: 0 7px; font-size: 9px; }
     .sql-examples-backdrop { padding: 12px; }
     .sql-examples-panel { width: calc(100vw - 24px); height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); }
     .sql-examples-panel { border-radius: 10px; }

@@ -7,7 +7,9 @@ const themes = [
         surface: '#0c151c',
         panel: '#14232d',
         accent: '#68e5ff',
-        action: '#e9f400',
+        action: '#68e5ff',
+        yellowAccent: '#f9c74f',
+        yellowAction: '#f9c74f',
         chrome: '#151515',
         logoColor: '#fff',
     },
@@ -17,7 +19,9 @@ const themes = [
         surface: '#edf4f6',
         panel: '#fcfeff',
         accent: '#08758d',
-        action: '#e9f400',
+        action: '#08758d',
+        yellowAccent: '#8a6500',
+        yellowAction: '#f9c74f',
         chrome: '#ffffff',
         logoColor: '#161616',
     },
@@ -28,12 +32,19 @@ function themeOption(page: Page, value: string) {
     return page.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: label });
 }
 
+function accentOption(page: Page, value: 'cyan' | 'clickhouse-yellow') {
+    const label = value === 'cyan' ? 'Cyan accent' : 'ClickHouse yellow accent';
+    return page.getByRole('group', { name: 'Accent color' }).getByRole('button', { name: label });
+}
+
 for (const theme of themes) test(`${theme.value} applies its palette and survives reload`, async ({ page }) => {
     await page.goto('/');
     const option = themeOption(page, theme.value);
     await expect(option).toBeVisible();
     await option.click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme.value);
+    await expect(page.locator('html')).toHaveAttribute('data-accent', 'cyan');
+    await expect(accentOption(page, 'cyan')).toHaveAttribute('aria-pressed', 'true');
 
     const palette = await page.locator('html').evaluate(element => {
         const styles = getComputedStyle(element);
@@ -56,14 +67,44 @@ for (const theme of themes) test(`${theme.value} applies its palette and survive
 
     await page.reload();
     await expect(themeOption(page, theme.value)).toBeChecked();
+    await expect(accentOption(page, 'cyan')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme.value);
 });
 
+for (const theme of themes) test(`${theme.value} supports the ClickHouse yellow accent`, async ({ page }) => {
+    await page.goto('/');
+    await themeOption(page, theme.value).click();
+    const option = accentOption(page, 'clickhouse-yellow');
+    await option.click();
+    await expect(option).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('html')).toHaveAttribute('data-accent', 'clickhouse-yellow');
+
+    const palette = await page.locator('html').evaluate(element => {
+        const styles = getComputedStyle(element);
+        return {
+            accent: styles.getPropertyValue('--accent').trim(),
+            action: styles.getPropertyValue('--accent-action').trim(),
+        };
+    });
+    expect(palette.accent).toBe(theme.yellowAccent);
+    expect(palette.action).toBe(theme.yellowAction);
+
+    await page.reload();
+    await expect(themeOption(page, theme.value)).toBeChecked();
+    await expect(accentOption(page, 'clickhouse-yellow')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('html')).toHaveAttribute('data-accent', 'clickhouse-yellow');
+});
+
 test('an unknown saved theme falls back to ClickDark', async ({ page }) => {
-    await page.addInitScript(() => localStorage.setItem('clickstudio:theme', 'future-theme'));
+    await page.addInitScript(() => {
+        localStorage.setItem('clickstudio:theme', 'future-theme');
+        localStorage.setItem('clickstudio:accent', 'future-accent');
+    });
     await page.goto('/');
     await expect(themeOption(page, 'click-dark')).toBeChecked();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'click-dark');
+    await expect(accentOption(page, 'cyan')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('html')).toHaveAttribute('data-accent', 'cyan');
 });
 
 for (const removedTheme of ['monokai', 'catppuccin-latte']) test(`a saved ${removedTheme} preference falls back to ClickDark`, async ({ page }) => {
@@ -80,11 +121,13 @@ test('localized desktop header keeps the theme switch in view', async ({ page })
     const localeSelect = page.locator('.topbar-preferences select');
     const topbar = page.locator('.topbar');
     const themeSwitch = page.locator('.theme-mode-control');
+    const accentSwitch = page.locator('.accent-mode-control');
 
     for (const locale of ['en', 'de', 'es', 'nl', 'zh', 'ru']) {
         await localeSelect.selectOption(locale);
         await expect(page.locator('html')).toHaveAttribute('lang', locale);
         await expect(themeSwitch).toBeVisible();
+        await expect(accentSwitch).toBeVisible();
 
         const headerSize = await topbar.evaluate(element => ({
             clientWidth: element.clientWidth,
@@ -98,5 +141,12 @@ test('localized desktop header keeps the theme switch in view', async ({ page })
         });
         expect(themeBounds.left, `${locale} theme switch left edge`).toBeGreaterThanOrEqual(0);
         expect(themeBounds.right, `${locale} theme switch right edge`).toBeLessThanOrEqual(themeBounds.viewportWidth);
+
+        const accentBounds = await accentSwitch.evaluate(element => {
+            const rect = element.getBoundingClientRect();
+            return { left: rect.left, right: rect.right, viewportWidth: window.innerWidth };
+        });
+        expect(accentBounds.left, `${locale} accent switch left edge`).toBeGreaterThanOrEqual(0);
+        expect(accentBounds.right, `${locale} accent switch right edge`).toBeLessThanOrEqual(accentBounds.viewportWidth);
     }
 });

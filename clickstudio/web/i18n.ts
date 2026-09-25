@@ -16,6 +16,9 @@ export interface Copy {
         tagline: string;
         language: string;
         theme: string;
+        accent: string;
+        cyanAccent: string;
+        clickhouseYellowAccent: string;
         darkTheme: string;
         lightTheme: string;
         beginner: string;
@@ -382,6 +385,9 @@ const english: Copy = {
         tagline: 'ClickHouse SQL, results, and performance',
         language: 'Language',
         theme: 'Theme',
+        accent: 'Accent color',
+        cyanAccent: 'Cyan accent',
+        clickhouseYellowAccent: 'ClickHouse yellow accent',
         darkTheme: 'Dark theme',
         lightTheme: 'Light theme',
         beginner: 'Compact',
@@ -758,27 +764,27 @@ const translations: Record<Exclude<Locale, 'en'>, LocalizedCopy> = {
 };
 
 const chromeTranslations: Record<Exclude<Locale, 'en'>, {
-    app: Pick<Copy['app'], 'darkTheme' | 'lightTheme'>;
+    app: Pick<Copy['app'], 'darkTheme' | 'lightTheme' | 'accent' | 'cyanAccent' | 'clickhouseYellowAccent'>;
     auth: Pick<Copy['auth'], 'privateWorkspace' | 'unavailable' | 'retry' | 'credentialsNotice'>;
 }> = {
     de: {
-        app: { darkTheme: 'Dunkles Design', lightTheme: 'Helles Design' },
+        app: { darkTheme: 'Dunkles Design', lightTheme: 'Helles Design', accent: 'Akzentfarbe', cyanAccent: 'Cyan-Akzent', clickhouseYellowAccent: 'ClickHouse-gelber Akzent' },
         auth: { privateWorkspace: 'Privater Arbeitsbereich', unavailable: 'Arbeitsbereich nicht verfügbar', retry: 'Erneut versuchen', credentialsNotice: 'Anmeldedaten werden vom Workspace-Server verarbeitet.' },
     },
     es: {
-        app: { darkTheme: 'Tema oscuro', lightTheme: 'Tema claro' },
+        app: { darkTheme: 'Tema oscuro', lightTheme: 'Tema claro', accent: 'Color de acento', cyanAccent: 'Acento cian', clickhouseYellowAccent: 'Acento amarillo de ClickHouse' },
         auth: { privateWorkspace: 'Espacio de trabajo privado', unavailable: 'Espacio de trabajo no disponible', retry: 'Intentar de nuevo', credentialsNotice: 'Las credenciales se procesan en el servidor del espacio de trabajo.' },
     },
     nl: {
-        app: { darkTheme: 'Donker thema', lightTheme: 'Licht thema' },
+        app: { darkTheme: 'Donker thema', lightTheme: 'Licht thema', accent: 'Accentkleur', cyanAccent: 'Cyaan accent', clickhouseYellowAccent: 'ClickHouse-geel accent' },
         auth: { privateWorkspace: 'Privéwerkruimte', unavailable: 'Werkruimte niet beschikbaar', retry: 'Opnieuw proberen', credentialsNotice: 'Aanmeldgegevens worden verwerkt door de werkruimteserver.' },
     },
     zh: {
-        app: { darkTheme: '深色主题', lightTheme: '浅色主题' },
+        app: { darkTheme: '深色主题', lightTheme: '浅色主题', accent: '强调色', cyanAccent: '青色强调', clickhouseYellowAccent: 'ClickHouse 黄色强调' },
         auth: { privateWorkspace: '私有工作区', unavailable: '工作区不可用', retry: '重试', credentialsNotice: '凭据由工作区服务器处理。' },
     },
     ru: {
-        app: { darkTheme: 'Тёмная тема', lightTheme: 'Светлая тема' },
+        app: { darkTheme: 'Тёмная тема', lightTheme: 'Светлая тема', accent: 'Цвет акцента', cyanAccent: 'Голубой акцент', clickhouseYellowAccent: 'Жёлтый акцент ClickHouse' },
         auth: { privateWorkspace: 'Приватная рабочая область', unavailable: 'Рабочая область недоступна', retry: 'Повторить', credentialsNotice: 'Учётные данные обрабатываются сервером рабочей области.' },
     },
 };

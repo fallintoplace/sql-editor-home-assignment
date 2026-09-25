@@ -9,6 +9,7 @@ import clickhouseLogomarkLight from './assets/clickhouse-logomark-light.svg';
 import type { Connected, Session } from './workspace-types';
 
 type ParserMode = 'wasm' | 'basic';
+type AccentChoice = 'cyan' | 'clickhouse-yellow';
 
 const connectionLabel = (connection: Connected, demo: boolean) => demo && connection.dataSource === 'fixture' ? connection.id === 'demo' ? 'Sample data' : 'Another sample' : connection.name;
 const storedPreference = (key: string): string | null => {
@@ -26,6 +27,7 @@ const browserLocales = (): readonly string[] => typeof navigator === 'undefined'
 function App() {
     const [locale, setLocale] = useState<Locale>(() => resolveLocale(storedPreference('clickstudio:locale'), ...browserLocales()));
     const [theme, setTheme] = useState<Theme>(() => pref('clickstudio:theme', ['click-dark', 'click-light'] as const, 'click-dark'));
+    const [accent, setAccent] = useState<AccentChoice>(() => pref('clickstudio:accent', ['cyan', 'clickhouse-yellow'] as const, 'cyan'));
     const [experience, setExperience] = useState<ExperienceLevel>(() => pref('clickstudio:experience', ['beginner', 'expert'] as const, 'beginner'));
     const [parserMode, setParserMode] = useState<ParserMode>(() => pref('clickstudio:parser-mode', ['wasm', 'basic'] as const, 'wasm'));
     const [session, setSession] = useState<Session>();
@@ -57,16 +59,18 @@ function App() {
 
     useEffect(() => {
         document.documentElement.dataset.theme = theme;
+        document.documentElement.dataset.accent = accent;
         document.documentElement.lang = locale;
         document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
         document.querySelector('meta[name="theme-color"]')?.setAttribute('content', themeAppearance[theme].chromeColor);
         try {
             localStorage.setItem('clickstudio:theme', theme);
+            localStorage.setItem('clickstudio:accent', accent);
             localStorage.setItem('clickstudio:locale', locale);
             localStorage.setItem('clickstudio:experience', experience);
             localStorage.setItem('clickstudio:parser-mode', parserMode);
         } catch { }
-    }, [dark, experience, locale, parserMode, theme]);
+    }, [accent, dark, experience, locale, parserMode, theme]);
 
     const loadSession = useCallback(async () => {
         const next = await api<Session>('/session');
@@ -166,6 +170,14 @@ function App() {
                 <div className="topbar-divider topbar-divider-short"/>
                 <div className="topbar-preferences">
                     <SelectControl label={copy.app.language} value={locale} options={localeOptions} onChange={setLocale}/>
+                    <div className="accent-mode-control" role="group" aria-label={copy.app.accent}>
+                        <button type="button" className={`accent-mode-option ${accent === 'cyan' ? 'is-active' : ''}`} aria-label={copy.app.cyanAccent} aria-pressed={accent === 'cyan'} title={copy.app.cyanAccent} onClick={() => setAccent('cyan')}>
+                            <span className="accent-mode-swatch is-cyan" aria-hidden="true"/>
+                        </button>
+                        <button type="button" className={`accent-mode-option ${accent === 'clickhouse-yellow' ? 'is-active' : ''}`} aria-label={copy.app.clickhouseYellowAccent} aria-pressed={accent === 'clickhouse-yellow'} title={copy.app.clickhouseYellowAccent} onClick={() => setAccent('clickhouse-yellow')}>
+                            <span className="accent-mode-swatch is-clickhouse-yellow" aria-hidden="true"/>
+                        </button>
+                    </div>
                     <div className="experience-switch theme-switch">
                         <div className="theme-mode-control" role="radiogroup" aria-label={copy.app.theme}>
                             {themeOptions(copy).map(option => <label key={option.value} className={`theme-mode-option ${theme === option.value ? 'is-active' : ''}`} title={option.label}>

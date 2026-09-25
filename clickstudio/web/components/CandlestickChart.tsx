@@ -112,7 +112,7 @@ export function CandlestickChart({ result, config, x, copy, locale }: Props) {
         const plotted = visible.length ? visible : candles;
         const upColor = getComputedStyle(svgElement).getPropertyValue('--green').trim() || '#1d9a6c';
         const downColor = getComputedStyle(svgElement).getPropertyValue('--red').trim() || '#e45757';
-        const bidAskColor = getComputedStyle(svgElement).getPropertyValue('--blue').trim() || '#6699ff';
+        const bidAskColor = getComputedStyle(svgElement).getPropertyValue('--accent').trim();
         const gridColor = getComputedStyle(svgElement).getPropertyValue('--line-bright').trim() || '#343a38';
         const textColor = getComputedStyle(svgElement).getPropertyValue('--muted').trim() || '#909a95';
         const mono = getComputedStyle(svgElement).getPropertyValue('--font-mono').trim() || 'monospace';

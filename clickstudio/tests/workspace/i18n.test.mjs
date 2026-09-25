@@ -29,6 +29,9 @@ test('Authentication and theme chrome is localized for every selectable locale',
         assert.notEqual(copy.auth.unavailable, english.auth.unavailable, `${locale} unavailable`);
         assert.notEqual(copy.auth.retry, english.auth.retry, `${locale} retry`);
         assert.notEqual(copy.auth.credentialsNotice, english.auth.credentialsNotice, `${locale} credentials notice`);
+        assert.notEqual(copy.app.accent, english.app.accent, `${locale} accent label`);
+        assert.notEqual(copy.app.cyanAccent, english.app.cyanAccent, `${locale} cyan accent label`);
+        assert.notEqual(copy.app.clickhouseYellowAccent, english.app.clickhouseYellowAccent, `${locale} ClickHouse yellow accent label`);
         const localizedThemes = themeOptions(copy);
         assert.notEqual(localizedThemes[0].label, englishThemes[0].label, `${locale} dark theme`);
         assert.notEqual(localizedThemes[1].label, englishThemes[1].label, `${locale} light theme`);

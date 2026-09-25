@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import type { ApiError, AssistantAction, ProfilePipeline, Proposal, QueryDocument, QueryProfile, Result, Run, RunKind, Schema, Script } from '../shared/types';
 import { DEFAULT_LIMITS } from '../shared/types';
 import { parseExplainPlan } from '../shared/explain-plan';
+import { parseExplainIndexAnalysis } from '../shared/explain-indexes';
 import { parsePipelineResult } from '../shared/profile';
 import { exportCsv, recommendChart } from '../shared/results';
 import { matchesDraft } from '../shared/evidence';
@@ -18,6 +19,7 @@ import { RestoreSqlMenu } from './components/RestoreSqlMenu';
 import { OverlayPortal } from './components/OverlayPortal';
 import { ChartView, InsightsView, ResultGrid } from './components/ResultViews';
 import { ExplainPlanView } from './components/ExplainPlanView';
+import { ExplainIndexesView } from './components/ExplainIndexesView';
 import { PipelineGraph } from './components/PipelineGraph';
 import { SqlFlowView } from './components/SqlFlowView';
 import { InspectorPane, type InspectorPaneProps } from './components/InspectorPane';
@@ -696,7 +698,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                 throw caught;
             }
             setRunForRun(created.id, created, true);
-            setPage(0); setView(kind === 'plan' ? 'plan' : kind === 'pipeline' ? 'pipeline' : 'results');
+            setPage(0); setView(kind === 'explain' ? 'indexes' : kind === 'plan' ? 'plan' : kind === 'pipeline' ? 'pipeline' : 'results');
             patch({ activeRunId: created.id, scriptId: undefined, runIds: [...new Set([...active.runIds, created.id])] });
             editor.current?.focus();
         }
@@ -825,7 +827,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     }, [activeRunId, exampleChartRunId, loadSnapshot, run, setError, snapshot?.runId]);
 
     useEffect(() => {
-        if (!run || (view !== 'plan' && view !== 'pipeline') || !terminal(run) || run.resultState !== 'reopenable' || snapshot?.runId === run.id) return;
+        if (!run || (view !== 'indexes' && view !== 'plan' && view !== 'pipeline') || !terminal(run) || run.resultState !== 'reopenable' || snapshot?.runId === run.id) return;
         void loadSnapshot().catch(caught => setError(message(caught)));
     }, [loadSnapshot, run, setError, snapshot?.runId, view]);
 
@@ -1031,24 +1033,29 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const sqlMapStatement = safeSelectedStatement(active.sql, active.from, active.from);
     const sqlMapParseStatement = sqlMapStatement && nativeParseSnapshot?.statements.find(statement =>
         statement.from === sqlMapStatement.from && statement.to === sqlMapStatement.to && active.sql.slice(statement.from, statement.to) === statement.sql);
-    const resultTabs: readonly ResultsView[] = run?.kind === 'plan'
-        ? ['results', 'plan']
+    const resultTabs: readonly ResultsView[] = run?.kind === 'explain'
+        ? ['results', 'indexes']
+        : run?.kind === 'plan'
+            ? ['results', 'plan']
         : run?.kind === 'pipeline'
             ? ['results', 'pipeline']
             : experience === 'beginner' ? ['results', 'chart', 'sqlmap'] : ['results', 'chart', 'sqlmap', 'insights'];
     const retainedSnapshot = run && snapshot?.runId === run.id ? snapshot : undefined;
     const explainPlanOutput = run?.kind === 'plan' ? retainedSnapshot?.rows[0]?.[0] : undefined;
     const explainPlan = useMemo(() => parseExplainPlan(explainPlanOutput), [explainPlanOutput]);
+    const explainIndexRows = run?.kind === 'explain' ? retainedSnapshot?.rows : undefined;
+    const explainIndexAnalysis = useMemo(() => explainIndexRows ? parseExplainIndexAnalysis(explainIndexRows) : undefined, [explainIndexRows]);
     const pipelineOutputRows = run?.kind === 'pipeline' ? retainedSnapshot?.rows : undefined;
     const pipelineResult = useMemo(() => pipelineOutputRows
         ? parsePipelineResult(pipelineOutputRows.map(row => row[0]).filter((value): value is string => typeof value === 'string'))
         : undefined, [pipelineOutputRows]);
     const resultsTitle = visibleResultsView === 'sqlmap' ? copy.common.sqlStructure
-        : visibleResultsView === 'plan' ? copy.common.logicalPlan
+        : visibleResultsView === 'indexes' ? copy.common.explain
+            : visibleResultsView === 'plan' ? copy.common.logicalPlan
             : visibleResultsView === 'pipeline' ? copy.common.pipelineGraph : copy.common.results;
     const resultsEyebrow = visibleResultsView === 'sqlmap' ? copy.common.queryVisualization : copy.common.workspaceOutput;
     const resultsPanelLabel = visibleResultsView === 'sqlmap' ? copy.common.sqlStructure
-        : visibleResultsView === 'plan' || visibleResultsView === 'pipeline' ? resultsTitle : copy.common.queryResults;
+        : visibleResultsView === 'plan' || visibleResultsView === 'pipeline' || visibleResultsView === 'indexes' ? resultsTitle : copy.common.queryResults;
     const snapshotChart = retainedSnapshot ? recommendChart(retainedSnapshot.columns, retainedSnapshot.rows) : undefined;
     const openDocument = (document: QueryDocument) => {
         addDraft(draftFromDocument(document));
@@ -1404,22 +1411,22 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             }}
                         >
                             <div className="results-title">
-                                <span className="results-mark"><Icon name={visibleResultsView === 'sqlmap' || visibleResultsView === 'pipeline' ? 'pipeline' : 'chart'}/></span>
+                                <span className="results-mark"><Icon name={visibleResultsView === 'sqlmap' || visibleResultsView === 'pipeline' || visibleResultsView === 'indexes' ? 'pipeline' : 'chart'}/></span>
                                 <div><span className="eyebrow">{resultsEyebrow}</span><h2>{resultsTitle}</h2></div>
                                 {run && visibleResultsView !== 'sqlmap' && <Status run={run} copy={copy.common}/>}
                             </div>
                             <div className="results-actions">
                                 {run && <div className="results-tabs" role="tablist" aria-label={copy.common.workspaceOutput}>{resultTabs.map(tab => <button key={tab} role="tab" aria-selected={visibleResultsView === tab} type="button" onClick={() => {
                                     setView(tab);
-                                    if (tab === 'chart' || tab === 'plan' || tab === 'pipeline') void perform(loadSnapshot, 'save');
+                                    if (tab === 'chart' || tab === 'indexes' || tab === 'plan' || tab === 'pipeline') void perform(loadSnapshot, 'save');
                                     if (tab === 'insights') void perform(loadProfile, 'save');
-                                }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : tab === 'sqlmap' ? copy.common.sqlMap : tab === 'plan' ? copy.common.logicalPlan : tab === 'pipeline' ? copy.common.pipelineGraph : copy.common.insights}{tab === 'chart' && retainedSnapshot && <span className="suggested-dot"/>}</button>)}</div>}
+                                }}>{tab === 'results' ? copy.common.results : tab === 'chart' ? copy.common.chart : tab === 'sqlmap' ? copy.common.sqlMap : tab === 'indexes' ? copy.common.explain : tab === 'plan' ? copy.common.logicalPlan : tab === 'pipeline' ? copy.common.pipelineGraph : copy.common.insights}{tab === 'chart' && retainedSnapshot && <span className="suggested-dot"/>}</button>)}</div>}
                                 {!compactViewport && <Button variant="ghost" className="panel-window-button" aria-label={resultsFloating ? 'Dock output panel' : 'Pop out output panel'} title={resultsFloating ? 'Dock output panel' : 'Pop out output panel'} onClick={() => togglePanelFloating('results')}><Icon name={resultsFloating ? 'dock' : 'popout'}/></Button>}
                                 {resultsFloating && <Button variant="ghost" className="panel-window-button" aria-label={resultsMode === 'maximized' ? 'Restore output panel' : 'Maximize output panel'} title={resultsMode === 'maximized' ? 'Restore output panel' : 'Maximize output panel'} onClick={() => togglePanelMaximized('results')}><Icon name={resultsMode === 'maximized' ? 'restore' : 'maximize'}/></Button>}
                                 <Button variant="ghost" className="panel-collapse-button" aria-label={`${resultsCollapsed ? copy.common.expand : copy.common.collapse} ${resultsPanelLabel}`} aria-expanded={!resultsCollapsed} aria-controls="query-results-content" title={resultsCollapsed ? copy.common.expandOutput : copy.common.collapseOutput} onClick={() => setResultsCollapsed(value => !value)}><Icon className="panel-toggle-icon" name="chevron"/></Button>
                             </div>
                         </div>
-                        <div id="query-results-content" className={cx('panel-content results-content', ['insights', 'plan', 'pipeline'].includes(visibleResultsView) && 'results-content-scrollable')} hidden={resultsCollapsed}>
+                        <div id="query-results-content" className={cx('panel-content results-content', ['insights', 'indexes', 'plan', 'pipeline'].includes(visibleResultsView) && 'results-content-scrollable')} hidden={resultsCollapsed}>
                             {visibleResultsView === 'sqlmap' && <SqlFlowView copy={copy.common} sql={sqlMapStatement?.sql ?? active.sql} sourceOffset={sqlMapStatement?.from ?? 0} parseResult={sqlMapParseStatement?.result} parserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} parseDurationMs={nativeParseSnapshot?.elapsedMs} onRevealRange={(from, to) => editor.current?.revealRange(from, to)}/>}
                             {visibleResultsView !== 'sqlmap' && staleResult && <div className="result-provenance" aria-live="polite"><span className="status-light is-warning"/><span><strong>Result from previous execution</strong><small>SQL or bound parameters changed since this run. Rerun to refresh the result.</small></span></div>}
                             {visibleResultsView === 'results' && script && <ScriptResults script={script} runs={history} activeRunId={run?.id} onSelectRun={runId => {
@@ -1428,6 +1435,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                 setPage(0); setView('results');
                             }} onCancel={() => void cancel()} cancelDisabled={cancelling}/>}
                             {run && visibleResultsView === 'results' && <ResultGrid key={run.id} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/>}
+                            {run && visibleResultsView === 'indexes' && <ExplainIndexesView analysis={explainIndexAnalysis} loading={!retainedSnapshot && run.resultState === 'reopenable'} copy={copy.common}/>}
                             {run && visibleResultsView === 'plan' && <ExplainPlanView plan={explainPlan} loading={!retainedSnapshot && run.resultState === 'reopenable'} copy={copy.common}/>}
                             {run && visibleResultsView === 'pipeline' && (pipelineResult
                                 ? <PipelineGraph pipeline={pipelineResult} copy={copy.common} heading={copy.common.pipelineGraph} subheading={copy.common.pipelineGraphDescription}/>

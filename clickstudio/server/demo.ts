@@ -2,6 +2,36 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import type { ClickHouseDocumentationEntry, ClickHouseDocumentationSummary, Connection, Principal, Progress, ReferenceCategory, Run, Schema } from '../shared/types.js';
 import { DEFAULT_LIMITS } from '../shared/types.js';
 import { AppError } from '../core/errors.js';
+
+const demoIndexAnalysis = [
+    'ReadFromMergeTree (demo.events)',
+    '  Indexes:',
+    '    MinMax',
+    '      Keys:',
+    '        day',
+    "      Condition: (day in ['2026-01-01', '2026-01-08'])",
+    '      Parts: 8/58',
+    '      Granules: 46/612',
+    '    Partition',
+    '      Keys:',
+    '        toYYYYMM(day)',
+    "      Condition: (toYYYYMM(day) = 202601)",
+    '      Parts: 4/8',
+    '      Granules: 46/360',
+    '    PrimaryKey',
+    '      Keys:',
+    '        tenant_id',
+    '        day',
+    '      Condition: (tenant_id = 42)',
+    '      Parts: 4/4',
+    '      Granules: 12/46',
+    '    Skip',
+    '      Name: tenant_bloom',
+    '      Description: bloom filter on tenant_id',
+    '      Parts: 1/4',
+    '      Granules: 4/12',
+];
+
 /** Explicit UI/test fixtures, not a SQL emulator and never an automatic fallback for a real database. */
 export class DemoDriver {
     connection(_p: Principal, id: string): Connection { if (!['demo', 'demo-second'].includes(id))
@@ -50,7 +80,7 @@ export class DemoDriver {
         if (run.kind === 'pipeline')
             return { columns: [{ name: 'explain', type: 'String' }], rows: ['digraph {', '  read [label="ReadFromFixture"];', '  filter [label="FilterTransform × 2"];', '  output [label="Output"];', '  read -> filter;', '  filter -> output;', '}'].map(line => [line]), truncated: false };
         if (run.kind === 'explain')
-            return { columns: [{ name: 'explain', type: 'String' }], rows: [['Fixture index analysis — not a live ClickHouse EXPLAIN']], truncated: false };
+            return { columns: [{ name: 'explain', type: 'String' }], rows: demoIndexAnalysis.map(line => [line]), truncated: false };
         return { columns: [{ name: 'day', type: 'Date' }, { name: 'events', type: 'UInt64' }], rows: Array.from({ length: 7 }, (_, i) => [`2026-01-${String(i + 1).padStart(2, '0')}`, String((i + 1) * 10)]), truncated: false, warnings: ['DEMO FIXTURE: this does not evaluate the supplied SQL.'] };
     }
     async cancel(_run: Run) { }

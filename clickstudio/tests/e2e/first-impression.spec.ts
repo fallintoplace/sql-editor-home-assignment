@@ -33,6 +33,38 @@ test('Run, script, and explain actions stay visible beside the primary Run butto
     await expect(runScript).toBeFocused();
 });
 
+test('EXPLAIN INDEXES opens an interactive index graph and keeps the raw result available', async ({ page }) => {
+    await trust(page);
+    await page.getByTestId('run-action-explain').click();
+
+    const graph = page.getByRole('region', { name: 'Index pruning graph · Graph', exact: true });
+    await expect(graph).toBeVisible();
+    await expect(graph.locator('[data-node-id]')).toHaveCount(6);
+    await expect(page.locator('.pipeline-graph-heading')).toContainText('4 index checks');
+
+    const bloomIndex = graph.locator('[data-node-id]').filter({ hasText: 'tenant_bloom' });
+    await expect(bloomIndex).toBeVisible();
+    await bloomIndex.click();
+    const inspection = page.locator('.pipeline-node-inspector[aria-label="Selected index details"]');
+    await expect(inspection).toContainText('tenant_bloom');
+    await expect(inspection).toContainText('Granules');
+    await expect(inspection).toContainText('4 / 12');
+
+    const controls = page.getByRole('group', { name: 'Graph view controls', exact: true });
+    await controls.getByRole('button', { name: 'Zoom in', exact: true }).click();
+    const zoomBeforeEditorFocus = await controls.getByLabel('Zoom level').innerText();
+    const selectedId = await graph.locator('[data-node-id][aria-pressed="true"]').getAttribute('data-node-id');
+    const editor = page.locator('.cm-content');
+    await editor.click();
+    await page.keyboard.press('ControlOrMeta+a');
+    await expect(editor).toBeFocused();
+    await expect(graph.locator('[data-node-id][aria-pressed="true"]')).toHaveAttribute('data-node-id', selectedId!);
+    await expect(controls.getByLabel('Zoom level')).toHaveText(zoomBeforeEditorFocus);
+
+    await page.getByRole('tab', { name: 'Results', exact: true }).click();
+    await expect(page.getByRole('table', { name: 'Retained query rows' })).toBeVisible();
+});
+
 test('EXPLAIN PLAN opens a graph with a tree view and keeps the raw result available', async ({ page }) => {
     await trust(page);
     await page.getByTestId('run-action-explain-plan').click();

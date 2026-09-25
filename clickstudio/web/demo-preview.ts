@@ -16,6 +16,33 @@ WHERE event_time >= now() - INTERVAL 30 DAY
 GROUP BY day
 ORDER BY day`;
 
+const demoIndexAnalysis = `ReadFromMergeTree (demo.events)
+  Indexes:
+    MinMax
+      Keys:
+        day
+      Condition: (day in ['2026-01-01', '2026-01-08'])
+      Parts: 8/58
+      Granules: 46/612
+    Partition
+      Keys:
+        toYYYYMM(day)
+      Condition: (toYYYYMM(day) = 202601)
+      Parts: 4/8
+      Granules: 46/360
+    PrimaryKey
+      Keys:
+        tenant_id
+        day
+      Condition: (tenant_id = 42)
+      Parts: 4/4
+      Granules: 12/46
+    Skip
+      Name: tenant_bloom
+      Description: bloom filter on tenant_id
+      Parts: 1/4
+      Granules: 4/12`;
+
 export type DemoPreviewStarter = { id: string; name: string; sql: string; chart: ChartConfig; initial?: boolean; revision?: number };
 export const DEMO_PREVIEW_STARTERS: DemoPreviewStarter[] = [
     { id: DEMO_PREVIEW_STARTER_DOCUMENT_ID, name: 'Getting started.sql', sql: DEMO_PREVIEW_SQL, chart: { kind: 'line', x: 0, ys: [1, 2], title: 'Daily activity' }, initial: true, revision: 5 },
@@ -434,7 +461,7 @@ function previewRowsFor(sql: string): PreviewRows {
     return starterId ? demoResultRows[starterId] ?? dailyRows() : dailyRows();
 }
 
-function resultFor(run: Run, sequence: number): Result {
+function resultFor(run: Run): Result {
     const preview = previewRowsFor(run.sql);
     const columns = run.kind === 'query'
         ? preview.columns
@@ -445,7 +472,7 @@ function resultFor(run: Run, sequence: number): Result {
             ? JSON.stringify([{ Plan: { 'Node Type': 'Expression', 'Node Id': 'Expression_2', Description: 'Sample plan only; SQL is not evaluated.', Plans: [{ 'Node Type': 'ReadFromFixture', 'Node Id': 'ReadFromFixture_0' }] } }])
             : run.kind === 'pipeline'
                 ? 'digraph { read [label="ReadFromFixture"]; filter [label="FilterTransform × 2"]; output [label="Output"]; read -> filter; filter -> output; }'
-                : `Sample index analysis for run ${sequence}. SQL is not evaluated.`]];
+                : demoIndexAnalysis]];
     return {
         runId: run.id, queryId: run.queryId, columns, rows: resultRows,
         completeness: 'complete', createdAt: now(), expiresAt: expiresAt(),
@@ -631,7 +658,7 @@ export class DemoPreviewApi {
     private addRun(id: string, sql: string, kind: Run['kind'], parameters: Record<string, string>) {
         const run = makeRun(id, sql, kind, ++this.sequence, parameters);
         this.runs.set(id, run);
-        this.results.set(id, resultFor(run, this.sequence));
+        this.results.set(id, resultFor(run));
         this.persist();
         return run;
     }
@@ -750,7 +777,7 @@ export class DemoPreviewApi {
                 const result = this.results.get(run.id);
                 if (!result && run.connectionId === PLAYGROUND_CONNECTION_ID)
                     throw new Error('This retained Playground result is no longer available in this browser. Run the SQL again.');
-                const retained = result ?? resultFor(run, run.sequence);
+                const retained = result ?? resultFor(run);
                 if (parts[2] === 'snapshot') return retained;
                 const offset = Math.max(0, Number(url.searchParams.get('offset') ?? 0) || 0);
                 const count = Math.max(1, Math.min(500, Number(url.searchParams.get('count') ?? 200) || 200));

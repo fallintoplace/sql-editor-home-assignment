@@ -95,6 +95,14 @@ export interface Copy {
         explain: string;
         explainPlan: string;
         explainPipeline: string;
+        indexAnalysisGraph: string;
+        indexAnalysisDescription: string;
+        indexAnalysisItem: string;
+        indexAnalysisSelected: string;
+        indexAnalysisInspect: string;
+        indexAnalysisDetails: string;
+        indexAnalysisHint: string;
+        indexAnalysisNoOutput: string;
         logicalPlan: string;
         logicalPlanDescription: string;
         planGraphView: string;
@@ -471,6 +479,14 @@ const english: Copy = {
         explain: 'EXPLAIN INDEXES',
         explainPlan: 'EXPLAIN PLAN',
         explainPipeline: 'EXPLAIN PIPELINE',
+        indexAnalysisGraph: 'Index pruning graph',
+        indexAnalysisDescription: 'ClickHouse-reported index checks with parts and granules retained.',
+        indexAnalysisItem: 'index checks',
+        indexAnalysisSelected: 'Selected index',
+        indexAnalysisInspect: 'Inspect index',
+        indexAnalysisDetails: 'Selected index details',
+        indexAnalysisHint: 'Select an index to inspect its condition and pruning counts.',
+        indexAnalysisNoOutput: 'ClickHouse did not return index details.',
         logicalPlan: 'Logical query plan',
         logicalPlanDescription: 'ClickHouse optimizer steps before execution. This view shows no runtime measurements.',
         planGraphView: 'Graph',
@@ -916,13 +932,14 @@ const objectExplorerTranslations: Record<Exclude<Locale, 'en'>, ObjectExplorerTr
 };
 
 const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common'],
-    'explain' | 'explainPlan' | 'logicalPlan' | 'logicalPlanDescription' | 'planGraphView' | 'planTreeView' | 'planGraphHint' | 'planStep' | 'planSelectedStep' | 'planInspectStep' | 'planStepDetails' | 'planUnknownStep' | 'planDepthLimit' | 'pipelineGraph' | 'pipelineGraphDescription' |
+    'explain' | 'explainPlan' | 'indexAnalysisGraph' | 'indexAnalysisDescription' | 'indexAnalysisItem' | 'indexAnalysisSelected' | 'indexAnalysisInspect' | 'indexAnalysisDetails' | 'indexAnalysisHint' | 'indexAnalysisNoOutput' | 'logicalPlan' | 'logicalPlanDescription' | 'planGraphView' | 'planTreeView' | 'planGraphHint' | 'planStep' | 'planSelectedStep' | 'planInspectStep' | 'planStepDetails' | 'planUnknownStep' | 'planDepthLimit' | 'pipelineGraph' | 'pipelineGraphDescription' |
     'pipelineGraphHint' | 'pipelineGraphTruncated' | 'pipelineZoomControls' | 'pipelineZoomOut' | 'pipelineZoomIn' | 'pipelineZoomReset' | 'pipelineZoomLevel' | 'pipelineFocusNode' | 'pipelineFit' |
     'pipelineInputs' | 'pipelineOutputs' | 'pipelineRunDuration' | 'pipelineRunRows' | 'pipelineRunBytes' |
     'planNodeCount' | 'planProperties' | 'planNoOutput' | 'planLoading' | 'planTruncated' | 'pipelineNoOutput' |
     'selectedOperator' | 'inspectOperator' | 'selectedOperatorDetails' | 'parallelism' | 'plannedStatus'>> = {
     de: {
         explain: 'EXPLAIN INDEXES', explainPlan: 'EXPLAIN PLAN', logicalPlan: 'Logischer Abfrageplan',
+        indexAnalysisGraph: 'Index-Pruning-Diagramm', indexAnalysisDescription: 'Von ClickHouse gemeldete Indexprüfungen mit Teilen und Granulen.', indexAnalysisItem: 'Indexprüfungen', indexAnalysisSelected: 'Ausgewählter Index', indexAnalysisInspect: 'Index ansehen', indexAnalysisDetails: 'Details des ausgewählten Index', indexAnalysisHint: 'Index auswählen, um Bedingung und Granulenwerte anzusehen.', indexAnalysisNoOutput: 'ClickHouse hat keine Indexdetails zurückgegeben.',
         logicalPlanDescription: 'ClickHouse-Optimierungsschritte vor der Ausführung. Diese Ansicht zeigt keine Laufzeitmessungen.',
         planGraphView: 'Diagramm', planTreeView: 'Baum', planGraphHint: 'Schritt auswählen, um Eigenschaften anzuzeigen.', planStep: 'Schritt', planSelectedStep: 'Ausgewählter Schritt', planInspectStep: 'Schritt ansehen', planStepDetails: 'Details des ausgewählten Planschritts',
         pipelineGraph: 'ClickHouse-Pipeline', pipelineGraphDescription: 'Geplante Prozessortopologie aus EXPLAIN PIPELINE. Laufzeitdaten werden separat angezeigt.',
@@ -939,6 +956,7 @@ const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common
     },
     es: {
         explain: 'EXPLAIN INDEXES', explainPlan: 'EXPLAIN PLAN', logicalPlan: 'Plan lógico de consulta',
+        indexAnalysisGraph: 'Gráfico de poda de índices', indexAnalysisDescription: 'Comprobaciones de índice informadas por ClickHouse con partes y granules.', indexAnalysisItem: 'comprobaciones de índice', indexAnalysisSelected: 'Índice seleccionado', indexAnalysisInspect: 'Inspeccionar índice', indexAnalysisDetails: 'Detalles del índice seleccionado', indexAnalysisHint: 'Selecciona un índice para ver su condición y sus métricas de poda.', indexAnalysisNoOutput: 'ClickHouse no devolvió detalles de índices.',
         logicalPlanDescription: 'Pasos del optimizador de ClickHouse antes de ejecutar. Esta vista no muestra medidas de ejecución.',
         planGraphView: 'Gráfico', planTreeView: 'Árbol', planGraphHint: 'Selecciona un paso para ver sus propiedades.', planStep: 'Paso', planSelectedStep: 'Paso seleccionado', planInspectStep: 'Inspeccionar paso', planStepDetails: 'Detalles del paso seleccionado',
         pipelineGraph: 'Pipeline de ClickHouse', pipelineGraphDescription: 'Topología planificada de procesadores de EXPLAIN PIPELINE. El tiempo de ejecución se muestra aparte.',
@@ -955,6 +973,7 @@ const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common
     },
     nl: {
         explain: 'EXPLAIN INDEXES', explainPlan: 'EXPLAIN PLAN', logicalPlan: 'Logisch queryplan',
+        indexAnalysisGraph: 'Indexpruninggrafiek', indexAnalysisDescription: 'Door ClickHouse gemelde indexcontroles met parts en granules.', indexAnalysisItem: 'indexcontroles', indexAnalysisSelected: 'Geselecteerde index', indexAnalysisInspect: 'Index bekijken', indexAnalysisDetails: 'Details van geselecteerde index', indexAnalysisHint: 'Selecteer een index om de voorwaarde en pruningcijfers te bekijken.', indexAnalysisNoOutput: 'ClickHouse heeft geen indexdetails teruggegeven.',
         logicalPlanDescription: 'ClickHouse-optimalisatiestappen vóór uitvoering. Deze weergave toont geen runtimemetingen.',
         planGraphView: 'Grafiek', planTreeView: 'Boom', planGraphHint: 'Selecteer een stap om de eigenschappen te bekijken.', planStep: 'Stap', planSelectedStep: 'Geselecteerde stap', planInspectStep: 'Stap bekijken', planStepDetails: 'Details van geselecteerde planstap',
         pipelineGraph: 'ClickHouse-pipeline', pipelineGraphDescription: 'Geplande processortopologie uit EXPLAIN PIPELINE. Runtime wordt apart getoond.',
@@ -971,6 +990,7 @@ const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common
     },
     zh: {
         explain: 'EXPLAIN INDEXES', explainPlan: 'EXPLAIN PLAN', logicalPlan: '逻辑查询计划',
+        indexAnalysisGraph: '索引裁剪图', indexAnalysisDescription: 'ClickHouse 返回的索引检查及保留的数据分区和粒度。', indexAnalysisItem: '索引检查', indexAnalysisSelected: '已选索引', indexAnalysisInspect: '查看索引', indexAnalysisDetails: '所选索引详情', indexAnalysisHint: '选择索引以查看条件和裁剪数量。', indexAnalysisNoOutput: 'ClickHouse 未返回索引详情。',
         logicalPlanDescription: 'ClickHouse 执行前的优化步骤。此视图不显示运行时测量数据。',
         planGraphView: '图', planTreeView: '树', planGraphHint: '选择步骤以查看其属性。', planStep: '步骤', planSelectedStep: '已选步骤', planInspectStep: '查看步骤', planStepDetails: '所选计划步骤详情',
         pipelineGraph: 'ClickHouse 执行管线', pipelineGraphDescription: '来自 EXPLAIN PIPELINE 的计划处理器拓扑。运行时数据单独显示。',
@@ -987,6 +1007,7 @@ const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common
     },
     ru: {
         explain: 'EXPLAIN INDEXES', explainPlan: 'EXPLAIN PLAN', logicalPlan: 'Логический план запроса',
+        indexAnalysisGraph: 'Граф отбора по индексам', indexAnalysisDescription: 'Проверки индексов ClickHouse с числом выбранных частей и гранул.', indexAnalysisItem: 'проверок индекса', indexAnalysisSelected: 'Выбранный индекс', indexAnalysisInspect: 'Изучить индекс', indexAnalysisDetails: 'Сведения о выбранном индексе', indexAnalysisHint: 'Выберите индекс, чтобы увидеть условие и показатели отбора.', indexAnalysisNoOutput: 'ClickHouse не вернул сведения об индексах.',
         logicalPlanDescription: 'Шаги оптимизатора ClickHouse до выполнения. Здесь не показываются показатели выполнения.',
         planGraphView: 'Граф', planTreeView: 'Дерево', planGraphHint: 'Выберите шаг, чтобы посмотреть его свойства.', planStep: 'Шаг', planSelectedStep: 'Выбранный шаг', planInspectStep: 'Просмотреть шаг', planStepDetails: 'Сведения о выбранном шаге плана',
         pipelineGraph: 'Конвейер ClickHouse', pipelineGraphDescription: 'Планируемая топология процессоров из EXPLAIN PIPELINE. Показатели выполнения отображаются отдельно.',

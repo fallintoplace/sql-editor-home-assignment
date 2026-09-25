@@ -8,7 +8,6 @@ import { exportCsv, recommendChart } from '../shared/results';
 import { matchesDraft } from '../shared/evidence';
 import { formatSql, hasSqlComments, parameterNames, selectedStatement, splitSql } from '../shared/sql';
 import { api, download, isFrontendDemoPreview, message, post, RequestError } from './api';
-import { DEMO_PREVIEW_INITIAL_STARTERS, DEMO_PREVIEW_SQL, DEMO_PREVIEW_STARTER_DOCUMENT_ID, demoPreviewStarterRunId, PLAYGROUND_PREVIEW_STARTER } from './demo-preview';
 import { PLAYGROUND_CONNECTION_ID } from './playground';
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { ImportWizard } from './components/ImportWizard';
@@ -24,7 +23,7 @@ import { SqlFlowView } from './components/SqlFlowView';
 import { InspectorPane, type InspectorPaneProps } from './components/InspectorPane';
 import { Button, cx, Icon, Status, terminal } from './components/ui';
 import { ExecutionBar, RailButton, RunActionGroup, ScriptResults } from './components/WorkspaceChrome';
-import { checkpoint, closeDraft, draftFromDocument, MAX_TABS, newDraft, recover, reopenDraft, SAMPLE_SQL, type Draft, type WorkspaceState } from './workspace-state';
+import { checkpoint, closeDraft, draftFromDocument, MAX_TABS, newDraft, reopenDraft, type Draft } from './workspace-state';
 import { draftSaveStatus, rememberRunIds, sameSavedContent } from '../shared/workspace-view';
 import type { NativeParseSnapshot, NativeParserStatus } from '../shared/native-parser';
 import { useWorkspacePersistence } from './useWorkspacePersistence';
@@ -41,8 +40,8 @@ import { sqlErrorRangeInDraft, type SqlErrorRange } from './sql-error';
 import type { Copy, ExperienceLevel, Locale } from './i18n';
 import type { BusyAction, Connected, Inspector, ResultsView } from './workspace-types';
 import { clampPanelSplitRatio } from './workspace-layout';
+import { initialWorkspaceState, workspaceStateKey } from './workspace-initial-state';
 
-const stateKey = (connectionId: string) => `clickstudio:workspace:${connectionId}:v1`;
 function safeSelectedStatement(sql: string, from: number, to: number) {
     try { return selectedStatement(sql, from, to); } catch { return undefined; }
 }
@@ -58,14 +57,6 @@ function apiErrorDetail(error: unknown): ApiError {
         message: typeof candidate?.message === 'string' ? candidate.message : message(error),
     };
 }
-function previewStarterDraft(starter: typeof DEMO_PREVIEW_INITIAL_STARTERS[number]): Draft {
-    const runId = demoPreviewStarterRunId(starter.id);
-    return {
-        ...newDraft(starter.name, starter.sql), serverId: starter.id, baseRevision: starter.revision ?? 1,
-        chart: { ...starter.chart, ys: [...starter.chart.ys] }, runIds: [runId], activeRunId: runId,
-    };
-}
-
 type WorkspaceProps = {
     connection: Connected;
     connectionLabel: string;
@@ -83,42 +74,8 @@ type WorkspaceProps = {
 };
 
 export function Workspace({ connection, connectionLabel, connections, onSelectConnection, onRefreshConnections, trustActionRef, testConnectionActionRef, demoMode, experience, nativeParserEnabled, dark, copy, locale }: WorkspaceProps) {
-    const key = stateKey(connection.id);
-    const [workspace, setWorkspace] = useState<WorkspaceState>(() => {
-        const recovered = recover(key);
-        if (!isFrontendDemoPreview) return recovered;
-        const activeId = recovered.tabs.find(tab => tab.id === recovered.activeId)?.id ?? recovered.tabs[0]!.id;
-        const active = recovered.tabs.find(tab => tab.id === activeId)!;
-        const isStarterDraft = active.name === 'Getting started.sql' &&
-            (active.sql.trim() === SAMPLE_SQL.trim() || active.sql.trim() === DEMO_PREVIEW_SQL.trim()) &&
-            (!active.serverId || active.serverId === DEMO_PREVIEW_STARTER_DOCUMENT_ID);
-        if (!isStarterDraft || recovered.tabs.length !== 1 || recovered.closedTabs?.length) return recovered;
-        if (connection.id === 'playground') {
-            return {
-                ...recovered,
-                tabs: [{
-                    ...active, name: PLAYGROUND_PREVIEW_STARTER.name, sql: PLAYGROUND_PREVIEW_STARTER.sql,
-                    serverId: undefined, baseRevision: undefined, chart: { ...PLAYGROUND_PREVIEW_STARTER.chart, ys: [] },
-                    runIds: [], activeRunId: undefined, scriptId: undefined, parentRunId: undefined,
-                    parentDocumentId: undefined, kind: 'query', metric: undefined, dependencies: [],
-                }],
-            };
-        }
-        const gettingStarted = DEMO_PREVIEW_INITIAL_STARTERS[0]!;
-        const runId = demoPreviewStarterRunId(gettingStarted.id);
-        return {
-            ...recovered,
-            tabs: [
-                {
-                    ...active, sql: DEMO_PREVIEW_SQL,
-                    serverId: DEMO_PREVIEW_STARTER_DOCUMENT_ID, baseRevision: gettingStarted.revision ?? 1,
-                    chart: { ...gettingStarted.chart, ys: [...gettingStarted.chart.ys] },
-                    activeRunId: runId, runIds: [...new Set([...active.runIds, runId])],
-                },
-                ...DEMO_PREVIEW_INITIAL_STARTERS.slice(1).map(previewStarterDraft),
-            ],
-        };
-    });
+    const key = workspaceStateKey(connection.id);
+    const [workspace, setWorkspace] = useState(() => initialWorkspaceState(connection.id));
     const workspaceRef = useRef(workspace);
     workspaceRef.current = workspace;
     const {

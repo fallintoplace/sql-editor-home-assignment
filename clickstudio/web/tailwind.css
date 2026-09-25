@@ -111,7 +111,7 @@
 .topbar .theme-mode-option input { position: absolute; inset: 0; z-index: var(--z-local-control); width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .topbar .theme-mode-icon { width: 18px; height: 18px; pointer-events: none; }
 
-@media (max-width: 1120px) {
+@media (max-width: 2100px) {
     .topbar { gap: 12px; padding-inline: 14px; }
     .topbar .mode-caption { display: none; }
 }

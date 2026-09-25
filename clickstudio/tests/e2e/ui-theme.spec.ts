@@ -72,3 +72,31 @@ for (const removedTheme of ['monokai', 'catppuccin-latte']) test(`a saved ${remo
     await expect(themeOption(page, 'click-dark')).toBeChecked();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'click-dark');
 });
+
+test('localized desktop header keeps the theme switch in view', async ({ page }) => {
+    await page.setViewportSize({ width: 2048, height: 900 });
+    await page.goto('/');
+
+    const localeSelect = page.locator('.topbar-preferences select');
+    const topbar = page.locator('.topbar');
+    const themeSwitch = page.locator('.theme-mode-control');
+
+    for (const locale of ['en', 'de', 'es', 'nl', 'zh', 'ru']) {
+        await localeSelect.selectOption(locale);
+        await expect(page.locator('html')).toHaveAttribute('lang', locale);
+        await expect(themeSwitch).toBeVisible();
+
+        const headerSize = await topbar.evaluate(element => ({
+            clientWidth: element.clientWidth,
+            scrollWidth: element.scrollWidth,
+        }));
+        expect(headerSize.scrollWidth, `${locale} header overflow`).toBeLessThanOrEqual(headerSize.clientWidth);
+
+        const themeBounds = await themeSwitch.evaluate(element => {
+            const rect = element.getBoundingClientRect();
+            return { left: rect.left, right: rect.right, viewportWidth: window.innerWidth };
+        });
+        expect(themeBounds.left, `${locale} theme switch left edge`).toBeGreaterThanOrEqual(0);
+        expect(themeBounds.right, `${locale} theme switch right edge`).toBeLessThanOrEqual(themeBounds.viewportWidth);
+    }
+});

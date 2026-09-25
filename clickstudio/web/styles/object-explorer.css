@@ -153,6 +153,26 @@
     .parts-graph-viewport { position: relative; min-height: 220px; flex: 1; overflow: hidden; border: 1px solid color-mix(in srgb, var(--accent) 23%, var(--line)); border-radius: 13px; background: radial-gradient(ellipse at 50% 0, color-mix(in srgb, var(--accent) 8%, transparent), transparent 65%), var(--canvas); }
     .parts-graph-viewport::before { position: absolute; inset: 0; background-image: linear-gradient(90deg, color-mix(in srgb, var(--line-bright) 30%, transparent) 1px, transparent 1px), linear-gradient(color-mix(in srgb, var(--line-bright) 30%, transparent) 1px, transparent 1px); background-size: 25px 25px; content: ''; opacity: .45; mask-image: radial-gradient(ellipse at center, #000 5%, transparent 95%); pointer-events: none; }
     .parts-graph-viewport svg { position: relative; display: block; width: 100%; height: 100%; min-height: 220px; }
+    .parts-graph-viewport.is-map { max-height: min(460px, 56vh); overflow: auto; scrollbar-color: color-mix(in srgb, var(--accent) 38%, var(--muted)) transparent; }
+    .parts-horizontal-map { position: relative; display: grid; min-width: 760px; gap: 4px; padding: 8px; }
+    .parts-map-partition { display: grid; grid-template-columns: minmax(118px, 158px) minmax(0, 1fr); align-items: stretch; gap: 7px; }
+    .parts-map-partition-heading { position: sticky; z-index: 2; top: 0; left: 0; display: grid; min-width: 0; align-content: center; gap: 4px; padding: 7px 8px; border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line)); border-radius: 8px; background: color-mix(in srgb, var(--panel-raised) 96%, var(--accent)); color: var(--text); text-align: left; cursor: pointer; }
+    .parts-map-partition-heading:hover, .parts-map-partition-heading:focus-visible, .parts-map-partition-heading[aria-pressed="true"] { border-color: color-mix(in srgb, var(--accent) 55%, var(--line-bright)); outline: none; box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 12%, transparent); }
+    .parts-map-partition-heading strong { overflow: hidden; font-family: var(--font-mono); font-size: 9px; text-overflow: ellipsis; }
+    .parts-map-partition-heading span { color: var(--muted); font-size: 7px; }
+    .parts-map-partition-rows { display: grid; min-width: 0; gap: 2px; }
+    .parts-map-row { display: grid; min-width: 0; min-height: 33px; grid-template-columns: minmax(185px, .95fr) minmax(390px, 1.8fr); align-items: center; gap: 10px; padding: 3px 8px; border: 1px solid transparent; border-radius: 7px; background: color-mix(in srgb, var(--panel-raised) 54%, transparent); color: var(--text-soft); text-align: left; cursor: pointer; }
+    .parts-map-row:hover, .parts-map-row:focus-visible, .parts-map-row.is-selected { border-color: color-mix(in srgb, var(--accent) 44%, var(--line)); background: color-mix(in srgb, var(--accent) 9%, var(--panel-raised)); outline: none; }
+    .parts-map-identity { display: grid; min-width: 0; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 6px; }
+    .parts-map-identity > i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 7px color-mix(in srgb, var(--green) 54%, transparent); }
+    .parts-map-row.is-inactive .parts-map-identity > i { background: var(--muted); box-shadow: none; }
+    .parts-map-identity code { overflow: hidden; color: var(--text); font-family: var(--font-mono); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+    .parts-map-identity small { color: var(--muted); font-size: 7px; white-space: nowrap; }
+    .parts-map-metrics { display: grid; min-width: 0; grid-template-columns: minmax(118px, 1.1fr) minmax(68px, auto) minmax(62px, auto) minmax(54px, auto); align-items: center; gap: 10px; color: var(--muted); font-family: var(--font-mono); font-size: 7px; font-variant-numeric: tabular-nums; }
+    .parts-map-size { display: grid; min-width: 0; grid-template-columns: minmax(36px, 1fr) auto; align-items: center; gap: 7px; }
+    .parts-map-size > i { display: block; height: 4px; overflow: hidden; border-radius: 3px; background: color-mix(in srgb, var(--line-bright) 42%, transparent); }
+    .parts-map-size > i > b { display: block; height: 100%; min-width: 2px; border-radius: inherit; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 52%, white)); box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 45%, transparent); }
+    .parts-map-size > strong { color: var(--text-soft); font-size: 7px; font-weight: 650; white-space: nowrap; }
     .parts-map-cell, .parts-galaxy-cell { cursor: pointer; outline: none; }
     .parts-map-cell rect { fill: color-mix(in srgb, var(--part-color) 25%, var(--panel-raised)); stroke: color-mix(in srgb, var(--part-color) 47%, var(--line)); stroke-width: 1.1px; transition: fill .16s ease, stroke .16s ease, filter .16s ease; }
     .parts-map-cell.is-partition-cell rect { fill: color-mix(in srgb, var(--part-color) 8%, var(--panel)); stroke: color-mix(in srgb, var(--part-color) 55%, var(--line-bright)); stroke-width: 1.4px; }
@@ -196,6 +216,8 @@
         .parts-explorer-toolbar { align-items: flex-start; }
         .parts-count-summary { width: 100%; margin-left: 0; }
         .parts-graph-meta { align-items: flex-start; flex-direction: column; }
+        .parts-graph-viewport.is-map { max-height: 48vh; }
+        .parts-horizontal-map { min-width: 760px; }
         .parts-inspector { align-items: flex-start; flex-direction: column; }
         .parts-inspector-stats { justify-content: flex-start; }
     }

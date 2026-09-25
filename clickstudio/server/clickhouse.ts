@@ -1,7 +1,7 @@
 import { createClient, type ClickHouseClient } from '@clickhouse/client';
 import { randomUUID } from 'node:crypto';
 import type { ClickHouseDocumentationEntry, ClickHouseDocumentationSummary, Connection, Json, Manifest, Principal, Progress, ReferenceCategory, Run, Schema } from '../shared/types.js';
-import { parseMergeTreeParts, type MergeTreePartsSnapshot } from '../shared/parts.js';
+import { mergeTreePartsQuery, parseMergeTreeParts, type MergeTreePartsSnapshot } from '../shared/parts.js';
 import { enrichSchemaTables, type SchemaTableMetadata, type SchemaTableSkipIndex } from '../shared/schema.js';
 import { buildReferenceEntryQuery, buildReferenceSearchQuery } from '../shared/reference.js';
 import { AppError, requireThat } from '../core/errors.js';
@@ -320,11 +320,7 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
         const target = (await this.rows<{ engine: string }>(id, 'SELECT engine FROM system.tables WHERE database = {database:String} AND name = {table:String} LIMIT 1', parameters))[0];
         requireThat(target, 404, 'TABLE_NOT_FOUND', 'The selected table is not available on this connection');
         requireThat(target.engine.endsWith('MergeTree'), 409, 'PARTS_UNAVAILABLE', 'Storage visualization is available for MergeTree tables');
-        const rows = await this.rows<Record<string, unknown>>(id, `SELECT partition, name, toString(rows) AS rows, toString(marks) AS marks,
-            toString(data_compressed_bytes) AS compressed_bytes, toString(data_uncompressed_bytes) AS uncompressed_bytes,
-            toString(level) AS level, toString(modification_time) AS modified_at, toString(count() OVER ()) AS total_parts
-            FROM system.parts WHERE database = {database:String} AND table = {table:String} AND active
-            ORDER BY data_compressed_bytes DESC, name LIMIT 1001`, parameters);
+        const rows = await this.rows<Record<string, unknown>>(id, mergeTreePartsQuery(), parameters);
         return parseMergeTreeParts(database, table, rows);
     }
     async profilePipeline(run: Run): Promise<string[]> {

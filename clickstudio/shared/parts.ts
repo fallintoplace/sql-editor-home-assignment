@@ -1,7 +1,9 @@
 export type PartsMetric = 'compressedBytes' | 'rows' | 'marks';
-export type PartsLayout = 'treemap' | 'galaxy';
+export type PartsLayout = 'map' | 'treemap' | 'galaxy';
+export type PartsState = 'all' | 'active' | 'inactive';
 
 export interface MergeTreePart {
+    active: boolean;
     partition: string;
     name: string;
     rows: string;
@@ -9,7 +11,10 @@ export interface MergeTreePart {
     compressedBytes: string;
     uncompressedBytes: string;
     level: number;
+    minBlockNumber: string;
+    maxBlockNumber: string;
     modifiedAt: string;
+    diskName: string;
 }
 
 export interface MergeTreePartsSnapshot {
@@ -17,13 +22,30 @@ export interface MergeTreePartsSnapshot {
     table: string;
     parts: MergeTreePart[];
     totalParts: string;
+    activeParts: string;
+    inactiveParts: string;
     truncated: boolean;
     measuredAt: string;
     totals: Pick<MergeTreePart, 'rows' | 'marks' | 'compressedBytes' | 'uncompressedBytes'>;
 }
 
 export const MAX_MERGETREE_PARTS = 1_000;
-const partColumns = ['partition', 'name', 'rows', 'marks', 'compressed_bytes', 'uncompressed_bytes', 'level', 'modified_at', 'total_parts'] as const;
+export const MAX_PARTS_PER_STATUS = MAX_MERGETREE_PARTS / 2;
+const partColumns = ['partition', 'name', 'is_active', 'rows', 'marks', 'compressed_bytes', 'uncompressed_bytes', 'level', 'min_block_number', 'max_block_number', 'modified_at', 'disk_name', 'total_parts', 'active_parts', 'inactive_parts'] as const;
+
+export function mergeTreePartsQuery() {
+    return `SELECT partition, name, toUInt8(active) AS is_active,
+        toString(rows) AS rows, toString(marks) AS marks,
+        toString(data_compressed_bytes) AS compressed_bytes, toString(data_uncompressed_bytes) AS uncompressed_bytes,
+        toString(level) AS level, toString(min_block_number) AS min_block_number, toString(max_block_number) AS max_block_number,
+        toString(modification_time) AS modified_at, disk_name,
+        toString(count() OVER ()) AS total_parts,
+        toString(countIf(active = 1) OVER ()) AS active_parts,
+        toString(countIf(active = 0) OVER ()) AS inactive_parts
+        FROM system.parts WHERE database = {database:String} AND table = {table:String}
+        ORDER BY active DESC, data_compressed_bytes DESC, name
+        LIMIT ${MAX_PARTS_PER_STATUS} BY active`;
+}
 
 function text(value: unknown, fallback = '') {
     if (typeof value === 'string') return value.slice(0, 500);
@@ -35,6 +57,15 @@ function text(value: unknown, fallback = '') {
 function nonNegativeInteger(value: unknown) {
     const valueText = text(value);
     return /^\d{1,80}$/.test(valueText) ? valueText : '0';
+}
+
+function integer(value: unknown) {
+    const valueText = text(value);
+    return /^-?\d{1,80}$/.test(valueText) ? valueText : '0';
+}
+
+function isActive(value: unknown) {
+    return value === true || value === 1 || value === '1' || value === 'true';
 }
 
 function sum(values: readonly string[]) {
@@ -54,6 +85,7 @@ export function parseMergeTreeParts(database: string, table: string, input: read
     const parts = sourceRows.map(row => {
         const level = Number(nonNegativeInteger(row.level));
         return {
+            active: isActive(row.is_active ?? row.active),
             partition: text(row.partition, '(unpartitioned)') || '(unpartitioned)',
             name: text(row.name, 'unknown part') || 'unknown part',
             rows: nonNegativeInteger(row.rows),
@@ -61,7 +93,10 @@ export function parseMergeTreeParts(database: string, table: string, input: read
             compressedBytes: nonNegativeInteger(row.compressed_bytes ?? row.compressedBytes),
             uncompressedBytes: nonNegativeInteger(row.uncompressed_bytes ?? row.uncompressedBytes),
             level: Math.min(Number.isFinite(level) ? level : 0, 1_000_000),
+            minBlockNumber: integer(row.min_block_number ?? row.minBlockNumber),
+            maxBlockNumber: integer(row.max_block_number ?? row.maxBlockNumber),
             modifiedAt: text(row.modified_at ?? row.modifiedAt, 'Unknown'),
+            diskName: text(row.disk_name ?? row.diskName, 'Unknown') || 'Unknown',
         } satisfies MergeTreePart;
     });
     const totals = {
@@ -70,13 +105,23 @@ export function parseMergeTreeParts(database: string, table: string, input: read
         compressedBytes: sum(parts.map(part => part.compressedBytes)),
         uncompressedBytes: sum(parts.map(part => part.uncompressedBytes)),
     };
-    const explicitTotal = sourceRows.length ? nonNegativeInteger(sourceRows[0]!.total_parts ?? sourceRows[0]!.totalParts) : '0';
-    const truncated = input.length > boundedLimit || (explicitTotal !== '0' && BigInt(explicitTotal) > BigInt(parts.length));
+    const first = sourceRows[0];
+    const explicitTotal = first ? nonNegativeInteger(first.total_parts ?? first.totalParts) : '0';
+    const sampledActive = parts.filter(part => part.active).length;
+    const sampledInactive = parts.length - sampledActive;
+    const activeParts = first ? nonNegativeInteger(first.active_parts ?? first.activeParts) : '0';
+    const inactiveParts = first ? nonNegativeInteger(first.inactive_parts ?? first.inactiveParts) : '0';
+    const hasStatusTotals = Boolean(first && (first.active_parts !== undefined || first.activeParts !== undefined || first.inactive_parts !== undefined || first.inactiveParts !== undefined));
+    const truncated = input.length > boundedLimit
+        || (explicitTotal !== '0' && BigInt(explicitTotal) > BigInt(parts.length))
+        || (hasStatusTotals && (BigInt(activeParts) > BigInt(sampledActive) || BigInt(inactiveParts) > BigInt(sampledInactive)));
     return {
         database: database.slice(0, 128),
         table: table.slice(0, 128),
         parts,
         totalParts: explicitTotal === '0' ? String(parts.length + (truncated ? 1 : 0)) : explicitTotal,
+        activeParts: hasStatusTotals ? activeParts : String(sampledActive),
+        inactiveParts: hasStatusTotals ? inactiveParts : String(sampledInactive),
         truncated,
         measuredAt: new Date().toISOString(),
         totals,

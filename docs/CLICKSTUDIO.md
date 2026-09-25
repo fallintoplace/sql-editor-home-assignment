@@ -98,7 +98,7 @@ The schema explorer presents the selected database alongside ClickHouse system t
 
 For system tables, **Read ClickHouse documentation** loads native documentation from the connected server and displays the associated server version.
 
-For MergeTree-family tables, select **Visualize parts** to inspect active parts by partition. Treemap sizes use compressed bytes by default; switch to rows or marks, choose the Galaxy layout, select parts for exact metrics, or zoom into a partition. The display is capped at 1,000 parts.
+For MergeTree-family tables, select **Visualize parts** to inspect active and inactive `system.parts` rows grouped by partition. The horizontal map uses compressed bytes by default; switch its bar scale to rows or marks, or choose the Treemap and Galaxy layouts. Part details include rows, marks, compressed and uncompressed bytes, compression ratio, level, block range, disk, and modification time. The preview shows up to 500 parts per state while the total and state counts remain exact.
 
 The object explorer also provides a unified way to inspect database objects and move directly into relevant SQL workflows.
 

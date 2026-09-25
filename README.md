@@ -73,7 +73,7 @@ In the editor, **Ctrl/Cmd+Enter** runs the selection or current statement. **Ctr
 - Run read-only SQL and inspect typed, paginated results.
 - Format and validate ClickHouse SQL in the editor.
 - Run scripts and inspect each statement separately.
-- Explore databases, tables, columns, native system-table documentation, and MergeTree part storage.
+- Explore databases, tables, columns, native system-table documentation, and active/inactive MergeTree part storage.
 - Import CSV, JSON, or NDJSON through preview, mapping, and explicit row-count confirmation.
 - Track execution progress, cancel queries, and reopen retained evidence.
 - Save query documents, build charts, and inspect query history.

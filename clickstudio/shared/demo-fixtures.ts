@@ -35,6 +35,7 @@ export function demoMergeTreePartRows() {
             const rowCount = (month * 11 + part * 3) * 10_000;
             const compressed = (month * 13 + part * 5) * 1024 * 1024;
             rows.push({
+                is_active: part === 7 ? '0' : '1',
                 partition: `2026-${String(month).padStart(2, '0')}`,
                 name: `2026${String(month).padStart(2, '0')}_${part}_${part + 4}_${Math.max(0, part - 2)}`,
                 rows: String(rowCount),
@@ -42,12 +43,20 @@ export function demoMergeTreePartRows() {
                 compressed_bytes: String(compressed),
                 uncompressed_bytes: String(Math.round(compressed * 3.7)),
                 level: String(Math.max(0, part % 4)),
+                min_block_number: String(part),
+                max_block_number: String(part + 4),
                 modified_at: `2026-${String(month).padStart(2, '0')}-${String(Math.min(27, part * 3)).padStart(2, '0')} 08:30:00`,
+                disk_name: 'default',
                 total_parts: '42',
+                active_parts: '36',
+                inactive_parts: '6',
             });
         }
     }
     return rows.sort((left, right) => {
+        const leftActive = left.is_active === '1';
+        const rightActive = right.is_active === '1';
+        if (leftActive !== rightActive) return leftActive ? -1 : 1;
         const leftBytes = BigInt(left.compressed_bytes ?? '0');
         const rightBytes = BigInt(right.compressed_bytes ?? '0');
         return leftBytes === rightBytes ? 0 : rightBytes > leftBytes ? 1 : -1;

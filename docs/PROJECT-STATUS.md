@@ -10,7 +10,7 @@ ClickStudio is a local-first ClickHouse SQL editor built as an interview project
 - Schema and object exploration, including ClickHouse system-table documentation.
 - Typed results, filtering, export, charts, and retained query history.
 - ClickHouse-specific EXPLAIN INDEXES, EXPLAIN PLAN, EXPLAIN PIPELINE, and EXPLAIN ANALYZE views.
-- MergeTree part storage explorer with treemap and circle-pack layouts.
+- MergeTree active/inactive part explorer with a horizontal partition map, treemap, and circle-pack layouts.
 - CSV, JSON, and NDJSON import with preview, mapping, a dedicated writer, and explicit confirmation.
 - Saved query revisions and bounded published snapshots.
 - Optional assistant proposals with review, apply, and run steps.

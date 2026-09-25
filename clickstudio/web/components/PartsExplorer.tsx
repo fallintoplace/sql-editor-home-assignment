@@ -1,7 +1,7 @@
-import { easeCubicInOut, hierarchy, pack, select, treemap } from 'd3';
+import { easeCubicInOut, hierarchy, pack, scaleLinear, select, treemap } from 'd3';
 import type { HierarchyCircularNode, HierarchyRectangularNode } from 'd3';
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
-import type { MergeTreePart, MergeTreePartsSnapshot, PartsLayout, PartsMetric } from '../../shared/parts';
+import type { MergeTreePart, MergeTreePartsSnapshot, PartsLayout, PartsMetric, PartsState } from '../../shared/parts';
 import { formatCompressionRatio, scalePartMetrics } from '../../shared/parts';
 import type { Connection, SchemaTable } from '../../shared/types';
 import type { Copy } from '../i18n';
@@ -38,12 +38,25 @@ function exactBytes(value: string) {
     } catch { return formatBytes(value); }
 }
 
-function makeTree(snapshot: MergeTreePartsSnapshot, metric: PartsMetric): Cell {
-    const values = scalePartMetrics(snapshot.parts, metric);
+function partId(part: MergeTreePart) {
+    return `${part.partition}:${part.name}:${part.active ? 'active' : 'inactive'}`;
+}
+
+function metricText(part: MergeTreePart, metric: PartsMetric) {
+    return metric === 'compressedBytes' ? exactBytes(part.compressedBytes) : exactCount(part[metric]);
+}
+
+function compareBlockNumber(left: string, right: string) {
+    const a = BigInt(left), b = BigInt(right);
+    return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function makeTree(snapshot: MergeTreePartsSnapshot, metric: PartsMetric, parts: readonly MergeTreePart[]): Cell {
+    const values = scalePartMetrics(parts, metric);
     const grouped = new Map<string, Cell[]>();
-    snapshot.parts.forEach((part, index) => {
+    parts.forEach((part, index) => {
         const children = grouped.get(part.partition) ?? [];
-        children.push({ id: `part:${part.partition}:${part.name}`, label: part.name, part, value: values[index] });
+        children.push({ id: `part:${partId(part)}`, label: part.name, part, value: values[index] });
         grouped.set(part.partition, children);
     });
     return {
@@ -59,13 +72,14 @@ function makeTree(snapshot: MergeTreePartsSnapshot, metric: PartsMetric): Cell {
 }
 
 function tooltip(part: MergeTreePart) {
-    return `${part.name}\n${part.partition}\nRows: ${part.rows}\nMarks: ${part.marks}\nCompressed: ${part.compressedBytes} bytes\nUncompressed: ${part.uncompressedBytes} bytes\nCompression: ${formatCompressionRatio(part)}\nLevel: ${part.level}\nModified: ${part.modifiedAt}`;
+    return `${part.name}\n${part.active ? 'Active' : 'Inactive'} · ${part.partition}\nRows: ${part.rows}\nMarks: ${part.marks}\nCompressed: ${part.compressedBytes} bytes\nUncompressed: ${part.uncompressedBytes} bytes\nCompression: ${formatCompressionRatio(part)}\nLevel: ${part.level}\nBlocks: ${part.minBlockNumber}–${part.maxBlockNumber}\nDisk: ${part.diskName}\nModified: ${part.modifiedAt}`;
 }
 
 export function PartsExplorer({ connection, table, copy, onClose }: { connection: Pick<Connection, 'id' | 'dataSource'>; table: SchemaTable; copy: Copy['common']; onClose: () => void }) {
     const [state, setState] = useState<{ key: string; loading: boolean; snapshot?: MergeTreePartsSnapshot; error?: string }>();
     const [metric, setMetric] = useState<PartsMetric>('compressedBytes');
-    const [layoutMode, setLayoutMode] = useState<PartsLayout>('treemap');
+    const [partState, setPartState] = useState<PartsState>('all');
+    const [layoutMode, setLayoutMode] = useState<PartsLayout>('map');
     const [selectedPart, setSelectedPart] = useState<MergeTreePart>();
     const [zoomedPartition, setZoomedPartition] = useState<string>();
     const transformGroup = useRef<SVGGElement>(null);
@@ -85,14 +99,38 @@ export function PartsExplorer({ connection, table, copy, onClose }: { connection
     }, [connection.id, requestKey, table.database, table.name]);
 
     const snapshot = state?.key === requestKey ? state.snapshot : undefined;
-    const tree = useMemo(() => snapshot ? makeTree(snapshot, metric) : undefined, [metric, snapshot]);
+    const filteredParts = useMemo(() => snapshot?.parts.filter(part => partState === 'all' || part.active === (partState === 'active')) ?? [], [partState, snapshot]);
+    const tree = useMemo(() => snapshot ? makeTree(snapshot, metric, filteredParts) : undefined, [filteredParts, metric, snapshot]);
     const layout = useMemo(() => {
-        if (!tree) return undefined;
+        if (!tree || layoutMode === 'map') return undefined;
         const root = hierarchy(tree, node => node.children).sum(node => node.value ?? 0).sort((left, right) => (right.value ?? 0) - (left.value ?? 0));
         return layoutMode === 'treemap'
             ? treemap<Cell>().size([width, height]).paddingInner(3).paddingTop(node => node.depth === 1 ? 25 : 3).round(true)(root)
             : pack<Cell>().size([width, height]).padding(4)(root);
     }, [layoutMode, tree]);
+    const layoutNodes = layout?.descendants() ?? [];
+
+    const partitionGroups = useMemo(() => {
+        const grouped = new Map<string, MergeTreePart[]>();
+        for (const part of filteredParts) {
+            const parts = grouped.get(part.partition) ?? [];
+            parts.push(part);
+            grouped.set(part.partition, parts);
+        }
+        return [...grouped].map(([partition, parts]) => ({
+            id: `partition:${partition}`,
+            partition,
+            parts: parts.sort((left, right) => compareBlockNumber(left.minBlockNumber, right.minBlockNumber) || left.name.localeCompare(right.name)),
+        })).sort((left, right) => left.partition.localeCompare(right.partition));
+    }, [filteredParts]);
+    const visiblePartitionGroups = zoomedPartition ? partitionGroups.filter(group => group.id === zoomedPartition) : partitionGroups;
+    const metricValues = useMemo(() => scalePartMetrics(filteredParts, metric), [filteredParts, metric]);
+    const metricScale = useMemo(() => scaleLinear().domain([0, Math.max(1, ...metricValues)]).range([0, 100]), [metricValues]);
+    const metricByPart = useMemo(() => new Map(filteredParts.map((part, index) => [partId(part), metricValues[index] ?? 0])), [filteredParts, metricValues]);
+    const visibleTotals = useMemo(() => filteredParts.reduce((totals, part) => ({
+        rows: totals.rows + BigInt(part.rows),
+        compressedBytes: totals.compressedBytes + BigInt(part.compressedBytes),
+    }), { rows: 0n, compressedBytes: 0n }), [filteredParts]);
 
     useEffect(() => {
         const group = transformGroup.current;
@@ -124,10 +162,10 @@ export function PartsExplorer({ connection, table, copy, onClose }: { connection
     }, [onClose]);
 
     const current = state?.key === requestKey ? state : undefined;
-    const partitions = snapshot ? new Set(snapshot.parts.map(part => part.partition)).size : 0;
+    const partitions = new Set(filteredParts.map(part => part.partition)).size;
     const activeMetricLabel = metric === 'compressedBytes' ? copy.partsMetricSize : metric === 'rows' ? copy.partsMetricRows : copy.partsMetricMarks;
     const selectedPartition = zoomedPartition?.replace(/^partition:/, '');
-    const partitionParts = selectedPartition && snapshot ? snapshot.parts.filter(part => part.partition === selectedPartition) : [];
+    const partitionParts = selectedPartition ? filteredParts.filter(part => part.partition === selectedPartition) : [];
     const handleCell = (id: string, part?: MergeTreePart) => {
         if (id.startsWith('partition:')) {
             setSelectedPart(undefined);
@@ -137,6 +175,13 @@ export function PartsExplorer({ connection, table, copy, onClose }: { connection
     const keyCell = (event: KeyboardEvent<SVGElement>, id: string, part?: MergeTreePart) => {
         if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); handleCell(id, part); }
     };
+    const selectedTotal = partState === 'all' ? snapshot?.totalParts : partState === 'active' ? snapshot?.activeParts : snapshot?.inactiveParts;
+    const selectedStateLabel = partState === 'all' ? copy.partsStateAll : partState === 'active' ? copy.partsStateActive : copy.partsStateInactive;
+    const stateIsTruncated = snapshot && selectedTotal !== undefined && BigInt(selectedTotal) > BigInt(filteredParts.length);
+    const showingText = stateIsTruncated ? copy.partsShowingState
+        .replace('{shown}', filteredParts.length.toLocaleString())
+        .replace('{total}', exactCount(selectedTotal ?? '0'))
+        .replace('{state}', selectedStateLabel.toLowerCase()) : undefined;
 
     return <div className="parts-explorer-layer">
         <button className="parts-explorer-scrim" type="button" aria-label={copy.closePanel} onClick={onClose}/>
@@ -146,31 +191,55 @@ export function PartsExplorer({ connection, table, copy, onClose }: { connection
                 <Button variant="ghost" className="panel-collapse-button" aria-label={copy.closePanel} onClick={onClose}>×</Button>
             </header>
             <div className="parts-explorer-toolbar">
+                <div className="parts-view-control" role="group" aria-label={copy.partsStateFilter}>
+                    {(['all', 'active', 'inactive'] as const).map(value => <button key={value} type="button" aria-pressed={partState === value} onClick={() => {
+                        setPartState(value);
+                        setSelectedPart(undefined);
+                        setZoomedPartition(undefined);
+                    }}>{value === 'all' ? copy.partsStateAll : value === 'active' ? copy.partsStateActive : copy.partsStateInactive}{value === 'active' && snapshot ? ` ${exactCount(snapshot.activeParts)}` : value === 'inactive' && snapshot ? ` ${exactCount(snapshot.inactiveParts)}` : ''}</button>)}
+                </div>
                 <div className="parts-view-control" role="group" aria-label={copy.partsExplorerTitle}>
                     {(['compressedBytes', 'rows', 'marks'] as const).map(value => <button key={value} type="button" aria-pressed={metric === value} onClick={() => setMetric(value)}>{value === 'compressedBytes' ? copy.partsMetricSize : value === 'rows' ? copy.partsMetricRows : copy.partsMetricMarks}</button>)}
                 </div>
-                <div className="parts-view-control" role="group" aria-label={copy.partsExplorerTitle}>
-                    {(['treemap', 'galaxy'] as const).map(value => <button key={value} type="button" aria-pressed={layoutMode === value} onClick={() => setLayoutMode(value)}>{value === 'treemap' ? copy.partsTreemap : copy.partsGalaxy}</button>)}
+                <div className="parts-view-control" role="group" aria-label={copy.partsMap}>
+                    {(['map', 'treemap', 'galaxy'] as const).map(value => <button key={value} type="button" aria-pressed={layoutMode === value} onClick={() => setLayoutMode(value)}>{value === 'map' ? copy.partsMap : value === 'treemap' ? copy.partsTreemap : copy.partsGalaxy}</button>)}
                 </div>
-                <span className="parts-count-summary">{snapshot ? `${snapshot.parts.length.toLocaleString()}${snapshot.truncated ? '+' : ''} ${copy.partsActive} · ${partitions} ${copy.partsPartitions}` : current?.loading ? copy.partsLoading : ''}</span>
+                <span className="parts-count-summary">{snapshot ? `${exactCount(snapshot.activeParts)} ${copy.partsStateActive.toLowerCase()} · ${exactCount(snapshot.inactiveParts)} ${copy.partsStateInactive.toLowerCase()} · ${partitions} ${copy.partsPartitions}` : current?.loading ? copy.partsLoading : ''}</span>
             </div>
             {current?.loading && <div className="parts-state" role="status">{copy.partsLoading}</div>}
             {current?.error && <div className="parts-state is-error" role="alert">{current.error}</div>}
-            {snapshot && !snapshot.parts.length && <div className="parts-state" role="status">{copy.partsEmpty}</div>}
-            {snapshot && snapshot.parts.length > 0 && layout && <>
+            {snapshot && !filteredParts.length && <div className="parts-state" role="status">{copy.partsEmpty}</div>}
+            {snapshot && filteredParts.length > 0 && (layoutMode === 'map' || layout) && <>
                 <div className="parts-graph-meta">
                     <span className="parts-breadcrumb"><button type="button" onClick={() => setZoomedPartition(undefined)}>{snapshot.database}.{snapshot.table}</button>{selectedPartition && <><i>/</i><strong>{selectedPartition}</strong></>}</span>
-                    <span>{copy.partsMetricSize}: <strong>{exactBytes(snapshot.totals.compressedBytes)}</strong> · {copy.partsMetricRows}: <strong>{exactCount(snapshot.totals.rows)}</strong></span>
+                    <span>{stateIsTruncated && `${copy.partsLoaded} · `}{copy.partsMetricSize}: <strong>{exactBytes(visibleTotals.compressedBytes.toString())}</strong> · {copy.partsMetricRows}: <strong>{exactCount(visibleTotals.rows.toString())}</strong></span>
                 </div>
                 <div className={`parts-graph-viewport is-${layoutMode}`}>
-                    <svg viewBox={`0 0 ${width} ${height}`} role="group" aria-label={`${copy.partsExplorerTitle} · ${activeMetricLabel}`}>
+                    {layoutMode === 'map' ? <div className="parts-horizontal-map" role="list" aria-label={copy.partsMap}>
+                        {visiblePartitionGroups.map(group => <section className="parts-map-partition" key={group.id} role="listitem">
+                            <button type="button" className="parts-map-partition-heading" aria-label={copy.partsZoomPartition.replace('{partition}', group.partition)} aria-pressed={zoomedPartition === group.id} onClick={() => handleCell(group.id)}>
+                                <strong>{group.partition}</strong><span>{group.parts.length} parts · {exactBytes(group.parts.reduce((sum, part) => sum + BigInt(part.compressedBytes), 0n).toString())}</span>
+                            </button>
+                            <div className="parts-map-partition-rows">
+                                {group.parts.map(part => {
+                                    const size = metricByPart.get(partId(part)) ?? 0;
+                                    const barWidth = size === 0 ? 0 : Math.max(1.5, metricScale(size));
+                                    const selected = selectedPart?.name === part.name && selectedPart.partition === part.partition && selectedPart.active === part.active;
+                                    return <button key={partId(part)} type="button" className={`parts-map-row${part.active ? ' is-active' : ' is-inactive'}${selected ? ' is-selected' : ''}`} title={tooltip(part)} aria-label={tooltip(part)} aria-pressed={Boolean(selected)} onClick={() => setSelectedPart(part)}>
+                                        <span className="parts-map-identity"><i aria-hidden="true"/><code>{part.name}</code><small>{part.active ? copy.partsStateActive : copy.partsStateInactive} · L{part.level}</small></span>
+                                        <span className="parts-map-metrics"><span className="parts-map-size"><i><b style={{ width: `${barWidth}%` }}/></i><strong>{metricText(part, metric)}</strong></span><span>{exactCount(part.rows)} {copy.partsRows.toLowerCase()}</span><span>{exactBytes(part.compressedBytes)}</span><span>{exactCount(part.marks)} {copy.partsMarks.toLowerCase()}</span></span>
+                                    </button>;
+                                })}
+                            </div>
+                        </section>)}
+                    </div> : <svg viewBox={`0 0 ${width} ${height}`} role="group" aria-label={`${copy.partsExplorerTitle} · ${activeMetricLabel}`}>
                         <g ref={transformGroup}>
-                            {layout.descendants().slice(1).map(node => {
+                            {layoutNodes.slice(1).map(node => {
                                 const depth = node.depth;
                                 const colorIndex = node.ancestors().find(ancestor => ancestor.depth === 1)?.data.colorIndex ?? 0;
                                 const color = palette[colorIndex % palette.length]!;
                                 const part = node.data.part;
-                                const selected = part && selectedPart?.name === part.name && selectedPart.partition === part.partition;
+                                const selected = part && selectedPart?.name === part.name && selectedPart.partition === part.partition && selectedPart.active === part.active;
                                 if (layoutMode === 'treemap') {
                                     const rect = node as HierarchyRectangularNode<Cell>;
                                     const cellWidth = Math.max(0, rect.x1 - rect.x0), cellHeight = Math.max(0, rect.y1 - rect.y0);
@@ -190,7 +259,7 @@ export function PartsExplorer({ connection, table, copy, onClose }: { connection
                                     {part && radius > 22 && <text className="parts-cell-label" y="3">{part.name.length > 20 ? `${part.name.slice(0, 19)}…` : part.name}</text>}
                                 </g>;
                             })}
-                            {layout.descendants().filter(node => node.depth === 1).map(node => {
+                            {layoutNodes.filter(node => node.depth === 1).map(node => {
                                 if (layoutMode === 'treemap') {
                                     const rect = node as HierarchyRectangularNode<Cell>;
                                     const rectWidth = Math.max(0, rect.x1 - rect.x0), rectHeight = Math.max(0, rect.y1 - rect.y0);
@@ -213,12 +282,12 @@ export function PartsExplorer({ connection, table, copy, onClose }: { connection
                                 </g>;
                             })}
                         </g>
-                    </svg>
-                    <div className="parts-legend"><span><i className="parts-legend-square"/>{activeMetricLabel}</span>{snapshot.truncated && <span>{copy.partsShowingLimit.replace('{count}', snapshot.parts.length.toLocaleString())}</span>}</div>
+                    </svg>}
+                    <div className="parts-legend"><span><i className="parts-legend-square"/>{layoutMode === 'map' ? `${copy.partsBarWidth}: ${activeMetricLabel}` : activeMetricLabel}</span>{showingText && <span>{showingText}</span>}</div>
                 </div>
                 <div className="parts-inspector" aria-live="polite">
                     {selectedPart ? <>
-                        <div className="parts-inspector-heading"><span className="eyebrow">{copy.partsPart.toUpperCase()}</span><strong>{selectedPart.name}</strong><code>{selectedPart.partition}</code></div>
+                        <div className="parts-inspector-heading"><span className="eyebrow">{copy.partsPart.toUpperCase()} · {selectedPart.active ? copy.partsStateActive : copy.partsStateInactive}</span><strong>{selectedPart.name}</strong><code>{selectedPart.partition}</code></div>
                         <div className="parts-inspector-stats">
                             <span><small>{copy.partsRows}</small><strong>{exactCount(selectedPart.rows)}</strong></span>
                             <span><small>{copy.partsMarks}</small><strong>{exactCount(selectedPart.marks)}</strong></span>
@@ -227,15 +296,18 @@ export function PartsExplorer({ connection, table, copy, onClose }: { connection
                             <span><small>{copy.partsCompression}</small><strong>{formatCompressionRatio(selectedPart)}</strong></span>
                             <span><small>{copy.partsLevel}</small><strong>{selectedPart.level}</strong></span>
                             <span><small>{copy.partsModified}</small><strong>{selectedPart.modifiedAt}</strong></span>
+                            <span><small>{copy.partsMinBlock}</small><strong>{selectedPart.minBlockNumber}</strong></span>
+                            <span><small>{copy.partsMaxBlock}</small><strong>{selectedPart.maxBlockNumber}</strong></span>
+                            <span><small>{copy.partsDisk}</small><strong>{selectedPart.diskName}</strong></span>
                         </div>
                     </> : selectedPartition && partitionParts.length > 0 ? <>
-                        <div className="parts-inspector-heading"><span className="eyebrow">{copy.partsPartitions.toUpperCase()}</span><strong>{selectedPartition}</strong><code>{partitionParts.length} {copy.partsActive}</code></div>
+                        <div className="parts-inspector-heading"><span className="eyebrow">{copy.partsPartitions.toUpperCase()}</span><strong>{selectedPartition}</strong><code>{partitionParts.length} {copy.partsTotal}</code></div>
                         <div className="parts-inspector-stats"><span><small>{copy.partsRows}</small><strong>{exactCount(partitionParts.reduce((sum, part) => sum + BigInt(part.rows), 0n).toString())}</strong></span><span><small>{copy.partsCompressed}</small><strong>{exactBytes(partitionParts.reduce((sum, part) => sum + BigInt(part.compressedBytes), 0n).toString())}</strong></span></div>
                     </> : <p>{copy.partsSelectForDetails}</p>}
                 </div>
             </>}
             {connection.dataSource === 'fixture' && snapshot && <span className="parts-fixture-label">{copy.partsFixture}</span>}
-            <div className="parts-explorer-footer"><span>{snapshot && `${exactCount(snapshot.totalParts)} ${copy.partsActive}`}</span><Button variant="secondary" className="toolbar-small" onClick={onClose}>{copy.closePanel}</Button></div>
+            <div className="parts-explorer-footer"><span>{snapshot && `${exactCount(snapshot.totalParts)} ${copy.partsTotal}`}</span><Button variant="secondary" className="toolbar-small" onClick={onClose}>{copy.closePanel}</Button></div>
         </section>
     </div>;
 }

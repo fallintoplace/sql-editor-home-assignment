@@ -54,18 +54,10 @@ test('Sample MergeTree parts are partitioned and unavailable for unknown tables'
     assert.equal(snapshot.parts.length, 42);
     assert.equal(new Set(snapshot.parts.map(part => part.partition)).size, 6);
     assert.equal(snapshot.totalParts, '42');
-    assert.equal(snapshot.truncated, false);
-    await assert.rejects(api.request('/connections/demo/table-parts', { method: 'POST', body: { database: 'demo', table: 'daily_rollup' } }));
-});
-
-test('Sample MergeTree parts are bounded, grouped by real partitions, and unavailable for unknown tables', async () => {
-    const api = new DemoPreviewApi();
-    const snapshot = await api.request('/connections/demo/table-parts', { method: 'POST', body: { database: 'demo', table: 'events' } });
-    assert.equal(snapshot.database, 'demo');
-    assert.equal(snapshot.table, 'events');
-    assert.equal(snapshot.parts.length, 42);
-    assert.equal(new Set(snapshot.parts.map(part => part.partition)).size, 6);
-    assert.equal(snapshot.totalParts, '42');
+    assert.equal(snapshot.activeParts, '36');
+    assert.equal(snapshot.inactiveParts, '6');
+    assert.equal(snapshot.parts.some(part => !part.active), true);
+    assert.ok(snapshot.parts.every(part => part.diskName === 'default' && part.minBlockNumber && part.maxBlockNumber));
     assert.equal(snapshot.truncated, false);
     await assert.rejects(api.request('/connections/demo/table-parts', { method: 'POST', body: { database: 'demo', table: 'daily_rollup' } }));
 });

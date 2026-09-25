@@ -91,7 +91,7 @@ test('Playground examples preview real SQL and open a draft without executing it
     await page.goto('/');
     await page.getByTestId('new-sql').click();
 
-    const dialog = page.getByRole('dialog', { name: 'SQL examples', exact: true });
+    const dialog = page.getByRole('dialog', { name: 'Help & examples', exact: true });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText('ClickHouse Playground', { exact: true })).toBeVisible();
     await dialog.getByTestId('sql-example-category-openSource').click();
@@ -118,7 +118,7 @@ test('Charts filter opens a localized chart example in a new SQL tab without exe
 
     await page.goto('/');
     await page.getByTestId('new-sql').click();
-    const dialog = page.getByRole('dialog', { name: 'SQL examples', exact: true });
+    const dialog = page.getByRole('dialog', { name: 'Help & examples', exact: true });
     await dialog.getByTestId('sql-example-category-charts').click();
 
     const forexExample = dialog.getByTestId('sql-example-forex-eur-usd-monthly');

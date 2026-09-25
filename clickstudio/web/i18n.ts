@@ -1,6 +1,7 @@
 import type { SelectOption } from './workspace-types.js';
 
-export type Locale = 'en' | 'de' | 'es' | 'nl' | 'zh' | 'ru';
+export const supportedLocales = ['en', 'de', 'es', 'nl', 'zh', 'ru'] as const;
+export type Locale = (typeof supportedLocales)[number];
 export type Theme = 'click-dark' | 'click-light';
 export type ExperienceLevel = 'beginner' | 'expert';
 
@@ -15,15 +16,21 @@ export interface Copy {
         tagline: string;
         language: string;
         theme: string;
+        darkTheme: string;
+        lightTheme: string;
         beginner: string;
         expert: string;
     };
     auth: {
+        privateWorkspace: string;
         title: string;
         description: string;
         token: string;
         open: string;
         opening: string;
+        unavailable: string;
+        retry: string;
+        credentialsNotice: string;
     };
     common: {
         run: string;
@@ -326,15 +333,21 @@ const english: Copy = {
         tagline: 'ClickHouse SQL, results, and performance',
         language: 'Language',
         theme: 'Theme',
+        darkTheme: 'Dark theme',
+        lightTheme: 'Light theme',
         beginner: 'Compact',
         expert: 'Advanced',
     },
     auth: {
+        privateWorkspace: 'Private workspace',
         title: 'Open your workspace',
         description: 'A focused ClickHouse SQL studio. Credentials stay on the server.',
         token: 'Workspace access token',
         open: 'Open workspace',
         opening: 'Opening workspace…',
+        unavailable: 'Workspace unavailable',
+        retry: 'Try again',
+        credentialsNotice: 'Credentials are handled by the workspace server.',
     },
     common: {
         run: 'Run',
@@ -646,6 +659,32 @@ const translations: Record<Exclude<Locale, 'en'>, LocalizedCopy> = {
     },
 };
 
+const chromeTranslations: Record<Exclude<Locale, 'en'>, {
+    app: Pick<Copy['app'], 'darkTheme' | 'lightTheme'>;
+    auth: Pick<Copy['auth'], 'privateWorkspace' | 'unavailable' | 'retry' | 'credentialsNotice'>;
+}> = {
+    de: {
+        app: { darkTheme: 'Dunkles Design', lightTheme: 'Helles Design' },
+        auth: { privateWorkspace: 'Privater Arbeitsbereich', unavailable: 'Arbeitsbereich nicht verfügbar', retry: 'Erneut versuchen', credentialsNotice: 'Anmeldedaten werden vom Workspace-Server verarbeitet.' },
+    },
+    es: {
+        app: { darkTheme: 'Tema oscuro', lightTheme: 'Tema claro' },
+        auth: { privateWorkspace: 'Espacio de trabajo privado', unavailable: 'Espacio de trabajo no disponible', retry: 'Intentar de nuevo', credentialsNotice: 'Las credenciales se procesan en el servidor del espacio de trabajo.' },
+    },
+    nl: {
+        app: { darkTheme: 'Donker thema', lightTheme: 'Licht thema' },
+        auth: { privateWorkspace: 'Privéwerkruimte', unavailable: 'Werkruimte niet beschikbaar', retry: 'Opnieuw proberen', credentialsNotice: 'Aanmeldgegevens worden verwerkt door de werkruimteserver.' },
+    },
+    zh: {
+        app: { darkTheme: '深色主题', lightTheme: '浅色主题' },
+        auth: { privateWorkspace: '私有工作区', unavailable: '工作区不可用', retry: '重试', credentialsNotice: '凭据由工作区服务器处理。' },
+    },
+    ru: {
+        app: { darkTheme: 'Тёмная тема', lightTheme: 'Светлая тема' },
+        auth: { privateWorkspace: 'Приватная рабочая область', unavailable: 'Рабочая область недоступна', retry: 'Повторить', credentialsNotice: 'Учётные данные обрабатываются сервером рабочей области.' },
+    },
+};
+
 const exampleCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common'],
     'exampleCharts' | 'exampleChartTable' | 'exampleChartNumber' | 'exampleChartLine' | 'exampleChartBar' | 'exampleChartScatter' | 'exampleChartHeatmap' | 'exampleChartCandlestick' | 'examplePreviewTable' | 'exampleReadRows' | 'openExample'>> = {
     de: {
@@ -796,18 +835,33 @@ const explainCommonTranslations: Record<Exclude<Locale, 'en'>, Pick<Copy['common
     },
 };
 
-export const localeOptions = [
-    { value: 'en', label: 'English' },
-    { value: 'de', label: 'Deutsch' },
-    { value: 'es', label: 'Español' },
-    { value: 'nl', label: 'Nederlands' },
-    { value: 'zh', label: '中文' },
-    { value: 'ru', label: 'Русский' },
-] as const satisfies readonly SelectOption<Locale>[];
+const localeLabels: Record<Locale, string> = {
+    en: 'English',
+    de: 'Deutsch',
+    es: 'Español',
+    nl: 'Nederlands',
+    zh: '中文',
+    ru: 'Русский',
+};
 
-export const themeOptions = [
-    { value: 'click-dark', label: 'Dark theme' },
-    { value: 'click-light', label: 'Light theme' },
+export const localeOptions = supportedLocales.map(value => ({ value, label: localeLabels[value] })) satisfies readonly SelectOption<Locale>[];
+
+export function resolveLocale(...candidates: readonly (string | null | undefined)[]): Locale {
+    for (const candidate of candidates) {
+        const normalized = candidate?.trim().toLowerCase().replaceAll('_', '-');
+        if (!normalized) continue;
+        const exact = supportedLocales.find(locale => locale === normalized);
+        if (exact) return exact;
+        const [primary] = normalized.split('-');
+        const regional = supportedLocales.find(locale => locale === primary);
+        if (regional) return regional;
+    }
+    return 'en';
+}
+
+export const themeOptions = (copy: Copy) => [
+    { value: 'click-dark', label: copy.app.darkTheme },
+    { value: 'click-light', label: copy.app.lightTheme },
 ] as const satisfies readonly SelectOption<Theme>[];
 
 export const experienceOptions = (copy: Copy) => [
@@ -828,9 +882,10 @@ function mergeSection<T extends object>(englishSection: T, translated: object): 
 export function getCopy(locale: Locale): Copy {
     if (locale === 'en') return english;
     const translated = translations[locale];
+    const chrome = chromeTranslations[locale];
     return {
-        app: mergeSection(english.app, translated),
-        auth: mergeSection(english.auth, translated),
+        app: { ...mergeSection(english.app, translated), ...chrome.app },
+        auth: { ...mergeSection(english.auth, translated), ...chrome.auth },
         common: { ...mergeSection(english.common, translated), ...exampleCommonTranslations[locale], ...workspaceCommonTranslations[locale], ...explainCommonTranslations[locale] },
         chart: mergeSection(english.chart, translated),
     };

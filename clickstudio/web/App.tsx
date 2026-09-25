@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, message, post } from './api';
 import { Button, cx, Icon, SelectControl } from './components/ui';
 import { Workspace } from './Workspace';
-import { experienceOptions, getCopy, localeOptions, themeAppearance, themeOptions, type ExperienceLevel, type Locale, type Theme } from './i18n';
+import { experienceOptions, getCopy, localeOptions, resolveLocale, themeAppearance, themeOptions, type ExperienceLevel, type Locale, type Theme } from './i18n';
 import { RadioGroup } from '@clickhouse/click-ui/RadioGroup';
 import clickhouseLogomarkDark from './assets/clickhouse-logomark-dark.svg';
 import clickhouseLogomarkLight from './assets/clickhouse-logomark-light.svg';
@@ -11,15 +11,20 @@ import type { Connected, Session } from './workspace-types';
 type ParserMode = 'wasm' | 'basic';
 
 const connectionLabel = (connection: Connected, demo: boolean) => demo && connection.dataSource === 'fixture' ? connection.id === 'demo' ? 'Sample data' : 'Another sample' : connection.name;
-const pref = <T extends string>(key: string, values: readonly T[], fallback: T): T => {
-    try {
-        const value = localStorage.getItem(key);
-        return values.find(candidate => candidate === value) ?? fallback;
-    } catch { return fallback; }
+const storedPreference = (key: string): string | null => {
+    try { return localStorage.getItem(key); }
+    catch { return null; }
 };
+const pref = <T extends string>(key: string, values: readonly T[], fallback: T): T => {
+    const value = storedPreference(key);
+    return values.find(candidate => candidate === value) ?? fallback;
+};
+const browserLocales = (): readonly string[] => typeof navigator === 'undefined'
+    ? []
+    : navigator.languages.length ? navigator.languages : [navigator.language];
 
 function App() {
-    const [locale, setLocale] = useState<Locale>(() => pref('clickstudio:locale', ['en', 'de', 'es', 'nl', 'zh', 'ru'] as const, 'en'));
+    const [locale, setLocale] = useState<Locale>(() => resolveLocale(storedPreference('clickstudio:locale'), ...browserLocales()));
     const [theme, setTheme] = useState<Theme>(() => pref('clickstudio:theme', ['click-dark', 'click-light'] as const, 'click-dark'));
     const [experience, setExperience] = useState<ExperienceLevel>(() => pref('clickstudio:experience', ['beginner', 'expert'] as const, 'beginner'));
     const [parserMode, setParserMode] = useState<ParserMode>(() => pref('clickstudio:parser-mode', ['wasm', 'basic'] as const, 'wasm'));
@@ -95,8 +100,8 @@ function App() {
         finally { setConnectionActionBusy(false); }
     };
 
-    if (!session) return <main className="auth-screen"><section className="auth-card animate-enter"><Brand theme={theme}/><span className="eyebrow mt-8">PRIVATE WORKSPACE</span><h1>{sessionError ? 'Workspace unavailable' : copy.auth.opening}</h1>{sessionError ? <><p>{sessionError}</p><Button variant="primary" onClick={() => { setSessionError(''); void loadSession().catch(error => setSessionError(message(error))); }}>Try again</Button></> : <div className="splash-status"><span className="loading-orbit"/><p>{copy.auth.opening}</p></div>}</section></main>;
-    if (!session.principal) return <main className="auth-screen"><form className="auth-card animate-enter" onSubmit={event => { event.preventDefault(); void login(); }}><Brand theme={theme}/><span className="eyebrow mt-8">Private workspace</span><h1>{copy.auth.title}</h1><p>{copy.auth.description}</p><label className="field-label">{copy.auth.token}<input className="field-input mt-2" type="password" autoComplete="current-password" value={token} onChange={event => setToken(event.target.value)} autoFocus/></label>{sessionError && <div className="callout callout-error">{sessionError}</div>}<Button variant="primary" type="submit" disabled={busy || !token} className="mt-4 w-full">{busy ? copy.auth.opening : copy.auth.open}<span className="button-arrow">↗</span></Button><div className="auth-footnote"><Icon name="lock"/> Credentials are handled by the workspace server.</div></form></main>;
+    if (!session) return <main className="auth-screen"><section className="auth-card animate-enter"><Brand theme={theme}/><span className="eyebrow mt-8">{copy.auth.privateWorkspace}</span><h1>{sessionError ? copy.auth.unavailable : copy.auth.opening}</h1>{sessionError ? <><p>{sessionError}</p><Button variant="primary" onClick={() => { setSessionError(''); void loadSession().catch(error => setSessionError(message(error))); }}>{copy.auth.retry}</Button></> : <div className="splash-status"><span className="loading-orbit"/><p>{copy.auth.opening}</p></div>}</section></main>;
+    if (!session.principal) return <main className="auth-screen"><form className="auth-card animate-enter" onSubmit={event => { event.preventDefault(); void login(); }}><Brand theme={theme}/><span className="eyebrow mt-8">{copy.auth.privateWorkspace}</span><h1>{copy.auth.title}</h1><p>{copy.auth.description}</p><label className="field-label">{copy.auth.token}<input className="field-input mt-2" type="password" autoComplete="current-password" value={token} onChange={event => setToken(event.target.value)} autoFocus/></label>{sessionError && <div className="callout callout-error">{sessionError}</div>}<Button variant="primary" type="submit" disabled={busy || !token} className="mt-4 w-full">{busy ? copy.auth.opening : copy.auth.open}<span className="button-arrow">↗</span></Button><div className="auth-footnote"><Icon name="lock"/> {copy.auth.credentialsNotice}</div></form></main>;
 
     const connectionNeedsTest = Boolean(connection && !session.demo && !connection.manifest);
     const connectionStatus = connection?.trusted
@@ -161,7 +166,7 @@ function App() {
                 <SelectControl label={copy.app.language} value={locale} options={localeOptions} onChange={setLocale}/>
                 <div className="experience-switch theme-switch">
                     <div className="theme-mode-control" role="radiogroup" aria-label={copy.app.theme}>
-                        {themeOptions.map(option => <label key={option.value} className={`theme-mode-option ${theme === option.value ? 'is-active' : ''}`} title={option.label}>
+                        {themeOptions(copy).map(option => <label key={option.value} className={`theme-mode-option ${theme === option.value ? 'is-active' : ''}`} title={option.label}>
                             <input type="radio" name="clickstudio-theme" value={option.value} checked={theme === option.value} aria-label={option.label} onChange={() => setTheme(option.value)}/>
                             <Icon name={option.value === 'click-dark' ? 'moon' : 'sun'} className="theme-mode-icon"/>
                         </label>)}

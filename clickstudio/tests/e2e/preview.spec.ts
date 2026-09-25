@@ -152,3 +152,30 @@ test('Static preview includes materialized views and storage activity in sample 
     await expect(storage).toContainText('67%');
     await expect(storage).toContainText('SAMPLE DATA');
 });
+
+test('debug Playground Point wire format', async ({ page }) => {
+    const query = [
+        "SELECT 'Berlin' AS city, (13.405, 52.52)::Point AS location, 120 AS events",
+        "UNION ALL SELECT 'Paris', (2.3522, 48.8566)::Point, 95",
+        "UNION ALL SELECT 'London', (-0.1276, 51.5072)::Point, 140",
+        "UNION ALL SELECT 'Madrid', (-3.7038, 40.4168)::Point, 80",
+    ].join('\n');
+    const responses: string[] = [];
+    page.on('response', async response => {
+        const request = response.request();
+        const requestText = request.url() + '\n' + (request.postData() ?? '');
+        if (new URL(request.url()).hostname !== 'sql-clickhouse.clickhouse.com' || !requestText.includes("'Berlin' AS city")) return;
+        const body = await response.text().catch(error => 'FAILED TO READ: ' + String(error));
+        responses.push(body);
+        console.log('GEO_WIRE_REQUEST\n' + requestText + '\nGEO_WIRE_RESPONSE\n' + body);
+    });
+
+    await page.goto('/');
+    const editor = page.locator('.cm-content');
+    await editor.click();
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.insertText(query);
+    await page.getByTestId('run-statement').click();
+    await expect(page.locator('.execution-bar')).toHaveAttribute('data-run-status', 'succeeded', { timeout: 30_000 });
+    await expect.poll(() => responses.length, { timeout: 30_000 }).toBeGreaterThan(0);
+});

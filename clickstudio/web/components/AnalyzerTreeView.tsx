@@ -20,7 +20,7 @@ export function AnalyzerTreeView({ active, available, unavailableReason, connect
         parameters: Object.fromEntries(Object.entries(parameters).sort(([left], [right]) => left.localeCompare(right))),
     }), [parameters, sql]);
     const requestKey = useMemo(() => JSON.stringify({ connectionId, ...request }), [connectionId, request]);
-    const loadedKey = useRef<string>();
+    const loadedKey = useRef<string | undefined>(undefined);
     const [state, setState] = useState<LoadState>();
 
     useEffect(() => {

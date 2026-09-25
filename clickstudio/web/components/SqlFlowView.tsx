@@ -39,7 +39,7 @@ export function SqlFlowView({ copy, sql, sourceOffset, parseResult, parserEnable
                 <h3>{copy.sqlFlowTitle}</h3>
                 <p>{view === 'ast' ? copy.sqlAstClickNode : view === 'analyzer' ? copy.queryTreeClickNode : copy.sqlFlowClickStage}</p>
             </div>
-            <span className={`sql-flow-parser-state ${view === 'analyzer' || model.mode === 'native AST' ? 'is-native' : ''}`}><span className="status-light"/>{parserLabel}{duration && model.mode === 'native AST' ? ` · ${duration}` : ''}</span>
+            <span className={`sql-flow-parser-state ${view === 'analyzer' || model.mode === 'native AST' ? 'is-native' : ''}`}><span className="status-light"/>{parserLabel}{duration && view !== 'analyzer' && model.mode === 'native AST' ? ` · ${duration}` : ''}</span>
         </header>
         <div className="sql-flow-mode-tabs" role="group" aria-label={copy.sqlStructure}>
             <button type="button" aria-pressed={view === 'flow'} className={view === 'flow' ? 'is-active' : ''} onClick={() => setView('flow')}>{copy.sqlFlowLogicalMode}</button>

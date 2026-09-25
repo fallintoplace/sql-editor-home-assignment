@@ -880,6 +880,11 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             }}
                         >
                             <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">{copy.common.query}</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label></div>
+                        <div className="editor-heading-tools">
+                            <Button variant="ghost" className="sql-map-button" aria-label={copy.common.visualizeSqlStructure} aria-pressed={view === 'sqlmap'} title={copy.common.visualizeSqlStructure} onClick={() => { setView(current => current === 'sqlmap' ? 'results' : 'sqlmap'); setResultsCollapsed(false); }}><Icon name="pipeline"/>{copy.common.sqlMap}</Button>
+                            <Button variant="ghost" className="sql-ai-button" data-testid="open-ai" aria-label={copy.common.askAi} aria-pressed={inspector === 'assistant'} onClick={() => showInspector('assistant')}><Icon name="assistant"/>{copy.common.askAi}</Button>
+                            <Button variant="secondary" className="save-revision-button" data-testid="save-query" aria-label={experience === 'expert' ? copy.common.saveRevision : copy.common.save} onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/>{copy.common.save}</Button>
+                        </div>
                         <div className="editor-heading-actions">
                             {experience === 'expert' && <>
                                 {nativeParserEnabled && nativeParserStatus === 'unavailable' && <>
@@ -920,10 +925,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         <div className="editor-toolbar">
                             <div className="editor-mode-label"><span className="editor-language-dot"/>{copy.common.clickhouseSql}<span className="toolbar-divider"/><span>{statementCount === undefined ? copy.common.incompleteSql : (statementCount === 1 ? copy.common.oneStatement : copy.common.manyStatements).replace('{count}', String(statementCount))}</span></div>
                             <div className="editor-actions">
-                                <Button variant="ghost" className="sql-map-button" aria-label={copy.common.visualizeSqlStructure} aria-pressed={view === 'sqlmap'} title={copy.common.visualizeSqlStructure} onClick={() => { setView(current => current === 'sqlmap' ? 'results' : 'sqlmap'); setResultsCollapsed(false); }}><Icon name="pipeline"/>{copy.common.sqlMap}</Button>
                                 {experience === 'expert' ? <>
-                                    <Button variant="ghost" className="sql-ai-button" data-testid="open-ai" aria-label={copy.common.askAi} aria-pressed={inspector === 'assistant'} onClick={() => showInspector('assistant')}><Icon name="assistant"/>{copy.common.askAi}</Button>
-                                    <Button variant="secondary" className="save-revision-button" data-testid="save-query" aria-label={copy.common.saveRevision} onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/>{copy.common.save}</Button>
                                     <RunActionGroup copy={copy.common} runLabel={copy.common.runStatement} running={busy === 'run' || busy === 'script'} disabled={!trusted || Boolean(busy) || unsupportedParameters} onRun={() => void execute()} actions={[
                                         { id: 'script', label: copy.common.runScript, disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.scripts.available, title: runActionTitle(connection.manifest?.scripts, 'script'), onSelect: () => void execute(true) },
                                         { id: 'explain', label: copy.common.explain, disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.explain.available, title: runActionTitle(connection.manifest?.explain, 'explain'), onSelect: () => void execute(false, 'explain') },
@@ -932,8 +934,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                         { id: 'explain-analyze', label: copy.common.explainAnalyze, disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.explainAnalyze?.available, title: runActionTitle(connection.manifest?.explainAnalyze, 'explain-analyze'), onSelect: () => void execute(false, 'analyze') },
                                     ]}/>
                                 </> : <>
-                                    <Button variant="ghost" className="sql-ai-button" data-testid="open-ai" aria-label={copy.common.askAi} onClick={() => showInspector('assistant')}><Icon name="assistant"/>{copy.common.askAi}</Button>
-                                    <Button variant="secondary" className="save-revision-button" data-testid="save-query" aria-label={copy.common.save} onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/>{copy.common.save}</Button>
                                     <Button variant="primary" className="run-query-button" data-testid="run-statement" aria-label={copy.common.runStatement} onClick={() => void execute()} disabled={!trusted || Boolean(busy) || unsupportedParameters}><Icon name="play"/>{busy === 'run' ? copy.common.running : copy.common.run}</Button>
                                 </>}
                             </div>

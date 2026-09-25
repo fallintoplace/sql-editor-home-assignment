@@ -44,6 +44,9 @@
     .editor-surface:focus-within, .results-surface:focus-within { border-color: var(--active-border); box-shadow: var(--focus-glow), 0 12px 42px #00000012, inset 0 1px #ffffff08; }
     .editor-heading { display: flex; min-height: 54px; flex: none; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 15px; border-bottom: 1px solid var(--line); background: var(--panel-header); }
     .editor-file-heading, .editor-heading-actions { display: flex; min-width: 0; align-items: center; gap: 11px; }
+    .editor-heading-tools { display: flex; min-width: 0; align-items: center; gap: 2px; margin-inline: auto; padding: 2px; border: 1px solid var(--line); border-radius: var(--radius-control); background: color-mix(in srgb, var(--panel-raised) 58%, transparent); }
+    .editor-heading-tools > .button-base { min-height: 30px; padding-inline: 9px; }
+    .editor-heading-tools > .save-revision-button { min-height: 30px; }
     .file-type-icon { display: grid; width: 32px; height: 32px; flex: none; place-items: center; border: 1px solid color-mix(in srgb, var(--signal-accent) 28%, var(--line)); border-radius: var(--radius-control); background: color-mix(in srgb, var(--signal-accent) 8%, var(--panel)); color: var(--signal-accent); font-family: var(--font-mono); font-size: 8px; font-weight: 800; letter-spacing: .03em; }
     .file-type-icon.small { width: 28px; height: 28px; font-size: 7px; }
     .document-name { display: grid; min-width: 0; gap: 1px; }

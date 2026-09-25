@@ -26,6 +26,8 @@
     .topbar { gap: 12px; padding: 0 14px; }
     .topbar-preferences .select-control > span { display: none; }
     .workspace-root.is-expert .workspace-layout { grid-template-columns: minmax(250px, 280px) minmax(0, 1fr); }
+    .editor-heading-tools > .button-base { width: 32px; min-width: 32px; padding-inline: 0; font-size: 0; }
+    .editor-heading-tools > .button-base svg { width: 15px; height: 15px; }
     .execution-bar { gap: 9px; }
     .execution-link-state { display: none; }
     .execution-telemetry { gap: 8px; }
@@ -167,6 +169,9 @@
     .workspace-content.has-run { grid-template-rows: minmax(285px, 1fr) minmax(250px, .94fr); }
     .beginner-workspace-content { grid-template-rows: minmax(310px, 1fr) minmax(165px, .65fr); }
     .editor-heading-actions .icon-only { display: none; }
+    .editor-heading { flex-wrap: wrap; row-gap: 5px; }
+    .editor-file-heading { flex: 1 1 auto; }
+    .editor-heading-tools { order: 3; flex: 1 0 100%; justify-content: flex-end; margin: 0; }
     .formatter-control { gap: 2px; padding: 2px; }
     .formatter-control-label { padding-inline: 3px; font-size: 6px; }
     .formatter-control > .formatter-choice { min-height: 23px; padding-inline: 5px; font-size: 7px; }
@@ -179,6 +184,8 @@
     .sql-ai-button, .save-revision-button { width: 31px; min-width: 31px; padding: 0; font-size: 0; }
     .sql-ai-button svg, .save-revision-button svg { width: 15px; height: 15px; }
     .workspace-root.is-beginner .sql-ai-button, .workspace-root.is-beginner .save-revision-button { width: auto; min-width: 0; padding: 0 8px; font-size: 8px; }
+    .editor-heading-tools .sql-ai-button, .editor-heading-tools .save-revision-button { width: 32px; min-width: 32px; padding: 0; font-size: 0; }
+    .editor-heading-tools .sql-ai-button svg, .editor-heading-tools .save-revision-button svg { width: 15px; height: 15px; }
     .run-action-group { gap: 4px; }
     .run-action-group .run-query-button { min-width: 70px; padding: 0 8px; }
     .run-option-button { min-height: 30px; padding: 0 7px; font-size: 8px; }

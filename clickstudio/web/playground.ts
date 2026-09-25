@@ -2,6 +2,7 @@ import { DEFAULT_LIMITS, type Column, type Connection, type Json, type Row, type
 import { lexSql, splitSql } from '../shared/sql.js';
 import { isSchema } from '../shared/schema.js';
 import { mergeTreePartsQuery, parseMergeTreeParts, type MergeTreePartsSnapshot } from '../shared/parts.js';
+import { decodeClickHouseStringValue } from '../shared/playground-values.js';
 import { ClickHouseError, createClient } from '@clickhouse/client-web';
 
 export const PLAYGROUND_CONNECTION_ID = 'playground';
@@ -74,42 +75,11 @@ export type PlaygroundQueryResult = {
     truncated: boolean;
 };
 
-function unwrapType(type: string) {
-    let value = type;
-    while ((value.startsWith('Nullable(') || value.startsWith('LowCardinality(')) && value.endsWith(')')) {
-        value = value.slice(value.indexOf('(') + 1, -1);
-    }
-    return value;
-}
-
-function nullableType(type: string) {
-    let value = type;
-    while ((value.startsWith('Nullable(') || value.startsWith('LowCardinality(')) && value.endsWith(')')) {
-        if (value.startsWith('Nullable(')) return true;
-        value = value.slice(value.indexOf('(') + 1, -1);
-    }
-    return false;
-}
-
 function valueForType(value: unknown, type: string): Json {
     if (value === null) return null;
     if (typeof value === 'boolean' || typeof value === 'number') return value;
     if (typeof value !== 'string') throw new PlaygroundError('INVALID_PLAYGROUND_RESPONSE', 'ClickHouse Playground returned a value with an unsupported type.');
-    if (value === NULL_MARKER && nullableType(type)) return null;
-
-    const baseType = unwrapType(type);
-    if (/^(?:U?Int(?:8|16|32|64|128|256))$/.test(baseType) && /^-?\d+$/.test(value)) {
-        try {
-            const integer = BigInt(value);
-            if (integer <= BigInt(Number.MAX_SAFE_INTEGER) && integer >= BigInt(Number.MIN_SAFE_INTEGER)) return Number(value);
-        } catch { }
-        return value;
-    }
-    if (/^(?:Float(?:32|64)|BFloat16)$/.test(baseType)) {
-        const number = Number(value);
-        if (Number.isFinite(number)) return number;
-    }
-    return value;
+    return decodeClickHouseStringValue(value, type, NULL_MARKER);
 }
 
 function parseCompactRows(body: string) {

@@ -51,6 +51,15 @@ function safeSelectedStatement(sql: string, from: number, to: number) {
 function safeStatementCount(sql: string) {
     try { return splitSql(sql).length; } catch { return undefined; }
 }
+type HelpStatement = { sql: string; from: number };
+function helpStatementSql(statement: HelpStatement | undefined, fallback: string) { return statement?.sql ?? fallback; }
+function helpStatementOffset(statement: HelpStatement | undefined) { return statement?.from ?? 0; }
+function helpParseResult<T>(statement: { result: T } | undefined) { return statement?.result; }
+function revealEditorRange(editor: { current: EditorHandle | null }, from: number, to: number) { editor.current?.revealRange(from, to); }
+function insertEditorText(editor: { current: EditorHandle | null }, value: string) { editor.current?.insert(value); }
+function focusEditor(editor: { current: EditorHandle | null }) { editor.current?.focus(); }
+function helpParseDuration(snapshot: NativeParseSnapshot | undefined) { return snapshot?.elapsedMs; }
+function helpQueryLogAvailable(connection: Connected) { return connection.manifest?.queryLog.available === true; }
 type FailedQueryError = { draftId: string; draftSql: string; statementSql: string; sourceFrom: number; error: ApiError };
 const TOAST_TIMEOUT_MS = 10_000;
 
@@ -147,7 +156,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [compactViewport, setCompactViewport] = useState(() => window.matchMedia('(max-width: 850px)').matches);
     const [importOpen, setImportOpen] = useState(false);
     const [helpPanelOpen, setHelpPanelOpen] = useState(false);
-    const [helpPanelSection, setHelpPanelSection] = useState<HelpPanelSection>('examples');
+    const [helpPanelSection, setHelpPanelSection] = useState<HelpPanelSection>('tour');
     const helpPanelOpenerRef = useRef<HTMLButtonElement | null>(null);
     const openHelpPanel = useCallback((section: HelpPanelSection, opener: HTMLButtonElement) => {
         helpPanelOpenerRef.current = opener;
@@ -159,7 +168,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         if (restoreFocus) window.requestAnimationFrame(() => helpPanelOpenerRef.current?.focus());
     }, []);
     const openExamples = useCallback((opener: HTMLButtonElement) => openHelpPanel('examples', opener), [openHelpPanel]);
-    const openHelp = useCallback((opener: HTMLButtonElement) => openHelpPanel('parts', opener), [openHelpPanel]);
+    const openHelp = useCallback((opener: HTMLButtonElement) => openHelpPanel('tour', opener), [openHelpPanel]);
     const [busy, setBusy] = useState<BusyAction>('');
     const [cancelling, setCancelling] = useState(false);
     const [error, setErrorState] = useState('');
@@ -858,16 +867,66 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             ><Icon name="chevron"/></button>
                         </>}
                     <button className="new-tab-button new-tab-labeled" data-testid="new-sql" type="button" aria-label={copy.common.newSql} title={copy.common.newSql} aria-haspopup="dialog" aria-expanded={helpPanelOpen} aria-controls="workspace-help-panel" onClick={event => openExamples(event.currentTarget)}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
-                    <WorkspaceHelpPanel open={helpPanelOpen} section={helpPanelSection} onSectionChange={setHelpPanelSection} onClose={closeHelpPanel} examples={sqlExamples} sourceLabel={connectionLabel} copy={copy.common} locale={locale} connection={connection} tables={schema?.tables ?? []} schemaLoading={schemaLoading} trusted={trusted} onOpenExample={example => {
-                        const draft = createExampleDraft(example);
-                        if (!openNewDraft(draft)) return false;
-                        window.requestAnimationFrame(() => editor.current?.focus());
-                        return true;
-                    }} onRunExample={runExample} onStartBlankSql={() => {
-                        if (!openNewDraft(newDraft())) return false;
-                        window.requestAnimationFrame(() => editor.current?.focus());
-                        return true;
-                    }}/>
+                    <WorkspaceHelpPanel
+                        open={helpPanelOpen}
+                        section={helpPanelSection}
+                        onSectionChange={setHelpPanelSection}
+                        onClose={closeHelpPanel}
+                        examples={sqlExamples}
+                        sourceLabel={connectionLabel}
+                        copy={copy.common}
+                        locale={locale}
+                        connection={connection}
+                        tables={schema?.tables ?? []}
+                        schemaLoading={schemaLoading}
+                        trusted={trusted}
+                        queryEngine={{
+                            copy: copy.common,
+                            sql: helpStatementSql(sqlMapStatement, active.sql),
+                            sourceOffset: helpStatementOffset(sqlMapStatement),
+                            parseResult: helpParseResult(sqlMapParseStatement),
+                            parserEnabled: nativeParserEnabled,
+                            parserStatus: nativeParserStatus,
+                            parseDurationMs: helpParseDuration(nativeParseSnapshot),
+                            connectionId: connection.id,
+                            parameters: active.parameters,
+                            analyzerAvailable: queryTreeAvailable,
+                            analyzerUnavailableReason: queryTreeUnavailableReason,
+                            onRevealRange: (from, to) => {
+                                closeHelpPanel(false);
+                                window.requestAnimationFrame(() => revealEditorRange(editor, from, to));
+                            },
+                        }}
+                        busy={Boolean(busy)}
+                        unsupportedParameters={unsupportedParameters}
+                        onRunExplain={kind => void execute(false, kind)}
+                        comparison={{
+                            connectionId: connection.id,
+                            trusted,
+                            history,
+                            initialRun: run,
+                            profiles: profilesByRun,
+                            pipelines: pipelinesByRun,
+                            queryLogAvailable: helpQueryLogAvailable(connection),
+                        }}
+                        onReferenceInsert={value => {
+                            insertEditorText(editor, value);
+                            closeHelpPanel(false);
+                            window.requestAnimationFrame(() => focusEditor(editor));
+                        }}
+                        onOpenExample={example => {
+                            const draft = createExampleDraft(example);
+                            if (!openNewDraft(draft)) return false;
+                            window.requestAnimationFrame(() => editor.current?.focus());
+                            return true;
+                        }}
+                        onRunExample={runExample}
+                        onStartBlankSql={() => {
+                            if (!openNewDraft(newDraft())) return false;
+                            window.requestAnimationFrame(() => editor.current?.focus());
+                            return true;
+                        }}
+                    />
                     {!!workspace.closedTabs?.length && <RestoreSqlMenu closedTabs={workspace.closedTabs} copy={copy.common} onRestore={draftId => {
                         if (workspaceRef.current.tabs.length >= MAX_TABS) { setError(`Close a tab before restoring one. This workspace supports ${MAX_TABS} open drafts.`); return false; }
                         setWorkspace(current => reopenDraft(current, draftId));

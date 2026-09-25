@@ -54,13 +54,14 @@ function LineageGraph({ snapshot }: { snapshot: LineageSnapshot }) {
             </div>{selectedNode && <NodeDetails node={selectedNode} snapshot={snapshot}/>}
         </div>}</>;
 }
-export function MaterializedViewExplorer({ connection, database, onClose }: { connection: Pick<Connection, 'id'>; database: string; onClose: () => void }) {
-    const { snapshot, loading, error, refresh } = useNativeExplorer(connection.id, { kind: 'lineage', database }, true, false);
+export function MaterializedViewExplorer({ connection, database, onClose, embedded = false, active = true }: { connection: Pick<Connection, 'id'>; database: string; onClose?: () => void; embedded?: boolean; active?: boolean }) {
+    const { snapshot, loading, error, refresh } = useNativeExplorer(connection.id, { kind: 'lineage', database }, active, false);
     const current = snapshot?.kind === 'lineage' ? snapshot : undefined;
-    return <NativeExplorerDialog title="Materialized view dependencies" description={`${database} · Insert triggers, write targets, and refresh schedules`} onClose={onClose}>
+    const content = <>
         <div className="native-toolbar"><span className="native-snapshot-meta">{current?.source === 'fixture' ? 'SAMPLE DATA · static' : 'SERVER METADATA'}{current && ` · ${nativeTime(current.observedAt)}`}</span><Button onClick={refresh} disabled={loading}>Refresh metadata</Button></div>
         {error && <div role="alert" className="native-warning">{error}{current && <p>The previous snapshot is shown below.</p>}</div>}
         {loading && !current && <div className="native-empty" role="status">Reading materialized-view metadata…</div>}
         {current && <><LineageGraph snapshot={current}/><footer className="native-notes">{current.notes.map(note => <p key={note}>{note}</p>)}</footer></>}
-    </NativeExplorerDialog>;
+    </>;
+    return embedded ? content : <NativeExplorerDialog title="Materialized view dependencies" description={`${database} · Insert triggers, write targets, and refresh schedules`} onClose={() => onClose?.()}>{content}</NativeExplorerDialog>;
 }

@@ -49,21 +49,34 @@ function ComparisonBody({ before, after, profiles, pipelines, queryLogAvailable 
         <PipelineComparison before={pipelines?.[before.id]} after={pipelines?.[after.id]}/>
     </>;
 }
-function RunComparisonDialog({ runs, initialRun, onClose, ...props }: RunComparisonProps & { runs: Run[]; onClose: () => void }) {
-    const initialAfter = initialRun && runs.some(run => run.id === initialRun.id) ? initialRun.id : runs[0]?.id ?? '';
-    const [beforeId, setBeforeId] = useState(runs.find(run => run.id !== initialAfter)?.id ?? ''), [afterId, setAfterId] = useState(initialAfter);
-    const before = runs.find(run => run.id === beforeId), after = runs.find(run => run.id === afterId);
-    return <NativeExplorerDialog title="Compare query runs" description="Before / after measurements and saved ClickHouse pipelines" onClose={onClose}>
-        {runs.length < 2 ? <div className="native-empty">Complete two queries on this connection to compare their runs.</div> : <><div className="native-run-pickers">{[{ name: 'Before', value: beforeId, change: setBeforeId }, { name: 'After', value: afterId, change: setAfterId }].map(picker => <label key={picker.name} className="native-run-picker"><span>{picker.name}</span><select aria-label={`${picker.name} run`} value={picker.value} onChange={event => picker.change(event.target.value)}>{runs.map(run => <option key={run.id} value={run.id}>{run.createdAt.replace('T', ' ').slice(0, 19)} · {run.sql.replace(/\s+/g, ' ').slice(0, 70)}</option>)}</select></label>)}<Button onClick={() => { setBeforeId(afterId); setAfterId(beforeId); }}>Swap ⇄</Button></div>
-            {before && after && before.id !== after.id ? <ComparisonBody key={JSON.stringify([before.id, after.id])} before={before} after={after} profiles={props.profiles} pipelines={props.pipelines} queryLogAvailable={props.queryLogAvailable}/> : <div className="native-empty">Select two different runs.</div>}
-        </>}
-    </NativeExplorerDialog>;
-}
-export function RunComparisonLauncher(props: RunComparisonProps) {
-    const [open, setOpen] = useState(false);
+export function RunComparisonView(props: RunComparisonProps) {
     const runs = useMemo(() => {
         const all = props.initialRun ? [props.initialRun, ...props.history] : props.history;
         return [...new Map(all.filter(run => comparableRun(run, props.connectionId)).map(run => [run.id, run])).values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     }, [props.history, props.initialRun, props.connectionId]);
-    return <><Button variant="secondary" className="toolbar-small" disabled={!props.trusted} onClick={() => setOpen(true)}>Compare runs</Button>{open && props.trusted && <OverlayPortal><RunComparisonDialog {...props} runs={runs} onClose={() => setOpen(false)}/></OverlayPortal>}</>;
+    const initialAfter = props.initialRun && runs.some(run => run.id === props.initialRun?.id) ? props.initialRun.id : runs[0]?.id ?? '';
+    const initialBefore = runs.find(run => run.id !== initialAfter)?.id ?? '';
+    const [beforeId, setBeforeId] = useState(initialBefore), [afterId, setAfterId] = useState(initialAfter);
+
+    useEffect(() => {
+        setAfterId(current => runs.some(run => run.id === current) ? current : initialAfter);
+        setBeforeId(current => runs.some(run => run.id === current && run.id !== afterId) ? current : initialBefore);
+    }, [afterId, initialAfter, initialBefore, runs]);
+
+    const before = runs.find(run => run.id === beforeId), after = runs.find(run => run.id === afterId);
+    return runs.length < 2 ? <div className="native-empty">Complete two queries on this connection to compare their runs.</div> : <>
+        <div className="native-run-pickers">{[{ name: 'Before', value: beforeId, change: setBeforeId }, { name: 'After', value: afterId, change: setAfterId }].map(picker => <label key={picker.name} className="native-run-picker"><span>{picker.name}</span><select aria-label={picker.name + ' run'} value={picker.value} onChange={event => picker.change(event.target.value)}>{runs.map(run => <option key={run.id} value={run.id}>{run.createdAt.replace('T', ' ').slice(0, 19)} · {run.sql.replace(/\s+/g, ' ').slice(0, 70)}</option>)}</select></label>)}<Button onClick={() => { setBeforeId(afterId); setAfterId(beforeId); }}>Swap ⇄</Button></div>
+        {before && after && before.id !== after.id ? <ComparisonBody key={JSON.stringify([before.id, after.id])} before={before} after={after} profiles={props.profiles} pipelines={props.pipelines} queryLogAvailable={props.queryLogAvailable}/> : <div className="native-empty">Select two different runs.</div>}
+    </>;
+}
+
+function RunComparisonDialog({ onClose, ...props }: RunComparisonProps & { onClose: () => void }) {
+    return <NativeExplorerDialog title="Compare query runs" description="Before / after measurements and saved ClickHouse pipelines" onClose={onClose}>
+        <RunComparisonView {...props}/>
+    </NativeExplorerDialog>;
+}
+
+export function RunComparisonLauncher(props: RunComparisonProps) {
+    const [open, setOpen] = useState(false);
+    return <><Button variant="secondary" className="toolbar-small" disabled={!props.trusted} onClick={() => setOpen(true)}>Compare runs</Button>{open && props.trusted && <OverlayPortal><RunComparisonDialog {...props} onClose={() => setOpen(false)}/></OverlayPortal>}</>;
 }

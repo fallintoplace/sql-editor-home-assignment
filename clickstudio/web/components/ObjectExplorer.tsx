@@ -33,6 +33,7 @@ type ObjectExplorerProps = {
     onRefreshSchema: () => void;
     onInsert: (value: string) => void;
     onOpenSqlDraft: (name: string, sql: string, run: boolean) => void;
+    compact?: boolean;
 };
 
 type ExplorerUiState = {
@@ -54,12 +55,13 @@ function recoverUiState(key: string): ExplorerUiState {
     }
 }
 
-export function ObjectExplorer({ copy, connection, schema, schemaLoading, schemaError, search, setSearch, trusted, onRefreshSchema, onInsert, onOpenSqlDraft }: ObjectExplorerProps) {
+export function ObjectExplorer({ copy, connection, schema, schemaLoading, schemaError, search, setSearch, trusted, onRefreshSchema, onInsert, onOpenSqlDraft, compact = false }: ObjectExplorerProps) {
     const model = useMemo(() => buildObjectExplorer(schema, search, connection.database), [schema, search, connection.database]);
     const storageKey = uiStateKey(connection.id);
     const recovered = useMemo(() => recoverUiState(storageKey), [storageKey]);
     const [selectedId, setSelectedId] = useState<string | undefined>(() => recovered.selectedId);
     const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(recovered.expandedIds));
+    const [detailsOpen, setDetailsOpen] = useState(false);
     const [copiedId, setCopiedId] = useState<string>();
     const copyTimer = useRef<number | undefined>(undefined);
 
@@ -75,19 +77,11 @@ export function ObjectExplorer({ copy, connection, schema, schemaLoading, schema
         }
     }, [storageKey, selectedId, expandedIds]);
 
-    const firstVisibleId = useMemo(() => {
-        for (const database of model.databases) {
-            if (database.tables[0]) return database.tables[0].id;
-            if (database.views[0]) return database.views[0].id;
-            if (database.dictionaries[0]) return explorerDictionaryId(database.dictionaries[0].database, database.dictionaries[0].name);
-        }
-        return undefined;
-    }, [model.databases]);
-
     useEffect(() => {
-        if (selectedId && model.selectionById.has(selectedId)) return;
-        setSelectedId(firstVisibleId);
-    }, [firstVisibleId, model.selectionById, selectedId]);
+        if (!selectedId || model.selectionById.has(selectedId)) return;
+        setSelectedId(undefined);
+        setDetailsOpen(false);
+    }, [model.selectionById, selectedId]);
 
     useEffect(() => {
         if (search || expandedIds.size || !model.databases.length) return;
@@ -105,6 +99,15 @@ export function ObjectExplorer({ copy, connection, schema, schemaLoading, schema
     });
     const expanded = (id: string, forced = false) => forced || expandedIds.has(id);
     const selected = selectedId ? model.selectionById.get(selectedId) : undefined;
+    const selectObject = (id: string) => {
+        setSelectedId(id);
+        setDetailsOpen(true);
+    };
+    const browseObjects = () => setDetailsOpen(false);
+    const changeSearch = (value: string) => {
+        setDetailsOpen(false);
+        setSearch(value);
+    };
 
     const copyText = async (value: string, id: string) => {
         try {
@@ -134,9 +137,9 @@ export function ObjectExplorer({ copy, connection, schema, schemaLoading, schema
         const hasChildren = relation.columns.length > 0 || (relation.table.projections?.length ?? 0) > 0 || (relation.table.skipIndexes?.length ?? 0) > 0;
 
         return <div className="object-tree-branch" key={relation.id}>
-            <div role="treeitem" aria-level={level} aria-expanded={hasChildren ? relationExpanded : undefined} aria-selected={selectedId === relation.id} className={cx('object-tree-row', 'is-object', selectedId === relation.id && 'is-selected')} style={{ paddingLeft: `${Math.max(0, level - 1) * 13}px` }}>
+            <div role="treeitem" aria-level={level} aria-expanded={hasChildren ? relationExpanded : undefined} aria-selected={selectedId === relation.id} className={cx('object-tree-row', 'is-object', selectedId === relation.id && 'is-selected')} style={{ paddingLeft: `${Math.max(0, level - 1) * 10}px` }}>
                 <button type="button" className="object-tree-toggle" aria-label={relationExpanded ? copy.collapse : copy.expand} disabled={!hasChildren} onClick={() => hasChildren && toggle(relation.id)}><span className={cx(relationExpanded && 'is-open')}>{hasChildren ? '›' : ''}</span></button>
-                <button type="button" className="object-tree-main" onClick={() => setSelectedId(relation.id)}>
+                <button type="button" className="object-tree-main" onClick={() => selectObject(relation.id)}>
                     <span className={cx('object-kind-glyph', relation.kind === 'view' && 'is-view')}>{relation.kind === 'view' ? '◇' : '▦'}</span>
                     <span className="object-tree-label"><strong>{relation.table.name}</strong><small>{relation.table.engine}</small></span>
                 </button>
@@ -147,29 +150,35 @@ export function ObjectExplorer({ copy, connection, schema, schemaLoading, schema
                     <ExplorerGroupRow level={level + 1} label={copy.columns} count={relation.columns.length} expanded={columnsExpanded} onToggle={() => toggle(columnGroupId)} />
                     {columnsExpanded && <div role="group">{columns.map(column => {
                         const id = explorerColumnId(relation.table.database, relation.table.name, column.name);
-                        return <ObjectLeafRow key={id} level={level + 2} selected={selectedId === id} glyph="·" label={column.name} meta={column.type} onSelect={() => setSelectedId(id)} onInsert={() => onInsert(quoteIdentifier(column.name))} insertLabel="Insert column name"/>;
+                        return <ObjectLeafRow key={id} level={level + 2} selected={selectedId === id} glyph="·" label={column.name} meta={column.type} onSelect={() => selectObject(id)} onInsert={() => onInsert(quoteIdentifier(column.name))} insertLabel="Insert column name"/>;
                     })}</div>}
                 </>}
                 {(relation.table.projections?.length ?? 0) > 0 && <>
                     <ExplorerGroupRow level={level + 1} label={copy.projections} count={relation.table.projections!.length} expanded={projectionsExpanded} onToggle={() => toggle(projectionGroupId)} />
                     {projectionsExpanded && <div role="group">{projections.map(projection => {
                         const id = explorerProjectionId(relation.table.database, relation.table.name, projection.name);
-                        return <ObjectLeafRow key={id} level={level + 2} selected={selectedId === id} glyph="P" label={projection.name} meta={projection.type} onSelect={() => setSelectedId(id)}/>;
+                        return <ObjectLeafRow key={id} level={level + 2} selected={selectedId === id} glyph="P" label={projection.name} meta={projection.type} onSelect={() => selectObject(id)}/>;
                     })}</div>}
                 </>}
                 {(relation.table.skipIndexes?.length ?? 0) > 0 && <>
                     <ExplorerGroupRow level={level + 1} label={copy.skipIndexes} count={relation.table.skipIndexes!.length} expanded={indexesExpanded} onToggle={() => toggle(indexGroupId)} />
                     {indexesExpanded && <div role="group">{indexes.map(index => {
                         const id = explorerSkipIndexId(relation.table.database, relation.table.name, index.name);
-                        return <ObjectLeafRow key={id} level={level + 2} selected={selectedId === id} glyph="I" label={index.name} meta={index.type} onSelect={() => setSelectedId(id)}/>;
+                        return <ObjectLeafRow key={id} level={level + 2} selected={selectedId === id} glyph="I" label={index.name} meta={index.type} onSelect={() => selectObject(id)}/>;
                     })}</div>}
                 </>}
             </div>}
         </div>;
     };
 
-    return <section className="inspector-section object-explorer-section">
-        <div className="inspector-search object-search"><Icon name="search"/><input data-testid="schema-search" value={search} onChange={event => setSearch(event.target.value)} placeholder={copy.objectSearch} aria-label={copy.objectSearch}/>{search && <button type="button" className="object-search-clear" aria-label="Clear object search" onClick={() => setSearch('')}>×</button>}</div>
+    const showCompactDetails = compact && detailsOpen && selected;
+
+    return <section className={cx('inspector-section object-explorer-section', compact && 'is-compact', showCompactDetails && 'is-detail-mode')}>
+        {showCompactDetails ? <div className="object-compact-details">
+            <button type="button" className="object-back-button" onClick={browseObjects}><span>‹</span>{copy.objects}</button>
+            <ObjectDetails copy={copy} connection={connection} selection={selected} trusted={trusted} copiedId={copiedId} systemTableDocumentationNames={schema?.systemTableDocumentationNames} onInsert={onInsert} onCopy={copyText} onOpenSqlDraft={onOpenSqlDraft}/>
+        </div> : <>
+        <div className="inspector-search object-search"><Icon name="search"/><input data-testid="schema-search" value={search} onChange={event => changeSearch(event.target.value)} placeholder={copy.objectSearch} aria-label={copy.objectSearch}/>{search && <button type="button" className="object-search-clear" aria-label="Clear object search" onClick={() => changeSearch('')}>×</button>}</div>
         <div className="schema-heading object-heading"><span>{copy.objectCount.replace('{count}', (model.query ? model.visibleObjects : model.totalObjects).toLocaleString())}</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshSchema} disabled={schemaLoading || !trusted}>{schemaLoading ? copy.loading : copy.refresh}</Button></div>
         {schemaError && <div className="callout callout-error">{schemaError}</div>}
         {schema?.metadataWarnings?.map(warning => <div className="schema-metadata-warning" key={warning}>{warning}</div>)}
@@ -185,13 +194,14 @@ export function ObjectExplorer({ copy, connection, schema, schemaLoading, schema
                             {databaseExpanded && <div role="group" className="object-tree-children">
                                 {database.tables.length > 0 && <ObjectCategory label={copy.tables} kind="table" database={database.name} relations={database.tables} level={2} query={model.query} expanded={expanded} toggle={toggle} renderRelation={renderRelation}/>}
                                 {database.views.length > 0 && <ObjectCategory label={copy.views} kind="view" database={database.name} relations={database.views} level={2} query={model.query} expanded={expanded} toggle={toggle} renderRelation={renderRelation}/>}
-                                {database.dictionaries.length > 0 && <DictionaryCategory label={copy.dictionaries} database={database.name} dictionaries={database.dictionaries} level={2} query={model.query} expanded={expanded} toggle={toggle} selectedId={selectedId} onSelect={setSelectedId}/>}
+                                {database.dictionaries.length > 0 && <DictionaryCategory label={copy.dictionaries} database={database.name} dictionaries={database.dictionaries} level={2} query={model.query} expanded={expanded} toggle={toggle} selectedId={selectedId} onSelect={selectObject}/>}
                             </div>}
                         </div>;
                     })}
                 </div>
             </div> : <div className="object-empty-search"><strong>{copy.noObjectsMatch}</strong><span>{search ? 'Try a different name, type, engine, index, or column.' : copy.metadataUnavailable}</span></div>}
-            {selected && <ObjectDetails copy={copy} connection={connection} selection={selected} trusted={trusted} copiedId={copiedId} systemTableDocumentationNames={schema.systemTableDocumentationNames} onInsert={onInsert} onCopy={copyText} onOpenSqlDraft={onOpenSqlDraft}/>}
+            {!compact && detailsOpen && selected && <ObjectDetails copy={copy} connection={connection} selection={selected} trusted={trusted} copiedId={copiedId} systemTableDocumentationNames={schema.systemTableDocumentationNames} onClose={browseObjects} onInsert={onInsert} onCopy={copyText} onOpenSqlDraft={onOpenSqlDraft}/>}
+        </>}
         </>}
     </section>;
 }
@@ -238,27 +248,28 @@ function DictionaryCategory({ label, database, dictionaries, level, query, expan
 }
 
 function ExplorerGroupRow({ level, label, count, expanded, onToggle, database = false }: { level: number; label: string; count: number; expanded: boolean; onToggle: () => void; database?: boolean }) {
-    return <div role="treeitem" aria-level={level} aria-expanded={expanded} className={cx('object-tree-row', 'is-group', database && 'is-database')} style={{ paddingLeft: `${Math.max(0, level - 1) * 13}px` }}>
+    return <div role="treeitem" aria-level={level} aria-expanded={expanded} className={cx('object-tree-row', 'is-group', database && 'is-database')} style={{ paddingLeft: `${Math.max(0, level - 1) * 10}px` }}>
         <button type="button" className="object-tree-toggle" aria-label={expanded ? `Collapse ${label}` : `Expand ${label}`} onClick={onToggle}><span className={cx(expanded && 'is-open')}>›</span></button>
         <button type="button" className="object-tree-main" onClick={onToggle}><span className="object-kind-glyph">{database ? '◉' : '⌁'}</span><span className="object-tree-label"><strong>{label}</strong></span><small className="object-tree-count">{count.toLocaleString()}</small></button>
     </div>;
 }
 
 function ObjectLeafRow({ level, selected, glyph, label, meta, onSelect, onInsert, insertLabel }: { level: number; selected: boolean; glyph: string; label: string; meta?: string; onSelect: () => void; onInsert?: () => void; insertLabel?: string }) {
-    return <div role="treeitem" aria-level={level} aria-selected={selected} className={cx('object-tree-row', 'is-object', 'is-leaf', selected && 'is-selected')} style={{ paddingLeft: `${Math.max(0, level - 1) * 13}px` }}>
+    return <div role="treeitem" aria-level={level} aria-selected={selected} className={cx('object-tree-row', 'is-object', 'is-leaf', selected && 'is-selected')} style={{ paddingLeft: `${Math.max(0, level - 1) * 10}px` }}>
         <span className="object-tree-toggle object-tree-spacer"/>
         <button type="button" className="object-tree-main" onClick={onSelect}><span className="object-kind-glyph">{glyph}</span><span className="object-tree-label"><strong>{label}</strong>{meta && <small>{meta}</small>}</span></button>
         {onInsert && <button type="button" className="object-tree-inline-action" title={insertLabel} aria-label={`${insertLabel}: ${label}`} onClick={onInsert}>+</button>}
     </div>;
 }
 
-function ObjectDetails({ copy, connection, selection, trusted, copiedId, systemTableDocumentationNames, onInsert, onCopy, onOpenSqlDraft }: {
+function ObjectDetails({ copy, connection, selection, trusted, copiedId, systemTableDocumentationNames, onClose, onInsert, onCopy, onOpenSqlDraft }: {
     copy: Copy['common'];
     connection: Connected;
     selection: ExplorerSelection;
     trusted: boolean;
     copiedId?: string;
     systemTableDocumentationNames?: readonly string[];
+    onClose?: () => void;
     onInsert: (value: string) => void;
     onCopy: (value: string, id: string) => void;
     onOpenSqlDraft: (name: string, sql: string, run: boolean) => void;
@@ -266,7 +277,7 @@ function ObjectDetails({ copy, connection, selection, trusted, copiedId, systemT
     if (selection.kind === 'relation') {
         const { table, columns } = selection;
         const qualified = qualifiedTableName(table);
-        return <section className="object-details" aria-label="Selected object">
+        return <section className="object-details" aria-label="Selected object">{onClose && <button type="button" className="object-details-close" aria-label="Close object details" onClick={onClose}>×</button>}
             <div className="object-details-hero"><span className={cx('object-kind-badge', selection.relationKind === 'view' && 'is-view')}>{selection.relationKind === 'view' ? 'VIEW' : 'TABLE'}</span><strong>{table.name}</strong><code>{table.database}.{table.name}</code><small>{table.engine} · {tableSummary(table, copy)}</small></div>
             <div className="object-action-grid">
                 <Button variant="secondary" className="toolbar-small" disabled={!trusted} title={!trusted ? copy.runActionTrustRequired : undefined} onClick={() => onOpenSqlDraft(`Preview ${table.name}.sql`, tableQuerySql(table, columns, 'preview'), true)}>{copy.previewRows}</Button>
@@ -281,7 +292,7 @@ function ObjectDetails({ copy, connection, selection, trusted, copiedId, systemT
 
     if (selection.kind === 'column') {
         const quoted = quoteIdentifier(selection.column.name);
-        return <section className="object-details" aria-label="Selected object">
+        return <section className="object-details" aria-label="Selected object">{onClose && <button type="button" className="object-details-close" aria-label="Close object details" onClick={onClose}>×</button>}
             <div className="object-details-hero"><span className="object-kind-badge">COLUMN</span><strong>{selection.column.name}</strong><code>{selection.table.database}.{selection.table.name}</code><small>{selection.column.type}</small></div>
             <div className="object-action-grid compact">
                 <Button variant="secondary" className="toolbar-small" onClick={() => onInsert(quoted)}>{copy.insertName}</Button>
@@ -298,7 +309,7 @@ function ObjectDetails({ copy, connection, selection, trusted, copiedId, systemT
     if (selection.kind === 'dictionary') {
         const dictionary = selection.dictionary;
         const qualified = dictionary.database ? `${quoteIdentifier(dictionary.database)}.${quoteIdentifier(dictionary.name)}` : quoteIdentifier(dictionary.name);
-        return <section className="object-details" aria-label="Selected object">
+        return <section className="object-details" aria-label="Selected object">{onClose && <button type="button" className="object-details-close" aria-label="Close object details" onClick={onClose}>×</button>}
             <div className="object-details-hero"><span className="object-kind-badge is-dictionary">DICTIONARY</span><strong>{dictionary.name}</strong><code>{dictionary.database || 'Server level'}</code><small>{dictionary.type || 'Dictionary'} · {dictionary.status.toLowerCase().replaceAll('_', ' ')}</small></div>
             <div className="object-action-grid compact">
                 <Button variant="secondary" className="toolbar-small" onClick={() => onInsert(qualified)}>{copy.insertName}</Button>
@@ -315,10 +326,10 @@ function ObjectDetails({ copy, connection, selection, trusted, copiedId, systemT
     }
 
     if (selection.kind === 'projection') {
-        return <section className="object-details" aria-label="Selected object"><div className="object-details-hero"><span className="object-kind-badge">PROJECTION</span><strong>{selection.projection.name}</strong><code>{selection.table.database}.{selection.table.name}</code><small>{selection.projection.type}</small></div><div className="object-fact-list">{selection.projection.sortingKey && <ObjectFact label="SORTING KEY" value={selection.projection.sortingKey}/>}</div></section>;
+        return <section className="object-details" aria-label="Selected object">{onClose && <button type="button" className="object-details-close" aria-label="Close object details" onClick={onClose}>×</button>}<div className="object-details-hero"><span className="object-kind-badge">PROJECTION</span><strong>{selection.projection.name}</strong><code>{selection.table.database}.{selection.table.name}</code><small>{selection.projection.type}</small></div><div className="object-fact-list">{selection.projection.sortingKey && <ObjectFact label="SORTING KEY" value={selection.projection.sortingKey}/>}</div></section>;
     }
 
-    return <section className="object-details" aria-label="Selected object"><div className="object-details-hero"><span className="object-kind-badge">SKIP INDEX</span><strong>{selection.index.name}</strong><code>{selection.table.database}.{selection.table.name}</code><small>{selection.index.type}</small></div><div className="object-fact-list"><ObjectFact label="EXPRESSION" value={selection.index.expression}/><ObjectFact label="GRANULARITY" value={selection.index.granularity}/></div></section>;
+    return <section className="object-details" aria-label="Selected object">{onClose && <button type="button" className="object-details-close" aria-label="Close object details" onClick={onClose}>×</button>}<div className="object-details-hero"><span className="object-kind-badge">SKIP INDEX</span><strong>{selection.index.name}</strong><code>{selection.table.database}.{selection.table.name}</code><small>{selection.index.type}</small></div><div className="object-fact-list"><ObjectFact label="EXPRESSION" value={selection.index.expression}/><ObjectFact label="GRANULARITY" value={selection.index.granularity}/></div></section>;
 }
 
 function ObjectFact({ label, value }: { label: string; value: string }) {

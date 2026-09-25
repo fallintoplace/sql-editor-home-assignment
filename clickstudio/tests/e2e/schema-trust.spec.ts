@@ -90,7 +90,9 @@ test('Object explorer shows ClickHouse metadata, searchable children, and genera
     await mockLiveWorkspace(page, route => route.fulfill({ json: schema }));
 
     await expect(page.getByRole('tree', { name: 'Objects' })).toBeVisible();
-    await expect(page.getByText('events', { exact: true }).first()).toBeVisible();
+    const eventsObject = page.getByText('events', { exact: true }).first();
+    await expect(eventsObject).toBeVisible();
+    await eventsObject.click();
     await expect(page.getByLabel('Selected object')).toContainText('MergeTree');
     await expect(page.getByLabel('Selected object')).toContainText('ORDER BY');
     await expect(page.getByLabel('Selected object')).toContainText('(tenant_id, day)');

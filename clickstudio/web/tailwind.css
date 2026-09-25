@@ -1389,6 +1389,7 @@
     .reference-list-heading { display: flex; min-height: 24px; flex: none; align-items: center; justify-content: space-between; gap: 8px; padding: 0 2px 4px; border-bottom: 1px solid color-mix(in srgb, var(--explorer-signal) 18%, var(--line)); color: var(--muted); font-family: var(--font-mono); font-size: 8px; font-weight: 760; letter-spacing: .12em; text-transform: uppercase; }
     .reference-list-heading small { color: var(--explorer-signal); font-size: 8px; letter-spacing: 0; }
     .reference-results { display: grid; min-height: 130px; flex: 1; align-content: start; gap: 2px; overflow: auto; padding: 4px; border: 1px solid color-mix(in srgb, var(--explorer-signal) 18%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--panel-raised) 82%, transparent); scrollbar-color: color-mix(in srgb, var(--explorer-signal) 35%, var(--muted)) transparent; scrollbar-gutter: stable; }
+    .reference-load-more { min-height: 28px; flex: none; justify-content: center; color: var(--explorer-signal); font-size: 9px; }
     .reference-result { display: flex; min-width: 0; min-height: 38px; align-items: center; gap: 8px; padding: 4px 7px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--text-soft); text-align: left; cursor: pointer; transition: .14s ease; }
     .reference-result:hover, .reference-result.is-active { border-color: color-mix(in srgb, var(--explorer-signal) 28%, var(--line)); background: color-mix(in srgb, var(--explorer-signal) 8%, var(--panel)); color: var(--text); }
     .reference-result:focus-visible { outline: 2px solid color-mix(in srgb, var(--explorer-signal) 68%, transparent); outline-offset: -2px; }
@@ -1424,6 +1425,7 @@
     .reference-entry-source { display: grid; gap: 4px; padding-top: 7px; border-top: 1px solid var(--line); }
     .reference-entry-source span { color: var(--muted); font-size: 7px; font-weight: 760; letter-spacing: .1em; }
     .reference-entry-source code { overflow-wrap: anywhere; color: var(--text-soft); font-family: var(--font-mono); font-size: 8px; }
+    .reference-entry-source a { overflow-wrap: anywhere; color: var(--explorer-signal); font-family: var(--font-mono); font-size: 8px; }
     @media (max-width: 850px) {
         .object-explorer-section { gap: 9px; padding: 10px; }
         .object-details { max-height: 48%; }

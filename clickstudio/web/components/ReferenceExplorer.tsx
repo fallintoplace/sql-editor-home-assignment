@@ -10,6 +10,7 @@ import type { Copy } from '../i18n';
 import { Button, cx, Icon } from './ui';
 
 type ReferenceTarget = { name: string; type: string };
+const REFERENCE_PAGE_SIZE = 100;
 
 type ReferenceExplorerProps = {
     copy: Copy['common'];
@@ -23,6 +24,7 @@ type ReferenceExplorerProps = {
 const categoryCopy: Record<ReferenceCategory, keyof Copy['common']> = {
     all: 'referenceAll', functions: 'referenceFunctions', types: 'referenceTypes',
     engines: 'referenceEngines', settings: 'referenceSettings', system: 'referenceSystem',
+    formats: 'referenceFormats', sql: 'referenceSql',
 };
 
 export function ReferenceExplorer({ copy, connection, trusted, target, onTargetHandled, onInsert }: ReferenceExplorerProps) {
@@ -39,7 +41,9 @@ export function ReferenceExplorer({ copy, connection, trusted, target, onTargetH
     const [entryLoading, setEntryLoading] = useState(false);
     const [entryError, setEntryError] = useState('');
     const [activeIndex, setActiveIndex] = useState(0);
+    const [visibleResultCount, setVisibleResultCount] = useState(REFERENCE_PAGE_SIZE);
     const [retryToken, setRetryToken] = useState(0);
+    const resultListRef = useRef<HTMLDivElement | null>(null);
     const searchRequest = useRef<AbortController | undefined>(undefined);
     const entryRequest = useRef<AbortController | undefined>(undefined);
     const lastTarget = useRef('');
@@ -93,7 +97,14 @@ export function ReferenceExplorer({ copy, connection, trusted, target, onTargetH
         };
     }, [provider, query, category, trusted, retryToken]);
 
-    useEffect(() => setActiveIndex(0), [results]);
+    useEffect(() => {
+        setActiveIndex(0);
+        setVisibleResultCount(REFERENCE_PAGE_SIZE);
+    }, [results]);
+
+    useEffect(() => {
+        resultListRef.current?.querySelector<HTMLElement>(`[data-reference-index="${activeIndex}"]`)?.scrollIntoView({ block: 'nearest' });
+    }, [activeIndex, visibleResultCount]);
 
     const openEntry = useCallback(async (summary: ClickHouseDocumentationSummary) => {
         entryRequest.current?.abort();
@@ -170,7 +181,9 @@ export function ReferenceExplorer({ copy, connection, trusted, target, onTargetH
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
             if (!results.length) return;
             event.preventDefault();
-            setActiveIndex(index => event.key === 'ArrowDown' ? (index + 1) % results.length : (index - 1 + results.length) % results.length);
+            const nextIndex = event.key === 'ArrowDown' ? (activeIndex + 1) % results.length : (activeIndex - 1 + results.length) % results.length;
+            if (nextIndex >= visibleResultCount) setVisibleResultCount(Math.min(results.length, Math.ceil((nextIndex + 1) / REFERENCE_PAGE_SIZE) * REFERENCE_PAGE_SIZE));
+            setActiveIndex(nextIndex);
         } else if (event.key === 'Enter' && !selected) {
             event.preventDefault();
             chooseActive();
@@ -178,7 +191,9 @@ export function ReferenceExplorer({ copy, connection, trusted, target, onTargetH
     };
 
     const isBundled = provider.kind === 'bundled';
-    const resultTitle = query ? copy.referenceMatches.replace('{count}', results.length.toLocaleString()) : copy.referencePopular;
+    const resultTitle = query ? copy.referenceMatches.replace('{count}', results.length.toLocaleString()) : copy.referenceBrowse;
+    const visibleResults = results.slice(0, visibleResultCount);
+    const remainingResults = results.length - visibleResults.length;
 
     return <section className="inspector-section object-explorer-section reference-explorer" onKeyDown={navigateResults}>
         {nativeProvider.kind === 'native' && !trusted ? <div className="inspector-empty"><Icon name="lock"/><strong>{copy.schemaPrivate}</strong><p>{copy.trustToInspect}</p></div> : <>
@@ -192,24 +207,25 @@ export function ReferenceExplorer({ copy, connection, trusted, target, onTargetH
                 {entryLoading && <div className="inspector-empty"><span className="loading-orbit"/><p>{copy.loading}</p></div>}
                 {entryError && <div className="object-empty-search" role="alert"><strong>{entryError}</strong><Button variant="secondary" className="toolbar-small" onClick={() => activeEntry && void openEntry(activeEntry)}>{copy.referenceRetry}</Button></div>}
                 {selected && <article className="reference-entry" aria-label={`${selected.type}: ${selected.name}`}>
-                    <div className="reference-entry-heading"><span>{selected.type}</span><h3>{selected.type === 'System Table' ? `system.${selected.name}` : selected.name}</h3><small>ClickHouse {selected.serverVersion}</small></div>
+                    <div className="reference-entry-heading"><span>{selected.type}</span><h3>{selected.type === 'System Table' ? `system.${selected.name}` : selected.name}</h3><small>{selected.origin === 'bundled' ? copy.referenceBundled : `ClickHouse ${selected.serverVersion}`}</small></div>
                     <div className="reference-entry-actions"><Button variant="secondary" className="toolbar-small" onClick={() => onInsert(referenceInsertValue(selected))}>{copy.referenceInsert}</Button><Button variant="ghost" className="toolbar-small" onClick={() => void navigator.clipboard.writeText(referenceInsertValue(selected)).catch(() => undefined)}>{copy.referenceCopy}</Button></div>
                     <div className="reference-markdown"><ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: ({ href, children, ...props }) => <a {...props} href={href} target="_blank" rel="noreferrer">{children}</a> }}>{selected.description}</ReactMarkdown></div>
-                    {(selected.source || selected.origin === 'native') && <div className="reference-entry-source"><span>{copy.referenceSource}</span><code>{selected.source ?? copy.referenceNative}</code></div>}
+                    {(selected.source || selected.origin === 'native') && <div className="reference-entry-source"><span>{copy.referenceSource}</span>{selected.source?.startsWith('https://') ? <a href={selected.source} target="_blank" rel="noreferrer">{selected.source}</a> : <code>{selected.source ?? copy.referenceNative}</code>}</div>}
                 </article>}
             </div> : <>
                 <label className="inspector-search reference-search"><Icon name="search"/><input data-testid="reference-search" autoComplete="off" value={query} onChange={event => setQuery(event.target.value)} placeholder={copy.referenceSearch} aria-label={copy.referenceSearch}/>{query && <button type="button" className="object-search-clear" aria-label={copy.clearSearch} onClick={() => setQuery('')}>×</button>}</label>
                 <div className="reference-categories" role="group" aria-label={copy.referenceCategories}>{REFERENCE_CATEGORIES.map(value => <button key={value} type="button" aria-pressed={category === value} onClick={() => setCategory(value)}>{copy[categoryCopy[value]]}</button>)}</div>
-                <div className="reference-list-heading"><span>{resultTitle}</span>{!loading && <small>{results.length}{results.length === 30 ? '+' : ''}</small>}</div>
+                <div className="reference-list-heading"><span>{resultTitle}</span>{!loading && <small>{results.length.toLocaleString()}</small>}</div>
                 {error && <div className="callout callout-error" role="alert">{error}<Button variant="ghost" className="toolbar-small" onClick={() => setRetryToken(value => value + 1)}>{copy.referenceRetry}</Button></div>}
                 {loading && <div className="inspector-empty"><span className="loading-orbit"/><p>{copy.loading}</p></div>}
                 {!loading && !error && !results.length && <div className="object-empty-search"><strong>{copy.referenceNoMatches}</strong><span>{copy.referenceEmptyHint}</span></div>}
-                {!loading && results.length > 0 && <div className="reference-results" role="listbox" aria-label={copy.referenceResults} aria-activedescendant={results[activeIndex] ? `reference-option-${activeIndex}` : undefined}>
-                    {results.map((entry, index) => <button id={`reference-option-${index}`} key={referenceId(entry)} type="button" role="option" aria-selected={index === activeIndex} className={cx('reference-result', index === activeIndex && 'is-active')} onMouseEnter={() => setActiveIndex(index)} onClick={() => { setActiveIndex(index); void openEntry(entry); }}>
+                {!loading && results.length > 0 && <div ref={resultListRef} className="reference-results" role="listbox" aria-label={copy.referenceResults} aria-activedescendant={visibleResults[activeIndex] ? `reference-option-${activeIndex}` : undefined}>
+                    {visibleResults.map((entry, index) => <button id={`reference-option-${index}`} data-reference-index={index} key={referenceId(entry)} type="button" role="option" aria-selected={index === activeIndex} className={cx('reference-result', index === activeIndex && 'is-active')} onMouseEnter={() => setActiveIndex(index)} onClick={() => { setActiveIndex(index); void openEntry(entry); }}>
                         <span className="reference-result-glyph"><Icon name={entry.type === 'System Table' ? 'table' : entry.type.includes('Engine') ? 'database' : entry.type.includes('Type') ? 'column' : 'documents'}/></span>
                         <span className="reference-result-copy"><strong>{entry.type === 'System Table' ? `system.${entry.name}` : entry.name}</strong><small>{entry.type}</small></span><span className="history-open">›</span>
                     </button>)}
                 </div>}
+                {!loading && remainingResults > 0 && <Button variant="ghost" className="reference-load-more" onClick={() => setVisibleResultCount(count => Math.min(results.length, count + REFERENCE_PAGE_SIZE))}>{copy.referenceLoadMore.replace('{count}', Math.min(remainingResults, REFERENCE_PAGE_SIZE).toLocaleString())}</Button>}
             </>}
         </>}
     </section>;

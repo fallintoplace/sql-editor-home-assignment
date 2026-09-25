@@ -111,7 +111,7 @@ export interface Schema {
     metadataWarnings?: string[];
     truncated: boolean;
 }
-export type ReferenceCategory = 'all' | 'functions' | 'types' | 'engines' | 'settings' | 'system';
+export type ReferenceCategory = 'all' | 'functions' | 'types' | 'engines' | 'settings' | 'system' | 'formats' | 'sql';
 export interface ClickHouseDocumentationSummary {
     name: string;
     type: string;

@@ -1,6 +1,6 @@
 import type { ClickHouseDocumentationSummary, ReferenceCategory } from './types.js';
 
-export const REFERENCE_CATEGORIES = ['all', 'functions', 'types', 'engines', 'settings', 'system'] as const satisfies readonly ReferenceCategory[];
+export const REFERENCE_CATEGORIES = ['all', 'functions', 'types', 'engines', 'settings', 'system', 'formats', 'sql'] as const satisfies readonly ReferenceCategory[];
 
 export const REFERENCE_TYPES_BY_CATEGORY: Readonly<Record<Exclude<ReferenceCategory, 'all'>, readonly string[]>> = {
     functions: ['Function', 'Aggregate Function', 'Table Function', 'Aggregate Function Combinator'],
@@ -8,6 +8,8 @@ export const REFERENCE_TYPES_BY_CATEGORY: Readonly<Record<Exclude<ReferenceCateg
     engines: ['Table Engine', 'Database Engine', 'Dictionary Layout', 'Dictionary Source', 'Data Skipping Index', 'Disk Type', 'Compression Codec'],
     settings: ['Setting', 'MergeTree Setting', 'Server Setting'],
     system: ['System Table', 'Profile Event', 'Current Metric', 'Asynchronous Metric'],
+    formats: ['Format'],
+    sql: ['Statement', 'SQL Statement', 'SQL Operator', 'SQL Syntax', 'Protocol'],
 };
 
 export const POPULAR_REFERENCE: readonly ClickHouseDocumentationSummary[] = [
@@ -37,15 +39,13 @@ export function buildReferenceSearchQuery(query: string, category: ReferenceCate
     const typeFilter = typeNames.length ? `AND type IN (${typeNames.map(type => `'${type}'`).join(', ')})` : '';
     const searchFilter = search
         ? 'AND (positionCaseInsensitive(name, {search:String}) > 0 OR positionCaseInsensitive(description, {search:String}) > 0)'
-        : category === 'all'
-            ? `AND tuple(toString(type), name) IN (${POPULAR_REFERENCE.map(entry => `('${entry.type}', '${entry.name}')`).join(', ')})`
-            : '';
+        : '';
     const favoriteOrder = POPULAR_REFERENCE.map(entry => `'${entry.type}:${entry.name}'`).join(', ');
     const favoriteIndex = `indexOf([${favoriteOrder}], concat(toString(type), ':', name))`;
     const rank = `if(length({search:String}) = 0, if(${favoriteIndex} = 0, ${POPULAR_REFERENCE.length + 1}, ${favoriteIndex}), multiIf(lower(name) = lower({search:String}), 0, startsWith(lower(name), lower({search:String})), 1, positionCaseInsensitive(name, {search:String}) > 0, 2, 3))`;
     const source = includeSource ? ', source' : '';
     return {
-        sql: `SELECT name, toString(type) AS type${source} FROM system.documentation WHERE 1 ${typeFilter} ${searchFilter} ORDER BY ${rank}, name, type LIMIT 30`,
+        sql: `SELECT name, toString(type) AS type${source} FROM system.documentation WHERE 1 ${typeFilter} ${searchFilter} ORDER BY ${rank}, name, type`,
         parameters: { search },
     };
 }

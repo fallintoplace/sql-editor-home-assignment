@@ -1,7 +1,8 @@
 import type { ClickHouseDocumentationEntry, ReferenceCategory } from '../shared/types.js';
 import { POPULAR_REFERENCE, REFERENCE_TYPES_BY_CATEGORY, referenceId } from '../shared/reference.js';
+import offlineReferenceCatalog from './offline-reference-catalog.json' with { type: 'json' };
 
-export const BUNDLED_REFERENCE: readonly ClickHouseDocumentationEntry[] = [
+const CURATED_REFERENCE: readonly ClickHouseDocumentationEntry[] = [
     { name: 'MergeTree', type: 'Table Engine', description: 'The general-purpose engine for high insert throughput and analytical queries. It stores sorted data parts; choose a sorting key that matches common filters and grouping patterns.\n\n```sql\nCREATE TABLE events\n(\n    event_time DateTime,\n    user_id UInt64,\n    event_type LowCardinality(String)\n)\nENGINE = MergeTree\nPARTITION BY toYYYYMM(event_time)\nORDER BY (event_type, event_time, user_id)\n```', serverVersion: 'Demo catalog', origin: 'bundled' },
     { name: 'ReplacingMergeTree', type: 'Table Engine', description: 'Keeps rows with matching sorting keys and removes older versions during background merges. Deduplication is eventual; use `FINAL` only when its query cost is acceptable.\n\n```sql\nCREATE TABLE user_profile\n(\n    user_id UInt64,\n    updated_at DateTime,\n    plan String\n)\nENGINE = ReplacingMergeTree(updated_at)\nORDER BY user_id\n```', serverVersion: 'Demo catalog', origin: 'bundled' },
     { name: 'SummingMergeTree', type: 'Table Engine', description: 'Combines rows with the same sorting key by summing selected numeric columns during background merges. Queries should still aggregate because merges may not have happened yet.\n\n```sql\nCREATE TABLE daily_counts\n(\n    day Date,\n    country LowCardinality(String),\n    events UInt64\n)\nENGINE = SummingMergeTree\nORDER BY (day, country)\n```', serverVersion: 'Demo catalog', origin: 'bundled' },
@@ -34,6 +35,19 @@ export const BUNDLED_REFERENCE: readonly ClickHouseDocumentationEntry[] = [
     { name: 'JSONEachRow', type: 'Format', description: 'A JSON format that represents each result row as one JSON object, with column names as keys.\n\n```sql\nSELECT event_time, event_type\nFROM events\nLIMIT 10\nFORMAT JSONEachRow\n```', serverVersion: 'Demo catalog', origin: 'bundled' },
 ];
 
+type OfflineReferenceEntry = Pick<ClickHouseDocumentationEntry, 'name' | 'type' | 'description' | 'source'>;
+const curatedIds = new Set(CURATED_REFERENCE.map(referenceId));
+const generatedReference: readonly ClickHouseDocumentationEntry[] = (offlineReferenceCatalog.entries as OfflineReferenceEntry[]).map(entry => ({
+    ...entry,
+    serverVersion: `Offline docs ${offlineReferenceCatalog.sourceRevision.slice(0, 7)}`,
+    origin: 'bundled',
+}));
+
+export const BUNDLED_REFERENCE: readonly ClickHouseDocumentationEntry[] = [
+    ...CURATED_REFERENCE,
+    ...generatedReference.filter(entry => !curatedIds.has(referenceId(entry))),
+];
+
 function displayName(entry: Pick<ClickHouseDocumentationEntry, 'name' | 'type'>) {
     return entry.type === 'System Table' ? `system.${entry.name}` : entry.name;
 }
@@ -60,7 +74,6 @@ export function searchBundledReference(query: string, category: ReferenceCategor
             if (category === 'all') return (popularOrder.get(referenceId(left.entry)) ?? Number.MAX_SAFE_INTEGER) - (popularOrder.get(referenceId(right.entry)) ?? Number.MAX_SAFE_INTEGER);
             return left.entry.name.localeCompare(right.entry.name) || left.entry.type.localeCompare(right.entry.type);
         })
-        .slice(0, 30)
         .map(item => item.entry);
 }
 

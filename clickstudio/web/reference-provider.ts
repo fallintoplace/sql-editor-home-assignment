@@ -1,7 +1,6 @@
 import type { ClickHouseDocumentationEntry, ClickHouseDocumentationSummary, ReferenceCategory, Row } from '../shared/types.js';
 import { buildReferenceEntryQuery, buildReferenceSearchQuery } from '../shared/reference.js';
 import { api, isFrontendDemoPreview, RequestError } from './api.js';
-import { findBundledReference, searchBundledReference } from './reference-data.js';
 import { PLAYGROUND_CONNECTION_ID, PlaygroundError, queryPlaygroundWithParams, type PlaygroundQueryResult } from './playground.js';
 import type { Connected } from './workspace-types.js';
 
@@ -33,8 +32,14 @@ export function isReferenceUnavailable(error: unknown) {
 
 const bundledProvider: ReferenceProvider = {
     kind: 'bundled',
-    async search(query, category) { return searchBundledReference(query, category); },
-    async get(name, type) { return findBundledReference(name, type); },
+    async search(query, category) {
+        const referenceData = await import('./reference-data.js');
+        return referenceData.searchBundledReference(query, category);
+    },
+    async get(name, type) {
+        const referenceData = await import('./reference-data.js');
+        return referenceData.findBundledReference(name, type);
+    },
 };
 
 function serverProvider(connection: Connected): ReferenceProvider {

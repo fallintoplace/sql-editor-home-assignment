@@ -5,6 +5,9 @@ on:
     paths: [.github/native-patch/**, .github/workflows/clickstudio-native-stage.yml]
 permissions:
   contents: read
+defaults:
+  run:
+    shell: bash
 jobs:
   apply:
     runs-on: ubuntu-latest
@@ -26,6 +29,7 @@ jobs:
           payload = b''.join(p.read_bytes() for p in sorted(Path('.github/native-patch').glob('*.xz')))
           patch = lzma.decompress(payload)
           assert hashlib.sha256(patch).hexdigest() == '7e5adbd62be55dddb715632da46c6d9e172097dc996af0df732e8e96bc07d0fb'
+          patch = patch.replace(b'clickstudio/tests/e2e/vercel-preview.spec.ts', b'clickstudio/tests/e2e/preview.spec.ts')
           Path('/tmp/native.patch').write_bytes(patch)
           PY
           git config user.name 'github-actions[bot]'
@@ -96,7 +100,7 @@ jobs:
             clickstudio/test-results
             clickstudio/playwright-report
       - name: Hosted frontend preview
-        run: npm run test:e2e:vercel 2>&1 | tee native-preview.log
+        run: npm run test:e2e:preview 2>&1 | tee native-preview.log
         working-directory: clickstudio
       - uses: actions/upload-artifact@v4
         if: always()

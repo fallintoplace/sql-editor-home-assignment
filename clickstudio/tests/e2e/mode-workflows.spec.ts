@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { openWorkspacePanel, trust, trustCurrentConnection } from './helpers.js';
+import { jsonRecord, openWorkspacePanel, runIdentity, trust, trustCurrentConnection } from './helpers.js';
 
 const generatedSql = 'SELECT day, events FROM demo.events ORDER BY day';
 
@@ -52,13 +52,13 @@ test('Compact AI proposal becomes the same query and run in Advanced mode', asyn
     const proposals: Record<string, unknown>[] = [];
     let proposalBaseSql = '';
     await page.route('**/api/assistant/context', async route => {
-        const body = route.request().postDataJSON() as Record<string, unknown>;
+        const body = jsonRecord(route.request().postDataJSON(), 'Assistant context request');
         contexts.push(body);
         proposalBaseSql = String(body.sql ?? '');
         await route.fulfill({ status: 201, json: { id: 'test-context', summary: ['Schema: demo.events', 'Only the selected question and schema are included.'] } });
     });
     await page.route('**/api/assistant/proposals', async route => {
-        proposals.push(route.request().postDataJSON() as Record<string, unknown>);
+        proposals.push(jsonRecord(route.request().postDataJSON(), 'Assistant proposal request'));
         await route.fulfill({ json: {
             id: 'test-proposal', owner: 'local-owner', connectionId: 'demo', action: 'generate', createdAt: '2026-09-23T00:00:00.000Z',
             baseSql: proposalBaseSql, responseId: 'test-response', model: 'test-model', promptVersion: 'test', contextSummary: ['Fixture-backed mock'], decision: 'pending',
@@ -67,10 +67,13 @@ test('Compact AI proposal becomes the same query and run in Advanced mode', asyn
         } });
     });
     await page.route('**/api/assistant/proposals/test-proposal/decision', async route => {
-        const body = route.request().postDataJSON() as { decision: 'accepted' | 'rejected' };
+        const body = jsonRecord(route.request().postDataJSON(), 'Assistant decision request');
+        const decision = body.decision;
+        if (decision !== 'accepted' && decision !== 'rejected')
+            throw new Error('Assistant decision request did not include a valid decision');
         await route.fulfill({ json: {
             id: 'test-proposal', owner: 'local-owner', connectionId: 'demo', action: 'generate', createdAt: '2026-09-23T00:00:00.000Z', decidedAt: '2026-09-23T00:00:01.000Z',
-            baseSql: proposalBaseSql, responseId: 'test-response', model: 'test-model', promptVersion: 'test', contextSummary: ['Fixture-backed mock'], decision: body.decision,
+            baseSql: proposalBaseSql, responseId: 'test-response', model: 'test-model', promptVersion: 'test', contextSummary: ['Fixture-backed mock'], decision,
             sql: generatedSql, summary: 'Show the sample event counts by day.', assumptions: [], tables: ['demo.events'], caveats: [], clarification: null, findings: [],
         } });
     });
@@ -118,17 +121,12 @@ test('Compact AI proposal becomes the same query and run in Advanced mode', asyn
 test('Advanced editor, insights, pipeline and AI copilot stay read-only until a user runs SQL', async ({ page }) => {
     const runRequests: unknown[] = [];
     const contexts: Record<string, unknown>[] = [];
-    let activeRunId = '';
     let proposalRequests = 0;
     page.on('request', request => {
         if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/runs') runRequests.push(request.postDataJSON());
     });
-    page.on('response', response => {
-        if (response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/runs')
-            void response.json().then(body => { activeRunId = body.id; });
-    });
     await page.route('**/api/assistant/context', async route => {
-        contexts.push(route.request().postDataJSON() as Record<string, unknown>);
+        contexts.push(jsonRecord(route.request().postDataJSON(), 'Assistant context request'));
         await route.fulfill({ status: 201, json: { id: 'expert-context', summary: ['Current SQL, schema, and selected retained result are included.'] } });
     });
     await page.route('**/api/assistant/proposals', async route => {
@@ -144,7 +142,10 @@ test('Advanced editor, insights, pipeline and AI copilot stay read-only until a 
     await trust(page);
     const editor = page.getByRole('textbox', { name: 'SQL editor', exact: true });
     await expect(editor).toBeVisible();
+    const startedRun = page.waitForResponse(response =>
+        response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/runs');
     await page.getByTestId('run-statement').click();
+    const activeRunId = runIdentity(await (await startedRun).json()).id;
     const results = page.getByRole('region', { name: 'Query results', exact: true });
     await expect(results.locator('[data-run-status="succeeded"]')).toBeVisible();
     const queryId = await page.locator('.execution-bar code').innerText();

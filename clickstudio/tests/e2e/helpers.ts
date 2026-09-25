@@ -2,6 +2,19 @@ import { expect, type Page } from '@playwright/test';
 
 export const runStatementButton = (page: Page) => page.getByTestId('run-statement');
 
+export function jsonRecord(value: unknown, label = 'JSON value'): Record<string, unknown> {
+    if (typeof value !== 'object' || value === null || Array.isArray(value))
+        throw new Error(`${label} was not an object`);
+    return value as Record<string, unknown>;
+}
+
+export function runIdentity(value: unknown): { id: string; queryId: string } {
+    const record = jsonRecord(value, 'Run response');
+    if (typeof record.id !== 'string' || typeof record.queryId !== 'string')
+        throw new Error('Run response did not include string id and queryId fields');
+    return { id: record.id, queryId: record.queryId };
+}
+
 export async function openBlankSql(page: Page) {
     await page.getByTestId('new-sql').click();
     await page.getByTestId('blank-sql').click();

@@ -1,6 +1,7 @@
 import { DEFAULT_LIMITS, type Column, type Connection, type Json, type Row, type Schema } from '../shared/types.js';
 import { lexSql, splitSql } from '../shared/sql.js';
 import { sqlForRunKind } from '../shared/explain-plan.js';
+import { isSchema } from '../shared/schema.js';
 import { ClickHouseError, createClient } from '@clickhouse/client-web';
 
 export const PLAYGROUND_CONNECTION_ID = 'playground';
@@ -228,11 +229,10 @@ const nullableText = (value: Json | undefined) => value === null || value === un
 function cachedSchema(): Schema | undefined {
     try {
         const stored: unknown = JSON.parse(localStorage.getItem(SCHEMA_CACHE_KEY) ?? 'null');
-        if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return undefined;
-        const value = stored as { savedAt?: unknown; schema?: unknown };
-        if (typeof value.savedAt !== 'number' || Date.now() - value.savedAt > SCHEMA_CACHE_AGE_MS || !value.schema || typeof value.schema !== 'object') return undefined;
-        const schema = value.schema as Schema;
-        if (schema.connectionId !== PLAYGROUND_CONNECTION_ID || !Array.isArray(schema.tables) || !Array.isArray(schema.columns)) return undefined;
+        if (!isRecord(stored) || typeof stored.savedAt !== 'number' || !Number.isFinite(stored.savedAt)) return undefined;
+        const age = Date.now() - stored.savedAt;
+        const schema = stored.schema;
+        if (age < 0 || age > SCHEMA_CACHE_AGE_MS || !isSchema(schema) || schema.connectionId !== PLAYGROUND_CONNECTION_ID) return undefined;
         return schema;
     } catch { return undefined; }
 }

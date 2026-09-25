@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { openBlankSql, openWorkspacePanel, runScript, runStatementButton, trust, trustCurrentConnection } from './helpers.js';
+import { openBlankSql, openWorkspacePanel, runIdentity, runScript, runStatementButton, trust, trustCurrentConnection } from './helpers.js';
 
 declare global {
     interface Window {
@@ -19,14 +19,6 @@ async function replaceSql(page: Page, sql: string) {
     await page.keyboard.insertText(sql);
     await expect.poll(async () => (await editor.innerText()).replace(/\s/g, ''))
         .toContain(sql.replace(/\s/g, ''));
-}
-
-function runIdentity(value: unknown): { id: string; queryId: string } {
-    if (typeof value !== 'object' || value === null ||
-        !('id' in value) || typeof value.id !== 'string' ||
-        !('queryId' in value) || typeof value.queryId !== 'string')
-        throw new Error('Run response did not include string id and queryId fields');
-    return { id: value.id, queryId: value.queryId };
 }
 
 async function runQuery(page: Page) {

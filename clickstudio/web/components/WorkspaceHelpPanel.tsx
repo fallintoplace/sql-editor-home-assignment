@@ -98,7 +98,7 @@ function HelpSectionHeading({ eyebrow, title, description }: { eyebrow: string; 
     </header>;
 }
 
-export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, section, onSectionChange, onClose, onOpenExample, onRunExample, onStartBlankSql, connection, tables, schemaLoading, trusted, queryEngine, explainActions, comparison, onReferenceInsert }: {
+export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, section, onSectionChange, onClose, onOpenExample, onRunExample, onStartBlankSql, connection, tables, schemaLoading, trusted, queryEngine, busy, unsupportedParameters, onRunExplain, comparison, onReferenceInsert }: {
     examples: SqlExample[];
     sourceLabel: string;
     copy: Copy['common'];
@@ -115,7 +115,9 @@ export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, 
     schemaLoading: boolean;
     trusted: boolean;
     queryEngine: SqlFlowViewProps;
-    explainActions: HelpExplainAction[];
+    busy: boolean;
+    unsupportedParameters: boolean;
+    onRunExplain: (kind: 'explain' | 'plan' | 'pipeline' | 'analyze') => void;
     comparison: RunComparisonProps;
     onReferenceInsert: (value: string) => void;
 }) {
@@ -126,6 +128,27 @@ export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, 
     sectionRef.current = section;
     const optionRefs = useRef(new Map<string, HTMLButtonElement>());
     const sections = helpSections(copy);
+    const explainDefinitions = [
+        { id: 'indexes', kind: 'explain', label: copy.explain, description: copy.helpExplainIndexesDescription, capability: connection.manifest?.explain },
+        { id: 'plan', kind: 'plan', label: copy.explainPlan, description: copy.helpExplainPlanDescription, capability: connection.manifest?.explainPlan ?? connection.manifest?.explain },
+        { id: 'pipeline', kind: 'pipeline', label: copy.explainPipeline, description: copy.helpExplainPipelineDescription, capability: connection.manifest?.explainPipeline ?? connection.manifest?.pipeline },
+        { id: 'analyze', kind: 'analyze', label: copy.explainAnalyze, description: copy.helpExplainAnalyzeDescription, capability: connection.manifest?.explainAnalyze },
+    ] as const;
+    const explainActions: HelpExplainAction[] = explainDefinitions.map(definition => {
+        const unavailableReason = definition.capability?.available === false ? definition.capability.reason : undefined;
+        const title = !trusted ? copy.runActionTrustRequired
+            : busy ? copy.runActionWait
+                : unsupportedParameters ? copy.runActionRemoveParameters
+                    : unavailableReason ?? (definition.kind === 'analyze' ? copy.runtimeExecutesQuery : undefined);
+        return {
+            id: definition.id,
+            label: definition.label,
+            description: definition.description,
+            disabled: !trusted || busy || unsupportedParameters || definition.capability?.available !== true,
+            title,
+            onSelect: () => onRunExplain(definition.kind),
+        };
+    });
     const featuredExamples = useMemo(() => examples
         .filter(example => example.featuredOrder !== undefined)
         .sort((left, right) => left.featuredOrder! - right.featuredOrder!), [examples]);

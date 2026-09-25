@@ -858,40 +858,9 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                 window.requestAnimationFrame(() => editor.current?.revealRange(from, to));
                             },
                         }}
-                        explainActions={[
-                            {
-                                id: 'indexes',
-                                label: copy.common.explain,
-                                description: copy.common.helpExplainIndexesDescription,
-                                disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.explain.available,
-                                title: runActionTitle(connection.manifest?.explain, 'explain'),
-                                onSelect: () => void execute(false, 'explain'),
-                            },
-                            {
-                                id: 'plan',
-                                label: copy.common.explainPlan,
-                                description: copy.common.helpExplainPlanDescription,
-                                disabled: !trusted || Boolean(busy) || unsupportedParameters || !(connection.manifest?.explainPlan ?? connection.manifest?.explain)?.available,
-                                title: runActionTitle(connection.manifest?.explainPlan ?? connection.manifest?.explain, 'explain-plan'),
-                                onSelect: () => void execute(false, 'plan'),
-                            },
-                            {
-                                id: 'pipeline',
-                                label: copy.common.explainPipeline,
-                                description: copy.common.helpExplainPipelineDescription,
-                                disabled: !trusted || Boolean(busy) || unsupportedParameters || !(connection.manifest?.explainPipeline ?? connection.manifest?.pipeline)?.available,
-                                title: runActionTitle(connection.manifest?.explainPipeline ?? connection.manifest?.pipeline, 'explain-pipeline'),
-                                onSelect: () => void execute(false, 'pipeline'),
-                            },
-                            {
-                                id: 'analyze',
-                                label: copy.common.explainAnalyze,
-                                description: copy.common.helpExplainAnalyzeDescription,
-                                disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.explainAnalyze?.available,
-                                title: runActionTitle(connection.manifest?.explainAnalyze, 'explain-analyze'),
-                                onSelect: () => void execute(false, 'analyze'),
-                            },
-                        ]}
+                        busy={Boolean(busy)}
+                        unsupportedParameters={unsupportedParameters}
+                        onRunExplain={kind => void execute(false, kind)}
                         comparison={{
                             connectionId: connection.id,
                             trusted,

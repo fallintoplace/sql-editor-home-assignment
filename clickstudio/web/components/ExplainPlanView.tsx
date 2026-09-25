@@ -30,13 +30,17 @@ function PlanProperty({ property }: { property: ExplainPlanProperty }) {
         : <div className="explain-plan-property is-scalar"><span>{property.name}</span><code>{propertyText(property.value)}</code></div>;
 }
 
-function planGraph(plan: ExplainPlan) {
+function planNodeType(node: ExplainPlanNode, unknownStep: string, depthLimit: string) {
+    return node.type === 'Unknown step' ? unknownStep : node.type === 'Depth limit reached' ? depthLimit : node.type;
+}
+
+function planGraph(plan: ExplainPlan, unknownStep: string, depthLimit: string) {
     const nodes: ProfilePipelineNode[] = [];
     const edges: ProfilePipeline['edges'] = [];
     const byId = new Map<string, ExplainPlanNode>();
     const visit = (node: ExplainPlanNode, path: number[], parentId?: string) => {
         const id = `plan-${path.join('-')}`;
-        nodes.push({ id, label: node.type, kind: 'stage', status: 'planned' });
+        nodes.push({ id, label: planNodeType(node, unknownStep, depthLimit), kind: 'stage', status: 'planned' });
         byId.set(id, node);
         if (parentId) edges.push({ source: parentId, target: id });
         node.children.forEach((child, index) => visit(child, [...path, index], id));
@@ -56,7 +60,7 @@ function planGraph(plan: ExplainPlan) {
 function PlanNode({ node, depth = 0, propertyLabel, unknownStep, depthLimit }: { node: ExplainPlanNode; depth?: number; propertyLabel: string; unknownStep: string; depthLimit: string }) {
     const [open, setOpen] = useState(depth < 2);
     const hasContent = Boolean(node.children.length || node.properties.length || node.description);
-    const type = node.type === 'Unknown step' ? unknownStep : node.type === 'Depth limit reached' ? depthLimit : node.type;
+    const type = planNodeType(node, unknownStep, depthLimit);
     if (!hasContent) return <li className="explain-plan-leaf"><strong>{type}</strong>{node.id && <code>{node.id}</code>}</li>;
     return <li className="explain-plan-node">
         <details open={open} onToggle={event => setOpen(event.currentTarget.open)}>
@@ -78,7 +82,7 @@ function PlanNode({ node, depth = 0, propertyLabel, unknownStep, depthLimit }: {
 
 export function ExplainPlanView({ plan, loading, copy }: { plan?: ExplainPlan; loading: boolean; copy: Copy['common'] }) {
     const [view, setView] = useState<'graph' | 'tree'>('graph');
-    const graph = useMemo(() => plan ? planGraph(plan) : undefined, [plan]);
+    const graph = useMemo(() => plan ? planGraph(plan, copy.planUnknownStep, copy.planDepthLimit) : undefined, [plan, copy.planDepthLimit, copy.planUnknownStep]);
     if (loading) return <div className="pipeline-graph-empty" role="status">{copy.planLoading}</div>;
     if (!plan) return <div className="pipeline-graph-empty" role="status">{copy.planNoOutput}</div>;
     return <div className="explain-plan-view">

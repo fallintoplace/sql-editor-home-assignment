@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ApiError, ProfilePipeline, QueryDocument, QueryProfile, Result, Run, RunKind, Script } from '../shared/types';
+import type { ApiError, ProfilePipeline, QueryDocument, QueryProfile, Result, Run, RunKind, SchemaTable, Script } from '../shared/types';
 import { DEFAULT_LIMITS } from '../shared/types';
 import { parseExplainPlan } from '../shared/explain-plan';
 import { parseExplainAnalyze } from '../shared/explain-analyze';
@@ -16,6 +16,7 @@ import { SqlExamplesMenu } from './components/SqlExamplesMenu';
 import { ExplainAnalyzeView } from './components/ExplainAnalyzeView';
 import { HelpButton } from './components/HelpButton';
 import { HelpCenter } from './components/HelpCenter';
+import { PartsExplorer } from './components/PartsExplorer';
 import { RestoreSqlMenu } from './components/RestoreSqlMenu';
 import { OverlayPortal } from './components/OverlayPortal';
 import { ChartView, InsightsView, ResultGrid } from './components/ResultViews';
@@ -107,6 +108,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const examplesOpenerRef = useRef<HTMLButtonElement | null>(null);
     const [helpOpen, setHelpOpen] = useState(false);
     const helpOpenerRef = useRef<HTMLButtonElement | null>(null);
+    const [helpPartsTable, setHelpPartsTable] = useState<SchemaTable>();
     const openExamples = useCallback((opener: HTMLButtonElement) => {
         examplesOpenerRef.current = opener;
         setExamplesOpen(true);
@@ -1003,6 +1005,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         </div>
         <ImportWizard open={importOpen} connectionId={connection.id} trusted={trusted} demoMode={demoMode} onClose={() => setImportOpen(false)} onImported={() => { void loadSchema(); setNotice('Import complete. The destination schema was refreshed.'); }}/>
         <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} cancelling={cancelling} scriptRunning={script?.status === 'running'} copy={copy.common} helpButton={<HelpButton copy={copy.common} open={helpOpen} onOpen={openHelp}/>}/>
-        <HelpCenter open={helpOpen} copy={copy.common} onClose={closeHelp} onOpenObjects={() => showInspector('schema')}/>
+        <HelpCenter open={helpOpen} copy={copy.common} tables={schema?.tables ?? []} schemaLoading={schemaLoading} trusted={trusted} onClose={closeHelp} onOpenObjects={() => showInspector('schema')} onOpenParts={table => { closeHelp(false); setHelpPartsTable(table); }}/>
+        {helpPartsTable && <OverlayPortal><PartsExplorer connection={connection} table={helpPartsTable} copy={copy.common} onClose={() => setHelpPartsTable(undefined)}/></OverlayPortal>}
     </div>;
 }

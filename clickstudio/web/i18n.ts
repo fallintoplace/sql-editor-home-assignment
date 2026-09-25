@@ -71,6 +71,11 @@ export interface Copy {
         helpFeatureLabel: string;
         helpPartsTitle: string;
         helpPartsDescription: string;
+        helpExploreLive: string;
+        helpSelectMergeTreeTable: string;
+        helpLoadingTables: string;
+        helpNoMergeTreeTables: string;
+        helpPartsRequiresTrust: string;
         helpPartsPartitions: string;
         helpPartsMetrics: string;
         helpPartsStates: string;

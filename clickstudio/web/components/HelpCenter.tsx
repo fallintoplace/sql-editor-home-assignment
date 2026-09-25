@@ -1,15 +1,28 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { SchemaTable } from '../../shared/types';
 import type { Copy } from '../i18n';
 import { OverlayPortal } from './OverlayPortal';
 import { Button, Icon } from './ui';
 
-export function HelpCenter({ open, copy, onClose, onOpenObjects }: {
+export function HelpCenter({ open, copy, tables, schemaLoading, trusted, onClose, onOpenObjects, onOpenParts }: {
     open: boolean;
     copy: Copy['common'];
+    tables: SchemaTable[];
+    schemaLoading: boolean;
+    trusted: boolean;
     onClose: (restoreFocus?: boolean) => void;
     onOpenObjects: () => void;
+    onOpenParts: (table: SchemaTable) => void;
 }) {
     const panelRef = useRef<HTMLElement>(null);
+    const mergeTreeTables = useMemo(() => tables.filter(table => table.engine.endsWith('MergeTree')), [tables]);
+    const [selectedTableKey, setSelectedTableKey] = useState('');
+    const selectedTable = mergeTreeTables.find(table => `${table.database}.${table.name}` === selectedTableKey) ?? mergeTreeTables[0];
+
+    useEffect(() => {
+        if (!selectedTable || !mergeTreeTables.some(table => `${table.database}.${table.name}` === selectedTableKey))
+            setSelectedTableKey(selectedTable ? `${selectedTable.database}.${selectedTable.name}` : '');
+    }, [mergeTreeTables, selectedTable, selectedTableKey]);
 
     useEffect(() => {
         if (!open) return;
@@ -18,7 +31,7 @@ export function HelpCenter({ open, copy, onClose, onOpenObjects }: {
         const previousInert = appRoot?.inert ?? false;
         document.body.style.overflow = 'hidden';
         if (appRoot) appRoot.inert = true;
-        const focusFrame = window.requestAnimationFrame(() => panelRef.current?.querySelector<HTMLElement>('.help-open-objects')?.focus());
+        const focusFrame = window.requestAnimationFrame(() => panelRef.current?.querySelector<HTMLElement>('.help-parts-table-picker select:not(:disabled), .help-open-objects')?.focus());
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key === 'Escape') {
                 event.preventDefault();
@@ -28,7 +41,7 @@ export function HelpCenter({ open, copy, onClose, onOpenObjects }: {
             if (event.key !== 'Tab') return;
             const panel = panelRef.current;
             if (!panel) return;
-            const focusable = Array.from(panel.querySelectorAll<HTMLElement>('button:not([disabled]), [tabindex]:not([tabindex="-1"])'));
+            const focusable = Array.from(panel.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'));
             const first = focusable[0];
             const last = focusable[focusable.length - 1];
             const focusIsOutside = !panel.contains(document.activeElement);
@@ -74,6 +87,15 @@ export function HelpCenter({ open, copy, onClose, onOpenObjects }: {
                             <span><Icon name="details"/>{copy.helpPartsStates}</span>
                             <span><Icon name="details"/>{copy.helpPartsMetadata}</span>
                         </div>
+                        <div className="help-parts-launch">
+                            <label className="help-parts-table-picker"><span className="eyebrow">{copy.helpExploreLive}</span><select aria-label={copy.helpSelectMergeTreeTable} value={selectedTable ? `${selectedTable.database}.${selectedTable.name}` : ''} onChange={event => setSelectedTableKey(event.target.value)} disabled={!trusted || schemaLoading || !mergeTreeTables.length}>
+                                {schemaLoading && <option value="">{copy.helpLoadingTables}</option>}
+                                {!schemaLoading && !mergeTreeTables.length && <option value="">{copy.helpNoMergeTreeTables}</option>}
+                                {mergeTreeTables.map(table => <option key={`${table.database}.${table.name}`} value={`${table.database}.${table.name}`}>{table.database}.{table.name}</option>)}
+                            </select></label>
+                            <Button variant="primary" className="help-live-parts-button" disabled={!trusted || !selectedTable} onClick={() => selectedTable && onOpenParts(selectedTable)}><Icon name="chart"/>{copy.partsVisualize}</Button>
+                        </div>
+                        {!trusted && <p className="help-parts-access-note">{copy.helpPartsRequiresTrust}</p>}
                     </div>
                     <div className="help-parts-illustration" role="img" aria-label={copy.helpPartsIllustration}>
                         <div className="help-parts-illustration-heading"><span>{copy.helpPartsIllustration}</span><span>{copy.helpPartsBySize}</span></div>

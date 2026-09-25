@@ -6,16 +6,20 @@ import tseslint from "typescript-eslint";
 
 export default defineConfig([
   {
+    ignores: [
+      "**/dist/**",
+      "**/node_modules/**",
+      "**/playwright-report/**",
+      "**/test-results/**",
+      "**/vendor/**",
+      "**/.core-build/**",
+      "**/.workspace-build/**",
+    ],
+  },
+  {
     linterOptions: {
       reportUnusedDisableDirectives: "error",
     },
-    ignores: [
-      "dist/**",
-      "node_modules/**",
-      "playwright-report/**",
-      "test-results/**",
-      "vendor/**",
-    ],
   },
   {
     files: ["**/*.{js,mjs,cjs,ts,tsx}"],

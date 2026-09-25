@@ -28,6 +28,17 @@ test('Logical-plan requests are rejected before queuing when the capability is u
     assert.equal(f.store.count('runs'), 0);
     assert.equal(f.calls.length, 0);
 });
+test('EXPLAIN ANALYZE is rejected without native support and retained as a measured run when supported', async () => {
+    const unsupported = fixture({ authorize: (_principal, id) => ({ ...connection, id, manifest: { ...connection.manifest, explainAnalyze: { available: false, reason: 'Upgrade ClickHouse to 26.7 or newer' } } }) });
+    assert.throws(() => unsupported.runs.submit(owner, unsupported.request({ kind: 'analyze' })), { code: 'CAPABILITY_UNAVAILABLE' });
+    assert.equal(unsupported.store.count('runs'), 0);
+    assert.equal(unsupported.calls.length, 0);
+
+    const supported = fixture({ authorize: (_principal, id) => ({ ...connection, id, manifest: { ...connection.manifest, explainAnalyze: { available: true } } }) });
+    const run = supported.runs.submit(owner, supported.request({ kind: 'analyze' }));
+    assert.equal((await supported.runs.wait(owner, run.id)).kind, 'analyze');
+    assert.equal(supported.calls[0].kind, 'analyze');
+});
 test('Viewer cannot execute', () => { const f = fixture(); assert.throws(() => f.runs.submit(viewer, f.request()), { code: 'ROLE_READ_ONLY' }); });
 test('Owners cannot inspect each other runs or history', async () => { const f = fixture(), r = f.runs.submit(owner, f.request()); await f.runs.wait(owner, r.id); assert.throws(() => f.runs.get(other, r.id), { code: 'NOT_FOUND' }); assert.equal(f.runs.list(other).length, 0); });
 test('Queued cancellation does not execute', async () => { const f = fixture(), r = f.runs.submit(owner, f.request()); await f.runs.cancel(owner, r.id); assert.equal((await f.runs.wait(owner, r.id)).status, 'cancelled'); assert.equal(f.calls.length, 0); });

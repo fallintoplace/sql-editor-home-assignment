@@ -24,7 +24,7 @@ export type Capability = {
     available: boolean;
     reason?: string;
 };
-export type RunKind = 'query' | 'explain' | 'plan' | 'pipeline';
+export type RunKind = 'query' | 'explain' | 'plan' | 'pipeline' | 'analyze';
 export interface Manifest {
     version: 1;
     serverVersion: string;
@@ -34,6 +34,7 @@ export interface Manifest {
     cancellation: Capability;
     explain: Capability;
     explainPlan?: Capability;
+    explainAnalyze?: Capability;
     /** Server-side semantic tree produced by EXPLAIN QUERY TREE. */
     queryTree?: Capability;
     /** Running EXPLAIN PIPELINE as a query is separate from loading structured pipeline evidence. */
@@ -213,15 +214,21 @@ export interface ProfilePipelineNode {
     rows?: string;
     bytes?: string;
     parallelism?: number;
+    timePercent?: number;
+    inputRows?: string;
+    outputRows?: string;
+    inputBytes?: string;
+    outputBytes?: string;
 }
 export interface ProfilePipelineEdge {
     source: string;
     target: string;
     label?: string;
+    flow?: number;
 }
 export interface ProfilePipeline {
     available: boolean;
-    source: 'explain_pipeline' | 'explain_plan' | 'query_shape';
+    source: 'explain_pipeline' | 'explain_plan' | 'query_shape' | 'explain_analyze';
     nodes: ProfilePipelineNode[];
     edges: ProfilePipelineEdge[];
     raw?: string[];

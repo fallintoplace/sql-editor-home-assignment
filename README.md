@@ -54,7 +54,7 @@ FROM default.events
 ORDER BY day;
 ```
 
-Use the Run actions beside **Run statement** to inspect **EXPLAIN INDEXES**, **EXPLAIN PLAN**, or **EXPLAIN PIPELINE** for the current statement.
+Use the Run actions beside **Run statement** to inspect **EXPLAIN INDEXES**, **EXPLAIN PLAN**, **EXPLAIN PIPELINE**, or **EXPLAIN ANALYZE**. EXPLAIN ANALYZE executes the selected query and is available on ClickHouse 26.7 or newer.
 
 Database and optional model-provider credentials stay on the server.
 
@@ -73,11 +73,11 @@ In the editor, **Ctrl/Cmd+Enter** runs the selection or current statement. **Ctr
 - Run read-only SQL and inspect typed, paginated results.
 - Format and validate ClickHouse SQL in the editor.
 - Run scripts and inspect each statement separately.
-- Explore databases, tables, columns, and native ClickHouse system-table documentation.
+- Explore databases, tables, columns, native system-table documentation, and MergeTree part storage.
 - Import CSV, JSON, or NDJSON through preview, mapping, and explicit row-count confirmation.
 - Track execution progress, cancel queries, and reopen retained evidence.
 - Save query documents, build charts, and inspect query history.
-- Explore index pruning, logical plans, and execution pipelines through interactive graph views.
+- Explore index pruning, logical plans, execution pipelines, and measured runtime through interactive graph views.
 - Review assistant context and SQL proposals before applying and running them.
 
 ## Validation

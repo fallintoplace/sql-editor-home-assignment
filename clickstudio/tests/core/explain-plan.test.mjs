@@ -53,5 +53,7 @@ test('Run actions produce the appropriate server SQL while preserving normal SQL
     assert.equal(sqlForRunKind(statement, 'explain'), `EXPLAIN indexes = 1\n${statement}`);
     assert.equal(sqlForRunKind(statement, 'plan'), `EXPLAIN PLAN json = 1, indexes = 1, description = 1\n${statement}`);
     assert.equal(sqlForRunKind(statement, 'pipeline'), `EXPLAIN PIPELINE graph = 1, compact = 0\n${statement}`);
+    assert.equal(sqlForRunKind(statement, 'analyze'), `EXPLAIN ANALYZE\n${statement}`);
     assert.equal(explainPrefixLength('plan'), 'EXPLAIN PLAN json = 1, indexes = 1, description = 1\n'.length);
+    assert.equal(explainPrefixLength('analyze'), 'EXPLAIN ANALYZE\n'.length);
 });

@@ -25,7 +25,7 @@ import { DemoDriver } from './demo.js';
 import { OpenAIDriver } from './openai.js';
 import { OpenAIVoiceService, safetyIdentifier, type VoiceService } from './voice.js';
 import { telemetry, recordRun } from './telemetry.js';
-type Driver = QueryDriver & ImportDriver & Pick<ClickHouseDriver, 'connection' | 'connections' | 'test' | 'targets' | 'profileEvidence' | 'profilePipeline' | 'queryTree' | 'searchDocumentation' | 'documentationEntry' | 'close'>;
+type Driver = QueryDriver & ImportDriver & Pick<ClickHouseDriver, 'connection' | 'connections' | 'test' | 'targets' | 'profileEvidence' | 'profilePipeline' | 'queryTree' | 'tableParts' | 'searchDocumentation' | 'documentationEntry' | 'close'>;
 const MAX_WASM_PARSER_BYTES = 64 * 1024 * 1024;
 const ASSISTANT_ACTIONS = ['generate', 'explain', 'repair', 'result', 'performance', 'review'] as const satisfies readonly AssistantAction[];
 const IMPORT_FORMATS = ['csv', 'json', 'ndjson'] as const;
@@ -123,6 +123,12 @@ export function createApp(config: Config, overrides: {
     app.post('/api/connections/:id/test', async (req, res) => { canWrite(principal(res)); res.json(await driver.test(id(req))); });
     app.post('/api/connections/:id/trust', (req, res) => { const p = principal(res), v = body(req), connectionId = id(req); requireThat(v.confirmation === connectionId, 400, 'TRUST_CONFIRMATION', 'Confirm the selected connection ID'); runs.trust(p, connectionId, boolean(v.trusted, 'trusted')); res.json({ trusted: runs.isTrusted(p, connectionId) }); });
     app.get('/api/connections/:id/schema', async (req, res) => { const p = principal(res), c = id(req); requireThat(authorized(p, c), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before inspecting its schema'); res.json(await driver.schema(c)); });
+    app.post('/api/connections/:id/table-parts', async (req, res) => {
+        const p = principal(res), connectionId = id(req), value = body(req);
+        requireThat(authorized(p, connectionId), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before inspecting table storage');
+        const database = text(value.database, 'database', 128), table = text(value.table, 'table', 128);
+        res.json(await driver.tableParts(connectionId, database, table));
+    });
     app.post('/api/connections/:id/query-tree', async (req, res) => {
         const p = principal(res), connectionId = id(req), value = body(req);
         canWrite(p);

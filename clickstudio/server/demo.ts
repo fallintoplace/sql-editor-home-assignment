@@ -1,6 +1,8 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { ClickHouseDocumentationEntry, ClickHouseDocumentationSummary, Connection, Principal, Progress, ReferenceCategory, Run, Schema } from '../shared/types.js';
 import { DEFAULT_LIMITS } from '../shared/types.js';
+import { parseMergeTreeParts, type MergeTreePartsSnapshot } from '../shared/parts.js';
+import { DEMO_EXPLAIN_ANALYZE, demoMergeTreePartRows } from '../shared/demo-fixtures.js';
 import { AppError } from '../core/errors.js';
 
 const demoIndexAnalysis = [
@@ -35,7 +37,7 @@ const demoIndexAnalysis = [
 /** Explicit UI/test fixtures, not a SQL emulator and never an automatic fallback for a real database. */
 export class DemoDriver {
     connection(_p: Principal, id: string): Connection { if (!['demo', 'demo-second'].includes(id))
-        throw new AppError(404, 'CONNECTION_NOT_FOUND', 'Fixture connection not found'); const yes = { available: true }; return { dataSource: 'fixture', id, name: id === 'demo' ? 'Demo fixtures (not live data)' : 'Second isolated fixture', host: 'fixture://local', database: 'demo', username: 'fixture-reader', readonly: true, limits: { ...DEFAULT_LIMITS }, manifest: { version: 1, serverVersion: 'fixture—not a ClickHouse server', testedAt: new Date().toISOString(), schema: yes, progress: yes, cancellation: yes, explain: yes, explainPlan: yes, queryTree: yes, pipeline: yes, queryLog: yes, documentation: { available: false, reason: 'Fixture mode' }, import: { available: false, reason: 'Fixture mode never writes data' }, scripts: yes, parameters: yes } }; }
+        throw new AppError(404, 'CONNECTION_NOT_FOUND', 'Fixture connection not found'); const yes = { available: true }; return { dataSource: 'fixture', id, name: id === 'demo' ? 'Demo fixtures (not live data)' : 'Second isolated fixture', host: 'fixture://local', database: 'demo', username: 'fixture-reader', readonly: true, limits: { ...DEFAULT_LIMITS }, manifest: { version: 1, serverVersion: 'fixture—not a ClickHouse server', testedAt: new Date().toISOString(), schema: yes, progress: yes, cancellation: yes, explain: yes, explainPlan: yes, explainAnalyze: yes, queryTree: yes, pipeline: yes, queryLog: yes, documentation: { available: false, reason: 'Fixture mode' }, import: { available: false, reason: 'Fixture mode never writes data' }, scripts: yes, parameters: yes } }; }
     connections(p: Principal) { return ['demo', 'demo-second'].map(id => this.connection(p, id)); }
     async test(id: string) { return this.connection({ id: 'local-owner', role: 'owner' }, id); }
     async schema(id: string): Promise<Schema> {
@@ -79,6 +81,8 @@ export class DemoDriver {
             return { columns: [{ name: 'explain', type: 'String' }], rows: [[JSON.stringify([{ Plan: { 'Node Type': 'Expression', 'Node Id': 'Expression_2', Description: 'Fixture only; the SQL was not evaluated.', Plans: [{ 'Node Type': 'ReadFromFixture', 'Node Id': 'ReadFromFixture_0' }] } }])]], truncated: false };
         if (run.kind === 'pipeline')
             return { columns: [{ name: 'explain', type: 'String' }], rows: ['digraph {', '  read [label="ReadFromFixture"];', '  filter [label="FilterTransform × 2"];', '  output [label="Output"];', '  read -> filter;', '  filter -> output;', '}'].map(line => [line]), truncated: false };
+        if (run.kind === 'analyze')
+            return { columns: [{ name: 'explain', type: 'String' }], rows: [[DEMO_EXPLAIN_ANALYZE]], truncated: false, warnings: ['DEMO FIXTURE: this is a sample runtime profile and does not evaluate the supplied SQL.'] };
         if (run.kind === 'explain')
             return { columns: [{ name: 'explain', type: 'String' }], rows: demoIndexAnalysis.map(line => [line]), truncated: false };
         return { columns: [{ name: 'day', type: 'Date' }, { name: 'events', type: 'UInt64' }], rows: Array.from({ length: 7 }, (_, i) => [`2026-01-${String(i + 1).padStart(2, '0')}`, String((i + 1) * 10)]), truncated: false, warnings: ['DEMO FIXTURE: this does not evaluate the supplied SQL.'] };
@@ -103,6 +107,11 @@ export class DemoDriver {
             '  JOIN TREE',
             '    TABLE id: 5, table_name: demo.events',
         ];
+    }
+    async tableParts(id: string, database: string, table: string): Promise<MergeTreePartsSnapshot> {
+        this.connection({ id: 'local-owner', role: 'owner' }, id);
+        if (database !== 'demo' || table !== 'events') throw new AppError(404, 'TABLE_NOT_FOUND', 'The selected table is not available in this sample.');
+        return parseMergeTreeParts(database, table, demoMergeTreePartRows());
     }
     async profileEvidence(_run: Run) { return [{ notice: 'Fixture mode has no real server profile' }]; }
     async profilePipeline(_run: Run) { return ['digraph {', '  node [shape=box];', '  read [label="ReadFromFixture"];', '  filter [label="FilterTransform × 2"];', '  expression [label="ExpressionTransform × 2"];', '  resize [label="Resize 2 → 1"];', '  output [label="Output"];', '  read -> filter [label="× 2"];', '  filter -> expression [label="× 2"];', '  expression -> resize;', '  resize -> output;', '}']; }

@@ -36,3 +36,36 @@ test('New offline examples reopen with fixture rows matching their result column
         assert.ok(result.rows.length > 0, `${id} should have sample rows`);
     }
 });
+
+test('Sample EXPLAIN ANALYZE is retained as a fixture result and never evaluates submitted SQL', async () => {
+    const api = new DemoPreviewApi();
+    const run = await api.request('/runs', { method: 'POST', body: { connectionId: 'demo', kind: 'analyze', sql: 'SELECT fixture_error()' } });
+    assert.equal(run.kind, 'analyze');
+    const result = await api.request(`/runs/${run.id}/result?count=10`);
+    assert.match(result.rows[0][0], /Query summary:/);
+    assert.match(run.warnings.join(' '), /do not evaluate the SQL/i);
+});
+
+test('Sample MergeTree parts are partitioned and unavailable for unknown tables', async () => {
+    const api = new DemoPreviewApi();
+    const snapshot = await api.request('/connections/demo/table-parts', { method: 'POST', body: { database: 'demo', table: 'events' } });
+    assert.equal(snapshot.database, 'demo');
+    assert.equal(snapshot.table, 'events');
+    assert.equal(snapshot.parts.length, 42);
+    assert.equal(new Set(snapshot.parts.map(part => part.partition)).size, 6);
+    assert.equal(snapshot.totalParts, '42');
+    assert.equal(snapshot.truncated, false);
+    await assert.rejects(api.request('/connections/demo/table-parts', { method: 'POST', body: { database: 'demo', table: 'daily_rollup' } }));
+});
+
+test('Sample MergeTree parts are bounded, grouped by real partitions, and unavailable for unknown tables', async () => {
+    const api = new DemoPreviewApi();
+    const snapshot = await api.request('/connections/demo/table-parts', { method: 'POST', body: { database: 'demo', table: 'events' } });
+    assert.equal(snapshot.database, 'demo');
+    assert.equal(snapshot.table, 'events');
+    assert.equal(snapshot.parts.length, 42);
+    assert.equal(new Set(snapshot.parts.map(part => part.partition)).size, 6);
+    assert.equal(snapshot.totalParts, '42');
+    assert.equal(snapshot.truncated, false);
+    await assert.rejects(api.request('/connections/demo/table-parts', { method: 'POST', body: { database: 'demo', table: 'daily_rollup' } }));
+});

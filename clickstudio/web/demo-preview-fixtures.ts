@@ -1,4 +1,5 @@
 import { DEFAULT_LIMITS, type Connection, type QueryDocument, type Result, type Run, type Schema, type SchemaColumn } from '../shared/types.js';
+import { DEMO_EXPLAIN_ANALYZE } from '../shared/demo-fixtures.js';
 import { DEMO_PREVIEW_STARTERS, demoIndexAnalysis } from './demo-preview-data.js';
 
 export const owner = 'preview-user';
@@ -78,7 +79,7 @@ export function connection(trusted: boolean): Connection & { trusted: boolean } 
         readonly: true, trusted, limits: { ...DEFAULT_LIMITS },
         manifest: {
             version: 1, serverVersion: 'Frontend sample data', testedAt: now(), schema: available, progress: available,
-            cancellation: available, explain: available, queryTree: available, pipeline: available, queryLog: available,
+            cancellation: available, explain: available, explainAnalyze: available, queryTree: available, pipeline: available, queryLog: available,
             documentation: { available: false, reason: 'System-table documentation is not connected in preview mode.' },
             import: { available: false, reason: 'File import is not connected in preview mode.' }, scripts: available,
             parameters: { available: false, reason: 'Sample results do not evaluate SQL parameters.' },
@@ -198,7 +199,9 @@ export function resultFor(run: Run): Result {
         : [{ name: 'explain', type: 'String' }];
     const resultRows = run.kind === 'query'
         ? preview.rows
-        : [[run.kind === 'plan'
+        : [[run.kind === 'analyze'
+            ? DEMO_EXPLAIN_ANALYZE
+            : run.kind === 'plan'
             ? JSON.stringify([{ Plan: { 'Node Type': 'Expression', 'Node Id': 'Expression_2', Description: 'Sample plan only; SQL is not evaluated.', Plans: [{ 'Node Type': 'ReadFromFixture', 'Node Id': 'ReadFromFixture_0' }] } }])
             : run.kind === 'pipeline'
                 ? 'digraph { read [label="ReadFromFixture"]; filter [label="FilterTransform × 2"]; output [label="Output"]; read -> filter; filter -> output; }'
@@ -263,4 +266,3 @@ export function makeRun(id: string, sql: string, kind: Run['kind'], sequence: nu
         permissionSnapshot: { readonly: true, role: 'owner' }, retryPolicy: 'never',
     };
 }
-

@@ -1,6 +1,7 @@
 import { DEFAULT_LIMITS, type Column, type Connection, type Json, type Row, type Schema } from '../shared/types.js';
 import { lexSql, splitSql } from '../shared/sql.js';
 import { isSchema } from '../shared/schema.js';
+import { MAX_MERGETREE_PARTS, parseMergeTreeParts, type MergeTreePartsSnapshot } from '../shared/parts.js';
 import { ClickHouseError, createClient } from '@clickhouse/client-web';
 
 export const PLAYGROUND_CONNECTION_ID = 'playground';
@@ -48,6 +49,7 @@ export const PLAYGROUND_CONNECTION: Connection & { trusted: boolean } = {
         cancellation: capability(false, 'Closing the request cannot confirm that ClickHouse stopped the query.'),
         explain: capability(true),
         explainPlan: capability(true),
+        explainAnalyze: capability(true),
         queryTree: capability(true),
         explainPipeline: capability(true),
         pipeline: capability(false, 'The public Playground returns pipeline text, but structured pipeline profiling is unavailable in this browser connection.'),
@@ -222,6 +224,16 @@ export async function queryPlaygroundQueryTree(sql: string, signal?: AbortSignal
 
 export function queryPlaygroundWithParams(sql: string, queryParams: Record<string, string>, signal?: AbortSignal) {
     return executePlaygroundQuery(sql, signal, MAX_RESULT_ROWS, MAX_RESPONSE_BYTES, queryParams);
+}
+
+export async function loadPlaygroundTableParts(database: string, table: string, signal?: AbortSignal): Promise<MergeTreePartsSnapshot> {
+    const sql = `SELECT partition, name, toString(rows) AS rows, toString(marks) AS marks,
+        toString(data_compressed_bytes) AS compressed_bytes, toString(data_uncompressed_bytes) AS uncompressed_bytes,
+        toString(level) AS level, toString(modification_time) AS modified_at, toString(count() OVER ()) AS total_parts
+        FROM system.parts WHERE database = {database:String} AND table = {table:String} AND active
+        ORDER BY data_compressed_bytes DESC, name LIMIT ${MAX_MERGETREE_PARTS + 1}`;
+    const result = await queryPlaygroundWithParams(sql, { database, table }, signal);
+    return parseMergeTreeParts(database, table, result.rows);
 }
 
 const tablesSql = `SELECT database, name, engine, sorting_key, primary_key, partition_key, sampling_key,

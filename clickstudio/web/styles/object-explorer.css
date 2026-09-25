@@ -130,8 +130,72 @@
     .reference-entry-source span { color: var(--muted); font-size: 7px; font-weight: 760; letter-spacing: .1em; }
     .reference-entry-source code { overflow-wrap: anywhere; color: var(--text-soft); font-family: var(--font-mono); font-size: 8px; }
     .reference-entry-source a { overflow-wrap: anywhere; color: var(--explorer-signal); font-family: var(--font-mono); font-size: 8px; }
+    .parts-explorer-layer { position: fixed; z-index: 9999; inset: 0; display: grid; place-items: center; padding: 16px; }
+    .parts-explorer-scrim { position: absolute; inset: 0; border: 0; background: color-mix(in srgb, var(--canvas) 74%, transparent); backdrop-filter: blur(9px); cursor: default; }
+    .parts-explorer-dialog { position: relative; display: flex; width: min(1120px, calc(100vw - 32px)); max-height: min(850px, calc(100dvh - 32px)); min-height: min(560px, calc(100dvh - 32px)); flex-direction: column; gap: 12px; overflow: auto; padding: 18px; border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--line-bright)); border-radius: 18px; background: radial-gradient(ellipse at 15% 0, color-mix(in srgb, var(--accent) 12%, transparent), transparent 44%), linear-gradient(155deg, var(--panel-raised), var(--panel) 70%); box-shadow: 0 24px 90px #0009, inset 0 1px #ffffff12; }
+    .parts-explorer-header { display: flex; flex: none; align-items: flex-start; justify-content: space-between; gap: 15px; }
+    .parts-explorer-header h2 { margin: 3px 0 4px; color: var(--text); font-family: var(--font-display); font-size: 19px; font-weight: 680; letter-spacing: -.03em; }
+    .parts-explorer-header p { margin: 0; color: var(--muted); font-size: 9px; }
+    .parts-explorer-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .parts-view-control { display: inline-flex; min-height: 34px; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: color-mix(in srgb, var(--panel) 82%, transparent); }
+    .parts-view-control button { min-height: 26px; padding: 0 10px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: 9px; cursor: pointer; }
+    .parts-view-control button[aria-pressed="true"] { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); background: color-mix(in srgb, var(--accent) 13%, var(--panel-raised)); color: var(--text); box-shadow: inset 0 1px #ffffff0a; }
+    .parts-view-control button:focus-visible, .parts-breadcrumb button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .parts-count-summary { margin-left: auto; color: var(--text-soft); font-family: var(--font-mono); font-size: 9px; }
+    .parts-state { display: grid; min-height: 170px; flex: 1; place-items: center; border: 1px dashed var(--line-bright); border-radius: 12px; color: var(--muted); font-size: 10px; }
+    .parts-state.is-error { border-color: color-mix(in srgb, var(--red) 48%, var(--line)); color: var(--red); }
+    .parts-graph-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); font-family: var(--font-mono); font-size: 8px; }
+    .parts-graph-meta strong { color: var(--text-soft); font-weight: 650; }
+    .parts-breadcrumb { display: inline-flex; min-width: 0; align-items: center; gap: 7px; }
+    .parts-breadcrumb button { padding: 0; border: 0; background: transparent; color: var(--accent); font: inherit; cursor: pointer; }
+    .parts-breadcrumb i { color: var(--muted); font-style: normal; }
+    .parts-breadcrumb strong { color: var(--text); font-weight: 650; }
+    .parts-graph-viewport { position: relative; min-height: 220px; flex: 1; overflow: hidden; border: 1px solid color-mix(in srgb, var(--accent) 23%, var(--line)); border-radius: 13px; background: radial-gradient(ellipse at 50% 0, color-mix(in srgb, var(--accent) 8%, transparent), transparent 65%), var(--canvas); }
+    .parts-graph-viewport::before { position: absolute; inset: 0; background-image: linear-gradient(90deg, color-mix(in srgb, var(--line-bright) 30%, transparent) 1px, transparent 1px), linear-gradient(color-mix(in srgb, var(--line-bright) 30%, transparent) 1px, transparent 1px); background-size: 25px 25px; content: ''; opacity: .45; mask-image: radial-gradient(ellipse at center, #000 5%, transparent 95%); pointer-events: none; }
+    .parts-graph-viewport svg { position: relative; display: block; width: 100%; height: 100%; min-height: 220px; }
+    .parts-map-cell, .parts-galaxy-cell { cursor: pointer; outline: none; }
+    .parts-map-cell rect { fill: color-mix(in srgb, var(--part-color) 25%, var(--panel-raised)); stroke: color-mix(in srgb, var(--part-color) 47%, var(--line)); stroke-width: 1.1px; transition: fill .16s ease, stroke .16s ease, filter .16s ease; }
+    .parts-map-cell.is-partition-cell rect { fill: color-mix(in srgb, var(--part-color) 8%, var(--panel)); stroke: color-mix(in srgb, var(--part-color) 55%, var(--line-bright)); stroke-width: 1.4px; }
+    .parts-map-cell.is-selected rect, .parts-galaxy-cell.is-selected circle { stroke: var(--accent); stroke-width: 3px; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 60%, transparent)); }
+    .parts-map-cell:hover rect, .parts-map-cell:focus-visible rect { stroke: var(--accent); stroke-width: 2px; }
+    .parts-cell-label { fill: var(--text); font-family: var(--font-mono); font-size: 10px; font-weight: 580; pointer-events: none; }
+    .parts-cell-partition-label { fill: var(--text-soft); font-family: var(--font-mono); font-size: 11px; font-weight: 760; pointer-events: none; }
+    .parts-galaxy-cell circle { fill: color-mix(in srgb, var(--part-color) 29%, var(--panel-raised)); stroke: color-mix(in srgb, var(--part-color) 62%, var(--line)); stroke-width: 1px; transition: fill .16s ease, stroke .16s ease; }
+    .parts-galaxy-cell.is-partition-cell circle { fill: color-mix(in srgb, var(--part-color) 12%, var(--panel)); stroke-width: 1.6px; }
+    .parts-galaxy-cell:hover circle, .parts-galaxy-cell:focus-visible circle { stroke: var(--accent); stroke-width: 2.4px; }
+    .parts-galaxy-cell text { fill: var(--text); font-family: var(--font-mono); font-size: 9px; text-anchor: middle; pointer-events: none; }
+    .parts-galaxy-cell .parts-cell-partition-label { font-size: 11px; font-weight: 760; }
+    .parts-partition-zoom { cursor: pointer; outline: none; }
+    .parts-partition-zoom rect { fill: color-mix(in srgb, var(--part-color) 24%, var(--panel-raised)); stroke: color-mix(in srgb, var(--part-color) 66%, var(--line-bright)); stroke-width: 1px; transition: fill .16s ease, stroke .16s ease, filter .16s ease; }
+    .parts-partition-zoom:hover rect, .parts-partition-zoom:focus-visible rect { fill: color-mix(in srgb, var(--accent) 36%, var(--panel-raised)); stroke: var(--accent); stroke-width: 1.8px; filter: drop-shadow(0 0 7px color-mix(in srgb, var(--accent) 45%, transparent)); }
+    .parts-partition-zoom text { fill: var(--text); font-family: var(--font-mono); font-size: 9px; font-weight: 760; pointer-events: none; }
+    .parts-partition-zoom.is-galaxy-zoom text { text-anchor: middle; }
+    .parts-legend { position: absolute; right: 10px; bottom: 8px; left: 10px; display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 8px; pointer-events: none; }
+    .parts-legend > span:first-child { display: inline-flex; align-items: center; gap: 5px; }
+    .parts-legend-square { width: 8px; height: 8px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 48%, transparent); }
+    .parts-inspector { display: flex; min-height: 62px; flex: none; align-items: center; justify-content: space-between; gap: 14px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 11px; background: color-mix(in srgb, var(--panel-raised) 65%, var(--panel)); }
+    .parts-inspector > p { margin: 0; color: var(--muted); font-size: 9px; }
+    .parts-inspector-heading { display: grid; min-width: 160px; gap: 3px; }
+    .parts-inspector-heading > strong { overflow: hidden; color: var(--text); font-family: var(--font-mono); font-size: 10px; text-overflow: ellipsis; }
+    .parts-inspector-heading > code { color: var(--muted); font-size: 8px; }
+    .parts-inspector-stats { display: flex; flex: 1; flex-wrap: wrap; justify-content: flex-end; gap: 7px 16px; }
+    .parts-inspector-stats > span { display: grid; gap: 3px; }
+    .parts-inspector-stats small { color: var(--muted); font-size: 7px; text-transform: uppercase; }
+    .parts-inspector-stats strong { color: var(--text-soft); font-family: var(--font-mono); font-size: 8px; }
+    .parts-fixture-label { align-self: flex-start; color: var(--muted); font-size: 8px; }
+    .parts-explorer-footer { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 8px; }
+    .parts-explorer-footer > span { color: var(--muted); font-family: var(--font-mono); font-size: 8px; }
     @media (max-width: 850px) {
         .object-explorer-section { gap: 9px; padding: 10px; }
         .object-details { max-height: 48%; }
         .object-tree-inline-action { opacity: 1; }
+    }
+    @media (max-width: 650px) {
+        .parts-explorer-layer { padding: 0; }
+        .parts-explorer-dialog { width: 100vw; max-height: 100dvh; min-height: 100dvh; border-radius: 0; padding: 14px; }
+        .parts-explorer-toolbar { align-items: flex-start; }
+        .parts-count-summary { width: 100%; margin-left: 0; }
+        .parts-graph-meta { align-items: flex-start; flex-direction: column; }
+        .parts-inspector { align-items: flex-start; flex-direction: column; }
+        .parts-inspector-stats { justify-content: flex-start; }
     }

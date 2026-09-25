@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useId, useRef, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useState, useId, useRef, type CSSProperties, type KeyboardEvent } from 'react';
 import type { ReactNode } from 'react';
 import { dagre } from 'd3-dag';
 import type { ProfilePipeline, ProfilePipelineNode } from '../../shared/types';
@@ -7,9 +7,11 @@ import type { Copy } from '../i18n';
 const nodeWidth = 220;
 const nodeHeight = 74;
 const graphPadding = 28;
+const autoFocusGraphKinds = new Set(['execution', 'explain-plan', 'index-analysis', 'runtime']);
+type PipelineGraphKind = 'execution' | 'sql-flow' | 'explain-plan' | 'index-analysis' | 'runtime';
 
 type PositionedNode = { node: ProfilePipelineNode; x: number; y: number };
-type PositionedEdge = { source: string; target: string; label?: string; points: Array<{ x: number; y: number }> };
+type PositionedEdge = { source: string; target: string; label?: string; flow?: number; points: Array<{ x: number; y: number }> };
 type GraphLayout = { width: number; height: number; nodes: PositionedNode[]; edges: PositionedEdge[] };
 
 function fallbackLayout(pipeline: ProfilePipeline): GraphLayout {
@@ -203,16 +205,66 @@ function sqlFlowNodeDetail(node: ProfilePipelineNode, copy?: Copy['common']) {
     return node.detail;
 }
 
+function graphLabels(kind: PipelineGraphKind, copy?: Copy['common']) {
+    switch (kind) {
+        case 'sql-flow': return {
+            terminology: { graph: copy?.sqlMap ?? 'SQL flow graph', item: copy?.sqlFlowStages ?? 'stages', selected: copy?.sqlFlowSelectedStage ?? 'Selected stage', action: copy?.sqlFlowInspectStage ?? 'Inspect stage', details: copy?.sqlFlowStageDetails ?? 'Selected stage details' },
+            connection: copy?.sqlFlowConnections ?? 'connections',
+            viewport: copy?.sqlMap ?? 'Scrollable SQL flow graph',
+            svg: copy?.sqlFlowGraphHint ?? 'Click a stage to inspect it',
+            empty: copy?.sqlFlowNoStages ?? 'No SQL stages were found in this statement.',
+        };
+        case 'explain-plan': return {
+            terminology: { graph: copy?.logicalPlan ?? 'Logical query plan', item: copy?.planStep ?? 'steps', selected: copy?.planSelectedStep ?? 'Selected step', action: copy?.planInspectStep ?? 'Inspect step', details: copy?.planStepDetails ?? 'Selected plan step details' },
+            connection: 'connections',
+            viewport: `${copy?.logicalPlan ?? 'Logical query plan'} · ${copy?.planGraphView ?? 'Graph'}`,
+            svg: copy?.planGraphHint ?? 'Select a step to inspect its properties.',
+            empty: copy?.pipelineNoOutput ?? 'This pipeline did not return any operator nodes.',
+        };
+        case 'index-analysis': return {
+            terminology: { graph: copy?.indexAnalysisGraph ?? 'Index pruning graph', item: copy?.indexAnalysisItem ?? 'index checks', selected: copy?.indexAnalysisSelected ?? 'Selected index', action: copy?.indexAnalysisInspect ?? 'Inspect index', details: copy?.indexAnalysisDetails ?? 'Selected index details' },
+            connection: 'connections',
+            viewport: `${copy?.indexAnalysisGraph ?? 'Index pruning graph'} · ${copy?.planGraphView ?? 'Graph'}`,
+            svg: copy?.indexAnalysisHint ?? 'Select an index to inspect its condition and pruning counts.',
+            empty: copy?.pipelineNoOutput ?? 'This pipeline did not return any operator nodes.',
+        };
+        case 'runtime': return {
+            terminology: { graph: copy?.runtimeGraph ?? 'Measured runtime', item: copy?.sqlFlowOperators ?? 'stages', selected: copy?.selectedOperator ?? 'Selected stage', action: copy?.inspectOperator ?? 'Inspect stage', details: copy?.selectedOperatorDetails ?? 'Selected runtime stage details' },
+            connection: 'connections',
+            viewport: `${copy?.runtimeGraph ?? 'Measured runtime'} · ${copy?.planGraphView ?? 'Graph'}`,
+            svg: copy?.pipelineGraphHint ?? 'Click an operator to inspect it',
+            empty: copy?.pipelineNoOutput ?? 'This pipeline did not return any operator nodes.',
+        };
+        default: return {
+            terminology: { graph: copy?.pipelineGraph ?? 'Execution plan graph', item: copy?.sqlFlowOperators ?? 'operators', selected: copy?.selectedOperator ?? 'Selected operator', action: copy?.inspectOperator ?? 'Inspect operator', details: copy?.selectedOperatorDetails ?? 'Selected operator details' },
+            connection: 'connections',
+            viewport: 'Scrollable operator graph',
+            svg: copy?.pipelineGraphHint ?? 'Click an operator to inspect it',
+            empty: copy?.pipelineNoOutput ?? 'This pipeline did not return any operator nodes.',
+        };
+    }
+}
+
+function graphNodeKindLabel(kind: PipelineGraphKind, node: ProfilePipelineNode, copy?: Copy['common']) {
+    if (kind === 'sql-flow') return sqlFlowNodeKind(node.kind, copy);
+    if (kind === 'explain-plan') return copy?.planStep ?? 'step';
+    if (kind !== 'index-analysis') return node.kind;
+    if (node.kind === 'read') return 'READ';
+    if (node.kind === 'filter') return 'INDEX';
+    return 'OUTPUT';
+}
+
 export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'execution', onSelectNode, renderSelection, initialSelectedId, copy }: {
     pipeline: ProfilePipeline;
     heading?: string;
     subheading?: string;
-    graphKind?: 'execution' | 'sql-flow' | 'explain-plan' | 'index-analysis';
+    graphKind?: PipelineGraphKind;
     onSelectNode?: (node: ProfilePipelineNode) => void;
     renderSelection?: (node: ProfilePipelineNode) => ReactNode;
     initialSelectedId?: string;
     copy?: Copy['common'];
 }) {
+    const runtime = graphKind === 'runtime';
     const layout = useMemo(() => layoutPipeline(pipeline), [pipeline]);
     const firstNodeId = initialSelectedId && pipeline.nodes.some(node => node.id === initialSelectedId)
         ? initialSelectedId
@@ -226,7 +278,7 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
         const initialNodeId = firstNodeId;
         setSelectedId(initialNodeId);
         setZoom(1);
-        if ((graphKind !== 'execution' && graphKind !== 'explain-plan' && graphKind !== 'index-analysis') || !initialNodeId) return;
+        if (!autoFocusGraphKinds.has(graphKind) || !initialNodeId) return;
         const initialNode = layout.nodes.find(({ node }) => node.id === initialNodeId);
         const frame = window.requestAnimationFrame(() => {
             const viewport = graphViewport.current;
@@ -310,28 +362,17 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
         });
     };
 
-    if (!pipeline.nodes.length) return <div className="pipeline-graph-empty">{graphKind === 'sql-flow' ? copy?.sqlFlowNoStages ?? 'No SQL stages were found in this statement.' : copy?.pipelineNoOutput ?? 'This pipeline did not return any operator nodes.'}</div>;
+    const labels = graphLabels(graphKind, copy);
+    const terminology = labels.terminology;
+    const connectionLabel = labels.connection;
+    const viewportLabel = labels.viewport;
 
-    const terminology = graphKind === 'sql-flow'
-        ? { graph: copy?.sqlMap ?? 'SQL flow graph', item: copy?.sqlFlowStages ?? 'stages', selected: copy?.sqlFlowSelectedStage ?? 'Selected stage', action: copy?.sqlFlowInspectStage ?? 'Inspect stage', details: copy?.sqlFlowStageDetails ?? 'Selected stage details' }
-        : graphKind === 'explain-plan'
-            ? { graph: copy?.logicalPlan ?? 'Logical query plan', item: copy?.planStep ?? 'steps', selected: copy?.planSelectedStep ?? 'Selected step', action: copy?.planInspectStep ?? 'Inspect step', details: copy?.planStepDetails ?? 'Selected plan step details' }
-            : graphKind === 'index-analysis'
-                ? { graph: copy?.indexAnalysisGraph ?? 'Index pruning graph', item: copy?.indexAnalysisItem ?? 'index checks', selected: copy?.indexAnalysisSelected ?? 'Selected index', action: copy?.indexAnalysisInspect ?? 'Inspect index', details: copy?.indexAnalysisDetails ?? 'Selected index details' }
-                : { graph: copy?.pipelineGraph ?? 'Execution plan graph', item: copy?.sqlFlowOperators ?? 'operators', selected: copy?.selectedOperator ?? 'Selected operator', action: copy?.inspectOperator ?? 'Inspect operator', details: copy?.selectedOperatorDetails ?? 'Selected operator details' };
-    const connectionLabel = graphKind === 'sql-flow' ? copy?.sqlFlowConnections ?? 'connections' : 'connections';
-    const viewportLabel = graphKind === 'sql-flow'
-        ? copy?.sqlMap ?? 'Scrollable SQL flow graph'
-        : graphKind === 'explain-plan'
-            ? `${copy?.logicalPlan ?? 'Logical query plan'} · ${copy?.planGraphView ?? 'Graph'}`
-            : graphKind === 'index-analysis'
-                ? `${copy?.indexAnalysisGraph ?? 'Index pruning graph'} · ${copy?.planGraphView ?? 'Graph'}`
-                : 'Scrollable operator graph';
+    if (!pipeline.nodes.length) return <div className="pipeline-graph-empty">{labels.empty}</div>;
 
-    return <div className="pipeline-graph-card grid gap-3 rounded-xl border p-3" role="group" aria-label={terminology.graph}>
+    return <div className={`pipeline-graph-card grid gap-3 rounded-xl border p-3${runtime ? ' is-runtime-graph' : ''}`} role="group" aria-label={terminology.graph}>
         {graphKind !== 'explain-plan' && <div className="pipeline-graph-heading">
-            <div><span className="eyebrow">{heading ?? (graphKind === 'index-analysis' ? terminology.graph : pipeline.source === 'explain_pipeline' ? 'CLICKHOUSE OPERATOR PLAN' : 'ESTIMATED QUERY SHAPE')}</span><strong>{(graphKind === 'index-analysis' ? pipeline.nodes.filter(node => node.kind === 'filter').length : pipeline.nodes.length).toLocaleString()} {terminology.item} <i>·</i> {pipeline.edges.length.toLocaleString()} {connectionLabel}</strong></div>
-            <small>{subheading ?? (graphKind === 'index-analysis' ? copy?.indexAnalysisDescription ?? 'ClickHouse-reported index checks with parts and granules retained.' : pipeline.source === 'explain_pipeline' ? copy?.pipelineGraphDescription ?? 'Planned topology · runtime counters are run-level' : 'Estimated from SQL structure')}</small>
+            <div><span className="eyebrow">{heading ?? (graphKind === 'index-analysis' || runtime ? terminology.graph : pipeline.source === 'explain_pipeline' ? 'CLICKHOUSE OPERATOR PLAN' : 'ESTIMATED QUERY SHAPE')}</span><strong>{(graphKind === 'index-analysis' ? pipeline.nodes.filter(node => node.kind === 'filter').length : pipeline.nodes.length).toLocaleString()} {terminology.item} <i>·</i> {pipeline.edges.length.toLocaleString()} {connectionLabel}</strong></div>
+            <small>{subheading ?? (graphKind === 'index-analysis' ? copy?.indexAnalysisDescription ?? 'ClickHouse-reported index checks with parts and granules retained.' : runtime ? copy?.runtimeGraphDescription ?? 'Measured execution stages from EXPLAIN ANALYZE.' : pipeline.source === 'explain_pipeline' ? copy?.pipelineGraphDescription ?? 'Planned topology · runtime counters are run-level' : 'Estimated from SQL structure')}</small>
         </div>}
         {pipeline.truncated && graphKind !== 'explain-plan' && <p className="pipeline-graph-warning" role="status">{graphKind === 'sql-flow' ? copy?.sqlFlowTruncatedWarning ?? 'This query is large. The graph shows a bounded set of SQL stages.' : graphKind === 'index-analysis' ? copy?.planTruncated ?? 'The index output is large. Some checks are hidden.' : copy?.pipelineGraphTruncated ?? 'This plan is large. The graph shows a bounded set of operators.'}</p>}
         <div className="pipeline-graph-controls" role="group" aria-label={copy?.pipelineZoomControls ?? 'Graph view controls'}>
@@ -348,7 +389,7 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
             </button>
         </div>
         <div ref={graphViewport} className="pipeline-graph-scroll overflow-auto" role="region" aria-label={viewportLabel}>
-            <svg className="pipeline-graph-svg" width={Math.round(graphWidth * zoom)} height={Math.round(graphHeight * zoom)} viewBox={`0 0 ${graphWidth} ${graphHeight}`} role="group" aria-label={graphKind === 'sql-flow' ? copy?.sqlFlowGraphHint ?? 'Click a stage to inspect it' : graphKind === 'explain-plan' ? copy?.planGraphHint ?? 'Select a step to inspect its properties.' : graphKind === 'index-analysis' ? copy?.indexAnalysisHint ?? 'Select an index to inspect its condition and pruning counts.' : copy?.pipelineGraphHint ?? 'Click an operator to inspect it'}>
+            <svg className="pipeline-graph-svg" width={Math.round(graphWidth * zoom)} height={Math.round(graphHeight * zoom)} viewBox={`0 0 ${graphWidth} ${graphHeight}`} role="group" aria-label={labels.svg}>
                 <defs>
                     <pattern id={gridId} width="32" height="32" patternUnits="userSpaceOnUse"><path d="M 32 0 H 0 V 32" className="pipeline-graph-grid-line"/></pattern>
                     <radialGradient id={ambientId} cx="50%" cy="0%" r="90%"><stop offset="0%" stopColor="var(--accent)" stopOpacity=".16"/><stop offset="100%" stopColor="var(--accent)" stopOpacity="0"/></radialGradient>
@@ -363,11 +404,13 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
                         const active = focusedGraph?.edgeIds.has(edgeId) ?? false;
                         const edgeState = focusedGraph ? active ? ' is-active' : ' is-muted' : '';
                         const path = pathFor(edge.points);
-                        return <g key={`${edge.source}-${edge.target}-${index}`} className={`pipeline-graph-edge${edgeState}`}>
+                        const flowStyle = runtime && edge.flow !== undefined ? { strokeWidth: `${1 + Math.sqrt(edge.flow) * 3}px` } : undefined;
+                        const showLabel = Boolean(edge.label && (!runtime || edge.source === selected?.id || edge.target === selected?.id));
+                        return <g key={`${edge.source}-${edge.target}-${index}`} className={`pipeline-graph-edge${edgeState}${runtime ? ' is-runtime-edge' : ''}`}>
                             {active && <path className="pipeline-edge-glow" d={path}/>}
-                            <path className="pipeline-edge-line" d={path} markerEnd={`url(#${active ? activeMarkerId : markerId})`}/>
+                            <path className="pipeline-edge-line" d={path} markerEnd={`url(#${active ? activeMarkerId : markerId})`} style={flowStyle}/>
                             {active && (edge.source === selected?.id || edge.target === selected?.id) && <path className="pipeline-edge-pulse" d={path}/>}
-                            {edge.label && middle && <text x={middle.x + 7} y={middle.y - 5}>{edge.label}</text>}
+                            {showLabel && middle && <text x={middle.x + 7} y={middle.y - 5}>{edge.label}</text>}
                         </g>;
                     })}
                 </g>
@@ -377,10 +420,16 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
                     const active = selected?.id === node.id;
                     const related = focusedGraph?.nodeIds.has(node.id) ?? false;
                     const status = graphKind === 'execution' && node.status === 'planned' ? copy?.plannedStatus ?? node.status : node.status;
-                    const nodeKindLabel = graphKind === 'sql-flow' ? sqlFlowNodeKind(node.kind, copy) : graphKind === 'explain-plan' ? copy?.planStep ?? 'step' : graphKind === 'index-analysis' ? node.kind === 'read' ? 'READ' : node.kind === 'filter' ? 'INDEX' : 'OUTPUT' : node.kind;
+                    const nodeKindLabel = graphNodeKindLabel(graphKind, node, copy);
                     const nodeStatus = graphKind === 'index-analysis' ? node.detail : graphKind === 'sql-flow' ? sqlFlowNodeStatus(node.status, copy) : status;
                     const focusState = focusedGraph ? active ? ' is-selected' : related ? ' is-related' : ' is-muted' : '';
-                    return <g key={node.id} role="button" tabIndex={active ? 0 : -1} aria-label={`${terminology.action} ${label}${node.detail ? ` · ${node.detail}` : ''}`} aria-pressed={active} data-node-id={node.id} className={`pipeline-graph-node pipeline-node-${node.kind}${focusState}`} transform={`translate(${x - nodeWidth / 2} ${y - nodeHeight / 2})`} onClick={event => { chooseNode(node); event.currentTarget.focus(); }} onKeyDown={event => onNodeKeyDown(event, node)}>
+                    const runtimeShare = Math.max(0, Math.min(100, node.timePercent ?? 0));
+                    const runtimeStyle = runtime ? {
+                        '--runtime-node-fill': `color-mix(in srgb, var(--accent) ${10 + runtimeShare * 0.34}%, var(--panel-raised))`,
+                        '--runtime-node-stroke': `color-mix(in srgb, var(--accent) ${18 + runtimeShare * 0.62}%, var(--line-bright))`,
+                    } as CSSProperties : undefined;
+                    const runtimeTiming = node.durationMs === undefined ? '' : `${node.durationMs < 1 ? node.durationMs.toFixed(2) : node.durationMs.toFixed(1)} ms${node.timePercent === undefined ? '' : ` · ${node.timePercent}%`}`;
+                    return <g key={node.id} role="button" tabIndex={active ? 0 : -1} aria-label={`${terminology.action} ${label}${node.detail ? ` · ${node.detail}` : ''}`} aria-pressed={active} data-node-id={node.id} className={`pipeline-graph-node pipeline-node-${node.kind}${runtime ? ' is-runtime-node' : ''}${focusState}`} style={runtimeStyle} transform={`translate(${x - nodeWidth / 2} ${y - nodeHeight / 2})`} onClick={event => { chooseNode(node); event.currentTarget.focus(); }} onKeyDown={event => onNodeKeyDown(event, node)}>
                         <title>{node.detail ? `${label}\n${node.detail}` : label}</title>
                         <rect className="pipeline-node-shadow" x="10" y="10" width={nodeWidth} height={nodeHeight} rx="11"/>
                         <path className="pipeline-node-side" d={`M 0 ${nodeHeight - 1} H ${nodeWidth} L ${nodeWidth + 10} ${nodeHeight + 9} H 10 Z`}/>
@@ -391,7 +440,7 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
                         <text className="pipeline-node-kind" x="14" y="19">{nodeKindLabel.toUpperCase()}</text>
                         {lines.map((line, index) => <text className="pipeline-node-label" key={index} x="14" y={43 + index * 15}>{line}</text>)}
                         {node.parallelism !== undefined && <text className="pipeline-node-parallel" x={nodeWidth - 12} y="20" textAnchor="end">× {node.parallelism}</text>}
-                        {graphKind !== 'explain-plan' && <text className="pipeline-node-status" x={nodeWidth - 12} y={nodeHeight - 11} textAnchor="end">{nodeStatus}</text>}
+                        {runtime ? <text className="pipeline-node-status runtime-node-timing" x={nodeWidth - 12} y={nodeHeight - 11} textAnchor="end">{runtimeTiming}</text> : graphKind !== 'explain-plan' && <text className="pipeline-node-status" x={nodeWidth - 12} y={nodeHeight - 11} textAnchor="end">{nodeStatus}</text>}
                     </g>;
                 })}
             </svg>
@@ -402,9 +451,17 @@ export function PipelineGraph({ pipeline, heading, subheading, graphKind = 'exec
                 {selected.parallelism !== undefined && <span><small>{copy?.parallelism ?? 'Parallelism'}</small><strong>{selected.parallelism.toLocaleString()}</strong></span>}
                 <span><small>{graphKind === 'sql-flow' ? copy?.sqlFlowInputs ?? 'Inputs' : copy?.pipelineInputs ?? 'Inputs'}</small><strong>{incomingCount}</strong></span>
                 <span><small>{graphKind === 'sql-flow' ? copy?.sqlFlowOutputs ?? 'Outputs' : copy?.pipelineOutputs ?? 'Outputs'}</small><strong>{outgoingCount}</strong></span>
-                {selected.durationMs !== undefined && <span><small>{copy?.pipelineRunDuration ?? 'Run duration'}</small><strong>{Math.round(selected.durationMs)} ms</strong></span>}
-                {selected.rows !== undefined && <span><small>{copy?.pipelineRunRows ?? 'Run rows'}</small><strong>{Number(selected.rows).toLocaleString()}</strong></span>}
-                {selected.bytes !== undefined && <span><small>{copy?.pipelineRunBytes ?? 'Run bytes'}</small><strong>{selected.bytes}</strong></span>}
+                {selected.durationMs !== undefined && <span><small>{copy?.pipelineRunDuration ?? 'Run duration'}</small><strong>{selected.durationMs < 1 ? `${selected.durationMs.toFixed(2)} ms` : `${selected.durationMs.toFixed(1)} ms`}</strong></span>}
+                {runtime ? <>
+                    {selected.timePercent !== undefined && <span><small>Execution share</small><strong>{selected.timePercent}%</strong></span>}
+                    {selected.inputRows !== undefined && <span><small>Rows in</small><strong>{selected.inputRows}</strong></span>}
+                    {selected.outputRows !== undefined && <span><small>Rows out</small><strong>{selected.outputRows}</strong></span>}
+                    {selected.inputBytes !== undefined && <span><small>Bytes in</small><strong>{selected.inputBytes}</strong></span>}
+                    {selected.outputBytes !== undefined && <span><small>Bytes out</small><strong>{selected.outputBytes}</strong></span>}
+                </> : <>
+                    {selected.rows !== undefined && <span><small>{copy?.pipelineRunRows ?? 'Run rows'}</small><strong>{Number(selected.rows).toLocaleString()}</strong></span>}
+                    {selected.bytes !== undefined && <span><small>{copy?.pipelineRunBytes ?? 'Run bytes'}</small><strong>{selected.bytes}</strong></span>}
+                </>}
             </div>}
         </div>}
     </div>;

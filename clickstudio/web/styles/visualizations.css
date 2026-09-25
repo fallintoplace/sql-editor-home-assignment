@@ -265,4 +265,12 @@
     .heatmap-cell { position: relative; min-width: 26px; height: 27px; padding: 2px; border: 1px solid color-mix(in srgb, var(--line) 65%, transparent); border-radius: 4px; font-family: var(--font-mono); font-size: 7px; font-variant-numeric: tabular-nums; text-align: center; transition: transform .12s ease, border-color .12s ease; }
     .heatmap-cell:hover { z-index: var(--z-local-control); border-color: var(--text-soft); transform: scale(1.08); }
     .heatmap-caption { padding: 0 12px 10px; color: var(--muted); font-size: 8px; }
+    .runtime-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 7px; margin: 0 0 10px; }
+    .runtime-summary-card { display: grid; min-width: 0; gap: 5px; padding: 9px 11px; border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line)); border-radius: 9px; background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 7%, var(--panel-raised)), var(--panel)); }
+    .runtime-summary-card > span { color: var(--muted); font-size: 8px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .runtime-summary-card > strong { overflow: hidden; color: var(--text); font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+    .is-runtime-graph .pipeline-node-face { fill: var(--runtime-node-fill, var(--panel-raised)); stroke: var(--runtime-node-stroke, var(--line-bright)); }
+    .is-runtime-graph .pipeline-node-accent-rail { stroke: var(--accent); opacity: .45; }
+    .is-runtime-graph .runtime-node-timing { fill: var(--accent); font-weight: 760; }
+    .is-runtime-graph .pipeline-graph-edge .pipeline-edge-line { stroke-linecap: round; opacity: .72; }
 }

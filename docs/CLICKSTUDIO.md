@@ -98,6 +98,8 @@ The schema explorer presents the selected database alongside ClickHouse system t
 
 For system tables, **Read ClickHouse documentation** loads native documentation from the connected server and displays the associated server version.
 
+For MergeTree-family tables, select **Visualize parts** to inspect active parts by partition. Treemap sizes use compressed bytes by default; switch to rows or marks, choose the Galaxy layout, select parts for exact metrics, or zoom into a partition. The display is capped at 1,000 parts.
+
 The object explorer also provides a unified way to inspect database objects and move directly into relevant SQL workflows.
 
 ## Example workflows
@@ -154,7 +156,7 @@ Choose **Run script** to retain a result for each statement.
 
 ## EXPLAIN experiences
 
-ClickStudio provides three ClickHouse-specific analysis paths.
+ClickStudio provides four ClickHouse-specific execution analysis paths.
 
 ### EXPLAIN INDEXES
 
@@ -168,7 +170,15 @@ Shows the logical query plan with graph and tree presentations. Selecting a step
 
 Shows the planned processor topology and parallel lanes. This is useful for understanding how ClickHouse intends to execute the query.
 
-Together these views turn ClickHouse planning output into an interactive part of the SQL workflow.
+### EXPLAIN ANALYZE
+
+Runs the selected query and displays measured time, data flow, and parallelism in an interactive runtime graph. The query runs on ClickHouse; the result rows are discarded and the explain output is retained. This action is available when the selected connection supports native `EXPLAIN ANALYZE` (introduced in ClickHouse 26.7).
+
+The runtime graph follows data from reads toward the result, emphasizes slower stages, and retains raw output in the Results tab. Sample mode displays deterministic fixture metrics and does not evaluate the SQL.
+
+The SQL Structure view also includes a server-resolved **Analyzer** tree alongside the local AST and logical flow.
+
+Together these views turn ClickHouse planning and runtime output into an interactive part of the SQL workflow.
 
 ## Execution evidence
 

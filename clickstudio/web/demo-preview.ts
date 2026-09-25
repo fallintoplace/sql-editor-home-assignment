@@ -3,6 +3,8 @@ import { splitSql } from '../shared/sql.js';
 import { sqlForRunKind } from '../shared/explain-plan.js';
 import { isResult, isRun } from '../shared/run-wire.js';
 import { loadPlaygroundSchema, PLAYGROUND_CONNECTION, PLAYGROUND_CONNECTION_ID, queryPlayground, queryPlaygroundQueryTree } from './playground.js';
+import { demoMergeTreePartRows } from '../shared/demo-fixtures.js';
+import { parseMergeTreeParts } from '../shared/parts.js';
 import {
     DEMO_PREVIEW_RUN_ID,
     DEMO_PREVIEW_SQL,
@@ -236,6 +238,10 @@ export class DemoPreviewApi {
         if (pathname === '/session') return { principal: { id: owner, role: 'owner' }, requiresLogin: false, demo: true };
         if (pathname === '/connections' && method === 'GET') return [connection(this.trusted), PLAYGROUND_CONNECTION];
         if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'schema') return schema;
+        if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'table-parts' && method === 'POST') {
+            if (body.database !== 'demo' || body.table !== 'events') throw new Error('The selected table is not available in this sample.');
+            return parseMergeTreeParts('demo', 'events', demoMergeTreePartRows());
+        }
         if (parts[0] === 'connections' && parts[1] === PLAYGROUND_CONNECTION_ID && parts[2] === 'schema')
             return loadPlaygroundSchema(options.signal, url.searchParams.get('refresh') === 'true');
         if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'trust' && method === 'POST') {
@@ -257,7 +263,7 @@ export class DemoPreviewApi {
         }
 
         if (pathname === '/runs' && method === 'POST') {
-            const requestedKind = body.kind === 'explain' || body.kind === 'plan' || body.kind === 'pipeline' ? body.kind : 'query';
+            const requestedKind = body.kind === 'explain' || body.kind === 'plan' || body.kind === 'pipeline' || body.kind === 'analyze' ? body.kind : 'query';
             const parameters = record(body.parameters) as Record<string, string>;
             if (body.connectionId === PLAYGROUND_CONNECTION_ID) {
                 if (Object.keys(parameters).length) throw new Error('Remove query parameters before running SQL on ClickHouse Playground.');

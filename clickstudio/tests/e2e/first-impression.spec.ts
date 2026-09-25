@@ -28,6 +28,7 @@ test('Run, script, and explain actions stay visible beside the primary Run butto
     await expect(actions.getByRole('button', { name: 'EXPLAIN INDEXES', exact: true })).toBeVisible();
     await expect(actions.getByRole('button', { name: 'EXPLAIN PLAN', exact: true })).toBeVisible();
     await expect(actions.getByRole('button', { name: 'EXPLAIN PIPELINE', exact: true })).toBeVisible();
+    await expect(actions.getByRole('button', { name: 'EXPLAIN ANALYZE', exact: true })).toBeVisible();
     await expect(runScript).toBeEnabled();
     await runScript.focus();
     await expect(runScript).toBeFocused();
@@ -110,6 +111,29 @@ test('EXPLAIN PLAN opens a graph with a tree view and keeps the raw result avail
     await expect(plan.locator('.explain-plan-tree')).toBeVisible();
     await plan.getByRole('button', { name: 'Graph', exact: true }).click();
     await expect(plan.getByRole('region', { name: 'Logical query plan · Graph', exact: true })).toBeVisible();
+
+    await page.getByRole('tab', { name: 'Results', exact: true }).click();
+    await expect(page.getByRole('table', { name: 'Retained query rows' })).toBeVisible();
+});
+
+test('EXPLAIN ANALYZE opens a measured runtime graph and retains the raw result', async ({ page }) => {
+    await trust(page);
+    await page.getByTestId('run-action-explain-analyze').click();
+
+    const runtime = page.locator('.results-surface[aria-label="Runtime"]');
+    await expect(runtime.locator('.runtime-summary-grid')).toContainText('31.42 ms');
+    await expect(runtime.locator('.runtime-summary-grid')).toContainText('29.34 ms');
+    const graph = runtime.getByRole('region', { name: 'Runtime · Graph', exact: true });
+    await expect(graph).toBeVisible();
+    await expect(graph.locator('[data-node-id]')).toHaveCount(5);
+    await expect(graph).toContainText('ReadFromMergeTree');
+
+    const read = graph.locator('[data-node-id]').filter({ hasText: 'ReadFromMergeTree' });
+    await read.click();
+    const inspection = runtime.locator('.pipeline-node-inspector');
+    await expect(inspection).toContainText('ReadFromMergeTree');
+    await expect(inspection).toContainText('1.24 million');
+    await expect(inspection).toContainText('87.6%');
 
     await page.getByRole('tab', { name: 'Results', exact: true }).click();
     await expect(page.getByRole('table', { name: 'Retained query rows' })).toBeVisible();

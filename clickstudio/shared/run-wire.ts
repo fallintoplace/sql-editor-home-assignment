@@ -79,7 +79,7 @@ export function isRun(value: unknown): value is Run {
         && typeof value.sql === 'string'
         && (value.sourceFrom === undefined || isSafeInteger(value.sourceFrom))
         && (value.sourceTo === undefined || isSafeInteger(value.sourceTo))
-        && (value.kind === 'query' || value.kind === 'explain' || value.kind === 'plan' || value.kind === 'pipeline')
+        && isRunKind(value.kind)
         && isStringRecord(value.parameters)
         && isLimits(value.limits)
         && isStringRecord(value.tags)
@@ -108,6 +108,10 @@ export function isRun(value: unknown): value is Run {
         && value.retryPolicy === 'never'
         && isOptionalString(value.traceId)
         && isOptionalString(value.serverVersion);
+}
+
+function isRunKind(value: unknown): value is Run['kind'] {
+    return value === 'query' || value === 'explain' || value === 'plan' || value === 'pipeline' || value === 'analyze';
 }
 
 export function isResult(value: unknown): value is Result {

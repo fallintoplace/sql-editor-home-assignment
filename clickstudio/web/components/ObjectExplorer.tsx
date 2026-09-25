@@ -19,6 +19,8 @@ import { quoteIdentifier } from '../../shared/sql';
 import type { Connected } from '../workspace-types';
 import type { Copy } from '../i18n';
 import { Button, cx, formatBytes, formatCount, Icon } from './ui';
+import { OverlayPortal } from './OverlayPortal';
+import { PartsExplorer } from './PartsExplorer';
 
 type ObjectExplorerProps = {
     copy: Copy['common'];
@@ -63,6 +65,7 @@ export function ObjectExplorer({ copy, connection, schema, schemaLoading, schema
     const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(recovered.expandedIds));
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [copiedId, setCopiedId] = useState<string>();
+    const [partsTable, setPartsTable] = useState<SchemaTable>();
     const copyTimer = useRef<number | undefined>(undefined);
 
     useEffect(() => () => {
@@ -176,7 +179,7 @@ export function ObjectExplorer({ copy, connection, schema, schemaLoading, schema
     return <section className={cx('inspector-section object-explorer-section', compact && 'is-compact', showCompactDetails && 'is-detail-mode')}>
         {showCompactDetails ? <div className="object-compact-details">
             <button type="button" className="object-back-button" onClick={browseObjects}><span>‹</span>{copy.objects}</button>
-            <ObjectDetails copy={copy} selection={selected} trusted={trusted} copiedId={copiedId} onInsert={onInsert} onCopy={copyText} onOpenSqlDraft={onOpenSqlDraft} onOpenReference={onOpenReference}/>
+            <ObjectDetails copy={copy} selection={selected} trusted={trusted} copiedId={copiedId} onInsert={onInsert} onCopy={copyText} onOpenSqlDraft={onOpenSqlDraft} onOpenReference={onOpenReference} onOpenParts={setPartsTable}/>
         </div> : <>
         <div className="inspector-search object-search"><Icon name="search"/><input data-testid="schema-search" value={search} onChange={event => changeSearch(event.target.value)} placeholder={copy.objectSearch} aria-label={copy.objectSearch}/>{search && <button type="button" className="object-search-clear" aria-label="Clear object search" onClick={() => changeSearch('')}>×</button>}</div>
         <div className="schema-heading object-heading"><span>{copy.objectCount.replace('{count}', (model.query ? model.visibleObjects : model.totalObjects).toLocaleString())}</span><Button variant="ghost" className="toolbar-small" onClick={onRefreshSchema} disabled={schemaLoading || !trusted}>{schemaLoading ? copy.loading : copy.refresh}</Button></div>
@@ -200,9 +203,10 @@ export function ObjectExplorer({ copy, connection, schema, schemaLoading, schema
                     })}
                 </div>
             </div> : <div className="object-empty-search"><strong>{copy.noObjectsMatch}</strong><span>{search ? 'Try a different name, type, engine, index, or column.' : copy.metadataUnavailable}</span></div>}
-            {!compact && detailsOpen && selected && <ObjectDetails copy={copy} selection={selected} trusted={trusted} copiedId={copiedId} onClose={browseObjects} onInsert={onInsert} onCopy={copyText} onOpenSqlDraft={onOpenSqlDraft} onOpenReference={onOpenReference}/>}
+            {!compact && detailsOpen && selected && <ObjectDetails copy={copy} selection={selected} trusted={trusted} copiedId={copiedId} onClose={browseObjects} onInsert={onInsert} onCopy={copyText} onOpenSqlDraft={onOpenSqlDraft} onOpenReference={onOpenReference} onOpenParts={setPartsTable}/>}
         </>}
         </>}
+        {partsTable && <OverlayPortal><PartsExplorer connection={connection} table={partsTable} copy={copy} onClose={() => setPartsTable(undefined)}/></OverlayPortal>}
     </section>;
 }
 
@@ -262,7 +266,7 @@ function ObjectLeafRow({ level, selected, glyph, label, meta, onSelect, onInsert
     </div>;
 }
 
-function ObjectDetails({ copy, selection, trusted, copiedId, onClose, onInsert, onCopy, onOpenSqlDraft, onOpenReference }: {
+function ObjectDetails({ copy, selection, trusted, copiedId, onClose, onInsert, onCopy, onOpenSqlDraft, onOpenReference, onOpenParts }: {
     copy: Copy['common'];
     selection: ExplorerSelection;
     trusted: boolean;
@@ -272,6 +276,7 @@ function ObjectDetails({ copy, selection, trusted, copiedId, onClose, onInsert, 
     onCopy: (value: string, id: string) => void;
     onOpenSqlDraft: (name: string, sql: string, run: boolean) => void;
     onOpenReference: (name: string, type: string) => void;
+    onOpenParts: (table: SchemaTable) => void;
 }) {
     if (selection.kind === 'relation') {
         const { table, columns } = selection;
@@ -285,6 +290,7 @@ function ObjectDetails({ copy, selection, trusted, copiedId, onClose, onInsert, 
                 <Button variant="ghost" className="toolbar-small" onClick={() => void onCopy(qualified, selection.id)}>{copiedId === selection.id ? copy.copied : copy.copyName}</Button>
             </div>
             <div className="object-reference-actions">
+                {table.engine.endsWith('MergeTree') && <Button variant="secondary" className="toolbar-small" disabled={!trusted} title={!trusted ? copy.runActionTrustRequired : undefined} onClick={() => onOpenParts(table)}>{copy.partsVisualize}</Button>}
                 {table.engine && <Button variant="secondary" className="toolbar-small" onClick={() => onOpenReference(table.engine, 'Table Engine')}>{copy.referenceTableEngine}</Button>}
                 {table.database === 'system' && <Button variant="ghost" className="toolbar-small" onClick={() => onOpenReference(table.name, 'System Table')}>{copy.referenceSystemTable}</Button>}
             </div>

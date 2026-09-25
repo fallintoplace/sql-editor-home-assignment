@@ -65,10 +65,11 @@ ClickStudio includes dedicated views for:
 - **EXPLAIN INDEXES**
 - **EXPLAIN PLAN**
 - **EXPLAIN PIPELINE**
+- **EXPLAIN ANALYZE**
 
-The UI turns ClickHouse output into bounded interactive graph structures while also retaining the raw result.
+The UI turns ClickHouse output into bounded interactive graph structures while also retaining the raw result. Runtime analysis executes the selected query and is capability-gated by the connected server. MergeTree storage metadata is explored separately from run history in the object browser.
 
-This makes pruning, logical plan shape, and processor topology easier to understand at a glance.
+This makes pruning, logical plan shape, processor topology, and measured execution easier to understand at a glance.
 
 ## 7. Lightweight local persistence
 

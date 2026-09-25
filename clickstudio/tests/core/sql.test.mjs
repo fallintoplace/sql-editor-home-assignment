@@ -25,7 +25,7 @@ test('Typed parameters ignore comments and literals', () => assert.deepEqual(par
 test('Inconsistent parameter types reject', () => assert.throws(() => parameterNames('SELECT {a:Int32}, {a:String}')));
 test('Identifier quoting cannot end the identifier', () => assert.equal(quoteIdentifier('a`b'), '`a\\`b`'));
 for (const sql of [
-    'SELECT 1', 'SELECT * FROM system.tables', "SELECT 'DROP'", 'WITH 1 AS n SELECT n', 'EXPLAIN SELECT 1',
+    'SELECT 1', 'SELECT * FROM system.tables', "SELECT 'DROP'", 'WITH 1 AS n SELECT n', 'EXPLAIN SELECT 1', 'EXPLAIN ANALYZE SELECT 1',
     'SHOW CREATE TABLE events', 'SHOW CREATE DATABASE analytics', 'SHOW CREATE VIEW recent_events',
     'SHOW CREATE DICTIONARY event_types', 'SHOW CREATE USER analyst', 'SHOW CREATE ROLE reader',
     'SHOW CREATE ROW POLICY tenant_policy ON events', 'SHOW CREATE QUOTA analyst_quota',
@@ -73,6 +73,7 @@ test('Unsafe JSON integers reject rather than lose precision', () => assert.thro
 test('Int64 encoded as a string remains lossless', () => assert.equal(validateJson({ id: '18446744073709551615' }).id, '18446744073709551615'));
 test('Request tags cannot smuggle arbitrary secret fields', () => assert.throws(() => runRequest({ clientRequestId: 'a', connectionId: 'local', sql: 'SELECT 1', tags: { password: 'x' } })));
 test('EXPLAIN PLAN is an accepted run kind', () => assert.equal(runRequest({ clientRequestId: 'plan-1', connectionId: 'local', sql: 'SELECT 1', kind: 'plan' }).kind, 'plan'));
+test('EXPLAIN ANALYZE is an accepted run kind', () => assert.equal(runRequest({ clientRequestId: 'analyze-1', connectionId: 'local', sql: 'SELECT 1', kind: 'analyze' }).kind, 'analyze'));
 test('Unknown explain run kinds are rejected', () => assert.throws(() => runRequest({ clientRequestId: 'plan-2', connectionId: 'local', sql: 'SELECT 1', kind: 'explain-json' }), { code: 'INVALID_KIND' }));
 for (const experience of ['beginner', 'expert'])
     test(`Workspace mode ${experience} is a valid query tag`, () => assert.equal(runRequest({ clientRequestId: 'a', connectionId: 'local', sql: 'SELECT 1', tags: { workspace: 'clickstudio', experience } }).tags.experience, experience));

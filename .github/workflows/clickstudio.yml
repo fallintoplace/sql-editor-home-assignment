@@ -1,26 +1,31 @@
 name: ClickStudio validation
+
 concurrency:
   group: clickstudio-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 on:
   push:
     paths: ["clickstudio/**", "package.json", "src/index.ts", ".github/workflows/clickstudio.yml"]
   pull_request:
     paths: ["clickstudio/**", "package.json", "src/index.ts", ".github/workflows/clickstudio.yml"]
   workflow_dispatch:
+
 permissions:
   contents: read
+
+defaults:
+  run:
+    working-directory: clickstudio
+
 jobs:
-  quality-checks:
-    name: Quality checks & build
+  static-checks:
+    name: Static checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: clickstudio
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -33,40 +38,59 @@ jobs:
         run: npm run typecheck
       - name: ESLint
         run: npm run lint
-      - name: Core and workspace coverage gates
-        run: npm run coverage
-      - name: Production build
-        run: npm run build:app
 
-  integration-tests:
-    name: Integration & browser tests
+  coverage:
+    name: Coverage
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    defaults:
-      run:
-        working-directory: clickstudio
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: clickstudio/package-lock.json
       - name: Install dependencies
         run: npm ci
-      - name: Local-only credentials and ClickHouse 24.6
+      - name: Core and workspace coverage gates
+        run: npm run coverage
+
+  production-build:
+    name: Production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: clickstudio/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Build application
+        run: npm run build:app
+
+  clickhouse-integration:
+    name: ClickHouse integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: clickstudio/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Start ClickHouse 24.6
         id: database
         run: npm run init:env && docker compose up -d --wait clickhouse && npm run db:setup
-      - name: HTTP integration and LIVE ClickHouse fixture checks
+      - name: HTTP integration and live ClickHouse checks
         run: CLICKHOUSE_INTEGRATION=1 npm run test:integration
       - name: Deterministic SQL evaluations
         run: npm run eval
-      - name: Install browser
-        run: npx playwright install --with-deps chromium
-      - name: Browser suite (fixture driver)
-        run: npm run test:e2e
-      - name: Vercel static preview parser and export smoke test
-        run: npm run test:e2e:vercel
       - name: Capture ClickHouse diagnostics
         if: ${{ failure() && steps.database.outcome != 'skipped' }}
         run: docker compose logs --no-color > clickhouse-compose.log 2>&1 || true
@@ -78,6 +102,29 @@ jobs:
           path: clickstudio/clickhouse-compose.log
           if-no-files-found: ignore
           retention-days: 7
+      - name: Stop local services
+        if: ${{ always() && steps.database.outcome != 'skipped' }}
+        run: docker compose down -v
+
+  browser-e2e:
+    name: Browser E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: clickstudio/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Browser suite
+        run: npm run test:e2e
+      - name: Vercel preview parser and export smoke test
+        run: npm run test:e2e:vercel
       - name: Preserve browser diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
@@ -96,6 +143,3 @@ jobs:
           path: clickstudio/test-results/**/clickstudio-*.png
           if-no-files-found: ignore
           retention-days: 7
-      - name: Stop local services
-        if: ${{ always() && steps.database.outcome != 'skipped' }}
-        run: docker compose down -v

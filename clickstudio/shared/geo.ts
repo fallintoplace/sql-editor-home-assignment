@@ -72,7 +72,8 @@ function inferredLabel(columns: Column[], excluded: Set<number>): number | undef
 }
 
 function inferredMeasure(columns: Column[], excluded: Set<number>): number | undefined {
-    const eligible = columns.flatMap((column, index) => !excluded.has(index) && numericType(column.type) ? [index] : []);
+    const eligible = columns.flatMap((column, index) => !excluded.has(index) && numericType(column.type)
+        && coordinateToken(column.name, 'longitude') === undefined && coordinateToken(column.name, 'latitude') === undefined ? [index] : []);
     return eligible.find(index => namedMeasure.test(columns[index]!.name))
         ?? eligible.find(index => !identifierLike.test(columns[index]!.name));
 }

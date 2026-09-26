@@ -31,6 +31,7 @@ import { useWorkspaceData } from './useWorkspaceData';
 import { useWorkspaceAssistant } from './useWorkspaceAssistant';
 import { useWorkspacePanels } from './useWorkspacePanels';
 import { useScriptExecution } from './useScriptExecution';
+import { usePendingExecution } from './usePendingExecution';
 import { sqlExamplesFor, type SqlExample } from './sql-examples';
 import { localizeSqlExample } from './sql-examples-locales';
 import type { Copy, ExperienceLevel, Locale } from './i18n';
@@ -226,6 +227,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         loadHistory,
         setError,
     });
+    const pendingExecution = usePendingExecution({ activeDraftId: active.id, busy, run, script });
     const scriptFollowRef = useScriptExecution({
         scriptId: active.scriptId,
         draftId: active.id,
@@ -273,12 +275,21 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             const statements = splitSql(draft.sql);
             if (statements.length !== 1) throw new Error('An example must contain exactly one SQL statement to run directly.');
             const statement = statements[0]!;
-            const created = await post<Run>('/runs', {
-                clientRequestId: crypto.randomUUID(), connectionId: connection.id, documentId: draft.serverId,
-                sql: statement.sql, parameters: draft.parameters, parentRunId: draft.parentRunId, kind: 'query',
-                limits: { rows: connection.limits.rows || DEFAULT_LIMITS.rows, seconds: connection.limits.seconds || DEFAULT_LIMITS.seconds },
-                tags: { workspace: 'clickstudio', experience }, sourceFrom: statement.from, sourceTo: statement.to,
-            });
+            const requestId = crypto.randomUUID();
+            pendingExecution.start(requestId, draft.id, statement.sql);
+            let created: Run;
+            try {
+                created = await post<Run>('/runs', {
+                    clientRequestId: requestId, connectionId: connection.id, documentId: draft.serverId,
+                    sql: statement.sql, parameters: draft.parameters, parentRunId: draft.parentRunId, kind: 'query',
+                    limits: { rows: connection.limits.rows || DEFAULT_LIMITS.rows, seconds: connection.limits.seconds || DEFAULT_LIMITS.seconds },
+                    tags: { workspace: 'clickstudio', experience }, sourceFrom: statement.from, sourceTo: statement.to,
+                });
+            } catch (caught) {
+                pendingExecution.clear(requestId);
+                throw caught;
+            }
+            pendingExecution.acceptRun(requestId, created.id);
             setRunForRun(created.id, created, true);
             setPage(0);
             update(draft.id, current => ({ ...current, activeRunId: created.id, scriptId: undefined, runIds: rememberRunIds(current.runIds, [created.id]) }));
@@ -323,7 +334,18 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             ...(wholeScript ? {} : { sourceFrom: statement!.from, sourceTo: statement!.to }),
         };
         if (wholeScript) {
-            const created = await post<Script>('/scripts', { ...payload, stopOnError: true });
+            const previousResult = run && terminal(run) && resultPage
+                ? { draftId: active.id, run, page: resultPage, pageIndex: page }
+                : undefined;
+            pendingExecution.start(payload.clientRequestId, active.id, payload.sql, previousResult);
+            let created: Script;
+            try {
+                created = await post<Script>('/scripts', { ...payload, stopOnError: true });
+            } catch (caught) {
+                pendingExecution.clear(payload.clientRequestId);
+                throw caught;
+            }
+            pendingExecution.acceptScript(payload.clientRequestId, created.id);
             scriptFollowRef.current = { scriptId: created.id, enabled: true };
             setScripts(current => ({ ...current, [created.id]: created }));
             const first = created.statements.find(item => item.runId);
@@ -331,14 +353,20 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             else patch({ scriptId: created.id });
             setView('results');
         } else {
+            const previousResult = run && terminal(run) && resultPage
+                ? { draftId: active.id, run, page: resultPage, pageIndex: page }
+                : undefined;
+            pendingExecution.start(payload.clientRequestId, active.id, payload.sql, previousResult);
             setFailedQueryError(undefined);
             let created: Run;
             try {
                 created = await post<Run>('/runs', payload);
             } catch (caught) {
+                pendingExecution.clear(payload.clientRequestId);
                 if (statement) setFailedQueryError({ draftId: active.id, draftSql: active.sql, statementSql: statement.sql, sourceFrom: statement.from, error: apiErrorDetail(caught) });
                 throw caught;
             }
+            pendingExecution.acceptRun(payload.clientRequestId, created.id);
             setRunForRun(created.id, created, true);
             setPage(0); setView(kind === 'explain' ? 'indexes' : kind === 'plan' ? 'plan' : kind === 'pipeline' ? 'pipeline' : kind === 'analyze' ? 'runtime' : 'results');
             patch({ activeRunId: created.id, scriptId: undefined, runIds: [...new Set([...active.runIds, created.id])] });
@@ -886,6 +914,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             nativeParseSnapshot,
                             trusted,
                             busy,
+                            execution: pendingExecution.execution,
+                            retainedExecutionResult: pendingExecution.retainedExecutionResult,
                             cancelling,
                             experience,
                         }}

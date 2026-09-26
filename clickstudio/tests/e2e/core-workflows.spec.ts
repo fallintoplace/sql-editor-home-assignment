@@ -99,6 +99,138 @@ test('Run evidence stays with its draft through tab and mode switches', async ({
     expect(runRequests).toBe(2);
 });
 
+test('A running query shows its submitted SQL and keeps previous rows until it ends', async ({ page }) => {
+    await trust(page);
+    await page.getByRole('textbox', { name: 'SQL document name', exact: true }).fill('Running query.sql');
+    const previousRun = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/runs');
+    await runStatementButton(page).click();
+    await previousRun;
+
+    const results = page.getByRole('region', { name: 'Query results', exact: true });
+    const table = results.getByRole('table', { name: 'Retained query rows' });
+    await expect(table).toContainText('2026-01-01');
+    await expect(results.locator('.result-execution-progress')).toHaveCount(0);
+
+    let releaseRun: () => void = () => {};
+    const runGate = new Promise<void>(resolve => { releaseRun = resolve; });
+    let notifyRunRequest: () => void = () => {};
+    const runRequest = new Promise<void>(resolve => { notifyRunRequest = resolve; });
+    const runRoute = (url: URL) => url.pathname === '/api/runs';
+    await page.route(runRoute, async route => {
+        if (route.request().method() === 'POST') {
+            notifyRunRequest();
+            await runGate;
+        }
+        await route.continue();
+    });
+    try {
+        const submittedSql = 'SELECT fixture_slow';
+        await replaceSql(page, submittedSql);
+        await runStatementButton(page).click();
+        await runRequest;
+
+        const progress = results.locator('.result-execution-progress');
+        await expect(progress).toBeVisible();
+        await expect(progress).toContainText(submittedSql);
+        await expect(progress.locator('.loading-orbit')).toBeVisible();
+        await expect(progress).toContainText('Result from previous execution');
+        await expect(table).toContainText('2026-01-01');
+        await expect(results.locator('.table-pagination')).toHaveCount(0);
+
+        await replaceSql(page, "SELECT 'edited after submit' AS value");
+        await expect(progress).toContainText(submittedSql);
+        await expect(progress).not.toContainText('edited after submit');
+
+        await openBlankSql(page);
+        await expect(page.locator('.result-execution-progress')).toHaveCount(0);
+        await page.getByRole('tab', { name: 'Running query.sql', exact: true }).click();
+        await expect(progress).toBeVisible();
+
+        const startedRun = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/runs');
+        releaseRun();
+        const run = runIdentity(await (await startedRun).json());
+        const cancel = page.locator('.execution-bar').getByRole('button', { name: 'Cancel', exact: true });
+        await expect(cancel).toBeVisible();
+        await expect(progress).toBeVisible();
+        await expect(table).toContainText('2026-01-01');
+
+        const cancelled = page.waitForResponse(response => new URL(response.url()).pathname === `/api/runs/${run.id}/cancel`);
+        await cancel.click();
+        await cancelled;
+        await expect(progress).toHaveCount(0);
+    } finally {
+        releaseRun();
+        await page.unroute(runRoute);
+    }
+});
+
+test('The execution indicator clears when run submission fails', async ({ page }) => {
+    await trust(page);
+    let releaseFailure: () => void = () => {};
+    const failureGate = new Promise<void>(resolve => { releaseFailure = resolve; });
+    let notifyRunRequest: () => void = () => {};
+    const runRequest = new Promise<void>(resolve => { notifyRunRequest = resolve; });
+    const runRoute = (url: URL) => url.pathname === '/api/runs';
+    await page.route(runRoute, async route => {
+        if (route.request().method() !== 'POST') return route.continue();
+        notifyRunRequest();
+        await failureGate;
+        await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Temporary run failure' }) });
+    });
+    try {
+        const submittedSql = 'SELECT fixture_submit_failure';
+        await replaceSql(page, submittedSql);
+        await runStatementButton(page).click();
+        await runRequest;
+        const progress = page.locator('.result-execution-progress');
+        await expect(progress).toBeVisible();
+        await expect(progress).toContainText(submittedSql);
+
+        releaseFailure();
+        await expect(progress).toHaveCount(0);
+    } finally {
+        releaseFailure();
+        await page.unroute(runRoute);
+    }
+});
+
+test('Run Script shows the full submitted script while submission is pending', async ({ page }) => {
+    await trust(page);
+    await useAdvancedMode(page);
+    const submittedSql = `SELECT '${'x'.repeat(300)}';\nSELECT 2;`;
+    await replaceSql(page, submittedSql);
+
+    let releaseScript: () => void = () => {};
+    const scriptGate = new Promise<void>(resolve => { releaseScript = resolve; });
+    let notifyScriptRequest: () => void = () => {};
+    const scriptRequest = new Promise<void>(resolve => { notifyScriptRequest = resolve; });
+    const scriptRoute = (url: URL) => url.pathname === '/api/scripts';
+    await page.route(scriptRoute, async route => {
+        if (route.request().method() !== 'POST') return route.continue();
+        notifyScriptRequest();
+        await scriptGate;
+        await route.continue();
+    });
+    try {
+        await runScript(page);
+        await scriptRequest;
+        const progress = page.locator('.result-execution-progress');
+        await expect(progress).toBeVisible();
+        await expect(progress.locator('pre.result-execution-sql:not(.is-full)')).not.toContainText('SELECT 2;');
+        const fullSql = progress.locator('details');
+        await expect(fullSql).toHaveCount(1);
+        await fullSql.locator('summary').click();
+        await expect(fullSql.locator('pre')).toHaveText(submittedSql);
+
+        const startedScript = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/scripts');
+        releaseScript();
+        await startedScript;
+    } finally {
+        releaseScript();
+        await page.unroute(scriptRoute);
+    }
+});
+
 test('Query and result panels collapse to their headings', async ({ page }) => {
     await page.setViewportSize({ width: 1905, height: 1280 });
     await trust(page);

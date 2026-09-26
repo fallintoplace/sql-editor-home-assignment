@@ -17,6 +17,12 @@ import { Button, cx, Icon, Status } from './ui';
 import { ScriptResults } from './WorkspaceChrome';
 import { resultsTabLabel } from '../workspace-helpers';
 
+function failureMessagePreview(message: string) {
+    const primaryMessage = message.split(/\s+In scope\s+/i, 1)[0] || message;
+    const compactMessage = primaryMessage.replace(/\s+/g, ' ').trim();
+    return compactMessage.length > 220 ? `${compactMessage.slice(0, 217).trimEnd()}…` : compactMessage;
+}
+
 export type WorkspaceResultsPanelState = Readonly<{
     active: Draft;
     connection: Connected;
@@ -128,9 +134,11 @@ export function WorkspaceResultsPanel({
     const resultsRun = showPreviousResult ? retainedExecutionResult!.run : run;
     const resultsPage = showPreviousResult ? retainedExecutionResult!.page : resultPage;
     const resultsPageIndex = showPreviousResult ? retainedExecutionResult!.pageIndex : page;
-    const executionSqlPreview = execution && execution.sql.length > 240 ? `${execution.sql.slice(0, 240)}…` : execution?.sql;
+    const executionSql = execution?.sql.replace(/\s+/g, ' ').trim();
+    const executionSqlPreview = executionSql && executionSql.length > 180 ? `${executionSql.slice(0, 177).trimEnd()}…` : executionSql;
     const failureError = failedAttempt?.error ?? (run?.status === 'failed' ? run.error : undefined);
     const failureSql = failedAttempt?.statementSql ?? (run?.status === 'failed' ? run.sql : undefined);
+    const failurePreview = failureError ? failureMessagePreview(failureError.message) : undefined;
 
     if (!run && !execution && !failedAttempt && visibleResultsView !== 'sqlmap') return null;
 
@@ -151,11 +159,11 @@ export function WorkspaceResultsPanel({
             <div className="results-title">
                 <span className="results-mark"><Icon name={visibleResultsView === 'sqlmap' || visibleResultsView === 'pipeline' || visibleResultsView === 'indexes' || visibleResultsView === 'runtime' ? 'pipeline' : 'chart'}/></span>
                 <div><span className="eyebrow">{resultsEyebrow}</span><h2>{resultsTitle}</h2></div>
-                {failedAttempt && visibleResultsView !== 'sqlmap'
+                {panels.resultsCollapsed && failureError && visibleResultsView !== 'sqlmap'
                     ? <span className="result-execution-header" data-run-status="failed" role="status"><span className="status-light is-error"/>{copy.common.statusFailed}</span>
-                    : execution && visibleResultsView !== 'sqlmap'
+                    : panels.resultsCollapsed && execution && visibleResultsView !== 'sqlmap'
                     ? <span className="result-execution-header"><span className="loading-orbit" aria-hidden="true"/>{copy.common.statusRunning}</span>
-                    : run && visibleResultsView !== 'sqlmap' && <Status run={run} copy={copy.common}/>}
+                    : !failureError && !execution && run && visibleResultsView !== 'sqlmap' && <Status run={run} copy={copy.common}/>}
             </div>
             <div className="results-actions">
                 {run && resultTabs.length > 1 && <div className="results-tabs" role="tablist" aria-label={copy.common.workspaceOutput}>{resultTabs.map(tab => <button key={tab} role="tab" aria-selected={visibleResultsView === tab} type="button" onClick={() => actions.onSelectView(tab)}>{resultsTabLabel(tab, copy.common)}{tab === 'chart' && retainedSnapshot && <span className="suggested-dot"/>}</button>)}</div>}
@@ -167,22 +175,22 @@ export function WorkspaceResultsPanel({
         <div id="query-results-content" className={cx('panel-content results-content', ['insights', 'indexes', 'plan', 'pipeline', 'runtime'].includes(visibleResultsView) && 'results-content-scrollable')} hidden={panels.resultsCollapsed}>
             {visibleResultsView === 'sqlmap' && <SqlFlowView copy={copy.common} sql={sqlMapStatement?.sql ?? active.sql} sourceOffset={sqlMapStatement?.from ?? 0} parseResult={sqlMapParseStatement?.result} parserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} parseDurationMs={nativeParseSnapshot?.elapsedMs} connectionId={connection.id} parameters={active.parameters} analyzerAvailable={queryTreeAvailable} analyzerUnavailableReason={queryTreeUnavailableReason} onRevealRange={actions.onRevealRange}/>}
             {failureError && visibleResultsView !== 'sqlmap' && <div className="result-failure callout callout-error" data-testid="query-failure" role="alert">
-                <strong>{copy.common.statusFailed} · {failureError.code}</strong>
-                <span>{failureError.message}</span>
-                {failureSql && <details className="result-execution-details">
-                    <summary>{copy.common.expandQuery}</summary>
-                    <pre className="result-execution-sql is-full">{failureSql}</pre>
-                </details>}
+                <div className="result-failure-heading"><span className="status-light is-error"/><div><strong>{copy.common.statusFailed} · {failureError.code}</strong><span>{failurePreview}</span></div></div>
+                <details className="result-execution-details">
+                    <summary>{copy.common.more}</summary>
+                    <pre className="result-failure-detail">{failureError.message}</pre>
+                    {failureSql && <><span className="result-failure-sql-label">{copy.common.query}</span><pre className="result-execution-sql is-full">{failureSql}</pre></>}
+                </details>
             </div>}
             {execution && visibleResultsView !== 'sqlmap' && <div className={cx('result-execution-progress', !showPreviousResult && 'is-initial')} aria-busy="true">
-                <div className="result-execution-heading"><span className="loading-orbit" aria-hidden="true"/><span role="status" aria-live="polite">{copy.common.statusRunning}</span>{showPreviousResult && <strong className="result-execution-previous">Result from previous execution</strong>}</div>
-                <pre className="result-execution-sql">{executionSqlPreview}</pre>
-                {execution.sql.length > 240 && <details className="result-execution-details"><summary>{copy.common.expandQuery}</summary><pre className="result-execution-sql is-full">{execution.sql}</pre></details>}
+                <div className="result-execution-heading"><span className="loading-orbit" aria-hidden="true"/><span role="status" aria-live="polite">{copy.common.statusRunning}</span><strong className="result-execution-query" title={active.name}>{active.name}</strong>{showPreviousResult && <span className="result-execution-previous">Previous result</span>}</div>
+                <pre className="result-execution-sql is-preview">{executionSqlPreview}</pre>
+                {execution.sql.length > 180 && <details className="result-execution-details"><summary>{copy.common.expandQuery}</summary><pre className="result-execution-sql is-full">{execution.sql}</pre></details>}
             </div>}
-            {visibleResultsView !== 'sqlmap' && !execution && failedAttempt && run && <div className="result-provenance" aria-live="polite"><span className="status-light is-warning"/><span><strong>{resultsRun?.status === 'succeeded' || resultsRun?.status === 'truncated' ? 'Previous successful result' : 'Result from previous execution'}</strong><small>The latest query attempt failed. These rows are from an earlier execution.</small></span></div>}
+            {visibleResultsView !== 'sqlmap' && !execution && failedAttempt && run && <div className="result-provenance" aria-live="polite"><span className="status-light is-warning"/><span><strong>Previous result</strong><small>Latest attempt failed</small></span></div>}
             {visibleResultsView !== 'sqlmap' && !execution && !failedAttempt && staleResult && <div className="result-provenance" aria-live="polite"><span className="status-light is-warning"/><span><strong>Result from previous execution</strong><small>SQL or bound parameters changed since this run. Rerun to refresh the result.</small></span></div>}
             {visibleResultsView === 'results' && script && <ScriptResults script={script} runs={history} activeRunId={run?.id} onSelectRun={actions.onSelectScriptRun} onCancel={actions.onCancel} cancelDisabled={cancelling}/>}
-            {resultsRun && visibleResultsView === 'results' && (!execution || showPreviousResult) && <ResultGrid key={resultsRun.id} run={resultsRun} page={resultsPage} pageIndex={resultsPageIndex} loading={!resultsPage && resultsRun.resultState === 'reopenable'} onPage={actions.onPage} showPagination={!showPreviousResult}/>}
+            {resultsRun && visibleResultsView === 'results' && (!execution || showPreviousResult) && <ResultGrid key={resultsRun.id} run={resultsRun} page={resultsPage} pageIndex={resultsPageIndex} loading={!resultsPage && resultsRun.resultState === 'reopenable'} onPage={actions.onPage} showPagination={!showPreviousResult} previousRun={showPreviousResult || staleResult || Boolean(failedAttempt && run)}/>}
             {run && visibleResultsView === 'indexes' && <ExplainIndexesView analysis={explainIndexAnalysis} loading={!retainedSnapshot && run.resultState === 'reopenable'} copy={copy.common}/>}
             {run && visibleResultsView === 'plan' && <ExplainPlanView plan={explainPlan} loading={!retainedSnapshot && run.resultState === 'reopenable'} copy={copy.common}/>}
             {run && visibleResultsView === 'pipeline' && (pipelineResult

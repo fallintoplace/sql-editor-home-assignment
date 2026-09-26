@@ -124,6 +124,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [busy, setBusy] = useState<BusyAction>('');
     const [cancelling, setCancelling] = useState(false);
     const { error, setError, notice, setNotice } = useWorkspaceNotifications();
+    const executionFailureRef = useRef(false);
     const { error: failedQueryError, clear: clearFailedQueryError, record: storeFailedQueryError } = useFailedQueryErrors(active.id);
     const [search, setSearch] = useState('');
     const storageError = useWorkspacePersistence(key, workspace);
@@ -242,7 +243,12 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         if (busy) return;
         setBusy(kind); setError(''); setNotice('');
         try { await task(); }
-        catch (caught) { setError(message(caught)); }
+        catch (caught) {
+            if (executionFailureRef.current) {
+                executionFailureRef.current = false;
+                setError(`${copy.common.statusFailed} · ${copy.common.queryResults}`);
+            } else setError(message(caught));
+        }
         finally { setBusy(''); }
     };
 
@@ -257,6 +263,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         return true;
     };
     const recordFailedQueryError = (failure: FailedQueryError) => {
+        executionFailureRef.current = true;
         storeFailedQueryError(failure);
         if (workspaceRef.current.activeId !== failure.draftId) return;
         setView('results'); setResultsCollapsed(false); setDrawerOpen(false);

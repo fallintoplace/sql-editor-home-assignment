@@ -6,6 +6,21 @@ import type { Locale } from './i18n';
 import type { AssistantContext, SpeechRecognitionLike } from './workspace-types';
 import { useScopedValue } from './useScopedValue';
 
+function isAssistantContext(value: unknown): value is Pick<AssistantContext, 'id' | 'summary'> {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+    const context = value as { id?: unknown; summary?: unknown };
+    return typeof context.id === 'string' && Array.isArray(context.summary) && context.summary.every(item => typeof item === 'string');
+}
+
+function isProposal(value: unknown): value is Proposal {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+    const proposal = value as { id?: unknown; baseSql?: unknown; decision?: unknown; sql?: unknown; summary?: unknown; assumptions?: unknown; caveats?: unknown; findings?: unknown };
+    return typeof proposal.id === 'string' && typeof proposal.baseSql === 'string' &&
+        ['pending', 'accepted', 'rejected'].includes(String(proposal.decision)) &&
+        (proposal.sql === null || typeof proposal.sql === 'string') && typeof proposal.summary === 'string' &&
+        Array.isArray(proposal.assumptions) && Array.isArray(proposal.caveats) && Array.isArray(proposal.findings);
+}
+
 function assistantContextKey(
     connectionId: string,
     draftId: string,
@@ -190,7 +205,7 @@ export function useWorkspaceAssistant({
         setAssistantError('');
         setAssistantAction(action);
         try {
-            const result = await post<AssistantContext>('/assistant/context', {
+            const result = await post<unknown>('/assistant/context', {
                 connectionId,
                 action,
                 question,
@@ -198,6 +213,7 @@ export function useWorkspaceAssistant({
                 runId: activeRunId,
                 includeResult,
             });
+            if (!isAssistantContext(result)) throw new Error('The context preview returned incomplete data. Try again.');
             if (requestRef.current !== requestId || assistantKeyRef.current !== requestKey) return;
             setAssistantContextForDraft(draftId, { ...result, key: requestKey });
             setAssistantProposalForDraft(draftId, undefined);
@@ -221,7 +237,8 @@ export function useWorkspaceAssistant({
         setAssistantBusyKey(context.key);
         setAssistantError('');
         try {
-            const proposal = await post<Proposal>('/assistant/proposals', { contextId: context.id, consent: true });
+            const proposal = await post<unknown>('/assistant/proposals', { contextId: context.id, consent: true });
+            if (!isProposal(proposal)) throw new Error('The AI proposal returned incomplete data. Try again.');
             if (requestRef.current !== requestId || assistantKeyRef.current !== context.key) return;
             setAssistantProposalForDraft(draftId, { key: context.key, value: proposal });
         } catch (caught) {

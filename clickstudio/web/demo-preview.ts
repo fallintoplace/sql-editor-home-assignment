@@ -439,6 +439,10 @@ export class DemoPreviewApi {
         }
 
         if (pathname === '/assistant/status') return { available: false, reason: 'Assistant features are unavailable in the static sample preview.' };
+        if (pathname === '/assistant/context' && method === 'POST')
+            throw new Error('AI context preview is unavailable in this static sample. Open a connected workspace to use the assistant.');
+        if (pathname === '/assistant/proposals' && method === 'POST')
+            throw new Error('AI proposals are unavailable in this static sample. Open a connected workspace to use the assistant.');
         if (pathname === '/voice/status') return { available: false, reason: 'Voice features are unavailable in the static sample preview.' };
         if (pathname === '/imports' || pathname === '/monitors' || pathname === '/notices' || pathname === '/audit' || pathname === '/published') return [];
         if (pathname === '/health') return { ok: true, demo: true, version: '0.1.0' };

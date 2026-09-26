@@ -1,9 +1,8 @@
 import { StateField, Transaction, type Extension } from '@codemirror/state';
-import { EditorView, keymap, showPanel, type Panel } from '@codemirror/view';
+import { EditorView, keymap } from '@codemirror/view';
 import { isolateHistory } from '@codemirror/commands';
 import { snippet, snippetCompletion } from '@codemirror/autocomplete';
-import { activeStatementIndex, appendQuerySeparator, CLICKHOUSE_SNIPPETS, statementOutline, type StatementOutline } from '../../shared/editor-tools';
-import type { Copy } from '../i18n';
+import { activeStatementIndex, appendQuerySeparator, CLICKHOUSE_SNIPPETS, type StatementOutline } from '../../shared/editor-tools';
 
 // Cursor movement reuses the outline; only document edits invoke the boundary lexer.
 export const sqlStatementOutline = StateField.define<StatementOutline>({
@@ -29,128 +28,34 @@ function navigateStatement(view: EditorView, direction: -1 | 1): boolean {
     return true;
 }
 
-function selectStatement(view: EditorView): boolean {
-    const statements = view.state.field(sqlStatementOutline).statements;
-    const target = statements[activeStatementIndex(statements, view.state.selection.main.from)];
-    if (!target) return false;
-    view.dispatch({ selection: { anchor: target.from, head: target.to }, scrollIntoView: true });
+export function appendSqlSnippet(view: EditorView, template: string): boolean {
+    const outline = view.state.field(sqlStatementOutline);
+    if (outline.error || view.state.readOnly) return false;
+    const text = view.state.doc.toString();
+    // One normal CodeMirror snippet edit: undoable, with linked fields and Tab navigation.
+    snippet(appendQuerySeparator(text) + template)({
+        state: view.state,
+        dispatch: transaction => view.dispatch(view.state.update({
+            changes: transaction.changes,
+            selection: transaction.selection,
+            effects: transaction.effects,
+            scrollIntoView: transaction.scrollIntoView,
+            annotations: [isolateHistory.of('full'), Transaction.userEvent.of('input.complete')],
+        })),
+    }, null, text.length, text.length);
     view.focus();
     return true;
 }
 
-function editorToolsPanel(view: EditorView, copy: Copy['common']): Panel {
-    const doc = view.dom.ownerDocument;
-    const dom = doc.createElement('div');
-    dom.className = 'cm-sql-tools';
-    dom.setAttribute('role', 'group');
-    dom.setAttribute('aria-label', copy.clickhouseSql);
-    dom.dataset.testid = 'sql-editor-tools';
-    const button = (text: string, label: string, action: () => void) => {
-        const element = doc.createElement('button');
-        element.type = 'button';
-        element.textContent = text;
-        element.setAttribute('aria-label', label);
-        element.title = label;
-        element.addEventListener('click', action);
-        return element;
-    };
-    const previous = button('←', copy.previousStatement, () => { navigateStatement(view, -1); });
-    const next = button('→', copy.nextStatement, () => { navigateStatement(view, 1); });
-    const select = button(copy.selectQuery, copy.selectCurrentSqlStatement, () => { selectStatement(view); });
-
-    const snippets = doc.createElement('select');
-    snippets.setAttribute('aria-label', copy.clickhouseSnippet);
-    snippets.title = copy.snippetSelectHelp;
-    const placeholder = doc.createElement('option');
-    placeholder.value = '';
-    placeholder.textContent = copy.clickhouseSnippets;
-    snippets.append(placeholder);
-    for (const item of CLICKHOUSE_SNIPPETS) {
-        const option = doc.createElement('option');
-        option.value = item.id;
-        option.textContent = item.label;
-        snippets.append(option);
-    }
-    const templateTools = doc.createElement('div');
-    templateTools.className = 'cm-sql-template-tools';
-    templateTools.setAttribute('role', 'group');
-    templateTools.setAttribute('aria-label', copy.clickhouseSnippet);
-    const insert = button(copy.addSnippetAsNewQuery, copy.addSnippetAsNewQuery, () => {
-        const chosen = CLICKHOUSE_SNIPPETS.find(item => item.id === snippets.value);
-        if (!chosen || view.state.readOnly || view.state.field(sqlStatementOutline).error) return;
-        const text = view.state.doc.toString();
-        // One normal CodeMirror snippet edit: undoable, with linked fields and Tab navigation.
-        snippet(appendQuerySeparator(text) + chosen.template)({
-            state: view.state,
-            dispatch: transaction => view.dispatch(view.state.update({
-                changes: transaction.changes,
-                selection: transaction.selection,
-                effects: transaction.effects,
-                scrollIntoView: transaction.scrollIntoView,
-                annotations: [isolateHistory.of('full'), Transaction.userEvent.of('input.complete')],
-            })),
-        }, null, text.length, text.length);
-        view.focus();
-    });
-    const note = doc.createElement('span');
-    note.className = 'cm-sql-tools-note';
-    note.setAttribute('role', 'status');
-    templateTools.append(snippets, insert);
-    dom.append(previous, next, select, templateTools, note);
-    dom.addEventListener('keydown', event => {
-        if (event.key === 'Escape') {
-            event.preventDefault();
-            event.stopPropagation();
-            view.focus();
-        }
-    });
-
-    const refresh = () => {
-        const outline = view.state.field(sqlStatementOutline);
-        const index = activeStatementIndex(outline.statements, view.state.selection.main.from);
-        previous.disabled = index <= 0;
-        next.disabled = index < 0 || index >= outline.statements.length - 1;
-        select.disabled = index < 0;
-        insert.disabled = !snippets.value || Boolean(outline.error) || view.state.readOnly;
-        const chosen = CLICKHOUSE_SNIPPETS.find(item => item.id === snippets.value);
-        const text = outline.error
-            ? `${copy.incompleteSql}: ${outline.error}`
-            : chosen ? chosen.detail : '';
-        if (note.textContent !== text) note.textContent = text;
-        note.hidden = !text;
-    };
-    snippets.addEventListener('change', refresh);
-    refresh();
-    return {
-        dom,
-        update: () => { refresh(); },
-    };
-}
-
-export function sqlEditorTools(copy: Copy['common']): Extension {
+export function sqlEditorTools(): Extension {
     return [
         sqlStatementOutline,
-        showPanel.of(view => editorToolsPanel(view, copy)),
         keymap.of([
             { key: 'Alt-PageUp', run: view => navigateStatement(view, -1) },
             { key: 'Alt-PageDown', run: view => navigateStatement(view, 1) },
         ]),
-        EditorView.baseTheme({
-            '.cm-panels-bottom': { backgroundColor: 'var(--panel)', color: 'var(--text)', borderTop: '1px solid var(--line)' },
-            '.cm-sql-tools': { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '6px', padding: '6px 10px', font: '11px var(--font-sans, sans-serif)' },
-            '.cm-sql-tools button, .cm-sql-tools select': { font: 'inherit', color: 'var(--text-soft)', backgroundColor: 'var(--panel)', border: '1px solid var(--line)', borderRadius: '5px', padding: '4px 7px', minHeight: '28px', maxWidth: '100%' },
-            '.cm-sql-tools button': { cursor: 'pointer' },
-            '.cm-sql-tools button:hover:not(:disabled)': { backgroundColor: 'var(--panel-hover)' },
-            '.cm-sql-tools button:disabled, .cm-sql-tools select:disabled': { opacity: '0.5', cursor: 'default' },
-            '.cm-sql-tools button:focus-visible, .cm-sql-tools select:focus-visible': { outline: '2px solid var(--accent)', outlineOffset: '2px' },
-            '.cm-sql-template-tools': { display: 'flex', flex: '0 1 auto', alignItems: 'center', gap: '2px', minWidth: '0', maxWidth: '100%', padding: '2px', backgroundColor: 'var(--panel-hover)', border: '1px solid var(--line)', borderRadius: '7px' },
-            '.cm-sql-template-tools select': { flex: '1 1 150px', minWidth: '0', maxWidth: '280px', border: '0', backgroundColor: 'transparent' },
-            '.cm-sql-template-tools button': { flex: '0 0 auto', whiteSpace: 'nowrap' },
-            '.cm-sql-tools-note': { flexBasis: '100%', color: 'var(--muted)', lineHeight: '1.5' },
-        }),
         EditorView.theme({
             '.cm-gutters': { zIndex: 'var(--z-editor-gutters)' },
-            '.cm-panels': { zIndex: 'var(--z-editor-panels)' },
         }),
     ];
 }

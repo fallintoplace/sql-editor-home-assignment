@@ -1,6 +1,7 @@
-import type { RefObject } from 'react';
+import { useMemo, useState, type RefObject } from 'react';
 import type { RunKind, Schema } from '../../shared/types';
 import type { NativeParseSnapshot, NativeParserStatus } from '../../shared/native-parser';
+import { CLICKHOUSE_SNIPPETS, statementOutline } from '../../shared/editor-tools';
 import { hasSqlComments, type SqlParameter } from '../../shared/sql';
 import type { Copy, ExperienceLevel } from '../i18n';
 import type {
@@ -93,6 +94,9 @@ export function WorkspaceQueryPanel({
         startPanelDrag,
         startPanelResize,
     } = panels;
+    const [selectedSnippetId, setSelectedSnippetId] = useState('');
+    const selectedSnippet = CLICKHOUSE_SNIPPETS.find(item => item.id === selectedSnippetId);
+    const sqlOutline = useMemo(() => statementOutline(active.sql), [active.sql]);
 
     return <section
         ref={queryPanelRef}
@@ -111,6 +115,13 @@ export function WorkspaceQueryPanel({
             <div className="editor-heading-tools">
                 <Button variant="ghost" className="sql-map-button" aria-label={copy.common.visualizeSqlStructure} aria-pressed={view === 'sqlmap'} title={copy.common.visualizeSqlStructure} onClick={actions.onToggleSqlMap}><Icon name="pipeline"/>{copy.common.sqlMap}</Button>
                 <Button variant="ghost" className="sql-ai-button" data-testid="open-ai" aria-label={copy.common.askAi} aria-pressed={inspector === 'assistant'} onClick={actions.onOpenAssistant}><Icon name="assistant"/>{copy.common.askAi}</Button>
+                <div className="editor-template-tools" role="group" aria-label={copy.common.clickhouseSnippet}>
+                    <select className="editor-template-select" aria-label={copy.common.clickhouseSnippet} title={selectedSnippet?.detail ?? copy.common.snippetSelectHelp} value={selectedSnippetId} onChange={event => setSelectedSnippetId(event.target.value)}>
+                        <option value="">{copy.common.clickhouseSnippets}</option>
+                        {CLICKHOUSE_SNIPPETS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+                    </select>
+                    <Button variant="secondary" className="editor-template-add" aria-label={copy.common.addSnippetAsNewQuery} title={selectedSnippet?.detail ?? copy.common.addSnippetAsNewQuery} onClick={() => { if (selectedSnippet) editorRef.current?.insertSnippet(selectedSnippet.template); }} disabled={!selectedSnippet || Boolean(sqlOutline.error)}><Icon name="plus"/><span className="editor-template-add-label">{copy.common.addSnippetAsNewQuery}</span></Button>
+                </div>
                 <Button variant="secondary" className="save-revision-button" data-testid="save-query" aria-label={experience === 'expert' ? copy.common.saveRevision : copy.common.save} onClick={() => void actions.onSave()} disabled={Boolean(busy)}><Icon name="documents"/>{copy.common.save}</Button>
             </div>
             <div className="editor-heading-actions">
@@ -150,24 +161,28 @@ export function WorkspaceQueryPanel({
             </div>
         </div>
         <div id="sql-editor-content" className="panel-content editor-content" hidden={panels.queryCollapsed}>
-            <div className="editor-toolbar">
-                <div className="editor-mode-label"><span className="editor-language-dot"/>{copy.common.clickhouseSql}<span className="toolbar-divider"/><span>{statementCount === undefined ? copy.common.incompleteSql : (statementCount === 1 ? copy.common.oneStatement : copy.common.manyStatements).replace('{count}', String(statementCount))}</span></div>
-                <div className="editor-actions">
-                    {experience === 'expert' ? <RunActionGroup copy={copy.common} runLabel={copy.common.runStatement} running={busy === 'run' || busy === 'script'} disabled={!trusted || Boolean(busy) || unsupportedParameters} onRun={() => void actions.onRun()} actions={[
-                        { id: 'script', label: copy.common.runScript, disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.scripts.available, title: actions.runActionTitle(connection.manifest?.scripts, 'script'), onSelect: () => void actions.onRun(true) },
-                        { id: 'explain', label: copy.common.explain, disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.explain.available, title: actions.runActionTitle(connection.manifest?.explain, 'explain'), onSelect: () => void actions.onRun(false, 'explain') },
-                        { id: 'explain-plan', label: copy.common.explainPlan, disabled: !trusted || Boolean(busy) || unsupportedParameters || !(connection.manifest?.explainPlan ?? connection.manifest?.explain)?.available, title: actions.runActionTitle(connection.manifest?.explainPlan ?? connection.manifest?.explain, 'explain-plan'), onSelect: () => void actions.onRun(false, 'plan') },
-                        { id: 'explain-pipeline', label: copy.common.explainPipeline, disabled: !trusted || Boolean(busy) || unsupportedParameters || !(connection.manifest?.explainPipeline ?? connection.manifest?.pipeline)?.available, title: actions.runActionTitle(connection.manifest?.explainPipeline ?? connection.manifest?.pipeline, 'explain-pipeline'), onSelect: () => void actions.onRun(false, 'pipeline') },
-                        { id: 'explain-analyze', label: copy.common.explainAnalyze, disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.explainAnalyze?.available, title: actions.runActionTitle(connection.manifest?.explainAnalyze, 'explain-analyze'), onSelect: () => void actions.onRun(false, 'analyze') },
-                    ]}/> : <Button variant="primary" className="run-query-button" data-testid="run-statement" aria-label={copy.common.runStatement} onClick={() => void actions.onRun()} disabled={!trusted || Boolean(busy) || unsupportedParameters}><Icon name="play"/>{busy === 'run' ? copy.common.running : copy.common.run}</Button>}
+            <div className="editor-workspace-layout">
+                <div className="editor-main-column">
+                    {experience === 'beginner' && (!trusted || (!demoMode && !connection.manifest)) && <div className="beginner-connection-notice" role="status"><span>{demoMode ? 'Start the sample workspace to run this query.' : !connection.manifest ? trusted ? 'Retest this connection to refresh its feature checks.' : 'Test this connection to discover its ClickHouse features.' : 'Trust this connection to run SQL.'}</span><Button variant="secondary" className="toolbar-small" onClick={() => void actions.onConnectionAction()}>{demoMode ? 'Start exploring' : !connection.manifest ? trusted ? 'Retest connection' : 'Test connection' : 'Trust connection'}</Button></div>}
+                    <div className="editor-frame"><SqlEditor key={active.id} ref={editorRef} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} nativeParserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} error={editorErrorContext?.error} errorRange={editorErrorRange} onChange={sql => actions.onPatch({ sql })} onSelection={(from, to) => actions.onPatch({ from, to })} onRun={wholeScript => void actions.onRun(wholeScript)} onNativeParserStatus={actions.onNativeParserStatus} onNativeParseSnapshot={actions.onNativeParseSnapshot}/></div>
+                    {unsupportedParameters
+                        ? <div className="callout mt-3" role="status">{connection.manifest?.parameters.reason ?? 'Query parameters are unavailable on this connection.'} Replace placeholders with SQL literals to run this query.</div>
+                        : parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => actions.onPatch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
+                    {experience === 'expert' && <div className="editor-footer"><span>{active.sql.length.toLocaleString()} {copy.common.characters} <span className="footer-dot">·</span> {active.sql.split('\n').length} {copy.common.lines}</span></div>}
                 </div>
+                <aside className="editor-control-rail" aria-label={copy.common.runActions}>
+                    <div className="editor-rail-status"><div className="editor-mode-label"><span className="editor-language-dot"/>{copy.common.clickhouseSql}</div><span>{statementCount === undefined ? copy.common.incompleteSql : (statementCount === 1 ? copy.common.oneStatement : copy.common.manyStatements).replace('{count}', String(statementCount))}</span></div>
+                    <div className="editor-actions">
+                        {experience === 'expert' ? <RunActionGroup copy={copy.common} runLabel={copy.common.runStatement} running={busy === 'run' || busy === 'script'} disabled={!trusted || Boolean(busy) || unsupportedParameters} onRun={() => void actions.onRun()} actions={[
+                            { id: 'script', label: copy.common.runScript, disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.scripts.available, title: actions.runActionTitle(connection.manifest?.scripts, 'script'), onSelect: () => void actions.onRun(true) },
+                            { id: 'explain', label: copy.common.explain, disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.explain.available, title: actions.runActionTitle(connection.manifest?.explain, 'explain'), onSelect: () => void actions.onRun(false, 'explain') },
+                            { id: 'explain-plan', label: copy.common.explainPlan, disabled: !trusted || Boolean(busy) || unsupportedParameters || !(connection.manifest?.explainPlan ?? connection.manifest?.explain)?.available, title: actions.runActionTitle(connection.manifest?.explainPlan ?? connection.manifest?.explain, 'explain-plan'), onSelect: () => void actions.onRun(false, 'plan') },
+                            { id: 'explain-pipeline', label: copy.common.explainPipeline, disabled: !trusted || Boolean(busy) || unsupportedParameters || !(connection.manifest?.explainPipeline ?? connection.manifest?.pipeline)?.available, title: actions.runActionTitle(connection.manifest?.explainPipeline ?? connection.manifest?.pipeline, 'explain-pipeline'), onSelect: () => void actions.onRun(false, 'pipeline') },
+                            { id: 'explain-analyze', label: copy.common.explainAnalyze, disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.explainAnalyze?.available, title: actions.runActionTitle(connection.manifest?.explainAnalyze, 'explain-analyze'), onSelect: () => void actions.onRun(false, 'analyze') },
+                        ]}/> : <Button variant="primary" className="run-query-button" data-testid="run-statement" aria-label={copy.common.runStatement} onClick={() => void actions.onRun()} disabled={!trusted || Boolean(busy) || unsupportedParameters}><Icon name="play"/>{busy === 'run' ? copy.common.running : copy.common.run}</Button>}
+                    </div>
+                </aside>
             </div>
-            {experience === 'beginner' && (!trusted || (!demoMode && !connection.manifest)) && <div className="beginner-connection-notice" role="status"><span>{demoMode ? 'Start the sample workspace to run this query.' : !connection.manifest ? trusted ? 'Retest this connection to refresh its feature checks.' : 'Test this connection to discover its ClickHouse features.' : 'Trust this connection to run SQL.'}</span><Button variant="secondary" className="toolbar-small" onClick={() => void actions.onConnectionAction()}>{demoMode ? 'Start exploring' : !connection.manifest ? trusted ? 'Retest connection' : 'Test connection' : 'Trust connection'}</Button></div>}
-            <div className="editor-frame"><SqlEditor key={active.id} ref={editorRef} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} nativeParserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} copy={copy.common} error={editorErrorContext?.error} errorRange={editorErrorRange} onChange={sql => actions.onPatch({ sql })} onSelection={(from, to) => actions.onPatch({ from, to })} onRun={wholeScript => void actions.onRun(wholeScript)} onNativeParserStatus={actions.onNativeParserStatus} onNativeParseSnapshot={actions.onNativeParseSnapshot}/></div>
-            {unsupportedParameters
-                ? <div className="callout mt-3" role="status">{connection.manifest?.parameters.reason ?? 'Query parameters are unavailable on this connection.'} Replace placeholders with SQL literals to run this query.</div>
-                : parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => actions.onPatch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
-            {experience === 'expert' && <div className="editor-footer"><span>{active.sql.length.toLocaleString()} {copy.common.characters} <span className="footer-dot">·</span> {active.sql.split('\n').length} {copy.common.lines}</span></div>}
         </div>
         {queryMode === 'floating' && !panels.queryCollapsed && <PanelResizeHandles onResize={(edge, event) => startPanelResize('query', edge, event)}/>}
     </section>;

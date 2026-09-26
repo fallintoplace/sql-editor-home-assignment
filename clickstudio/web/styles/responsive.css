@@ -26,6 +26,8 @@
     .workspace-root.is-expert .workspace-layout { grid-template-columns: minmax(250px, 280px) minmax(0, 1fr); }
     .editor-heading-tools > .button-base { width: 32px; min-width: 32px; padding-inline: 0; font-size: 0; }
     .editor-heading-tools > .button-base svg { width: 15px; height: 15px; }
+    .editor-template-select { width: 120px; }
+    .editor-template-add-label { display: none; }
     .execution-bar { gap: 9px; }
     .execution-link-state { display: none; }
     .execution-telemetry { gap: 8px; }
@@ -39,7 +41,6 @@
     .workspace-content.has-run { grid-template-rows: minmax(205px, .98fr) minmax(218px, 1.02fr); }
     .beginner-workspace-content { grid-template-rows: minmax(330px, 1.2fr) minmax(160px, .8fr); }
     .editor-heading { min-height: 46px; padding: 6px 12px; }
-    .editor-toolbar { min-height: 38px; padding: 5px 10px; }
     .editor-frame { min-height: 96px; }
     .editor-footer { padding-top: 5px; padding-bottom: 5px; }
     .results-header { min-height: 47px; padding-top: 5px; padding-bottom: 5px; }
@@ -95,9 +96,9 @@
     .document-tabs-scroll-button { width: 25px; }
     .draft-status { display: none; }
     .editor-heading { min-height: 47px; padding: 6px 9px; }
-    .editor-toolbar { min-height: 40px; padding: 5px 8px; }
-    .editor-actions { gap: 4px; }
     .editor-mode-label { gap: 6px; font-size: 8px; }
+    .editor-control-rail { gap: 7px; padding: 8px; }
+    .editor-template-select { width: 104px; font-size: 7px; }
     .editor-footer { font-size: 7px; }
     .execution-bar { min-height: 40px; flex-wrap: wrap; gap: 7px 12px; padding: 6px 10px; }
     .help-button { min-height: 27px; }
@@ -150,11 +151,19 @@
     .formatter-control-label { padding-inline: 3px; font-size: 6px; }
     .formatter-control > .formatter-choice { min-height: 23px; padding-inline: 5px; font-size: 7px; }
     .file-type-icon { width: 27px; height: 27px; }
-    .editor-mode-label > span:last-child, .editor-mode-label .toolbar-divider { display: none; }
     .toolbar-small { min-height: 25px; padding: 0 5px; font-size: 7px; }
-    .editor-actions .toolbar-small { display: none; }
     .revision-history-trigger span { display: none; }
-    .editor-actions { gap: 4px; }
+    .editor-workspace-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(180px, 1fr) auto; overflow: auto; }
+    .editor-main-column { min-height: 180px; }
+    .editor-control-rail { display: grid; grid-template-columns: 84px minmax(0, 1fr); align-items: start; overflow: visible; border-top: 1px solid var(--line); border-left: 0; }
+    .editor-rail-status { align-self: start; padding: 4px 2px; border-bottom: 0; }
+    .editor-actions { min-width: 0; }
+    .run-action-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+    .run-action-group > .run-query-button, .run-explain-actions { grid-column: 1 / -1; }
+    .run-explain-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .run-explain-label { grid-column: 1 / -1; }
+    .editor-heading-tools .editor-template-select { width: 104px; }
+    .editor-template-add-label { display: none; }
     .sql-ai-button, .save-revision-button { width: 31px; min-width: 31px; padding: 0; font-size: 0; }
     .sql-ai-button svg, .save-revision-button svg { width: 15px; height: 15px; }
     .workspace-root.is-beginner .sql-ai-button, .workspace-root.is-beginner .save-revision-button { width: auto; min-width: 0; padding: 0 8px; font-size: 8px; }

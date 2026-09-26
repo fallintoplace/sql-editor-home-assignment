@@ -136,4 +136,40 @@ export const CLICKHOUSE_SNIPPETS = [
         id: 'ch_explain_indexes', label: 'EXPLAIN index usage', detail: 'Inspect the query plan and MergeTree index pruning.',
         template: 'EXPLAIN indexes = 1\nSELECT ${1:*}\nFROM ${2:events}\nWHERE ${3:event_time >= now() - INTERVAL 1 DAY};\n${0}',
     },
+    {
+        id: 'ch_daily_time_series', label: 'Daily time series', detail: 'Compare event volume by day over the last month.',
+        template: 'SELECT\n    toStartOfDay(${1:event_time}) AS day,\n    count() AS events\nFROM ${2:events}\nWHERE ${1:event_time} >= now() - INTERVAL 30 DAY\nGROUP BY day\nORDER BY day;\n${0}',
+    },
+    {
+        id: 'ch_approx_unique', label: 'Approximate unique users', detail: 'Estimate distinct users for a recent time window.',
+        template: 'SELECT uniqCombined64(${1:user_id}) AS unique_users\nFROM ${2:events}\nWHERE ${3:event_time} >= now() - INTERVAL 7 DAY;\n${0}',
+    },
+    {
+        id: 'ch_running_total', label: 'Running total', detail: 'Calculate a cumulative value per user with a window function.',
+        template: 'SELECT\n    ${1:user_id},\n    ${2:event_time},\n    ${3:amount},\n    sum(${3:amount}) OVER (PARTITION BY ${1:user_id} ORDER BY ${2:event_time}) AS running_total\nFROM ${4:events}\nORDER BY ${1:user_id}, ${2:event_time};\n${0}',
+    },
+    {
+        id: 'ch_array_join', label: 'Expand array values', detail: 'Turn each array element into its own result row.',
+        template: 'SELECT ${1:event_id}, tag\nFROM ${2:events}\nARRAY JOIN ${3:tags} AS tag\nLIMIT 100;\n${0}',
+    },
+    {
+        id: 'ch_json_extract', label: 'Group JSON values', detail: 'Extract a string field from JSON and count each value.',
+        template: "SELECT JSONExtractString(${1:payload}, '${2:status}') AS status, count() AS events\nFROM ${3:events}\nGROUP BY status\nORDER BY events DESC\nLIMIT 20;\n${0}",
+    },
+    {
+        id: 'ch_prewhere', label: 'Filter with PREWHERE', detail: 'Filter a recent time range before reading other columns.',
+        template: "SELECT ${1:country}, count() AS events\nFROM ${2:events}\nPREWHERE ${3:event_time} >= now() - INTERVAL 7 DAY\nWHERE ${1:country} != ''\nGROUP BY ${1:country}\nORDER BY events DESC\nLIMIT 20;\n${0}",
+    },
+    {
+        id: 'ch_slow_queries', label: 'Slow queries', detail: 'Find the slowest completed queries from the query log.',
+        template: "SELECT event_time, query_duration_ms, read_rows, formatReadableSize(read_bytes) AS read_size, query\nFROM system.query_log\nWHERE type = 'QueryFinish'\n  AND event_time >= now() - INTERVAL 1 HOUR\nORDER BY query_duration_ms DESC\nLIMIT 10;\n${0}",
+    },
+    {
+        id: 'ch_table_sizes', label: 'Table sizes', detail: 'Compare row counts and stored bytes in the current database.',
+        template: 'SELECT name, engine, total_rows, formatReadableSize(total_bytes) AS size\nFROM system.tables\nWHERE database = currentDatabase()\nORDER BY total_bytes DESC\nLIMIT 20;\n${0}',
+    },
+    {
+        id: 'ch_partition_parts', label: 'Parts by partition', detail: 'Inspect active MergeTree parts and their storage size.',
+        template: "SELECT partition, count() AS parts, sum(rows) AS rows, formatReadableSize(sum(bytes_on_disk)) AS size\nFROM system.parts\nWHERE database = currentDatabase()\n  AND table = '${1:events}'\n  AND active\nGROUP BY partition\nORDER BY partition DESC;\n${0}",
+    },
 ] as const;

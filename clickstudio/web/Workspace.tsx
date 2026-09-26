@@ -25,6 +25,7 @@ import { SqlFlowView } from './components/SqlFlowView';
 import { InspectorPane, type InspectorPaneProps } from './components/InspectorPane';
 import { Button, cx, Icon, Status, terminal } from './components/ui';
 import { ExecutionBar, RailButton, RunActionGroup, ScriptResults } from './components/WorkspaceChrome';
+import { WorkspaceDocumentTabs } from './components/WorkspaceDocumentTabs';
 import { checkpoint, closeDraft, draftFromDocument, MAX_TABS, newDraft, reopenDraft, type Draft } from './workspace-state';
 import { draftSaveStatus, rememberRunIds, sameSavedContent } from '../shared/workspace-view';
 import type { NativeParseSnapshot, NativeParserStatus } from '../shared/native-parser';
@@ -721,149 +722,99 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             {experience === 'expert' && <InspectorPane {...inspectorProps}/>}
 
             <main className="workspace-main">
-                <div className={cx('document-tabs', tabScrollState.overflow && 'has-tab-overflow')}>
-                    <div
-                        ref={tabScrollerRef}
-                        className="document-tabs-scroll"
-                        role="tablist"
-                        aria-label="SQL documents"
-                        onScroll={updateTabScrollState}
-                    >
-                    {workspace.tabs.map((draft, index) => <div key={draft.id} id={`document-tab-${draft.id}`} className={cx('document-tab', draft.id === active.id && 'is-active')} role="tab" aria-label={draft.name} aria-selected={draft.id === active.id} aria-controls="sql-document-panel" tabIndex={draft.id === active.id ? 0 : -1} onClick={() => setWorkspace(current => ({ ...current, activeId: draft.id }))} onKeyDown={event => {
-                        if (event.target !== event.currentTarget) return;
-                        if (event.key === 'F2') {
-                            event.preventDefault();
-                            beginTabRename(draft);
-                            return;
-                        }
-                        if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            setWorkspace(current => ({ ...current, activeId: draft.id }));
-                            return;
-                        }
-                        let nextIndex: number | undefined;
-                        if (event.key === 'ArrowRight') nextIndex = (index + 1) % workspace.tabs.length;
-                        else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + workspace.tabs.length) % workspace.tabs.length;
-                        else if (event.key === 'Home') nextIndex = 0;
-                        else if (event.key === 'End') nextIndex = workspace.tabs.length - 1;
-                        if (nextIndex === undefined) return;
-                        event.preventDefault();
-                        const nextDraft = workspace.tabs[nextIndex]!;
-                        setWorkspace(current => ({ ...current, activeId: nextDraft.id }));
-                        window.requestAnimationFrame(() => document.getElementById(`document-tab-${nextDraft.id}`)?.focus());
-                    }}>
-                        {renamingTabId === draft.id
-                            ? <input className="document-tab-rename" aria-label={`Rename ${draft.name}`} value={tabRenameValue} autoFocus onFocus={event => event.currentTarget.select()} onClick={event => event.stopPropagation()} onChange={event => setTabRenameValue(event.target.value)} onBlur={event => finishTabRename(draft.id, event.currentTarget.value)} onKeyDown={event => {
-                                if (event.key === 'Enter') {
-                                    event.preventDefault();
-                                    finishTabRename(draft.id, event.currentTarget.value, true);
-                                } else if (event.key === 'Escape') {
-                                    event.preventDefault();
-                                    cancelTabRename(draft.id);
-                                }
-                            }}/>
-                            : <span className="document-tab-name" title={`Double-click to rename ${draft.name} · F2`} onDoubleClick={event => { event.stopPropagation(); beginTabRename(draft); }}>{draft.name}</span>}{(() => {
-                            const status = draftSaveStatus(draft, connection.id, documents.find(document => document.id === draft.serverId), {
-                                saving: Boolean(savingDraftIds[draft.id]), pending: !documentsLoaded, readError: documentsReadError,
-                            });
-                            const unsaved = ['local', 'changed', 'conflict', 'deleted', 'unavailable'].includes(status.state);
-                            return unsaved ? <span className="tab-unsaved" title={status.label} aria-hidden="true"/> : null;
-                        })()}<button type="button" aria-label={`Close ${draft.name}`} onClick={event => { event.stopPropagation(); setWorkspace(current => closeDraft(current, draft.id)); }}>×</button>
-                    </div>)}
-                    </div>
-                    <div className="document-tab-actions">
-                        {tabScrollState.overflow && <>
-                            <button
-                                className="document-tabs-scroll-button is-left"
-                                data-testid="scroll-sql-tabs-left"
-                                type="button"
-                                aria-label="Scroll SQL tabs left"
-                                title="More SQL tabs to the left"
-                                disabled={!tabScrollState.canScrollLeft}
-                                onClick={() => scrollTabs(-1)}
-                            ><Icon name="chevron"/></button>
-                            <button
-                                className="document-tabs-scroll-button is-right"
-                                data-testid="scroll-sql-tabs-right"
-                                type="button"
-                                aria-label="Scroll SQL tabs right"
-                                title="More SQL tabs to the right"
-                                disabled={!tabScrollState.canScrollRight}
-                                onClick={() => scrollTabs(1)}
-                            ><Icon name="chevron"/></button>
-                        </>}
+                <WorkspaceDocumentTabs
+                    workspace={workspace}
+                    activeId={active.id}
+                    connectionId={connection.id}
+                    documents={documents}
+                    documentsLoaded={documentsLoaded}
+                    documentsReadError={documentsReadError}
+                    savingDraftIds={savingDraftIds}
+                    tabScrollerRef={tabScrollerRef}
+                    tabScrollState={tabScrollState}
+                    updateTabScrollState={updateTabScrollState}
+                    scrollTabs={scrollTabs}
+                    renamingTabId={renamingTabId}
+                    tabRenameValue={tabRenameValue}
+                    setTabRenameValue={setTabRenameValue}
+                    beginTabRename={beginTabRename}
+                    finishTabRename={finishTabRename}
+                    cancelTabRename={cancelTabRename}
+                    onActivate={draftId => setWorkspace(current => ({ ...current, activeId: draftId }))}
+                    onClose={draftId => setWorkspace(current => closeDraft(current, draftId))}
+                    actions={<>
                     <button className="new-tab-button new-tab-labeled" data-testid="new-sql" type="button" aria-label={copy.common.newSql} title={copy.common.newSql} aria-haspopup="dialog" aria-expanded={helpPanelOpen} aria-controls="workspace-help-panel" onClick={event => openExamples(event.currentTarget)}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
-                    <WorkspaceHelpPanel
-                        open={helpPanelOpen}
-                        section={helpPanelSection}
-                        onSectionChange={setHelpPanelSection}
-                        onClose={closeHelpPanel}
-                        examples={sqlExamples}
-                        sourceLabel={connectionLabel}
-                        copy={copy.common}
-                        locale={locale}
-                        connection={connection}
-                        tables={schema?.tables ?? []}
-                        schemaLoading={schemaLoading}
-                        trusted={trusted}
-                        queryEngine={{
-                            copy: copy.common,
-                            sql: helpStatementSql(sqlMapStatement, active.sql),
-                            sourceOffset: helpStatementOffset(sqlMapStatement),
-                            parseResult: helpParseResult(sqlMapParseStatement),
-                            parserEnabled: nativeParserEnabled,
-                            parserStatus: nativeParserStatus,
-                            parseDurationMs: helpParseDuration(nativeParseSnapshot),
-                            connectionId: connection.id,
-                            parameters: active.parameters,
-                            analyzerAvailable: queryTreeAvailable,
-                            analyzerUnavailableReason: queryTreeUnavailableReason,
-                            onRevealRange: (from, to) => {
+                        <WorkspaceHelpPanel
+                            open={helpPanelOpen}
+                            section={helpPanelSection}
+                            onSectionChange={setHelpPanelSection}
+                            onClose={closeHelpPanel}
+                            examples={sqlExamples}
+                            sourceLabel={connectionLabel}
+                            copy={copy.common}
+                            locale={locale}
+                            connection={connection}
+                            tables={schema?.tables ?? []}
+                            schemaLoading={schemaLoading}
+                            trusted={trusted}
+                            queryEngine={{
+                                copy: copy.common,
+                                sql: helpStatementSql(sqlMapStatement, active.sql),
+                                sourceOffset: helpStatementOffset(sqlMapStatement),
+                                parseResult: helpParseResult(sqlMapParseStatement),
+                                parserEnabled: nativeParserEnabled,
+                                parserStatus: nativeParserStatus,
+                                parseDurationMs: helpParseDuration(nativeParseSnapshot),
+                                connectionId: connection.id,
+                                parameters: active.parameters,
+                                analyzerAvailable: queryTreeAvailable,
+                                analyzerUnavailableReason: queryTreeUnavailableReason,
+                                onRevealRange: (from, to) => {
+                                    closeHelpPanel(false);
+                                    window.requestAnimationFrame(() => revealEditorRange(editor, from, to));
+                                },
+                            }}
+                            busy={Boolean(busy)}
+                            unsupportedParameters={unsupportedParameters}
+                            onRunExplain={kind => void execute(false, kind)}
+                            comparison={{
+                                connectionId: connection.id,
+                                trusted,
+                                history,
+                                initialRun: run,
+                                profiles: profilesByRun,
+                                pipelines: pipelinesByRun,
+                                queryLogAvailable: helpQueryLogAvailable(connection),
+                            }}
+                            onReferenceInsert={value => {
+                                insertEditorText(editor, value);
                                 closeHelpPanel(false);
-                                window.requestAnimationFrame(() => revealEditorRange(editor, from, to));
-                            },
-                        }}
-                        busy={Boolean(busy)}
-                        unsupportedParameters={unsupportedParameters}
-                        onRunExplain={kind => void execute(false, kind)}
-                        comparison={{
-                            connectionId: connection.id,
-                            trusted,
-                            history,
-                            initialRun: run,
-                            profiles: profilesByRun,
-                            pipelines: pipelinesByRun,
-                            queryLogAvailable: helpQueryLogAvailable(connection),
-                        }}
-                        onReferenceInsert={value => {
-                            insertEditorText(editor, value);
-                            closeHelpPanel(false);
-                            window.requestAnimationFrame(() => focusEditor(editor));
-                        }}
-                        onOpenExample={example => {
-                            const draft = createExampleDraft(example);
-                            if (!openNewDraft(draft)) return false;
+                                window.requestAnimationFrame(() => focusEditor(editor));
+                            }}
+                            onOpenExample={example => {
+                                const draft = createExampleDraft(example);
+                                if (!openNewDraft(draft)) return false;
+                                window.requestAnimationFrame(() => editor.current?.focus());
+                                return true;
+                            }}
+                            onRunExample={runExample}
+                            onStartBlankSql={() => {
+                                if (!openNewDraft(newDraft())) return false;
+                                window.requestAnimationFrame(() => editor.current?.focus());
+                                return true;
+                            }}
+                        />
+                        {!!workspace.closedTabs?.length && <RestoreSqlMenu closedTabs={workspace.closedTabs} copy={copy.common} onRestore={draftId => {
+                            if (workspaceRef.current.tabs.length >= MAX_TABS) { setError(`Close a tab before restoring one. This workspace supports ${MAX_TABS} open drafts.`); return false; }
+                            setWorkspace(current => reopenDraft(current, draftId));
                             window.requestAnimationFrame(() => editor.current?.focus());
                             return true;
-                        }}
-                        onRunExample={runExample}
-                        onStartBlankSql={() => {
-                            if (!openNewDraft(newDraft())) return false;
-                            window.requestAnimationFrame(() => editor.current?.focus());
-                            return true;
-                        }}
-                    />
-                    {!!workspace.closedTabs?.length && <RestoreSqlMenu closedTabs={workspace.closedTabs} copy={copy.common} onRestore={draftId => {
-                        if (workspaceRef.current.tabs.length >= MAX_TABS) { setError(`Close a tab before restoring one. This workspace supports ${MAX_TABS} open drafts.`); return false; }
-                        setWorkspace(current => reopenDraft(current, draftId));
-                        window.requestAnimationFrame(() => editor.current?.focus());
-                        return true;
-                    }}/>}
-                    <span className="draft-status" data-save-state={saveStatus.state} title={`${saveStatus.label}. ${saveStatus.detail}`}><span className={cx('status-light', saveStatus.state === 'saved' ? 'is-trusted' : ['changed', 'conflict', 'deleted', 'unavailable'].includes(saveStatus.state) ? 'is-warning' : '')}/>{saveStatusLabel}</span>
-                    {active.serverId && <Button variant="ghost" className="revision-history-trigger" aria-label={`Version history for ${active.name}`} aria-pressed={inspector === 'revisions'} title="View saved versions" onClick={() => showInspector('revisions')}><Icon name="history"/><span>Versions</span></Button>}
-                    </div>
-                </div>
+                        }}/>}
+                        <span className="draft-status" data-save-state={saveStatus.state} title={`${saveStatus.label}. ${saveStatus.detail}`}><span className={cx('status-light', saveStatus.state === 'saved' ? 'is-trusted' : ['changed', 'conflict', 'deleted', 'unavailable'].includes(saveStatus.state) ? 'is-warning' : '')}/>{saveStatusLabel}</span>
+                        {active.serverId && <Button variant="ghost" className="revision-history-trigger" aria-label={`Version history for ${active.name}`} aria-pressed={inspector === 'revisions'} title="View saved versions" onClick={() => showInspector('revisions')}><Icon name="history"/><span>Versions</span></Button>}
 
+                    </>}
+                />
                 <div
                     ref={workspaceContentRef}
                     id="sql-document-panel"

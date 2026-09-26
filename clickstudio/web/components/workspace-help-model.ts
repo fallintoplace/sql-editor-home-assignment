@@ -7,8 +7,8 @@ export type HelpPanelSection = 'tour' | 'examples' | 'query' | 'geo' | 'explain'
 export type CategoryFilter = SqlExampleCategory | 'charts' | 'all' | 'featured';
 
 export const helpCategories: CategoryFilter[] = [
-    'featured', 'business', 'observability', 'operations', 'engineering', 'markets', 'cities',
-    'openSource', 'internet', 'datasets', 'clickhouse', 'charts', 'all', 'basics', 'aggregation',
+    'featured', 'all', 'business', 'observability', 'operations', 'engineering', 'markets', 'cities',
+    'openSource', 'internet', 'datasets', 'clickhouse', 'charts', 'basics', 'aggregation',
     'timeSeries', 'schema',
 ];
 
@@ -65,8 +65,8 @@ export type HelpSectionDefinition = {
 
 export function helpSections(copy: Copy['common']): HelpSectionDefinition[] {
     return [
-        { id: 'tour', label: copy.helpTour, description: copy.helpTourDescription, icon: 'help' },
         { id: 'examples', label: copy.sqlExamples, description: copy.examplesHint, icon: 'examples' },
+        { id: 'tour', label: copy.helpTour, description: copy.helpTourDescription, icon: 'help' },
         { id: 'query', label: copy.helpQueryEngine, description: copy.helpQueryEngineDescription, icon: 'parser' },
         { id: 'geo', label: copy.helpGeo, description: copy.helpGeoDescription, icon: 'chart' },
         { id: 'explain', label: copy.helpExplain, description: copy.helpExplainDescription, icon: 'bolt' },

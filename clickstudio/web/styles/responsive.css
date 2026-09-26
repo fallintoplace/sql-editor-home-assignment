@@ -10,8 +10,6 @@
 @keyframes statusPulse { 0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent), 0 0 7px color-mix(in srgb, var(--accent) 35%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 6%, transparent), 0 0 13px color-mix(in srgb, var(--accent) 70%, transparent); } }
 @keyframes helpBeacon { 0%, 100% { border-color: color-mix(in srgb, var(--accent) 38%, var(--line-bright)); box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 18%, transparent); } 50% { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 24%, transparent); } }
 @keyframes progressSweep { 0% { right: 100%; left: 0; opacity: 0; } 12% { opacity: 1; } 55% { right: 0; left: 15%; } 100% { right: 0; left: 100%; opacity: .2; } }
-@keyframes examplesReveal { from { opacity: 0; transform: translateY(-4px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
-@keyframes examplesBackdrop { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rowReveal { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes drawLine { from { stroke-dashoffset: 1400; } to { stroke-dashoffset: 0; } }
 @keyframes barRise { from { transform: scaleY(.02); opacity: .3; } to { transform: scaleY(1); opacity: 1; } }
@@ -95,21 +93,6 @@
     .document-tab { min-width: 140px; max-width: 260px; gap: 5px; padding: 0 7px; font-size: 9px; }
     .document-tab-actions { padding-left: 3px; }
     .document-tabs-scroll-button { width: 25px; }
-    .workspace-help-backdrop { padding: 12px; }
-    .workspace-help-panel { width: calc(100vw - 24px); height: calc(100dvh - 24px); max-height: calc(100dvh - 24px); border-radius: 10px; }
-    .workspace-help-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
-    .workspace-help-tabs { flex-direction: row; gap: 4px; overflow-x: auto; overflow-y: hidden; padding: 6px 8px; border-right: 0; border-bottom: 1px solid var(--line); }
-    .workspace-help-tab { min-width: max-content; min-height: 34px; flex: none; grid-template-columns: 16px auto; padding: 5px 8px; }
-    .workspace-help-tab > svg { width: 13px; height: 13px; }
-    .workspace-help-tab small { display: none; }
-    .workspace-help-content { min-height: 0; }
-    .workspace-help-tour, .workspace-help-feature-view { padding: 14px; }
-    .workspace-help-geo-demo { grid-template-columns: 1fr; }
-    .workspace-help-geo-preview { min-height: 220px; }
-    .sql-examples-toolbar { align-items: stretch; }
-    .sql-example-search { min-width: 100%; flex-basis: 100%; }
-    .sql-examples-layout { grid-template-columns: minmax(150px, .8fr) minmax(0, 1.2fr); }
-    .sql-example-preview { padding: 11px; }
     .draft-status { display: none; }
     .editor-heading { min-height: 47px; padding: 6px 9px; }
     .editor-toolbar { min-height: 40px; padding: 5px 8px; }
@@ -132,33 +115,11 @@
 @media (max-width: 560px) {
     .is-drawer { width: calc(100vw - 12px); }
     .new-tab-labeled { gap: 4px; padding-inline: 7px; font-size: 9px; }
-    .workspace-help-backdrop { padding: 8px; }
-    .workspace-help-panel { width: calc(100vw - 16px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); border-radius: 10px; }
-    .workspace-help-header { padding: 13px 12px 10px; }
-    .workspace-help-header p { max-width: 270px; }
-    .workspace-help-tabs { padding: 6px 9px; }
-    .workspace-help-tab { flex: none; }
-    .workspace-help-tour, .workspace-help-feature-view { padding: 10px; }
-    .workspace-help-section-heading h3 { font-size: 17px; }
-    .workspace-help-feature-grid, .workspace-help-explain-grid { grid-template-columns: 1fr; }
-    .workspace-help-feature-card { min-height: 74px; }
-    .sql-examples-toolbar { padding: 8px; }
-    .sql-example-categories { width: 100%; }
-    .sql-examples-layout { display: flex; flex-direction: column; }
-    .sql-examples-list { max-height: 30dvh; flex: none; gap: 3px; padding: 7px; border-right: 0; border-bottom: 1px solid var(--line); }
-    .sql-example-preview { flex: 1; }
-    .sql-example-option { padding: 8px 7px; }
-    .sql-example-option-meta { flex-wrap: wrap; }
-    .sql-example-preview pre { font-size: 8px; }
     .help-button { width: 29px; min-height: 29px; padding: 0; }
     .help-button span { display: none; }
-    .help-parts-browser { padding: 8px; }
-    .help-parts-browser-toolbar { align-items: stretch; flex-direction: column; gap: 7px; }
-    .help-parts-table-picker { min-width: 0; max-width: none; flex-basis: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .workspace-help-backdrop, .workspace-help-panel { animation: none; }
     .help-button { animation: none; }
 }
 

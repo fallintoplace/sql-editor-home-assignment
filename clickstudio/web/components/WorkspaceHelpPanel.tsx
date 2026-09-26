@@ -246,7 +246,11 @@ export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, 
                                 <div className="sql-example-categories" role="group" aria-label={copy.exampleCategories}>
                                     {availableCategories.map(value => <button key={value} data-testid={'sql-example-category-' + value} type="button" className={cx('sql-example-category', category === value && 'is-active')} aria-pressed={category === value} onClick={() => setCategory(value)}>{categoryLabel(value, copy, locale)}</button>)}
                                 </div>
-                                <label className="sql-example-search"><Icon name="search"/><input ref={searchRef} data-testid="sql-example-search" type="search" aria-label={copy.searchExamples} placeholder={copy.searchExamples} value={search} onChange={event => setSearch(event.target.value)}/></label>
+                                <label className="sql-example-search"><Icon name="search"/><input ref={searchRef} data-testid="sql-example-search" type="search" aria-label={copy.searchExamples} placeholder={copy.searchExamples} value={search} onChange={event => {
+                                    const value = event.target.value;
+                                    setSearch(value);
+                                    if (value.trim() && category === 'featured') setCategory('all');
+                                }}/></label>
                             </div>
                             {filteredExamples.length === 0 ? <p className="sql-examples-empty" role="status">{copy.noExamplesFound}</p> : <div className="sql-examples-layout">
                                 <div className="sql-examples-list" role="listbox" aria-label={copy.sqlExamples}>

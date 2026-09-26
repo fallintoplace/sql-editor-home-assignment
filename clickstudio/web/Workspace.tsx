@@ -125,6 +125,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [busy, setBusy] = useState<BusyAction>('');
     const [cancelling, setCancelling] = useState(false);
     const { error, setError, notice, setNotice } = useWorkspaceNotifications();
+    const [failedQueryError, setFailedQueryError] = useState<FailedQueryError>();
     const [search, setSearch] = useState('');
     const storageError = useWorkspacePersistence(key, workspace);
     const parameters = useMemo(() => {

@@ -565,6 +565,22 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         snapshot,
     });
 
+    const {
+        panelLayout, setPanelLayout, activeFloatingPanel, setActiveFloatingPanel,
+        queryPanelRef, resultsPanelRef, workspaceContentRef,
+        queryMode, resultsMode, queryFloating, resultsFloating,
+        panelStyle, togglePanelFloating, togglePanelMaximized,
+        startPanelDrag, startPanelResize, canSplitPanels,
+        workspaceLayoutStyle, startPanelSplit,
+    } = useWorkspacePanels({
+        compactViewport,
+        queryCollapsed,
+        setQueryCollapsed,
+        resultsCollapsed,
+        setResultsCollapsed,
+        hasOutput: Boolean(run || requestedResultsView === 'sqlmap'),
+    });
+
     const openDocument = (document: QueryDocument) => {
         addDraft(draftFromDocument(document));
     };

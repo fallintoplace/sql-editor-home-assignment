@@ -402,7 +402,7 @@ export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, 
                             : null)}
 
                         {renderTabPanel('dependencies', 'workspace-help-feature-view workspace-help-dependencies', section === 'dependencies' ? <>
-                            <HelpSectionHeading eyebrow="MATERIALIZED VIEWS" title={copy.helpDependencies} description={copy.helpDependenciesDescription}/>
+                            <HelpSectionHeading eyebrow="HOW DATA MOVES" title={copy.helpDependencies} description={copy.helpDependenciesDescription}/>
                             {!trusted ? <div className="workspace-help-locked"><Icon name="lock"/><strong>{copy.schemaPrivate}</strong><p>{copy.trustToInspect}</p></div> : <div className="workspace-help-feature-scroll"><MaterializedViewExplorer embedded active={open && section === 'dependencies'} connection={connection} database={connection.database}/></div>}
                         </> : null)}
 

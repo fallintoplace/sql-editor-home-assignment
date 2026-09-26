@@ -38,6 +38,25 @@
 .native-sql, .native-warning pre { max-height: 230px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; font-family: var(--font-mono); font-size: 11px; }
 .native-search { display: flex; align-items: center; gap: 10px; color: var(--muted); }
 .native-search input, .native-run-picker select { min-height: 36px; color: var(--text); background: var(--panel); border: 1px solid var(--line-bright); border-radius: 8px; padding: 8px 12px; font: inherit; }
+.native-lineage-primer { display: grid; gap: 11px; margin-bottom: 14px; padding: 13px 15px 11px; border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--line)); border-radius: 12px; background: linear-gradient(115deg, color-mix(in srgb, var(--accent) 5%, var(--panel-raised)), color-mix(in srgb, var(--violet) 3%, var(--panel-raised)) 58%, var(--panel-raised)); }
+.native-lineage-primer > header { display: flex; align-items: baseline; gap: 10px; }
+.native-lineage-primer > header .eyebrow { color: var(--accent); font-size: 9px; font-weight: 760; letter-spacing: .12em; }
+.native-lineage-primer > header > strong { color: var(--text); font-size: 12px; }
+.native-lineage-primer-flow { display: grid; grid-template-columns: minmax(0, 1fr) 32px minmax(0, 1fr) 32px minmax(0, 1fr); align-items: center; gap: 8px; }
+.native-lineage-primer-flow article { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: color-mix(in srgb, var(--panel) 88%, transparent); }
+.native-lineage-primer-icon { display: grid; width: 34px; height: 34px; flex: none; place-items: center; border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--line)); border-radius: 9px; background: color-mix(in srgb, var(--accent) 8%, var(--panel-raised)); color: var(--accent); }
+.native-lineage-primer-icon svg { width: 17px; height: 17px; }
+.native-lineage-primer-flow .is-view .native-lineage-primer-icon { border-color: color-mix(in srgb, var(--violet) 32%, var(--line)); background: color-mix(in srgb, var(--violet) 8%, var(--panel-raised)); color: var(--violet); }
+.native-lineage-primer-flow .is-target .native-lineage-primer-icon { border-color: color-mix(in srgb, var(--green) 32%, var(--line)); background: color-mix(in srgb, var(--green) 8%, var(--panel-raised)); color: var(--green); }
+.native-lineage-primer-flow article > div { display: grid; min-width: 0; gap: 2px; }
+.native-lineage-primer-flow small { color: var(--muted); font-size: 8px; font-weight: 720; letter-spacing: .09em; }
+.native-lineage-primer-flow strong { color: var(--text); font-size: 11px; }
+.native-lineage-primer-flow p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.35; }
+.native-lineage-primer-arrow { color: var(--accent); font-size: 21px; text-align: center; }
+.native-lineage-primer-note { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.4; }
+.native-lineage-map-heading { display: flex; align-items: baseline; gap: 9px; margin: 8px 0 6px; }
+.native-lineage-map-heading strong { color: var(--text); font-size: 12px; }
+.native-lineage-map-heading span { color: var(--muted); font-size: 10px; }
 .native-lineage-layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; min-height: 370px; gap: 14px; }
 .native-lineage-canvas { overflow: auto; max-height: 570px; border: 1px solid var(--line); border-radius: 12px; background: radial-gradient(circle at 20% 20%, color-mix(in srgb, var(--accent) 8%, var(--canvas)), var(--canvas)); }
 .native-lineage-canvas svg { display: block; }
@@ -45,13 +64,23 @@
 .native-edge.edge-writes-to { stroke: var(--green); }
 .native-edge.edge-refresh-dependency { stroke: var(--violet); stroke-dasharray: 7 4; }
 .native-edge.edge-catalog-dependency { stroke: var(--muted); stroke-dasharray: 3 5; }
+.native-edge-marker path { fill: var(--accent); }
+.native-edge-marker.edge-writes-to path { fill: var(--green); }
+.native-edge-marker.edge-refresh-dependency path { fill: var(--violet); }
+.native-edge-marker.edge-catalog-dependency path { fill: var(--muted); }
 .native-lineage-node { cursor: pointer; outline: none; }
 .native-lineage-node rect { fill: var(--panel-raised); stroke: var(--line-bright); stroke-width: 1.5; }
 .native-lineage-node.materialized-view rect { stroke: var(--violet); }
+.native-lineage-node.input-table rect { stroke: var(--accent); }
+.native-lineage-node.result-table rect { stroke: var(--green); }
 .native-lineage-node.is-selected rect, .native-lineage-node:focus-visible rect { stroke: var(--accent); stroke-width: 3; }
 .native-lineage-node.external rect { stroke-dasharray: 5 3; }
 .native-lineage-node text { fill: var(--text); font-size: 12px; font-family: var(--font-mono); pointer-events: none; }
 .native-lineage-node .native-node-kind, .native-lineage-node .native-node-meta { fill: var(--muted); font-size: 9px; }
+.native-lineage-node.beginner-node .native-node-kind { font-family: var(--font-sans); font-size: 9px; font-weight: 720; letter-spacing: .025em; }
+.native-lineage-node.beginner-node.input-table .native-node-kind { fill: var(--accent); }
+.native-lineage-node.beginner-node.materialized-view .native-node-kind { fill: var(--violet); }
+.native-lineage-node.beginner-node.result-table .native-node-kind { fill: var(--green); }
 .native-lineage-legend { display: flex; flex-wrap: wrap; gap: 15px; color: var(--muted); font-size: 11px; }
 .native-lineage-legend span::before { content: ''; display: inline-block; vertical-align: middle; width: 20px; border-top: 2px solid var(--accent); margin-right: 6px; }
 .native-lineage-legend .edge-writes-to::before { border-color: var(--green); }
@@ -60,6 +89,13 @@
 .native-node-details { min-width: 0; max-height: 570px; overflow: auto; padding: 15px; }
 .native-node-details h3 { font-size: 16px; overflow-wrap: anywhere; }
 .native-node-details .native-metrics dd { font-size: 22px; }
+.native-node-explanation { margin: 4px 0 12px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.native-node-details.is-beginner .native-metrics { gap: 12px 18px; margin: 12px 0; }
+.native-node-details.is-beginner .native-metrics div { min-width: 0; }
+.native-node-details.is-beginner .native-metrics dt { font-size: 10px; }
+.native-node-details details { margin-top: 10px; border-top: 1px solid var(--line); }
+.native-node-details details summary { cursor: pointer; padding-block: 9px; color: var(--text-soft); font-size: 11px; }
+.native-detail-caption { display: block; margin: 10px 0 5px; color: var(--muted); font-size: 10px; }
 .native-detail-list { display: grid; gap: 4px; margin: 15px 0; }
 .native-detail-list dd { margin: 0 0 10px; font-size: 11px; overflow-wrap: anywhere; }
 .native-schedule { font-family: var(--font-mono); color: var(--accent); }
@@ -69,7 +105,7 @@
 .native-dialog summary, .native-activity summary { cursor: pointer; padding-block: 8px; }
 .native-dialog :focus-visible, .native-activity :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 @media (max-width: 850px) { .native-lineage-layout { grid-template-columns: minmax(0, 1fr); } .native-node-details { max-height: none; } .native-lineage-canvas { max-height: 360px; } }
-@media (max-width: 560px) { .native-dialog { width: 100vw; max-height: 100dvh; border-radius: 0; padding: 14px; } .native-merge-flow { grid-template-columns: minmax(0, 1fr); } .native-flow-arrow { transform: rotate(90deg); font-size: 26px; } .native-tabs button { padding-inline: 12px; } .native-search { flex-wrap: wrap; } }
+@media (max-width: 560px) { .native-dialog { width: 100vw; max-height: 100dvh; border-radius: 0; padding: 14px; } .native-merge-flow { grid-template-columns: minmax(0, 1fr); } .native-flow-arrow { transform: rotate(90deg); font-size: 26px; } .native-tabs button { padding-inline: 12px; } .native-search { flex-wrap: wrap; } .native-lineage-primer-flow { grid-template-columns: minmax(0, 1fr); } .native-lineage-primer-arrow { transform: rotate(90deg); } .native-lineage-map-heading { align-items: flex-start; flex-direction: column; gap: 2px; } }
 .native-run-pickers {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;

@@ -157,7 +157,7 @@ export interface EditorHandle {
         to: number;
     };
 }
-interface Props {
+export interface SqlEditorProps {
     value: string;
     from: number;
     to: number;
@@ -174,7 +174,7 @@ interface Props {
     onNativeParserStatus?: (status: NativeParserStatus) => void;
     onNativeParseSnapshot?: (snapshot?: NativeParseSnapshot) => void;
 }
-export const SqlEditor = forwardRef<EditorHandle, Props>(function SqlEditor(props, ref) {
+export const SqlEditor = forwardRef<EditorHandle, SqlEditorProps>(function SqlEditor(props, ref) {
     const element = useRef<HTMLDivElement>(null), view = useRef<EditorView | undefined>(undefined), current = useRef(props), language = useRef(new Compartment()), theme = useRef(new Compartment()), tools = useRef(new Compartment());
     const nativeDiagnostics = useRef<NativeDiagnostic[]>([]), validationRevision = useRef(0);
     current.current = props;

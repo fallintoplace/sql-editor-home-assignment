@@ -69,7 +69,7 @@ export default defineConfig([
     files: ["web/Workspace.tsx"],
     rules: {
       "complexity": ["error", 300],
-      "max-lines-per-function": ["error", { max: 1000, skipBlankLines: true, skipComments: true }],
+      "max-lines-per-function": ["error", { max: 850, skipBlankLines: true, skipComments: true }],
     },
   },
 ]);

@@ -104,6 +104,8 @@
     .workspace-help-tab small { display: none; }
     .workspace-help-content { min-height: 0; }
     .workspace-help-tour, .workspace-help-feature-view { padding: 14px; }
+    .workspace-help-geo-demo { grid-template-columns: 1fr; }
+    .workspace-help-geo-preview { min-height: 220px; }
     .sql-examples-toolbar { align-items: stretch; }
     .sql-example-search { min-width: 100%; flex-basis: 100%; }
     .sql-examples-layout { grid-template-columns: minmax(150px, .8fr) minmax(0, 1.2fr); }

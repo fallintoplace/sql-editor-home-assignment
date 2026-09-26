@@ -186,6 +186,11 @@ export function useWorkspacePanels({
     };
 
     return {
+        compactViewport,
+        queryCollapsed,
+        setQueryCollapsed,
+        resultsCollapsed,
+        setResultsCollapsed,
         panelLayout,
         setPanelLayout,
         activeFloatingPanel,
@@ -207,3 +212,5 @@ export function useWorkspacePanels({
         startPanelSplit,
     };
 }
+
+export type WorkspacePanelController = ReturnType<typeof useWorkspacePanels>;

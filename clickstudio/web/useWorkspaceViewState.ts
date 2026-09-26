@@ -145,3 +145,5 @@ export function useWorkspaceViewState({
         snapshotChart,
     };
 }
+
+export type WorkspaceViewState = ReturnType<typeof useWorkspaceViewState>;

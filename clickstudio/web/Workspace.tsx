@@ -2,25 +2,22 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ProfilePipeline, QueryDocument, QueryProfile, Result, Run, RunKind, Script } from '../shared/types';
 import { DEFAULT_LIMITS } from '../shared/types';
 import { exportCsv, recommendChart } from '../shared/results';
-import { formatSql, hasSqlComments, parameterNames, selectedStatement, splitSql } from '../shared/sql';
+import { formatSql, parameterNames, selectedStatement, splitSql } from '../shared/sql';
 import { api, download, isFrontendDemoPreview, message, post } from './api';
 import { PLAYGROUND_CONNECTION_ID } from './playground';
-import { SqlEditor, type EditorHandle } from './components/SqlEditor';
+import type { EditorHandle } from './components/SqlEditor';
 import { ImportWizard } from './components/ImportWizard';
 import { WorkspaceHelpPanel, type HelpPanelSection } from './components/WorkspaceHelpPanel';
-import { ExplainAnalyzeView } from './components/ExplainAnalyzeView';
 import { HelpButton } from './components/HelpButton';
 import { RestoreSqlMenu } from './components/RestoreSqlMenu';
 import { OverlayPortal } from './components/OverlayPortal';
-import { ChartView, GeoView, InsightsView, ResultGrid } from './components/ResultViews';
-import { ExplainPlanView } from './components/ExplainPlanView';
-import { ExplainIndexesView } from './components/ExplainIndexesView';
-import { PipelineGraph } from './components/PipelineGraph';
-import { SqlFlowView } from './components/SqlFlowView';
 import { InspectorPane, type InspectorPaneProps } from './components/InspectorPane';
-import { Button, cx, Icon, Status, terminal } from './components/ui';
-import { ExecutionBar, RailButton, RunActionGroup, ScriptResults } from './components/WorkspaceChrome';
+import { Button, cx, Icon, terminal } from './components/ui';
+import { ExecutionBar, RailButton } from './components/WorkspaceChrome';
 import { WorkspaceDocumentTabs } from './components/WorkspaceDocumentTabs';
+import { WorkspaceQueryPanel } from './components/WorkspaceQueryPanel';
+import { WorkspaceResultsPanel } from './components/WorkspaceResultsPanel';
+import { WorkspacePanelSplitter } from './components/WorkspacePanelSplitter';
 import { checkpoint, closeDraft, draftFromDocument, MAX_TABS, newDraft, reopenDraft, type Draft } from './workspace-state';
 import { rememberRunIds, sameSavedContent } from '../shared/workspace-view';
 import type { NativeParseSnapshot, NativeParserStatus } from '../shared/native-parser';
@@ -30,13 +27,21 @@ import { useResultSnapshot } from './useResultSnapshot';
 import { useWorkspaceTabs } from './useWorkspaceTabs';
 import { useWorkspaceData } from './useWorkspaceData';
 import { useWorkspaceAssistant } from './useWorkspaceAssistant';
-import { PanelResizeHandles, panelTargetIsInteractive, useWorkspacePanels } from './useWorkspacePanels';
+import { useWorkspacePanels } from './useWorkspacePanels';
 import { useScriptExecution } from './useScriptExecution';
 import { sqlExamplesFor, type SqlExample } from './sql-examples';
 import { localizeSqlExample } from './sql-examples-locales';
 import type { Copy, ExperienceLevel, Locale } from './i18n';
-import type { BusyAction, Connected, Inspector, ResultsView } from './workspace-types';
-import { clampPanelSplitRatio } from './workspace-layout';
+import type {
+    BusyAction,
+    Connected,
+    Inspector,
+    ResultsView,
+    WorkspaceActionRef,
+    WorkspaceFormatter,
+    WorkspaceRunCapability,
+    WorkspaceRunCapabilityAction,
+} from './workspace-types';
 import { initialWorkspaceState, workspaceStateKey } from './workspace-initial-state';
 
 import {
@@ -48,28 +53,27 @@ import {
     helpStatementOffset,
     helpStatementSql,
     insertEditorText,
-    resultsTabLabel,
     revealEditorRange,
     type FailedQueryError,
 } from './workspace-helpers';
 import { useWorkspaceNotifications, WORKSPACE_TOAST_TIMEOUT_MS } from './useWorkspaceNotifications';
 import { useWorkspaceViewState } from './useWorkspaceViewState';
 
-type WorkspaceProps = {
+type WorkspaceProps = Readonly<{
     connection: Connected;
     connectionLabel: string;
-    connections: Connected[];
-    onSelectConnection: (id: string) => void;
+    connections: readonly Connected[];
+    onSelectConnection: (id: Connected['id']) => void;
     onRefreshConnections: () => Promise<void>;
-    trustActionRef: { current: () => Promise<void> };
-    testConnectionActionRef: { current: () => Promise<void> };
+    trustActionRef: WorkspaceActionRef;
+    testConnectionActionRef: WorkspaceActionRef;
     demoMode: boolean;
     experience: ExperienceLevel;
     nativeParserEnabled: boolean;
     dark: boolean;
     copy: Copy;
     locale: Locale;
-};
+}>;
 
 export function Workspace({ connection, connectionLabel, connections, onSelectConnection, onRefreshConnections, trustActionRef, testConnectionActionRef, demoMode, experience, nativeParserEnabled, dark, copy, locale }: WorkspaceProps) {
     const key = workspaceStateKey(connection.id);
@@ -122,7 +126,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         try { return parameterNames(active.sql); } catch { return []; }
     }, [active.sql]);
     const unsupportedParameters = parameters.length > 0 && connection.manifest?.parameters.available === false;
-    const runActionTitle = (capability: { available: boolean; reason?: string } | undefined, action: 'script' | 'explain' | 'explain-plan' | 'explain-pipeline' | 'explain-analyze') => {
+    const runActionTitle = (capability: WorkspaceRunCapability | undefined, action: WorkspaceRunCapabilityAction): string | undefined => {
         if (!trusted) return copy.common.runActionTrustRequired;
         if (busy) return copy.common.runActionWait;
         if (unsupportedParameters) return copy.common.runActionRemoveParameters;
@@ -198,7 +202,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         setWorkspace(current => ({ ...current, tabs: current.tabs.map(draft => draft.id === id ? change(draft) : draft) }));
     }, []);
     const patch = useCallback((values: Partial<Draft>) => update(active.id, draft => ({ ...draft, ...values })), [active.id, update]);
-    const formatActiveSql = useCallback(async (formatter: 'wasm' | 'builtin') => {
+    const formatActiveSql = useCallback(async (formatter: WorkspaceFormatter) => {
         const draftId = active.id, sourceSql = active.sql;
         const applyBuiltIn = () => setWorkspace(current => current.activeId !== draftId ? current : ({ ...current,
             tabs: current.tabs.map(draft => draft.id === draftId && draft.sql === sourceSql ? { ...draft, sql: formatSql(sourceSql) } : draft),
@@ -521,32 +525,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     }, 'save');
     testConnectionActionRef.current = testConnection;
 
-    const {
-        sortedHistory,
-        savedDocument,
-        saveStatus,
-        saveStatusLabel,
-        statementCount,
-        editorErrorContext,
-        editorErrorRange,
-        staleResult,
-        requestedResultsView,
-        sqlMapStatement,
-        queryTreeAvailable,
-        queryTreeUnavailableReason,
-        sqlMapParseStatement,
-        resultTabs,
-        visibleResultsView,
-        retainedSnapshot,
-        explainPlan,
-        explainIndexAnalysis,
-        pipelineResult,
-        analyzeEvidence,
-        resultsTitle,
-        resultsEyebrow,
-        resultsPanelLabel,
-        snapshotChart,
-    } = useWorkspaceViewState({
+    const viewState = useWorkspaceViewState({
         active,
         connection,
         documents,
@@ -566,13 +545,20 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     });
 
     const {
-        panelLayout, setPanelLayout, activeFloatingPanel, setActiveFloatingPanel,
-        queryPanelRef, resultsPanelRef, workspaceContentRef,
-        queryMode, resultsMode, queryFloating, resultsFloating,
-        panelStyle, togglePanelFloating, togglePanelMaximized,
-        startPanelDrag, startPanelResize, canSplitPanels,
-        workspaceLayoutStyle, startPanelSplit,
-    } = useWorkspacePanels({
+        sortedHistory,
+        savedDocument,
+        saveStatus,
+        saveStatusLabel,
+        requestedResultsView,
+        sqlMapStatement,
+        queryTreeAvailable,
+        queryTreeUnavailableReason,
+        sqlMapParseStatement,
+        visibleResultsView,
+    } = viewState;
+
+
+    const panels = useWorkspacePanels({
         compactViewport,
         queryCollapsed,
         setQueryCollapsed,
@@ -580,6 +566,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         setResultsCollapsed,
         hasOutput: Boolean(run || requestedResultsView === 'sqlmap'),
     });
+
 
     const openDocument = (document: QueryDocument) => {
         addDraft(draftFromDocument(document));
@@ -805,12 +792,12 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     </>}
                 />
                 <div
-                    ref={workspaceContentRef}
+                    ref={panels.workspaceContentRef}
                     id="sql-document-panel"
                     role="tabpanel"
                     aria-labelledby={`document-tab-${active.id}`}
                     tabIndex={0}
-                    style={workspaceLayoutStyle}
+                    style={panels.workspaceLayoutStyle}
                     className={cx(
                         'workspace-content',
                         experience === 'beginner' && 'beginner-workspace-content',
@@ -818,161 +805,97 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                         visibleResultsView === 'sqlmap' && 'has-sql-map',
                         queryCollapsed && 'is-query-collapsed',
                         (run || visibleResultsView === 'sqlmap') && resultsCollapsed && 'is-results-collapsed',
-                        queryFloating && 'has-floating-query',
-                        resultsFloating && 'has-floating-results',
-                        canSplitPanels && 'has-panel-split',
+                        panels.queryFloating && 'has-floating-query',
+                        panels.resultsFloating && 'has-floating-results',
+                        panels.canSplitPanels && 'has-panel-split',
                     )}
                 >
-                    <section
-                        ref={queryPanelRef}
-                        className={cx('editor-surface', queryCollapsed && 'is-collapsed', queryFloating && 'is-floating', queryMode === 'maximized' && 'is-maximized', activeFloatingPanel === 'query' && queryFloating && 'is-front')}
-                        style={panelStyle('query', queryMode)}
-                        onPointerDownCapture={() => { if (queryFloating) setActiveFloatingPanel('query'); }}
-                    >
-                        <div
-                            className={cx('editor-heading', queryFloating && 'workspace-panel-drag-handle')}
-                            onPointerDown={event => startPanelDrag('query', event)}
-                            onDoubleClick={event => {
-                                if (queryFloating && !panelTargetIsInteractive(event.target)) togglePanelMaximized('query');
-                            }}
-                        >
-                            <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">{copy.common.query}</span><input aria-label="SQL document name" value={active.name} onChange={event => patch({ name: event.target.value })}/></label></div>
-                        <div className="editor-heading-tools">
-                            <Button variant="ghost" className="sql-map-button" aria-label={copy.common.visualizeSqlStructure} aria-pressed={view === 'sqlmap'} title={copy.common.visualizeSqlStructure} onClick={() => { setView(current => current === 'sqlmap' ? 'results' : 'sqlmap'); setResultsCollapsed(false); }}><Icon name="pipeline"/>{copy.common.sqlMap}</Button>
-                            <Button variant="ghost" className="sql-ai-button" data-testid="open-ai" aria-label={copy.common.askAi} aria-pressed={inspector === 'assistant'} onClick={() => showInspector('assistant')}><Icon name="assistant"/>{copy.common.askAi}</Button>
-                            <Button variant="secondary" className="save-revision-button" data-testid="save-query" aria-label={experience === 'expert' ? copy.common.saveRevision : copy.common.save} onClick={() => void saveDraft()} disabled={Boolean(busy)}><Icon name="documents"/>{copy.common.save}</Button>
-                        </div>
-                        <div className="editor-heading-actions">
-                            {experience === 'expert' && <>
-                                {nativeParserEnabled && nativeParserStatus === 'unavailable' && <>
-                                    <span className="toolbar-small" role="status" title="Formatting remains available while the native parser is unavailable.">{copy.common.parserUnavailable}</span>
-                                    <Button variant="ghost" className="toolbar-small" onClick={() => editor.current?.retryNativeParser()}>{copy.common.retryParser}</Button>
-                                </>}
-                                <div className="formatter-control" role="group" aria-label={copy.common.formatSql}>
-                                    <span className="formatter-control-label">{copy.common.format}</span>
-                                    <Button
-                                        variant="ghost"
-                                        className="toolbar-small formatter-choice formatter-choice-wasm"
-                                        disabled={!nativeParserEnabled || nativeParserStatus !== 'ready'}
-                                        title={!nativeParserEnabled
-                                            ? 'Select WASM in the parser switch to enable this formatter.'
-                                            : nativeParserStatus === 'loading'
-                                                ? 'The WASM parser is loading.'
-                                                : nativeParserStatus === 'unavailable'
-                                                    ? 'The WASM parser is unavailable. Retry the parser to enable this formatter.'
-                                                    : hasSqlComments(active.sql)
-                                                        ? 'Formats with WASM when supported; SQL with comments falls back to Built-in Format to preserve them.'
-                                                        : 'Format SQL with the native ClickHouse WASM parser.'}
-                                        onClick={() => void formatActiveSql('wasm')}
-                                    >WASM</Button>
-                                    <Button
-                                        variant="ghost"
-                                        className="toolbar-small formatter-choice formatter-choice-builtin"
-                                        title="Format SQL with ClickStudio’s built-in formatter."
-                                        onClick={() => void formatActiveSql('builtin')}
-                                    >{copy.common.builtInFormatter}</Button>
-                                </div>
-                            </>}
-                            {!compactViewport && <Button variant="ghost" className="panel-window-button" aria-label={queryFloating ? 'Dock query panel' : 'Pop out query panel'} title={queryFloating ? 'Dock query panel' : 'Pop out query panel'} onClick={() => togglePanelFloating('query')}><Icon name={queryFloating ? 'dock' : 'popout'}/></Button>}
-                            {queryFloating && <Button variant="ghost" className="panel-window-button" aria-label={queryMode === 'maximized' ? 'Restore query panel' : 'Maximize query panel'} title={queryMode === 'maximized' ? 'Restore query panel' : 'Maximize query panel'} onClick={() => togglePanelMaximized('query')}><Icon name={queryMode === 'maximized' ? 'restore' : 'maximize'}/></Button>}
-                            <Button variant="ghost" className="panel-collapse-button" aria-label={queryCollapsed ? copy.common.expandQuery : copy.common.collapseQuery} aria-expanded={!queryCollapsed} aria-controls="sql-editor-content" title={queryCollapsed ? copy.common.expandQuery : copy.common.collapseQuery} onClick={() => setQueryCollapsed(value => !value)}><Icon className="panel-toggle-icon" name="chevron"/></Button>
-                        </div>
-                        </div>
-                        <div id="sql-editor-content" className="panel-content editor-content" hidden={queryCollapsed}>
-                        <div className="editor-toolbar">
-                            <div className="editor-mode-label"><span className="editor-language-dot"/>{copy.common.clickhouseSql}<span className="toolbar-divider"/><span>{statementCount === undefined ? copy.common.incompleteSql : (statementCount === 1 ? copy.common.oneStatement : copy.common.manyStatements).replace('{count}', String(statementCount))}</span></div>
-                            <div className="editor-actions">
-                                {experience === 'expert' ? <>
-                                    <RunActionGroup copy={copy.common} runLabel={copy.common.runStatement} running={busy === 'run' || busy === 'script'} disabled={!trusted || Boolean(busy) || unsupportedParameters} onRun={() => void execute()} actions={[
-                                        { id: 'script', label: copy.common.runScript, disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.scripts.available, title: runActionTitle(connection.manifest?.scripts, 'script'), onSelect: () => void execute(true) },
-                                        { id: 'explain', label: copy.common.explain, disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.explain.available, title: runActionTitle(connection.manifest?.explain, 'explain'), onSelect: () => void execute(false, 'explain') },
-                                        { id: 'explain-plan', label: copy.common.explainPlan, disabled: !trusted || Boolean(busy) || unsupportedParameters || !(connection.manifest?.explainPlan ?? connection.manifest?.explain)?.available, title: runActionTitle(connection.manifest?.explainPlan ?? connection.manifest?.explain, 'explain-plan'), onSelect: () => void execute(false, 'plan') },
-                                        { id: 'explain-pipeline', label: copy.common.explainPipeline, disabled: !trusted || Boolean(busy) || unsupportedParameters || !(connection.manifest?.explainPipeline ?? connection.manifest?.pipeline)?.available, title: runActionTitle(connection.manifest?.explainPipeline ?? connection.manifest?.pipeline, 'explain-pipeline'), onSelect: () => void execute(false, 'pipeline') },
-                                        { id: 'explain-analyze', label: copy.common.explainAnalyze, disabled: !trusted || Boolean(busy) || unsupportedParameters || !connection.manifest?.explainAnalyze?.available, title: runActionTitle(connection.manifest?.explainAnalyze, 'explain-analyze'), onSelect: () => void execute(false, 'analyze') },
-                                    ]}/>
-                                </> : <>
-                                    <Button variant="primary" className="run-query-button" data-testid="run-statement" aria-label={copy.common.runStatement} onClick={() => void execute()} disabled={!trusted || Boolean(busy) || unsupportedParameters}><Icon name="play"/>{busy === 'run' ? copy.common.running : copy.common.run}</Button>
-                                </>}
-                            </div>
-                        </div>
-                        {experience === 'beginner' && (!trusted || (!demoMode && !connection.manifest)) && <div className="beginner-connection-notice" role="status"><span>{demoMode ? 'Start the sample workspace to run this query.' : !connection.manifest ? trusted ? 'Retest this connection to refresh its feature checks.' : 'Test this connection to discover its ClickHouse features.' : 'Trust this connection to run SQL.'}</span><Button variant="secondary" className="toolbar-small" onClick={() => void (!demoMode && !connection.manifest ? testConnectionActionRef.current() : trustActionRef.current())}>{demoMode ? 'Start exploring' : !connection.manifest ? trusted ? 'Retest connection' : 'Test connection' : 'Trust connection'}</Button></div>}
-                        <div className="editor-frame"><SqlEditor key={active.id} ref={editor} value={active.sql} from={active.from} to={active.to} schema={trusted ? schema : undefined} dark={dark} nativeParserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} copy={copy.common} error={editorErrorContext?.error} errorRange={editorErrorRange} onChange={sql => patch({ sql })} onSelection={(from, to) => patch({ from, to })} onRun={wholeScript => void execute(wholeScript)} onNativeParserStatus={setNativeParserStatus} onNativeParseSnapshot={snapshot => setNativeParseSnapshot(snapshot)}/></div>
-                        {unsupportedParameters
-                            ? <div className="callout mt-3" role="status">{connection.manifest?.parameters.reason ?? 'Query parameters are unavailable on this connection.'} Replace placeholders with SQL literals to run this query.</div>
-                            : parameters.length > 0 && <div className="parameters-row"><div className="parameters-label"><span>INPUTS</span><strong>Query parameters</strong><small>Values are bound separately from the SQL text.</small></div>{parameters.map(parameter => <label className="parameter-field" key={parameter.name}><span>{parameter.name}<code>:{parameter.type}</code></span><input value={active.parameters[parameter.name] ?? ''} placeholder="Enter value" onChange={event => patch({ parameters: { ...active.parameters, [parameter.name]: event.target.value } })}/></label>)}<span className="parameter-count">{parameters.filter(parameter => Boolean(active.parameters[parameter.name]?.trim())).length} / {parameters.length} ready</span></div>}
-                        {experience === 'expert' && <div className="editor-footer"><span>{active.sql.length.toLocaleString()} {copy.common.characters} <span className="footer-dot">·</span> {active.sql.split('\n').length} {copy.common.lines}</span></div>}
-                        </div>
-                        {queryMode === 'floating' && !queryCollapsed && <PanelResizeHandles onResize={(edge, event) => startPanelResize('query', edge, event)}/>}
-                    </section>
-
-                    {canSplitPanels && <div
-                        className="workspace-panel-splitter"
-                        role="separator"
-                        aria-label="Resize query and output panels"
-                        aria-orientation="horizontal"
-                        aria-valuemin={25}
-                        aria-valuemax={75}
-                        aria-valuenow={Math.round(panelLayout.splitRatio * 100)}
-                        tabIndex={0}
-                        onPointerDown={startPanelSplit}
-                        onKeyDown={event => {
-                            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-                            event.preventDefault();
-                            const delta = event.key === 'ArrowUp' ? -0.05 : 0.05;
-                            setPanelLayout(current => ({ ...current, splitRatio: clampPanelSplitRatio(current.splitRatio + delta) }));
+                    <WorkspaceQueryPanel
+                        state={{
+                            active,
+                            connection,
+                            schema,
+                            copy,
+                            experience,
+                            dark,
+                            nativeParserEnabled,
+                            nativeParserStatus,
+                            trusted,
+                            unsupportedParameters,
+                            parameters,
+                            busy,
+                            inspector,
+                            demoMode,
+                            view,
                         }}
-                    ><span/></div>}
+                        actions={{
+                            onPatch: patch,
+                            onToggleSqlMap: () => {
+                                setView(current => current === 'sqlmap' ? 'results' : 'sqlmap');
+                                setResultsCollapsed(false);
+                            },
+                            onOpenAssistant: () => showInspector('assistant'),
+                            onSave: saveDraft,
+                            onFormat: formatActiveSql,
+                            onRun: execute,
+                            runActionTitle,
+                            onConnectionAction: () => !demoMode && !connection.manifest
+                                ? testConnectionActionRef.current()
+                                : trustActionRef.current(),
+                            onNativeParserStatus: setNativeParserStatus,
+                            onNativeParseSnapshot: setNativeParseSnapshot,
+                        }}
+                        panels={panels}
+                        viewState={viewState}
+                        editorRef={editor}
+                    />
 
-                    {(run || visibleResultsView === 'sqlmap') && <section
-                        ref={resultsPanelRef}
-                        className={cx('results-surface', experience === 'expert' && 'results-expert', resultsCollapsed && 'is-collapsed', resultsFloating && 'is-floating', resultsMode === 'maximized' && 'is-maximized', activeFloatingPanel === 'results' && resultsFloating && 'is-front')}
-                        style={panelStyle('results', resultsMode)}
-                        aria-label={resultsPanelLabel}
-                        onPointerDownCapture={() => { if (resultsFloating) setActiveFloatingPanel('results'); }}
-                    >
-                        <div
-                            className={cx('results-header', resultsFloating && 'workspace-panel-drag-handle')}
-                            onPointerDown={event => startPanelDrag('results', event)}
-                            onDoubleClick={event => {
-                                if (resultsFloating && !panelTargetIsInteractive(event.target)) togglePanelMaximized('results');
-                            }}
-                        >
-                            <div className="results-title">
-                                <span className="results-mark"><Icon name={visibleResultsView === 'sqlmap' || visibleResultsView === 'pipeline' || visibleResultsView === 'indexes' || visibleResultsView === 'runtime' ? 'pipeline' : 'chart'}/></span>
-                                <div><span className="eyebrow">{resultsEyebrow}</span><h2>{resultsTitle}</h2></div>
-                                {run && visibleResultsView !== 'sqlmap' && <Status run={run} copy={copy.common}/>}
-                            </div>
-                            <div className="results-actions">
-                                {run && <div className="results-tabs" role="tablist" aria-label={copy.common.workspaceOutput}>{resultTabs.map(tab => <button key={tab} role="tab" aria-selected={visibleResultsView === tab} type="button" onClick={() => {
-                                    setView(tab);
-                                    if (tab === 'insights') void perform(loadProfile, 'save');
-                                }}>{resultsTabLabel(tab, copy.common)}{tab === 'chart' && retainedSnapshot && <span className="suggested-dot"/>}</button>)}</div>}
-                                {!compactViewport && <Button variant="ghost" className="panel-window-button" aria-label={resultsFloating ? 'Dock output panel' : 'Pop out output panel'} title={resultsFloating ? 'Dock output panel' : 'Pop out output panel'} onClick={() => togglePanelFloating('results')}><Icon name={resultsFloating ? 'dock' : 'popout'}/></Button>}
-                                {resultsFloating && <Button variant="ghost" className="panel-window-button" aria-label={resultsMode === 'maximized' ? 'Restore output panel' : 'Maximize output panel'} title={resultsMode === 'maximized' ? 'Restore output panel' : 'Maximize output panel'} onClick={() => togglePanelMaximized('results')}><Icon name={resultsMode === 'maximized' ? 'restore' : 'maximize'}/></Button>}
-                                <Button variant="ghost" className="panel-collapse-button" aria-label={`${resultsCollapsed ? copy.common.expand : copy.common.collapse} ${resultsPanelLabel}`} aria-expanded={!resultsCollapsed} aria-controls="query-results-content" title={resultsCollapsed ? copy.common.expandOutput : copy.common.collapseOutput} onClick={() => setResultsCollapsed(value => !value)}><Icon className="panel-toggle-icon" name="chevron"/></Button>
-                            </div>
-                        </div>
-                        <div id="query-results-content" className={cx('panel-content results-content', ['insights', 'indexes', 'plan', 'pipeline', 'runtime'].includes(visibleResultsView) && 'results-content-scrollable')} hidden={resultsCollapsed}>
-                            {visibleResultsView === 'sqlmap' && <SqlFlowView copy={copy.common} sql={sqlMapStatement?.sql ?? active.sql} sourceOffset={sqlMapStatement?.from ?? 0} parseResult={sqlMapParseStatement?.result} parserEnabled={nativeParserEnabled} parserStatus={nativeParserStatus} parseDurationMs={nativeParseSnapshot?.elapsedMs} connectionId={connection.id} parameters={active.parameters} analyzerAvailable={queryTreeAvailable} analyzerUnavailableReason={queryTreeUnavailableReason} onRevealRange={(from, to) => editor.current?.revealRange(from, to)}/>}
-                            {visibleResultsView !== 'sqlmap' && staleResult && <div className="result-provenance" aria-live="polite"><span className="status-light is-warning"/><span><strong>Result from previous execution</strong><small>SQL or bound parameters changed since this run. Rerun to refresh the result.</small></span></div>}
-                            {visibleResultsView === 'results' && script && <ScriptResults script={script} runs={history} activeRunId={run?.id} onSelectRun={runId => {
+                    <WorkspacePanelSplitter panels={panels}/>
+
+                    <WorkspaceResultsPanel
+                        state={{
+                            active,
+                            connection,
+                            copy,
+                            locale,
+                            run,
+                            script,
+                            history,
+                            page,
+                            resultPage,
+                            profile,
+                            pipeline,
+                            profilesByRun,
+                            pipelinesByRun,
+                            nativeParserEnabled,
+                            nativeParserStatus,
+                            nativeParseSnapshot,
+                            trusted,
+                            busy,
+                            cancelling,
+                            experience,
+                        }}
+                        actions={{
+                            onSelectView: nextView => {
+                                setView(nextView);
+                                if (nextView === 'insights') void perform(loadProfile, 'save');
+                            },
+                            onSelectScriptRun: runId => {
                                 if (active.scriptId) scriptFollowRef.current = { scriptId: active.scriptId, enabled: false };
                                 update(active.id, draft => ({ ...draft, activeRunId: runId }));
-                                setPage(0); setView('results');
-                            }} onCancel={() => void cancel()} cancelDisabled={cancelling}/>}
-                            {run && visibleResultsView === 'results' && <ResultGrid key={run.id} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/>}
-                            {run && visibleResultsView === 'indexes' && <ExplainIndexesView analysis={explainIndexAnalysis} loading={!retainedSnapshot && run.resultState === 'reopenable'} copy={copy.common}/>}
-                            {run && visibleResultsView === 'plan' && <ExplainPlanView plan={explainPlan} loading={!retainedSnapshot && run.resultState === 'reopenable'} copy={copy.common}/>}
-                            {run && visibleResultsView === 'pipeline' && (pipelineResult
-                                ? <PipelineGraph pipeline={pipelineResult} copy={copy.common} heading={copy.common.pipelineGraph} subheading={copy.common.pipelineGraphDescription}/>
-                                : <div className="pipeline-graph-empty" role="status">{copy.common.pipelineNoOutput}</div>)}
-                            {run && visibleResultsView === 'runtime' && <ExplainAnalyzeView evidence={analyzeEvidence} loading={!retainedSnapshot && run.resultState === 'reopenable'} copy={copy.common}/>}
-                            {run && visibleResultsView === 'chart' && snapshotChart?.config.kind === 'table' ? <div className="chart-table-fallback"><div className="chart-table-notice" role="status">{copy.chart.fallbackNoMeasure}</div><ResultGrid key={`${run.id}-chart-table`} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={setPage}/></div> : run && visibleResultsView === 'chart' && <ChartView result={retainedSnapshot} loading={!retainedSnapshot && run.resultState === 'reopenable'} chart={active.chart} onChart={chart => patch({ chart })} copy={copy} locale={locale}/>}
-                            {run && visibleResultsView === 'map' && <GeoView result={retainedSnapshot} loading={!retainedSnapshot && run.resultState === 'reopenable'} locale={locale}/>}
-                            {run && visibleResultsView === 'insights' && <InsightsView comparison={{ connectionId: connection.id, trusted, history, initialRun: run, profiles: profilesByRun, pipelines: pipelinesByRun, queryLogAvailable: connection.manifest?.queryLog.available === true }} run={run} profile={profile} pipeline={pipeline} pipelineAvailable={Boolean(trusted && connection.manifest?.pipeline.available)} onLoad={() => void perform(loadProfile, 'save')} onLoadPipeline={() => void perform(loadPipeline, 'save')} loading={busy === 'save'}/>}
-                        </div>
-                        {resultsMode === 'floating' && !resultsCollapsed && <PanelResizeHandles onResize={(edge, event) => startPanelResize('results', edge, event)}/>}
-                    </section>}
+                                setPage(0);
+                                setView('results');
+                            },
+                            onCancel: () => void cancel(),
+                            onPage: setPage,
+                            onPatch: patch,
+                            onLoadProfile: () => void perform(loadProfile, 'save'),
+                            onLoadPipeline: () => void perform(loadPipeline, 'save'),
+                            onRevealRange: (from, to) => editor.current?.revealRange(from, to),
+                        }}
+                        panels={panels}
+                        viewState={viewState}
+                    />
                 </div>
             </main>
 

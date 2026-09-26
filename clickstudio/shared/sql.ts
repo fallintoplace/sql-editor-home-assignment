@@ -210,10 +210,12 @@ export function formatSql(sql: string): string {
 export function quoteIdentifier(name: string): string {
     return '`' + name.replace(/\\/g, '\\\\').replace(/`/g, '\\`') + '`';
 }
-export function parameterNames(sql: string): {
+export interface SqlParameter {
     name: string;
     type: string;
-}[] {
+}
+
+export function parameterNames(sql: string): SqlParameter[] {
     const tokens = lexSql(sql), out = new Map<string, string>();
     for (let i = 0; i < tokens.length; i++) {
         if (tokens[i]?.text !== '{' || tokens[i + 1]?.kind !== 'word' || tokens[i + 2]?.text !== ':')

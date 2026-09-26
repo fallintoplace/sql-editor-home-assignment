@@ -272,38 +272,6 @@
     .workspace-help-query .sql-flow-view { min-height: 100%; }
     .workspace-help-dependencies .native-lineage-layout,
     .workspace-help-compare .native-comparison-columns { min-width: 0; }
-    .workspace-help-compare .native-run-pickers + .native-toolbar {
-        display: grid;
-        min-height: 0;
-        grid-template-columns: minmax(0, 1fr) auto;
-        align-items: center;
-        gap: 8px 14px;
-        margin: 12px 0 6px;
-        padding: 9px 11px;
-        border: 1px solid var(--help-border);
-        border-radius: var(--help-radius-control);
-        background: var(--help-surface);
-    }
-    .workspace-help-compare .native-run-pickers + .native-toolbar .native-notes {
-        min-width: 0;
-        margin: 0;
-        font-size: var(--help-text-meta);
-        letter-spacing: .015em;
-        line-height: 1.45;
-        overflow-wrap: anywhere;
-    }
-    .workspace-help-compare .native-run-pickers + .native-toolbar .button-base {
-        min-height: 32px;
-        padding: 5px 10px;
-        font-size: var(--help-text-meta);
-    }
-    .workspace-help-compare .native-run-pickers + .native-toolbar + .native-notes {
-        margin: 0 0 10px;
-        padding: 0 2px;
-        font-size: var(--help-text-meta);
-        line-height: 1.45;
-    }
-    .workspace-help-compare .native-comparison-table-scroll { margin-top: 0; }
     .workspace-help-reference .reference-explorer { min-height: 100%; }
 
     .workspace-help-geo-demo { display: grid; min-width: 0; grid-template-columns: minmax(300px, .92fr) minmax(0, 1.08fr); gap: 12px; }
@@ -447,8 +415,6 @@
     .workspace-help-close { width: 34px; height: 34px; }
     .workspace-help-tabs { padding: 6px 8px; }
     .workspace-help-tab { min-height: 36px; padding: 5px 8px; }
-    .workspace-help-compare .native-run-pickers + .native-toolbar { grid-template-columns: minmax(0, 1fr); }
-    .workspace-help-compare .native-run-pickers + .native-toolbar .button-base { justify-self: start; width: auto; }
     .workspace-help-tour,
     .workspace-help-feature-view { padding: 12px; }
     .workspace-help-guide-card { padding: 12px; }

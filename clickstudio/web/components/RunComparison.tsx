@@ -16,6 +16,11 @@ export interface RunComparisonProps {
 function metricValue(value: string | undefined, unit: ComparisonMetric['unit']) {
     return unit === 'bytes' ? nativeBytes(value) : value === undefined ? 'Unavailable' : `${nativeCount(value)}${unit === 'ms' ? ' ms' : ''}`;
 }
+function runOptionLabel(run: Run) {
+    const query = run.sql.replace(/\s+/g, ' ').trim();
+    const preview = query.length > 38 ? `${query.slice(0, 38).trimEnd()}…` : query;
+    return `${run.createdAt.replace('T', ' ').slice(0, 19)} · ${preview}`;
+}
 function PipelineComparison({ before, after }: { before?: ProfilePipeline; after?: ProfilePipeline }) {
     const usable = (pipeline?: ProfilePipeline) => pipeline?.available && pipeline.source !== 'query_shape' ? pipeline : undefined;
     const left = usable(before), right = usable(after);
@@ -65,7 +70,7 @@ export function RunComparisonView(props: RunComparisonProps) {
 
     const before = runs.find(run => run.id === beforeId), after = runs.find(run => run.id === afterId);
     return runs.length < 2 ? <div className="native-empty">Complete two queries on this connection to compare their runs.</div> : <>
-        <div className="native-run-pickers">{[{ name: 'Before', value: beforeId, change: setBeforeId }, { name: 'After', value: afterId, change: setAfterId }].map(picker => <label key={picker.name} className="native-run-picker"><span>{picker.name}</span><select aria-label={picker.name + ' run'} value={picker.value} onChange={event => picker.change(event.target.value)}>{runs.map(run => <option key={run.id} value={run.id}>{run.createdAt.replace('T', ' ').slice(0, 19)} · {run.sql.replace(/\s+/g, ' ').slice(0, 70)}</option>)}</select></label>)}<Button onClick={() => { setBeforeId(afterId); setAfterId(beforeId); }}>Swap ⇄</Button></div>
+        <div className="native-run-pickers">{[{ name: 'Before', value: beforeId, change: setBeforeId }, { name: 'After', value: afterId, change: setAfterId }].map(picker => <label key={picker.name} className="native-run-picker"><span>{picker.name}</span><select aria-label={picker.name + ' run'} title={runs.find(run => run.id === picker.value)?.sql} value={picker.value} onChange={event => picker.change(event.target.value)}>{runs.map(run => <option key={run.id} value={run.id}>{runOptionLabel(run)}</option>)}</select></label>)}<Button onClick={() => { setBeforeId(afterId); setAfterId(beforeId); }}>Swap ⇄</Button></div>
         {before && after && before.id !== after.id ? <ComparisonBody key={JSON.stringify([before.id, after.id])} before={before} after={after} profiles={props.profiles} pipelines={props.pipelines} queryLogAvailable={props.queryLogAvailable}/> : <div className="native-empty">Select two different runs.</div>}
     </>;
 }

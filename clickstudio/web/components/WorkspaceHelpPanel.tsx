@@ -253,7 +253,6 @@ export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, 
                                     <span className="workspace-help-feature-arrow">›</span>
                                 </button>)}
                             </div>
-                            <p className="workspace-help-safe-note"><span className="status-light is-trusted"/>Explore freely. SQL only runs when you explicitly choose Run or an EXPLAIN action.</p>
                         </>)}
 
                         {renderTabPanel('workflows', 'workspace-help-feature-view workspace-help-workflows', section === 'workflows' ? <>

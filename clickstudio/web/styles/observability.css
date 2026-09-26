@@ -1,7 +1,4 @@
 @layer components {
-    .observability-trigger { min-height: 30px; gap: 6px; padding: 0 9px; color: var(--text-soft); font-size: 9px; font-weight: 650; white-space: nowrap; }
-    .observability-trigger svg { width: 14px; height: 14px; color: var(--accent); }
-    .observability-trigger:hover, .observability-trigger[aria-expanded="true"] { border-color: color-mix(in srgb, var(--accent) 34%, var(--line)); background: color-mix(in srgb, var(--accent) 7%, var(--panel)); color: var(--text); }
     .observability-shell { display: grid; min-height: 0; flex: 1; grid-template-rows: auto minmax(0, 1fr); gap: 4px; }
     .native-tabs.observability-tabs { flex: none; margin: 0; }
     .native-tabs.observability-tabs button[aria-selected="true"] { border-color: color-mix(in srgb, var(--accent) 42%, var(--line)); background: color-mix(in srgb, var(--accent) 10%, var(--panel)); color: var(--accent); }
@@ -129,9 +126,8 @@
         .replication-table-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .replication-queue-list > div { grid-template-columns: minmax(0, 1fr) auto; }
         .replication-queue-list > div > span:nth-of-type(2) { grid-column: 1 / -1; }
-        .observability-trigger > span { display: none; }
     }
     @media (prefers-reduced-motion: reduce) {
-        .workload-scatter-point, .observability-trigger { transition: none; }
+        .workload-scatter-point { transition: none; }
     }
 }

@@ -266,6 +266,9 @@
     .workspace-help-shortcuts > span { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
     .workspace-help-shortcuts kbd { padding: 3px 6px; border: 1px solid var(--help-border-strong); border-radius: 5px; background: var(--help-code-surface); color: var(--text-soft); font-family: var(--font-mono); }
     .workspace-help-shortcuts small { color: var(--muted); font-size: var(--help-text-meta); }
+    .workspace-help-monitoring-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+    .workspace-help-monitoring-actions .workspace-help-safe-note { margin: 0; }
+    .workspace-help-monitoring-actions .button-base { flex: none; }
     .workspace-help-query .sql-flow-view { min-height: 100%; }
     .workspace-help-dependencies .native-lineage-layout,
     .workspace-help-compare .native-comparison-columns { min-width: 0; }
@@ -392,6 +395,7 @@
     .workspace-help-tour,
     .workspace-help-feature-view { padding: 14px; }
     .workspace-help-guide-grid { grid-template-columns: minmax(0, 1fr); }
+    .workspace-help-monitoring-actions { align-items: stretch; flex-direction: column; }
     .workspace-help-geo-demo { grid-template-columns: minmax(0, 1fr); }
     .workspace-help-geo-preview { min-height: 220px; }
     .sql-examples-toolbar { align-items: stretch; }

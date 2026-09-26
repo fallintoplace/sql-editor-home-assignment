@@ -56,3 +56,20 @@ test('Mixed Geometry infers points, lines, and closed rings from retained JSON',
     assert.equal(normalizeGeoGeometry([[13.4, 52.5], [13.5, 52.6]], 'Geometry')?.type, 'LineString');
     assert.equal(normalizeGeoGeometry([[13.4, 52.5], [13.5, 52.6], [13.4, 52.5]], 'Geometry')?.type, 'Polygon');
 });
+
+
+test('Geo prepares retained ClickHouse text geometry without requiring rerun decoding', () => {
+    const columns = [{ name: 'city', type: 'String' }, { name: 'location', type: 'Point' }, { name: 'events', type: 'UInt64' }];
+    const recommendation = recommendGeo(columns);
+    assert.ok(recommendation);
+    const prepared = prepareGeoFeatures([
+        ['Berlin', '(13.405,52.52)', 120],
+        ['Paris', '(2.3522,48.8566)', 95],
+        ['London', '(-0.1276,51.5072)', 140],
+        ['Madrid', '(-3.7038,40.4168)', 80],
+    ], columns, recommendation);
+    assert.equal(prepared.totalFeatures, 4);
+    assert.equal(prepared.invalidRows, 0);
+    assert.deepEqual(prepared.features[0]?.geometry, { type: 'Point', coordinates: [13.405, 52.52] });
+    assert.equal(prepared.features[0]?.label, 'Berlin');
+});

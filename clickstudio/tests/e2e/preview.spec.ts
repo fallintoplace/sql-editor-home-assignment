@@ -153,29 +153,19 @@ test('Static preview includes materialized views and storage activity in sample 
     await expect(storage).toContainText('SAMPLE DATA');
 });
 
-test('debug Playground Point wire format', async ({ page }) => {
-    const query = [
-        "SELECT 'Berlin' AS city, (13.405, 52.52)::Point AS location, 120 AS events",
-        "UNION ALL SELECT 'Paris', (2.3522, 48.8566)::Point, 95",
-        "UNION ALL SELECT 'London', (-0.1276, 51.5072)::Point, 140",
-        "UNION ALL SELECT 'Madrid', (-3.7038, 40.4168)::Point, 80",
-    ].join('\n');
-    const responses: string[] = [];
-    page.on('response', async response => {
-        const request = response.request();
-        const requestText = request.url() + '\n' + (request.postData() ?? '');
-        if (new URL(request.url()).hostname !== 'sql-clickhouse.clickhouse.com' || !requestText.includes("'Berlin' AS city")) return;
-        const body = await response.text().catch(error => 'FAILED TO READ: ' + String(error));
-        responses.push(body);
-        console.log('GEO_WIRE_REQUEST\n' + requestText + '\nGEO_WIRE_RESPONSE\n' + body);
-    });
-
+test('Geo Help demo runs native Point values and renders four cities', async ({ page }) => {
     await page.goto('/');
-    const editor = page.locator('.cm-content');
-    await editor.click();
-    await page.keyboard.press('ControlOrMeta+a');
-    await page.keyboard.insertText(query);
-    await page.getByTestId('run-statement').click();
+    await page.getByRole('button', { name: 'Help', exact: true }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Explore ClickStudio', exact: true });
+    await dialog.getByTestId('help-section-geo').click();
+    await expect(dialog.locator('.workspace-help-geo-copy code')).toContainText("(13.405, 52.52)::Point");
+    await dialog.getByTestId('run-geo-example').click();
+
+    await expect(page.getByRole('tab', { name: 'Native Point cities.sql', exact: true })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('.execution-bar')).toHaveAttribute('data-run-status', 'succeeded', { timeout: 30_000 });
-    await expect.poll(() => responses.length, { timeout: 30_000 }).toBeGreaterThan(0);
+    await expect(page.locator('.geo-map')).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('.geo-feature.geo-point')).toHaveCount(4);
+    await expect(page.locator('.geo-map-caption')).toContainText('4 valid features');
+    await expect(page.getByText('No returned rows contain valid longitude/latitude geometry for this selection.', { exact: true })).toHaveCount(0);
 });

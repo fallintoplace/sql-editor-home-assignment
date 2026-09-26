@@ -237,8 +237,7 @@ function normalizeStructuredGeoGeometry(value: Json | undefined, type: string, s
 
 export function parseNativeGeoText(value: string, type: string): Json | undefined {
     if (!nativeGeoType(type)) return undefined;
-    const parsed = parseGeoLiteral(value);
-    return parsed !== undefined && normalizeStructuredGeoGeometry(parsed, type) ? parsed : undefined;
+    return parseGeoLiteral(value);
 }
 
 export function normalizeGeoGeometry(value: Json | undefined, type: string, swapCoordinates = false): GeoGeometry | undefined {

@@ -2,6 +2,15 @@ import type { Json } from './types.js';
 import { baseType } from './results.js';
 import { parseNativeGeoText } from './geo.js';
 
+function nullableType(type: string) {
+    let value = type;
+    while ((value.startsWith('Nullable(') || value.startsWith('LowCardinality(')) && value.endsWith(')')) {
+        if (value.startsWith('Nullable(')) return true;
+        value = value.slice(value.indexOf('(') + 1, -1);
+    }
+    return false;
+}
+
 /**
  * Decode one value emitted by JSONCompactStringsEachRowWithNamesAndTypes.
  * Wide integers stay strings so JavaScript never silently loses precision.

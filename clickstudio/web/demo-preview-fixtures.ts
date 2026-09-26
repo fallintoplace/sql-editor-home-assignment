@@ -24,6 +24,7 @@ export const schema: Schema = {
         { database: 'demo', name: 'orders', engine: 'ReplacingMergeTree', orderBy: '(tenant_id, order_id)', primaryKey: 'tenant_id, order_id', partitionKey: 'toYYYYMM(order_time)', rowEstimate: '42800000', sizeBytes: '18622709760', uncompressedBytes: '59362078720', parts: '36', activeParts: '32', skipIndexTypes: ['bloom_filter'] },
         { database: 'demo', name: 'daily_metrics', engine: 'SummingMergeTree', orderBy: '(day, country, channel)', primaryKey: 'day, country', partitionKey: 'toYYYYMM(day)', rowEstimate: '1095', sizeBytes: '1048576', uncompressedBytes: '3145728', parts: '3', activeParts: '3', projections: [{ name: 'by_channel', type: 'Normal', sortingKey: 'channel, day' }], skipIndexes: [] },
         { database: 'demo', name: 'users', engine: 'ReplacingMergeTree', orderBy: '(tenant_id, user_id)', primaryKey: 'tenant_id, user_id', rowEstimate: '4120000', sizeBytes: '1207959552', uncompressedBytes: '3892314112', parts: '18', activeParts: '16' },
+        { database: 'demo', name: 'interview_imports', engine: 'MergeTree', orderBy: '(day, region, channel)', primaryKey: 'day, region, channel', partitionKey: 'toYYYYMM(day)', rowEstimate: '0', sizeBytes: '0', uncompressedBytes: '0', parts: '0', activeParts: '0' },
     ],
     columns: [
         ...schemaColumns('events', [
@@ -63,6 +64,11 @@ export const schema: Schema = {
             ['created_at', 'DateTime', 'Account creation time'], ['plan', 'LowCardinality(String)', 'Subscription plan'],
             ['country', 'LowCardinality(String)', 'Account country'], ['lifetime_value', 'Decimal(18, 2)', 'Synthetic lifetime value'],
         ]),
+        ...schemaColumns('interview_imports', [
+            ['day', 'Date', 'Import date'], ['region', 'LowCardinality(String)', 'Sales region'],
+            ['channel', 'LowCardinality(String)', 'Acquisition channel'], ['events', 'UInt64', 'Event count'],
+            ['revenue', 'Decimal(18, 2)', 'Attributed revenue'],
+        ]),
     ],
     dictionaries: [
         { database: 'demo', name: 'campaign_lookup', status: 'LOADED', type: 'Hashed', keyColumns: 'campaign_id UInt32', attributeColumns: 'campaign_name String, channel String, start_date Date', elementCount: '18240', memoryBytes: '5242880', lastSuccessfulUpdate: now().replace('T', ' ').slice(0, 19) },
@@ -82,7 +88,7 @@ export function connection(trusted: boolean): Connection & { trusted: boolean } 
             cancellation: available, explain: available, explainAnalyze: available, queryTree: available, pipeline: available, queryLog: available,
             queryLogSource: 'query_log', traceLog: available, replication: available,
             documentation: { available: false, reason: 'System-table documentation is not connected in preview mode.' },
-            import: { available: false, reason: 'File import is not connected in preview mode.' }, scripts: available,
+            import: { available: true, reason: 'Interview demo imports are stored in this browser only.' }, scripts: available,
             parameters: { available: false, reason: 'Sample results do not evaluate SQL parameters.' },
         },
     };

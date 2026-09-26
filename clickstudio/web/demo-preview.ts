@@ -1,11 +1,20 @@
 import { nativeExplorerFixture } from '../shared/native-explorer-fixtures.js';
-import type { QueryDocument, Result, ResultPage, Run, Script } from '../shared/types.js';
+import type { Json, QueryDocument, Result, ResultPage, Run, Schema, Script } from '../shared/types.js';
 import { splitSql } from '../shared/sql.js';
 import { sqlForRunKind } from '../shared/explain-plan.js';
 import { isResult, isRun } from '../shared/run-wire.js';
 import { loadPlaygroundSchema, PLAYGROUND_CONNECTION, PLAYGROUND_CONNECTION_ID, queryPlayground, queryPlaygroundQueryTree } from './playground.js';
 import { demoMergeTreePartRows } from '../shared/demo-fixtures.js';
 import { parseMergeTreeParts } from '../shared/parts.js';
+import {
+    DEMO_IMPORT_TARGET,
+    demoImportQuery,
+    loadDemoImportRows,
+    parseDemoImport,
+    saveDemoImportRows,
+    type DemoImportFormat,
+    type DemoImportRow,
+} from './demo-import-data.js';
 import { demoFlamegraph, demoReplication, demoWorkload } from '../shared/observability-fixtures.js';
 import { WORKLOAD_WINDOWS, type WorkloadWindow } from '../shared/workload.js';
 import {
@@ -64,6 +73,11 @@ export class DemoPreviewApi {
     private scripts = new Map<string, Script>();
     private documents = new Map<string, QueryDocument>();
     private revisions = new Map<string, QueryDocument[]>();
+    private demoImportInputs = new Map<string, { id: string; name: string; format: DemoImportFormat; columns: string[]; rows: DemoImportRow[]; expiresAt: string }>();
+    private demoImportMappings = new Map<string, { id: string; inputId: string; connectionId: string; table: string; fields: Record<string, string>; rows: DemoImportRow[] }>();
+    private demoImportJobs = new Map<string, { id: string; connectionId: string; table: string; rows: number; createdAt: string; status: 'succeeded'; demoRows: DemoImportRow[]; demoPersisted: boolean }>();
+    private demoImportRows: DemoImportRow[] = [];
+    private demoImportRowsReady: Promise<void>;
     private sequence = 0;
 
     constructor() {
@@ -104,6 +118,7 @@ export class DemoPreviewApi {
         for (const document of this.documents.values())
             if (!this.revisions.has(document.id)) this.revisions.set(document.id, [document]);
         this.persist();
+        this.demoImportRowsReady = loadDemoImportRows().then(rows => { this.demoImportRows = rows; }).catch(() => undefined);
     }
 
     private restore() {
@@ -181,9 +196,107 @@ export class DemoPreviewApi {
     private addRun(id: string, sql: string, kind: Run['kind'], parameters: Record<string, string>) {
         const run = makeRun(id, sql, kind, ++this.sequence, parameters);
         this.runs.set(id, run);
-        this.results.set(id, resultFor(run));
+        const imported = kind === 'query' ? demoImportQuery(sql, this.demoImportRows) : undefined;
+        if (imported) {
+            run.columns = imported.columns;
+            run.rowCount = imported.rows.length;
+            run.bytes = JSON.stringify(imported.rows).length;
+            run.warnings = ['BROWSER DEMO: these imported rows are stored in this browser. SQL was not sent to ClickHouse.'];
+        }
+        this.results.set(id, imported ? {
+            runId: id, queryId: run.queryId, columns: imported.columns, rows: imported.rows,
+            completeness: 'complete', createdAt: now(), expiresAt: expiresAt(),
+        } : resultFor(run));
         this.persist();
         return run;
+    }
+
+    private demoSchema(): Schema {
+        const importedBytes = JSON.stringify(this.demoImportRows).length;
+        return {
+            ...schema,
+            fetchedAt: now(),
+            tables: schema.tables.map(table => table.name === 'interview_imports' ? {
+                ...table, rowEstimate: String(this.demoImportRows.length), sizeBytes: String(importedBytes),
+                uncompressedBytes: String(importedBytes), parts: this.demoImportRows.length ? '1' : '0',
+                activeParts: this.demoImportRows.length ? '1' : '0',
+            } : table),
+        };
+    }
+
+    private async importRequest(parts: string[], method: string, body: Record<string, unknown>, url: URL): Promise<unknown> {
+        if (parts.length === 1 && method === 'GET') return [];
+        if (parts[1] === 'preview' && method === 'POST') {
+            if (body.format !== 'csv' && body.format !== 'json' && body.format !== 'ndjson') throw new Error('Use CSV, JSON, or NDJSON');
+            const format: DemoImportFormat = body.format;
+            if (typeof body.source !== 'string' || typeof body.name !== 'string') throw new Error('Choose a file to preview');
+            const parsed = parseDemoImport(body.source, format);
+            if (!parsed.rows.length) throw new Error('The input contains no data rows');
+            const id = crypto.randomUUID();
+            const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+            const input = { id, name: body.name.slice(0, 128), format, ...parsed, expiresAt };
+            this.demoImportInputs.set(id, input);
+            return { ...input, rows: input.rows.slice(0, 20), rowCount: input.rows.length };
+        }
+        const id = parts[1];
+        if (!id) throw new Error('Import request is incomplete');
+        if (parts.length === 2 && method === 'DELETE') {
+            this.demoImportInputs.delete(id);
+            for (const [mappingId, mapping] of this.demoImportMappings)
+                if (mapping.inputId === id) this.demoImportMappings.delete(mappingId);
+            return { ok: true };
+        }
+        if (parts[2] === 'mapping' && method === 'POST') {
+            const input = this.demoImportInputs.get(id);
+            if (!input || Date.parse(input.expiresAt) <= Date.now()) throw new Error('This preview expired; upload the file again');
+            if (body.connectionId !== 'demo' || body.table !== DEMO_IMPORT_TARGET) throw new Error('Choose the browser demo table as the destination');
+            const fields = record(body.fields) as Record<string, unknown>;
+            const destinations = Object.values(fields);
+            const allowed = ['day', 'region', 'channel', 'events', 'revenue'];
+            if (!destinations.length || destinations.some(value => typeof value !== 'string' || !allowed.includes(value)) || new Set(destinations).size !== destinations.length)
+                throw new Error('Each destination column must be mapped once');
+            const mappedRows = input.rows.map(row => {
+                const mapped = Object.create(null) as DemoImportRow;
+                for (const [source, destination] of Object.entries(fields)) {
+                    if (!input.columns.includes(source) || typeof destination !== 'string' || !allowed.includes(destination) || !Object.hasOwn(row, source))
+                        throw new Error('Mapping references an unknown source or destination column');
+                    mapped[destination] = row[source]!;
+                }
+                return mapped;
+            });
+            const mapping = { id: crypto.randomUUID(), inputId: id, connectionId: 'demo', table: DEMO_IMPORT_TARGET, fields: fields as Record<string, string>, rows: mappedRows };
+            this.demoImportMappings.set(mapping.id, mapping);
+            return { ...mapping, rows: mappedRows.slice(0, 20), rowCount: mappedRows.length };
+        }
+        if (parts[2] === 'commit' && method === 'POST') {
+            const mapping = this.demoImportMappings.get(id);
+            if (!mapping) throw new Error('Mapping not found; review the columns again');
+            if (this.demoImportJobs.has(id)) return this.demoImportJobs.get(id);
+            const rows = [...this.demoImportRows, ...mapping.rows];
+            let demoPersisted = true;
+            try { await saveDemoImportRows(rows); }
+            catch { demoPersisted = false; }
+            this.demoImportRows = rows;
+            const job = {
+                id, connectionId: 'demo', table: mapping.table, rows: mapping.rows.length,
+                createdAt: now(), status: 'succeeded' as const, demoRows: mapping.rows.slice(0, 8), demoPersisted,
+            };
+            this.demoImportJobs.set(id, job);
+            return job;
+        }
+        if (parts.length === 2 && method === 'GET') {
+            const job = this.demoImportJobs.get(id);
+            if (!job) throw new Error('Import job not found');
+            return job;
+        }
+        if ((parts[2] === 'reconcile' || parts[2] === 'review') && method === 'POST') {
+            const job = this.demoImportJobs.get(id);
+            if (!job) throw new Error('Import job not found');
+            return job;
+        }
+        const connectionId = url.searchParams.get('connectionId');
+        if (parts.length === 1 && method === 'GET' && connectionId === 'demo') return [];
+        throw new Error('Unknown browser demo import action');
     }
 
     private getRun(id: string) {
@@ -231,6 +344,7 @@ export class DemoPreviewApi {
     }
 
     async request(path: string, options: RequestOptions = {}): Promise<unknown> {
+        await this.demoImportRowsReady;
         if (options.signal?.aborted) throw options.signal.reason ?? new Error('The request was cancelled.');
         const url = new URL(path, 'https://preview.invalid');
         const pathname = url.pathname.replace(/\/+$/, '') || '/';
@@ -240,7 +354,7 @@ export class DemoPreviewApi {
 
         if (pathname === '/session') return { principal: { id: owner, role: 'owner' }, requiresLogin: false, demo: true };
         if (pathname === '/connections' && method === 'GET') return [connection(this.trusted), PLAYGROUND_CONNECTION];
-        if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'schema') return schema;
+        if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'schema') return this.demoSchema();
         if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'native-explorer' && method === 'POST') {
             if (!this.trusted) throw new Error('Trust this connection before inspecting native metadata.');
             if (typeof body.database !== 'string') throw new Error('A database is required.');
@@ -272,8 +386,9 @@ export class DemoPreviewApi {
             this.persist();
             return { trusted: this.trusted };
         }
-        if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'import-targets') return [];
+        if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'import-targets') return [DEMO_IMPORT_TARGET];
         if (parts[0] === 'connections' && parts[1] === PLAYGROUND_CONNECTION_ID && parts[2] === 'import-targets') return [];
+        if (parts[0] === 'imports') return this.importRequest(parts, method, body, url);
         if (parts[0] === 'connections' && parts[2] === 'query-tree' && method === 'POST') {
             const sql = typeof body.sql === 'string' ? body.sql : '';
             const parameters = record(body.parameters) as Record<string, string>;

@@ -38,6 +38,8 @@ export type ImportJob = {
     error?: string;
     reconciliationRequired?: boolean;
     reviewedAt?: string;
+    demoRows?: Record<string, Json>[];
+    demoPersisted?: boolean;
 };
 export type PendingImport = { id: string; table: string; rows: number; name: string };
 export type BusyAction = '' | 'setup' | 'preview' | 'mapping' | 'commit' | 'recover' | 'reconcile' | 'review';

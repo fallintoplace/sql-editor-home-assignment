@@ -3,7 +3,7 @@ import type { SqlExample, SqlExampleCategory } from '../sql-examples';
 import { localizeSqlExample, localizeSqlExampleCategory } from '../sql-examples-locales';
 import type { IconName } from './ui';
 
-export type HelpPanelSection = 'tour' | 'examples' | 'query' | 'geo' | 'explain' | 'storage' | 'dependencies' | 'compare' | 'reference';
+export type HelpPanelSection = 'tour' | 'examples' | 'workflows' | 'observability' | 'query' | 'geo' | 'explain' | 'storage' | 'dependencies' | 'compare' | 'reference';
 export type CategoryFilter = SqlExampleCategory | 'charts' | 'all' | 'featured';
 
 export const helpCategories: CategoryFilter[] = [
@@ -66,6 +66,8 @@ export type HelpSectionDefinition = {
 export function helpSections(copy: Copy['common']): HelpSectionDefinition[] {
     return [
         { id: 'examples', label: copy.sqlExamples, description: copy.examplesHint, icon: 'examples' },
+        { id: 'workflows', label: copy.helpQueryWorkflows, description: copy.helpQueryWorkflowsDescription, icon: 'play' },
+        { id: 'observability', label: copy.helpObservability, description: copy.helpObservabilityDescription, icon: 'observability' },
         { id: 'tour', label: copy.helpTour, description: copy.helpTourDescription, icon: 'help' },
         { id: 'query', label: copy.helpQueryEngine, description: copy.helpQueryEngineDescription, icon: 'parser' },
         { id: 'geo', label: copy.helpGeo, description: copy.helpGeoDescription, icon: 'chart' },

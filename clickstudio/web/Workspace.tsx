@@ -736,6 +736,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             section={helpPanelSection}
                             onSectionChange={setHelpPanelSection}
                             onClose={closeHelpPanel}
+                            onOpenObservability={() => setObservabilityOpen(true)}
                             examples={sqlExamples}
                             sourceLabel={connectionLabel}
                             copy={copy.common}

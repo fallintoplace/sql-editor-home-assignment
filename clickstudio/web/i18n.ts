@@ -78,6 +78,11 @@ export interface Copy {
         helpTour: string;
         helpTourTitle: string;
         helpTourDescription: string;
+        helpQueryWorkflows: string;
+        helpQueryWorkflowsDescription: string;
+        helpObservability: string;
+        helpObservabilityDescription: string;
+        helpOpenObservability: string;
         helpQueryEngine: string;
         helpQueryEngineDescription: string;
         helpGeo: string;

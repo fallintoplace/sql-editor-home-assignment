@@ -259,6 +259,25 @@
 
     .workspace-help-feature-view { display: flex; flex-direction: column; overflow: hidden; }
     .workspace-help-feature-scroll { min-width: 0; min-height: 0; flex: 1; overflow: auto; }
+    .workspace-help-guide-scroll { min-width: 0; min-height: 0; flex: 1; overflow: auto; padding: 2px 1px 1px; }
+    .workspace-help-guide-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .workspace-help-guide-card { position: relative; display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 8px; padding: 16px; border: 1px solid var(--help-border); border-radius: var(--help-radius-card); background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 4%, var(--help-surface)), var(--help-surface) 65%); color: var(--text-soft); }
+    .workspace-help-guide-index { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--help-border)); border-radius: 9px; background: color-mix(in srgb, var(--accent) 8%, var(--panel-raised)); color: var(--accent); font-family: var(--font-mono); font-size: var(--help-text-small); font-weight: 750; }
+    .workspace-help-guide-index svg { width: 16px; height: 16px; }
+    .workspace-help-guide-card > .eyebrow { color: var(--accent); font-size: var(--help-text-meta); font-weight: 760; letter-spacing: .12em; }
+    .workspace-help-guide-card h4 { margin: 0; color: var(--text); font-size: 14px; font-weight: 740; line-height: 1.35; }
+    .workspace-help-guide-card p { margin: 0; color: var(--muted); font-size: var(--help-text-small); line-height: 1.55; }
+    .workspace-help-guide-card p code { padding: 2px 5px; border: 1px solid var(--help-border); border-radius: 5px; background: var(--help-code-surface); color: var(--accent); font-family: var(--font-mono); white-space: nowrap; }
+    .workspace-help-guide-card ul { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+    .workspace-help-guide-card li { position: relative; padding-left: 14px; color: var(--muted); font-size: var(--help-text-small); line-height: 1.5; }
+    .workspace-help-guide-card li::before { position: absolute; top: .55em; left: 1px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); content: ""; }
+    .workspace-help-shortcuts { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 2px; color: var(--muted); font-size: var(--help-text-meta); }
+    .workspace-help-shortcuts > span { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .workspace-help-shortcuts kbd { padding: 3px 6px; border: 1px solid var(--help-border-strong); border-radius: 5px; background: var(--help-code-surface); color: var(--text-soft); font-family: var(--font-mono); }
+    .workspace-help-shortcuts small { color: var(--muted); font-size: var(--help-text-meta); }
+    .workspace-help-observability-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+    .workspace-help-observability-actions .workspace-help-safe-note { margin: 0; }
+    .workspace-help-observability-actions .button-base { flex: none; }
     .workspace-help-query .sql-flow-view { min-height: 100%; }
     .workspace-help-dependencies .native-lineage-layout,
     .workspace-help-compare .native-comparison-columns { min-width: 0; }
@@ -390,6 +409,8 @@
     .workspace-help-content { min-height: 0; }
     .workspace-help-tour,
     .workspace-help-feature-view { padding: 14px; }
+    .workspace-help-guide-grid { grid-template-columns: minmax(0, 1fr); }
+    .workspace-help-observability-actions { align-items: stretch; flex-direction: column; }
     .workspace-help-geo-demo { grid-template-columns: minmax(0, 1fr); }
     .workspace-help-geo-preview { min-height: 220px; }
     .sql-examples-toolbar { align-items: stretch; }
@@ -411,6 +432,7 @@
     .workspace-help-tab { min-height: 36px; padding: 5px 8px; }
     .workspace-help-tour,
     .workspace-help-feature-view { padding: 12px; }
+    .workspace-help-guide-card { padding: 12px; }
     .workspace-help-section-heading h3 { font-size: 19px; }
     .workspace-help-feature-grid,
     .workspace-help-explain-grid { grid-template-columns: minmax(0, 1fr); }

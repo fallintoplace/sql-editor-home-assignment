@@ -62,7 +62,7 @@ import {
     safeStatementCount,
     type FailedQueryError,
 } from './workspace-helpers';
-import { useWorkspaceNotifications, WORKSPACE_WORKSPACE_TOAST_TIMEOUT_MS } from './useWorkspaceNotifications';
+import { useWorkspaceNotifications, WORKSPACE_TOAST_TIMEOUT_MS } from './useWorkspaceNotifications';
 
 type WorkspaceProps = {
     connection: Connected;

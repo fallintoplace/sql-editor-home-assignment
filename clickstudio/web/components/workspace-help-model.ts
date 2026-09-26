@@ -65,10 +65,10 @@ export type HelpSectionDefinition = {
 
 export function helpSections(copy: Copy['common']): HelpSectionDefinition[] {
     return [
+        { id: 'tour', label: copy.helpTour, description: copy.helpTourDescription, icon: 'help' },
         { id: 'examples', label: copy.sqlExamples, description: copy.examplesHint, icon: 'examples' },
         { id: 'workflows', label: copy.helpQueryWorkflows, description: copy.helpQueryWorkflowsDescription, icon: 'play' },
         { id: 'monitoring', label: copy.helpMonitoring, description: copy.helpMonitoringDescription, icon: 'observability' },
-        { id: 'tour', label: copy.helpTour, description: copy.helpTourDescription, icon: 'help' },
         { id: 'query', label: copy.helpQueryEngine, description: copy.helpQueryEngineDescription, icon: 'parser' },
         { id: 'geo', label: copy.helpGeo, description: copy.helpGeoDescription, icon: 'chart' },
         { id: 'explain', label: copy.helpExplain, description: copy.helpExplainDescription, icon: 'bolt' },

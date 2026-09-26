@@ -60,10 +60,12 @@ test('Help tour exposes ClickStudio native workflows from one place', async ({ p
     const dialog = page.getByRole('dialog', { name: 'Explore ClickStudio', exact: true });
     await expect(dialog).toBeVisible();
 
-    for (const section of ['examples', 'workflows', 'monitoring', 'query', 'geo', 'explain', 'storage', 'dependencies', 'compare', 'reference'])
+    for (const section of ['tour', 'examples', 'workflows', 'monitoring', 'query', 'geo', 'explain', 'storage', 'dependencies', 'compare', 'reference'])
         await expect(dialog.getByTestId('help-section-' + section)).toBeVisible();
 
-    await expect(dialog.getByTestId('help-section-examples')).toHaveAttribute('aria-selected', 'true');
+    const tabs = dialog.getByRole('tablist', { name: 'Explore ClickStudio sections' }).getByRole('tab');
+    await expect(tabs.first()).toHaveAttribute('data-testid', 'help-section-tour');
+    await expect(dialog.getByTestId('help-section-tour')).toHaveAttribute('aria-selected', 'true');
     await dialog.getByTestId('help-section-workflows').click();
     await expect(dialog.getByText('Bind typed values', { exact: true })).toBeVisible();
     await expect(dialog.getByText(/runs every statement and stops at the first error/)).toBeVisible();

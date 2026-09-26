@@ -106,7 +106,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [importOpen, setImportOpen] = useState(false);
     const [helpPanelOpen, setHelpPanelOpen] = useState(false);
     const [observabilityOpen, setObservabilityOpen] = useState(false);
-    const [helpPanelSection, setHelpPanelSection] = useState<HelpPanelSection>('examples');
+    const [helpPanelSection, setHelpPanelSection] = useState<HelpPanelSection>('tour');
     const helpPanelOpenerRef = useRef<HTMLButtonElement | null>(null);
     const openHelpPanel = useCallback((section: HelpPanelSection, opener: HTMLButtonElement) => {
         helpPanelOpenerRef.current = opener;
@@ -118,7 +118,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         if (restoreFocus) window.requestAnimationFrame(() => helpPanelOpenerRef.current?.focus());
     }, []);
     const openExamples = useCallback((opener: HTMLButtonElement) => openHelpPanel('examples', opener), [openHelpPanel]);
-    const openHelp = useCallback((opener: HTMLButtonElement) => openHelpPanel('examples', opener), [openHelpPanel]);
+    const openHelp = useCallback((opener: HTMLButtonElement) => openHelpPanel('tour', opener), [openHelpPanel]);
     const [busy, setBusy] = useState<BusyAction>('');
     const [cancelling, setCancelling] = useState(false);
     const { error, setError, notice, setNotice } = useWorkspaceNotifications();

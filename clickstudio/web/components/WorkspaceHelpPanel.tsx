@@ -292,13 +292,13 @@ export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, 
                             <HelpSectionHeading eyebrow="CLICKHOUSE GEO" title={copy.helpGeoTitle} description={copy.helpGeoDescription}/>
                             <div className="workspace-help-geo-demo">
                                 <div className="workspace-help-geo-preview" aria-hidden="true">
+                                    <span className="geo-demo-point point-san-francisco">San Francisco<strong>240</strong></span>
+                                    <span className="geo-demo-point point-sao-paulo">São Paulo<strong>180</strong></span>
                                     <span className="geo-demo-point point-berlin">Berlin<strong>120</strong></span>
-                                    <span className="geo-demo-point point-paris">Paris<strong>95</strong></span>
-                                    <span className="geo-demo-point point-london">London<strong>140</strong></span>
-                                    <span className="geo-demo-point point-madrid">Madrid<strong>80</strong></span>
+                                    <span className="geo-demo-point point-singapore">Singapore<strong>310</strong></span>
                                 </div>
                                 <div className="workspace-help-geo-copy">
-                                    <div className="sql-example-option-meta"><span className="sql-example-option-category">Point</span><span className="sql-example-chart-kind">4 cities · events measure</span></div>
+                                    <div className="sql-example-option-meta"><span className="sql-example-option-category">Point</span><span className="sql-example-chart-kind">4 global cities · event volume</span></div>
                                     <pre><code>{GEO_HELP_EXAMPLE.sql}</code></pre>
                                     <div className="sql-example-actions">
                                         <Button variant="secondary" className="sql-example-action" data-testid="open-geo-example" onClick={() => { if (onOpenExample(GEO_HELP_EXAMPLE)) onClose(false); }}><Icon name="plus"/>{copy.openExample}</Button>

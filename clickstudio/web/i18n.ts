@@ -80,6 +80,9 @@ export interface Copy {
         helpTourDescription: string;
         helpQueryEngine: string;
         helpQueryEngineDescription: string;
+        helpGeo: string;
+        helpGeoTitle: string;
+        helpGeoDescription: string;
         helpExplain: string;
         helpExplainDescription: string;
         helpExplainIndexesDescription: string;

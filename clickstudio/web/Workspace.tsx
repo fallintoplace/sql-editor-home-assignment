@@ -729,14 +729,13 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     onActivate={draftId => setWorkspace(current => ({ ...current, activeId: draftId }))}
                     onClose={draftId => setWorkspace(current => closeDraft(current, draftId))}
                     actions={<>
-                    {experience === 'expert' && <Button variant="ghost" className="observability-trigger" aria-label="Open observability" aria-haspopup="dialog" aria-expanded={observabilityOpen} onClick={() => setObservabilityOpen(true)}><Icon name="observability"/><span>Observability</span></Button>}
                     <button className="new-tab-button new-tab-labeled" data-testid="new-sql" type="button" aria-label={copy.common.newSql} title={copy.common.newSql} aria-haspopup="dialog" aria-expanded={helpPanelOpen} aria-controls="workspace-help-panel" onClick={event => openExamples(event.currentTarget)}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
+                    <Button variant="ghost" className="observability-trigger" aria-label="Open observability" aria-haspopup="dialog" aria-expanded={observabilityOpen} onClick={() => setObservabilityOpen(true)}><Icon name="observability"/><span>Observability</span></Button>
                         <WorkspaceHelpPanel
                             open={helpPanelOpen}
                             section={helpPanelSection}
                             onSectionChange={setHelpPanelSection}
                             onClose={closeHelpPanel}
-                            onOpenObservability={() => setObservabilityOpen(true)}
                             examples={sqlExamples}
                             sourceLabel={connectionLabel}
                             copy={copy.common}

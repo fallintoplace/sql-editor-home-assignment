@@ -53,7 +53,7 @@ function HelpSectionHeading({ eyebrow, title, description }: { eyebrow: string; 
     </header>;
 }
 
-export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, section, onSectionChange, onClose, onOpenExample, onRunExample, onStartBlankSql, onOpenObservability, connection, tables, schemaLoading, trusted, queryEngine, busy, unsupportedParameters, onRunExplain, comparison, onReferenceInsert }: {
+export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, section, onSectionChange, onClose, onOpenExample, onRunExample, onStartBlankSql, connection, tables, schemaLoading, trusted, queryEngine, busy, unsupportedParameters, onRunExplain, comparison, onReferenceInsert }: {
     examples: SqlExample[];
     sourceLabel: string;
     copy: Copy['common'];
@@ -65,7 +65,6 @@ export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, 
     onOpenExample: (example: SqlExample) => boolean;
     onRunExample: (example: SqlExample, view: 'results' | 'chart' | 'map') => boolean;
     onStartBlankSql: () => boolean;
-    onOpenObservability: () => void;
     connection: Connected;
     tables: SchemaTable[];
     schemaLoading: boolean;
@@ -285,32 +284,6 @@ export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, 
                                         <h4>{copy.results} and execution status</h4>
                                         <p>Inspect each script statement and its run in Results, then switch to {copy.chart}, SQL map, or {copy.insights} in Advanced mode. Cancel a running query from the execution bar.</p>
                                     </article>
-                                </div>
-                            </div>
-                        </> : null)}
-
-                        {renderTabPanel('observability', 'workspace-help-feature-view workspace-help-observability', section === 'observability' ? <>
-                            <HelpSectionHeading eyebrow="CLICKHOUSE OBSERVABILITY" title={copy.helpObservability} description={copy.helpObservabilityDescription}/>
-                            <div className="workspace-help-guide-scroll">
-                                <div className="workspace-help-guide-grid">
-                                    <article className="workspace-help-guide-card">
-                                        <span className="workspace-help-guide-index"><Icon name="details"/></span>
-                                        <span className="eyebrow">QUERY LOG</span>
-                                        <h4>Workload</h4>
-                                        <p>Explore query-log history for the current user and local server.</p>
-                                        <ul><li>Compare duration with peak memory and rows read.</li><li>Rank query families by total duration; inspect p50, p95, and p99 latency.</li><li>Review execution counts, read volume, and errors over a selected time window.</li></ul>
-                                    </article>
-                                    <article className="workspace-help-guide-card">
-                                        <span className="workspace-help-guide-index"><Icon name="database"/></span>
-                                        <span className="eyebrow">REPLICA METADATA</span>
-                                        <h4>Replication</h4>
-                                        <p>Review replica state and queued work reported by the connected server.</p>
-                                        <ul><li>Check active replicas, delay, and read-only or expired sessions.</li><li>Inspect queued inserts and merges, plus errors and postponed tasks.</li><li>View local replica rows; cluster-wide state is not inferred.</li></ul>
-                                    </article>
-                                </div>
-                                <div className="workspace-help-observability-actions">
-                                    <p className="workspace-help-safe-note"><span className="status-light is-trusted"/>Uses the trusted connection. Available metrics depend on ClickHouse permissions and system-table support.</p>
-                                    <Button variant="secondary" onClick={() => { onClose(false); onOpenObservability(); }}><Icon name="observability"/>{copy.helpOpenObservability}</Button>
                                 </div>
                             </div>
                         </> : null)}

@@ -55,21 +55,20 @@ test('SQL examples search handles no matches and Escape restores focus', async (
 
 test('Help tour exposes ClickStudio native workflows from one place', async ({ page }) => {
     await trust(page);
+    const documentActions = page.locator('.document-tab-actions');
+    await expect(documentActions.locator('.new-tab-button + .observability-trigger')).toBeVisible();
     await page.getByRole('button', { name: 'Help', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Explore ClickStudio', exact: true });
     await expect(dialog).toBeVisible();
 
-    for (const section of ['examples', 'workflows', 'observability', 'query', 'geo', 'explain', 'storage', 'dependencies', 'compare', 'reference'])
+    for (const section of ['examples', 'workflows', 'query', 'geo', 'explain', 'storage', 'dependencies', 'compare', 'reference'])
         await expect(dialog.getByTestId('help-section-' + section)).toBeVisible();
+    await expect(dialog.getByTestId('help-section-observability')).toHaveCount(0);
 
     await expect(dialog.getByTestId('help-section-examples')).toHaveAttribute('aria-selected', 'true');
     await dialog.getByTestId('help-section-workflows').click();
     await expect(dialog.getByText('Bind typed values', { exact: true })).toBeVisible();
     await expect(dialog.getByText(/runs every statement and stops at the first error/)).toBeVisible();
-
-    await dialog.getByTestId('help-section-observability').click();
-    await expect(dialog.getByRole('heading', { name: 'Workload', exact: true })).toBeVisible();
-    await expect(dialog.getByRole('heading', { name: 'Replication', exact: true })).toBeVisible();
 
     await dialog.getByTestId('help-section-geo').click();
     await expect(dialog.getByText('Native geometry on a spatial canvas', { exact: true })).toBeVisible();
@@ -85,7 +84,8 @@ test('Help tour exposes ClickStudio native workflows from one place', async ({ p
     await expect(dialog.getByRole('button', { name: /EXPLAIN PLAN/ })).toBeVisible();
     await expect(dialog.getByRole('button', { name: /EXPLAIN PIPELINE/ })).toBeVisible();
 
-    await dialog.getByTestId('help-section-observability').click();
-    await dialog.getByRole('button', { name: 'Open observability', exact: true }).click();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await documentActions.locator('.observability-trigger').click();
     await expect(page.getByRole('dialog', { name: 'Observability', exact: true })).toBeVisible();
 });

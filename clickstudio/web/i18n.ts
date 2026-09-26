@@ -80,9 +80,6 @@ export interface Copy {
         helpTourDescription: string;
         helpQueryWorkflows: string;
         helpQueryWorkflowsDescription: string;
-        helpObservability: string;
-        helpObservabilityDescription: string;
-        helpOpenObservability: string;
         helpQueryEngine: string;
         helpQueryEngineDescription: string;
         helpGeo: string;

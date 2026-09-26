@@ -11,6 +11,9 @@
     color-scheme: dark;
     --page: #0c151c;
     --page-raised: #111e27;
+    --canvas: #0b171d;
+    --geo-land: #233942;
+    --geo-border: #47616a;
     --panel: #14232d;
     --panel-raised: #1a2d38;
     --panel-hover: #223b46;
@@ -83,6 +86,9 @@
     color-scheme: light;
     --page: #edf4f6;
     --page-raised: #f7fafb;
+    --canvas: #e1ebee;
+    --geo-land: #eaf1f3;
+    --geo-border: #b8cbd1;
     --panel: #fcfeff;
     --panel-raised: #f4f9fb;
     --panel-hover: #eaf3f6;

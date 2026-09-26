@@ -10,6 +10,8 @@ const HEIGHT = 470;
 const EMPTY_COLUMNS: Column[] = [];
 const formatCount = (value: number, locale: Locale) => new Intl.NumberFormat(locale).format(value);
 const geometryObject = (feature: GeoFeature): GeoPermissibleObjects => ({ type: 'Feature', properties: {}, geometry: feature.geometry } as GeoPermissibleObjects);
+type CountryFeature = GeoPermissibleObjects & { type: 'Feature'; properties?: { name?: string } };
+type PointLabelPlacement = { x: number; y: number; width: number; height: number; label: string; measure?: string };
 
 function MapCanvas({ prepared, columns, measureIndex, completeness, locale }: {
     prepared: ReturnType<typeof prepareGeoFeatures>;
@@ -19,8 +21,21 @@ function MapCanvas({ prepared, columns, measureIndex, completeness, locale }: {
     locale: Locale;
 }) {
     const [selectedIndex, setSelectedIndex] = useState<number>();
+    const [hoveredIndex, setHoveredIndex] = useState<number>();
+    const [countryFeatures, setCountryFeatures] = useState<CountryFeature[]>([]);
     const [viewport, setViewport] = useState({ x: 0, y: 0, scale: 1 });
     const drag = useRef<{ pointerId: number; x: number; y: number; originX: number; originY: number } | undefined>(undefined);
+    useEffect(() => {
+        const controller = new AbortController();
+        void fetch(`${import.meta.env.BASE_URL}geo/countries-50m.geojson`, { signal: controller.signal })
+            .then(response => response.ok ? response.json() : undefined)
+            .then((collection: unknown) => {
+                if (!collection || typeof collection !== 'object' || !('features' in collection) || !Array.isArray(collection.features)) return;
+                setCountryFeatures(collection.features as CountryFeature[]);
+            })
+            .catch(() => undefined);
+        return () => controller.abort();
+    }, []);
     const collection = useMemo(() => ({
         type: 'FeatureCollection',
         features: prepared.features.map(feature => geometryObject(feature)),
@@ -37,14 +52,64 @@ function MapCanvas({ prepared, columns, measureIndex, completeness, locale }: {
             path,
             sphere: path({ type: 'Sphere' }),
             graticule: path(geoGraticule10()),
+            countries: countryFeatures.flatMap(country => {
+                const d = path(country);
+                return d ? [{ name: country.properties?.name, d }] : [];
+            }),
         };
-    }, [collection]);
+    }, [collection, countryFeatures]);
     const measures = prepared.features.flatMap(feature => feature.measure === null ? [] : [feature.measure]);
     const minimum = Math.min(...measures, 0), maximum = Math.max(...measures, 0), range = maximum - minimum;
     const intensity = (feature: GeoFeature) => feature.measure === null ? 34
         : range === 0 ? 76 : 28 + 66 * ((feature.measure - minimum) / range);
     const pointRadius = (feature: GeoFeature) => feature.measure === null || range === 0 ? 5
         : 4 + 6 * Math.sqrt(Math.max(0, (feature.measure - minimum) / range));
+    const labelPlacements = useMemo(() => {
+        const placements = new Map<number, PointLabelPlacement>();
+        const indexes = prepared.features.flatMap((feature, index) => feature.geometry.type === 'Point'
+            && (prepared.features.length <= 12 || index === selectedIndex || index === hoveredIndex) ? [index] : []);
+        const visibleIndexes = new Set(indexes);
+        const prioritized = [selectedIndex, hoveredIndex].filter((index): index is number => index !== undefined);
+        const orderedIndexes = [...new Set([...prioritized, ...indexes])].filter(index => visibleIndexes.has(index));
+        const occupied: Array<{ x: number; y: number; width: number; height: number }> = [];
+        for (const index of orderedIndexes) {
+            const feature = prepared.features[index];
+            if (!feature || feature.geometry.type !== 'Point') continue;
+            const projected = map.projection(feature.geometry.coordinates);
+            if (!projected) continue;
+            const label = feature.label.length > 19 ? `${feature.label.slice(0, 18)}…` : feature.label;
+            const measure = feature.measure === null ? undefined
+                : new Intl.NumberFormat(locale, { notation: 'compact', maximumSignificantDigits: 4 }).format(feature.measure);
+            const width = Math.max(58, Math.min(148, Math.max(label.length * 5.3, (measure?.length ?? 0) * 5.2) + 16));
+            const height = measure ? 32 : 23;
+            const radius = feature.measure === null || range === 0 ? 5
+                : 4 + 6 * Math.sqrt(Math.max(0, (feature.measure - minimum) / range));
+            const sides = projected[0] < WIDTH / 2 ? ['right', 'left'] as const : ['left', 'right'] as const;
+            const verticals = projected[1] < HEIGHT / 2 ? ['below', 'above'] as const : ['above', 'below'] as const;
+            const candidates = sides.flatMap(side => verticals.map(vertical => {
+                const x = side === 'right' ? projected[0] + radius + 7 : projected[0] - radius - 7 - width;
+                const y = vertical === 'above' ? projected[1] - radius - 6 - height : projected[1] + radius + 6;
+                const placed = {
+                    x: Math.max(7, Math.min(WIDTH - width - 7, x)),
+                    y: Math.max(7, Math.min(HEIGHT - height - 7, y)),
+                    width,
+                    height,
+                };
+                const shiftPenalty = (Math.abs(placed.x - x) + Math.abs(placed.y - y)) * 2;
+                const overlapPenalty = occupied.reduce((total, other) => {
+                    const overlapX = Math.max(0, Math.min(placed.x + width, other.x + other.width) - Math.max(placed.x, other.x));
+                    const overlapY = Math.max(0, Math.min(placed.y + height, other.y + other.height) - Math.max(placed.y, other.y));
+                    return total + (overlapX && overlapY ? 140 + overlapX * overlapY : 0);
+                }, 0);
+                return { ...placed, score: shiftPenalty + overlapPenalty };
+            }));
+            const best = candidates.reduce((choice, candidate) => candidate.score < choice.score ? candidate : choice);
+            if (best.score > 180 && index !== selectedIndex && index !== hoveredIndex) continue;
+            occupied.push(best);
+            placements.set(index, { ...best, label, measure });
+        }
+        return placements;
+    }, [hoveredIndex, locale, map, minimum, prepared.features, range, selectedIndex]);
     const selected = selectedIndex === undefined ? undefined : prepared.features[selectedIndex];
     const zoom = (factor: number) => setViewport(current => ({ ...current, scale: Math.max(1, Math.min(8, current.scale * factor)) }));
     const reset = () => setViewport({ x: 0, y: 0, scale: 1 });
@@ -73,18 +138,28 @@ function MapCanvas({ prepared, columns, measureIndex, completeness, locale }: {
             <svg className="geo-map" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label={`Spatial result map with ${prepared.features.length} rendered features`} onClick={() => setSelectedIndex(undefined)} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={finishDrag} onPointerCancel={finishDrag}>
                 <g transform={`translate(${viewport.x} ${viewport.y}) translate(${WIDTH / 2} ${HEIGHT / 2}) scale(${viewport.scale}) translate(${-WIDTH / 2} ${-HEIGHT / 2})`}>
                     {map.sphere && <path className="geo-sphere" d={map.sphere}/>}
+                    {map.countries.map((country, index) => <path key={country.name ?? index} className="geo-country" d={country.d}>{country.name && <title>{country.name}</title>}</path>)}
                     {map.graticule && <path className="geo-graticule" d={map.graticule}/>}
                     {prepared.features.map((feature, index) => {
                         const style = { '--geo-intensity': `${Math.round(intensity(feature))}%` } as CSSProperties;
                         if (feature.geometry.type === 'Point') {
                             const projected = map.projection(feature.geometry.coordinates);
                             if (!projected) return null;
-                            return <circle key={`${feature.rowIndex}-${index}`} className={`geo-feature geo-point${selectedIndex === index ? ' is-selected' : ''}`} cx={projected[0]} cy={projected[1]} r={pointRadius(feature)} style={style} onClick={event => { event.stopPropagation(); setSelectedIndex(index); }}><title>{feature.label}{feature.measure === null ? '' : ` · ${feature.measure}`}</title></circle>;
+                            const placement = labelPlacements.get(index);
+                            const selectPoint = () => setSelectedIndex(index);
+                            return <g key={`${feature.rowIndex}-${index}`}>
+                                <circle className={`geo-feature geo-point${selectedIndex === index ? ' is-selected' : ''}`} cx={projected[0]} cy={projected[1]} r={pointRadius(feature)} style={style} onPointerEnter={() => setHoveredIndex(index)} onPointerLeave={() => setHoveredIndex(current => current === index ? undefined : current)} onClick={event => { event.stopPropagation(); selectPoint(); }}><title>{feature.label}{feature.measure === null ? '' : ` · ${feature.measure}`}</title></circle>
+                                {placement && <g className="geo-point-label" transform={`translate(${placement.x} ${placement.y})`} aria-hidden="true">
+                                    <rect width={placement.width} height={placement.height} rx="6"/>
+                                    <text className="geo-point-label-name" x="8" y={placement.measure ? 13 : 15}>{placement.label}</text>
+                                    {placement.measure && <text className="geo-point-label-measure" x="8" y="26">{placement.measure}</text>}
+                                </g>}
+                            </g>;
                         }
                         const path = map.path(geometryObject(feature));
                         if (!path) return null;
                         const line = feature.geometry.type === 'LineString' || feature.geometry.type === 'MultiLineString';
-                        return <path key={`${feature.rowIndex}-${index}`} className={`geo-feature${line ? ' is-line' : ' is-area'}${selectedIndex === index ? ' is-selected' : ''}`} d={path} style={style} onClick={event => { event.stopPropagation(); setSelectedIndex(index); }}><title>{feature.label}{feature.measure === null ? '' : ` · ${feature.measure}`}</title></path>;
+                        return <path key={`${feature.rowIndex}-${index}`} className={`geo-feature${line ? ' is-line' : ' is-area'}${selectedIndex === index ? ' is-selected' : ''}`} d={path} style={style} onPointerEnter={() => setHoveredIndex(index)} onPointerLeave={() => setHoveredIndex(current => current === index ? undefined : current)} onClick={event => { event.stopPropagation(); setSelectedIndex(index); }}><title>{feature.label}{feature.measure === null ? '' : ` · ${feature.measure}`}</title></path>;
                     })}
                 </g>
             </svg>

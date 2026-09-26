@@ -282,16 +282,21 @@
     .geo-swap > button { min-height: 29px; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel-raised); color: var(--text-soft); font-size: 9px; cursor: pointer; }
     .geo-swap > button[aria-pressed="true"] { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--panel-raised)); }
     .geo-stage { position: relative; min-height: 300px; margin-top: 13px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--accent) 7%, transparent), transparent 58%), var(--canvas); }
-    .geo-map { display: block; width: 100%; min-height: 300px; max-height: 54vh; aspect-ratio: 960 / 470; cursor: grab; touch-action: none; }
+    .geo-map { display: block; width: 100%; min-height: 300px; max-height: min(66vh, 760px); aspect-ratio: 960 / 470; cursor: grab; touch-action: none; }
     .geo-map:active { cursor: grabbing; }
     .geo-sphere { fill: color-mix(in srgb, var(--panel-raised) 78%, var(--canvas)); stroke: var(--line-bright); stroke-width: 1; vector-effect: non-scaling-stroke; }
     .geo-graticule { fill: none; stroke: color-mix(in srgb, var(--muted) 18%, transparent); stroke-width: .7; vector-effect: non-scaling-stroke; }
+    .geo-country { fill: var(--geo-land); stroke: var(--geo-border); stroke-width: .7; vector-effect: non-scaling-stroke; }
     .geo-feature { cursor: pointer; transition: opacity .14s ease, filter .14s ease; vector-effect: non-scaling-stroke; }
     .geo-feature.is-area { fill: color-mix(in srgb, var(--accent) var(--geo-intensity), var(--panel-raised)); stroke: color-mix(in srgb, var(--accent) 75%, var(--text)); stroke-width: 1; }
     .geo-feature.is-line { fill: none; stroke: color-mix(in srgb, var(--accent) var(--geo-intensity), var(--text-soft)); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
     .geo-point { fill: color-mix(in srgb, var(--accent) var(--geo-intensity), var(--panel-raised)); stroke: color-mix(in srgb, var(--accent) 78%, white); stroke-width: 1.5; }
     .geo-feature:hover, .geo-feature.is-selected { opacity: 1; filter: drop-shadow(0 0 7px color-mix(in srgb, var(--accent) 60%, transparent)); }
     .geo-feature.is-selected { stroke: var(--text); stroke-width: 2.2; }
+    .geo-point-label { pointer-events: none; filter: drop-shadow(0 3px 8px #00000038); }
+    .geo-point-label rect { fill: color-mix(in srgb, var(--panel) 94%, transparent); stroke: color-mix(in srgb, var(--accent) 42%, var(--line-bright)); stroke-width: .8; vector-effect: non-scaling-stroke; }
+    .geo-point-label-name { fill: var(--text); font: 650 9px var(--font-sans); }
+    .geo-point-label-measure { fill: var(--accent-strong); font: 720 8px var(--font-mono); }
     .geo-map-tools { position: absolute; z-index: var(--z-local-control); top: 10px; right: 10px; display: flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--panel-raised) 92%, transparent); backdrop-filter: blur(8px); }
     .geo-map-tools button { min-width: 30px; min-height: 28px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text-soft); font: 600 10px var(--font-mono); cursor: pointer; }
     .geo-map-tools button:hover { background: color-mix(in srgb, var(--accent) 9%, transparent); color: var(--accent); }

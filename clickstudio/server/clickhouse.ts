@@ -3,6 +3,9 @@ import { createClient, type ClickHouseClient } from '@clickhouse/client';
 import { randomUUID } from 'node:crypto';
 import type { ClickHouseDocumentationEntry, ClickHouseDocumentationSummary, Connection, Json, Manifest, Principal, Progress, ReferenceCategory, Run, Schema } from '../shared/types.js';
 import { mergeTreePartsQuery, parseMergeTreeParts, type MergeTreePartsSnapshot } from '../shared/parts.js';
+import { flamegraphQuery, parseFlamegraphRows, type FlamegraphSource } from '../shared/flamegraph.js';
+import { parseReplicationSnapshot, replicationQueueQuery, replicationReplicasQuery, type ReplicationCapabilities } from '../shared/replication.js';
+import { parseWorkloadSnapshot, workloadFamiliesQuery, workloadPointsQuery, type QueryLogSource, type WorkloadWindow } from '../shared/workload.js';
 import { enrichSchemaTables, type SchemaTableMetadata, type SchemaTableSkipIndex } from '../shared/schema.js';
 import { buildReferenceEntryQuery, buildReferenceSearchQuery } from '../shared/reference.js';
 import { AppError, requireThat } from '../core/errors.js';
@@ -19,6 +22,8 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
     private readers = new Map<string, ClickHouseClient>();
     private writers = new Map<string, ClickHouseClient>();
     private manifests = new Map<string, Manifest>();
+    private replicationCapabilities = new Map<string, ReplicationCapabilities>();
+    private flamegraphSources = new Map<string, FlamegraphSource>();
     private readonly redact: (s: string) => string;
     constructor(private readonly config: Config) { this.redact = redactor(config); }
     private profile(id: string): Profile { const p = this.config.profiles.find(p => p.id === id); requireThat(p, 404, 'CONNECTION_NOT_FOUND', 'Connection not found'); return p; }
@@ -65,12 +70,25 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
         catch (error) {
             return { available: false, reason: error instanceof Error ? error.message : 'Not permitted' };
         } };
-        const [schema, progress, queryLog, documentation, explain, explainPlan, queryTree, pipeline, explainAnalyze] = await Promise.all([
-            probe('SELECT name FROM system.columns LIMIT 1'), probe('SELECT query_id FROM system.processes LIMIT 0'), probe('SELECT query_id FROM system.query_log LIMIT 0'),
+        const [schema, progress, userQueryLog, queryLogFallback, documentation, explain, explainPlan, queryTree, pipeline, explainAnalyze, traceLogSymbolized, traceLogAddresses, replicas, replicationQueue] = await Promise.all([
+            probe('SELECT name FROM system.columns LIMIT 1'), probe('SELECT query_id FROM system.processes LIMIT 0'),
+            probe("SELECT query_id, type, query_duration_ms, read_rows, read_bytes, result_rows, result_bytes, memory_usage, exception_code, normalized_query_hash, query, user, is_initial_query, normalizeQuery('SELECT 1') FROM system.user_query_log LIMIT 0"),
+            probe("SELECT query_id, type, query_duration_ms, read_rows, read_bytes, result_rows, result_bytes, memory_usage, exception_code, normalized_query_hash, query, user, is_initial_query, normalizeQuery('SELECT 1') FROM system.query_log LIMIT 0"),
             probe('SELECT name, type, description FROM system.documentation LIMIT 0'), probe('EXPLAIN indexes = 1 SELECT 1'),
             probe('EXPLAIN PLAN json = 1, indexes = 1, description = 1 SELECT 1'), probe('EXPLAIN QUERY TREE SELECT 1'),
             probe('EXPLAIN PIPELINE graph = 1, compact = 0 SELECT 1'), probe('EXPLAIN ANALYZE SELECT 1'),
+            probe('SELECT query_id, trace_type, symbols, lines FROM system.trace_log LIMIT 0'),
+            probe('SELECT query_id, trace_type, trace, demangle(addressToSymbol(trace[1])), addressToLine(trace[1]) FROM system.trace_log LIMIT 0'),
+            probe('SELECT database, table, replica_name, is_leader, is_readonly, is_session_expired, absolute_delay, queue_size, inserts_in_queue, merges_in_queue, future_parts, total_replicas, active_replicas FROM system.replicas LIMIT 0'),
+            probe('SELECT database, table, type, create_time, num_tries, last_exception, postpone_reason, is_currently_executing FROM system.replication_queue LIMIT 0'),
         ]);
+        const queryLogSource: QueryLogSource | undefined = userQueryLog.available ? 'user_query_log' : queryLogFallback.available ? 'query_log' : undefined;
+        const queryLog = queryLogSource ? { available: true } : queryLogFallback;
+        const flamegraphSource: FlamegraphSource | undefined = traceLogSymbolized.available ? 'symbolized' : traceLogAddresses.available ? 'addresses' : undefined;
+        if (flamegraphSource) this.flamegraphSources.set(id, flamegraphSource);
+        else this.flamegraphSources.delete(id);
+        const replication: ReplicationCapabilities = { replicas: replicas.available, queue: replicationQueue.available };
+        this.replicationCapabilities.set(id, replication);
         // KILL of a random, nonexistent own query checks cancellation permission without touching a real query.
         let cancellation: Manifest['cancellation'];
         try {
@@ -81,7 +99,10 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
         catch {
             cancellation = { available: false, reason: 'Own-query cancellation is not permitted; transport abort and server deadline still apply.' };
         }
-        const manifest: Manifest = { version: 1, serverVersion: version, testedAt: new Date().toISOString(), schema, progress, queryLog, documentation, explain, explainPlan, queryTree, pipeline, explainAnalyze, cancellation,
+        const manifest: Manifest = { version: 1, serverVersion: version, testedAt: new Date().toISOString(), schema, progress, queryLog,
+            ...(queryLogSource ? { queryLogSource } : {}), traceLog: flamegraphSource ? { available: true } : { available: false, reason: traceLogSymbolized.reason ?? traceLogAddresses.reason ?? 'ClickHouse trace-log symbols are unavailable to this reader.' },
+            replication: replication.replicas || replication.queue ? { available: true } : { available: false, reason: replicas.reason ?? replicationQueue.reason ?? 'Replication system tables are unavailable to this reader.' },
+            documentation, explain, explainPlan, queryTree, pipeline, explainAnalyze, cancellation,
             import: { available: Boolean(this.profile(id).writer), reason: this.profile(id).writer ? 'Explicit allowlisted import identity configured' : 'Configure a separate writer and target allowlist to enable imports' }, scripts: { available: true }, parameters: { available: true } };
         this.manifests.set(id, manifest);
         return this.connection({ id: 'local-owner', role: 'owner' }, id);
@@ -310,7 +331,49 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
     }
     async profileEvidence(run: Run) {
         requireThat(this.manifests.get(run.connectionId)?.queryLog.available, 409, 'CAPABILITY_UNAVAILABLE', 'Test the connection; query-log visibility is required');
-        return this.rows(run.connectionId, "SELECT query_id, type, query_duration_ms, read_rows, read_bytes, result_rows, result_bytes, memory_usage, exception_code FROM system.query_log WHERE query_id = {id:String} AND type IN ('QueryFinish', 'ExceptionWhileProcessing', 'ExceptionBeforeStart') ORDER BY event_time DESC LIMIT 10", { id: run.queryId });
+        return this.rows(run.connectionId, `SELECT query_id, type, query_duration_ms, read_rows, read_bytes, result_rows, result_bytes, memory_usage, exception_code FROM ${this.queryLogTable(run.connectionId)} WHERE query_id = {id:String} AND type IN ('QueryFinish', 'ExceptionWhileProcessing', 'ExceptionBeforeStart') ORDER BY event_time DESC LIMIT 10`, { id: run.queryId });
+    }
+    private queryLogTable(id: string) {
+        const source = this.manifests.get(id)?.queryLogSource;
+        requireThat(source === 'user_query_log' || source === 'query_log', 409, 'CAPABILITY_UNAVAILABLE', 'Test the connection; query-log visibility is required');
+        return `system.${source}`;
+    }
+    async workload(id: string, minutes: WorkloadWindow) {
+        const manifest = this.manifests.get(id);
+        requireThat(manifest?.queryLog.available, 409, 'CAPABILITY_UNAVAILABLE', manifest?.queryLog.reason ?? 'Query-log visibility is required for workload analysis');
+        const source = manifest.queryLogSource;
+        requireThat(source === 'user_query_log' || source === 'query_log', 409, 'CAPABILITY_UNAVAILABLE', 'Test the connection; query-log visibility is required');
+        const parameters = { minutes: String(minutes), username: this.profile(id).username };
+        const [families, points] = await Promise.all([
+            this.rows<Record<string, unknown>>(id, workloadFamiliesQuery(source), parameters),
+            this.rows<Record<string, unknown>>(id, workloadPointsQuery(source), parameters),
+        ]);
+        return parseWorkloadSnapshot(id, minutes, source, families, points);
+    }
+    async replication(id: string) {
+        const manifest = this.manifests.get(id);
+        requireThat(manifest?.replication?.available, 409, 'CAPABILITY_UNAVAILABLE', manifest?.replication?.reason ?? 'Replication system tables are unavailable on this connection');
+        const capabilities = this.replicationCapabilities.get(id) ?? { replicas: false, queue: false };
+        const [replicaRows, queueRows] = await Promise.all([
+            capabilities.replicas ? this.rows<Record<string, unknown>>(id, replicationReplicasQuery()) : Promise.resolve([]),
+            capabilities.queue ? this.rows<Record<string, unknown>>(id, replicationQueueQuery()) : Promise.resolve([]),
+        ]);
+        return parseReplicationSnapshot(id, capabilities, replicaRows, queueRows);
+    }
+    async profileFlamegraph(run: Run) {
+        requireThat(this.manifests.get(run.connectionId)?.traceLog?.available, 409, 'CAPABILITY_UNAVAILABLE', this.manifests.get(run.connectionId)?.traceLog?.reason ?? 'ClickHouse trace-log symbols are unavailable');
+        const source = this.flamegraphSources.get(run.connectionId);
+        requireThat(source, 409, 'CAPABILITY_UNAVAILABLE', 'Test the connection; ClickHouse trace-log symbolization is unavailable');
+        const asDate = (value: string | undefined) => {
+            const parsed = value ? new Date(value) : new Date();
+            return Number.isFinite(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+        };
+        const rows = await this.rows<Record<string, unknown>>(run.connectionId, flamegraphQuery(source), {
+            queryId: run.queryId,
+            startDate: asDate(run.createdAt),
+            endDate: asDate(run.finishedAt ?? run.createdAt),
+        });
+        return parseFlamegraphRows(run.queryId, rows);
     }
     async queryTree(id: string, sql: string, parameters: Record<string, string> = {}): Promise<string[]> {
         const rows = await this.rows<Record<string, unknown>>(id, `EXPLAIN QUERY TREE\n${sql}`, parameters);
@@ -346,11 +409,12 @@ export class ClickHouseDriver implements QueryDriver, ImportDriver {
         }
     }
     async inspectInsert(id: string, queryId: string): Promise<'running' | 'succeeded' | 'unknown'> {
+        const source = this.manifests.get(id)?.queryLogSource;
         const [active, events] = await Promise.all([
             this.rows<{ query_id: string }>(id, 'SELECT query_id FROM system.processes WHERE query_id = {id:String} LIMIT 1', { id: queryId }).catch(() => []),
-            this.rows<{ type: string; exception_code: string }>(id,
-                "SELECT type, toString(exception_code) AS exception_code FROM system.query_log WHERE query_id = {id:String} AND type IN ('QueryFinish', 'ExceptionWhileProcessing', 'ExceptionBeforeStart') ORDER BY event_time DESC LIMIT 1",
-                { id: queryId }).catch(() => []),
+            source ? this.rows<{ type: string; exception_code: string }>(id,
+                `SELECT type, toString(exception_code) AS exception_code FROM system.${source} WHERE query_id = {id:String} AND type IN ('QueryFinish', 'ExceptionWhileProcessing', 'ExceptionBeforeStart') ORDER BY event_time DESC LIMIT 1`,
+                { id: queryId }).catch(() => []) : Promise.resolve([]),
         ]);
         if (active.length)
             return 'running';

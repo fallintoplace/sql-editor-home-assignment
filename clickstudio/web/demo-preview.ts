@@ -6,6 +6,8 @@ import { isResult, isRun } from '../shared/run-wire.js';
 import { loadPlaygroundSchema, PLAYGROUND_CONNECTION, PLAYGROUND_CONNECTION_ID, queryPlayground, queryPlaygroundQueryTree } from './playground.js';
 import { demoMergeTreePartRows } from '../shared/demo-fixtures.js';
 import { parseMergeTreeParts } from '../shared/parts.js';
+import { demoFlamegraph, demoReplication, demoWorkload } from '../shared/observability-fixtures.js';
+import { WORKLOAD_WINDOWS, type WorkloadWindow } from '../shared/workload.js';
 import {
     DEMO_PREVIEW_RUN_ID,
     DEMO_PREVIEW_SQL,
@@ -247,6 +249,18 @@ export class DemoPreviewApi {
                 return nativeExplorerFixture({ kind: body.kind, database: body.database, table: body.table });
             throw new Error('Unknown native explorer request.');
         }
+        if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'workload') {
+            if (!this.trusted) throw new Error('Trust this connection before inspecting workload history.');
+            const rawMinutes = url.searchParams.get('minutes') ?? '60';
+            if (!WORKLOAD_WINDOWS.some(minutes => String(minutes) === rawMinutes)) throw new Error('minutes must be 15, 60, 360, or 1440.');
+            return demoWorkload('demo', Number(rawMinutes) as WorkloadWindow);
+        }
+        if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'replication') {
+            if (!this.trusted) throw new Error('Trust this connection before inspecting replication health.');
+            return demoReplication('demo');
+        }
+        if (parts[0] === 'connections' && parts[1] === PLAYGROUND_CONNECTION_ID && (parts[2] === 'workload' || parts[2] === 'replication'))
+            throw new Error('Observability system-table access is unavailable in the public Playground browser preview.');
         if (parts[0] === 'connections' && parts[1] === 'demo' && parts[2] === 'table-parts' && method === 'POST') {
             if (body.database !== 'demo' || body.table !== 'events') throw new Error('The selected table is not available in this sample.');
             return parseMergeTreeParts('demo', 'events', demoMergeTreePartRows());
@@ -336,6 +350,11 @@ export class DemoPreviewApi {
             if (parts[2] === 'profile') {
                 if (run.connectionId === PLAYGROUND_CONNECTION_ID)
                     throw new Error('Query-log and pipeline profiling are unavailable on ClickHouse Playground.');
+                if (parts[3] === 'flamegraph') {
+                    if (!this.trusted) throw new Error('Trust this connection before inspecting profiler samples.');
+                    if (run.status === 'running' || run.status === 'queued') throw new Error('Wait for the query to finish before loading its flamegraph.');
+                    return demoFlamegraph(run.queryId);
+                }
                 const pipeline = {
                     available: true, source: 'query_shape' as const, truncated: false,
                     nodes: [

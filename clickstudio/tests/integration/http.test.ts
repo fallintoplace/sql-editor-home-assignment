@@ -31,6 +31,12 @@ class NoQueryLogDemoDriver extends DemoDriver {
         throw new Error('Query-log evidence must not be required for pipeline inspection');
     }
 }
+class MissingObservabilityDemoDriver extends DemoDriver {
+    override connection(principal: Parameters<DemoDriver['connection']>[0], id: string) {
+        const connection = super.connection(principal, id);
+        return { ...connection, manifest: { ...connection.manifest!, queryLog: { available: false, reason: 'Disabled for this test' }, traceLog: { available: false, reason: 'Disabled for this test' }, replication: { available: false, reason: 'Disabled for this test' } } };
+    }
+}
 class ReferenceDocsDemoDriver extends DemoDriver {
     readonly searches: Array<{ id: string; query: string; category: ReferenceCategory }> = [];
     readonly entries: Array<{ id: string; name: string; type: string }> = [];
@@ -166,6 +172,55 @@ test('Pipeline inspection works when query-log evidence is unavailable', async (
     const pipeline = await response.json();
     assert.equal(pipeline.source, 'explain_pipeline');
     assert.equal(driver.evidenceCalls, 0);
+});
+test('Observability routes require trust, validate windows, and return scoped fixture evidence', async (t) => {
+    const s = await start();
+    t.after(() => s.stop());
+    assert.equal((await s.call('/connections/demo/workload')).status, 403);
+    assert.equal((await s.call('/connections/demo/replication')).status, 403);
+    await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' });
+    assert.equal((await s.call('/connections/demo/workload?minutes=30')).status, 400);
+    assert.equal((await s.call('/connections/demo/workload?minutes=60&minutes=15')).status, 400);
+
+    const workloadResponse = await s.call('/connections/demo/workload?minutes=15');
+    assert.equal(workloadResponse.status, 200);
+    const workload = await workloadResponse.json();
+    assert.equal(workload.scope, 'local-user');
+    assert.equal(workload.minutes, 15);
+    assert.ok(workload.families.length > 0);
+    assert.ok(workload.points.every((point: { queryId: string }) => point.queryId.length > 0));
+
+    const replicationResponse = await s.call('/connections/demo/replication');
+    assert.equal(replicationResponse.status, 200);
+    const replication = await replicationResponse.json();
+    assert.equal(replication.scope, 'local-node');
+    assert.ok(replication.replicas.every((replica: { database: string }) => replica.database === 'demo'));
+    assert.ok(replication.queue.length > 0);
+});
+test('Observability routes honor manifest capabilities and keep flamegraphs scoped to completed runs', async (t) => {
+    const driver = new MissingObservabilityDemoDriver(), s = await start(undefined, undefined, undefined, driver);
+    t.after(() => s.stop());
+    await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' });
+    assert.equal((await s.call('/connections/demo/workload')).status, 409);
+    assert.equal((await s.call('/connections/demo/replication')).status, 409);
+
+    const run = await (await s.call('/runs', { clientRequestId: randomUUID(), connectionId: 'demo', sql: 'SELECT 1' })).json() as Run;
+    await s.runs.wait(owner, run.id);
+    assert.equal((await s.call(`/runs/${run.id}/profile/flamegraph`)).status, 409);
+});
+test('Completed demo runs expose one bounded flamegraph with CPU and wall-clock evidence', async (t) => {
+    const s = await start();
+    t.after(() => s.stop());
+    await s.call('/connections/demo/trust', { trusted: true, confirmation: 'demo' });
+    const run = await (await s.call('/runs', { clientRequestId: randomUUID(), connectionId: 'demo', sql: 'SELECT 1' })).json() as Run;
+    await s.runs.wait(owner, run.id);
+    const response = await s.call(`/runs/${run.id}/profile/flamegraph`);
+    assert.equal(response.status, 200);
+    const flamegraph = await response.json();
+    assert.equal(flamegraph.queryId, run.queryId);
+    assert.ok(flamegraph.series.CPU.samples > 0);
+    assert.ok(flamegraph.series.Real.samples > 0);
+    assert.ok(flamegraph.symbolizedSamples <= flamegraph.samples.CPU + flamegraph.samples.Real);
 });
 test('Native ClickHouse parser bytes are served same-origin behind the session boundary', async (t) => {
     const fixture = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);

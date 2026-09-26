@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ProfilePipeline, QueryProfile, Result, ResultPage, Run } from '../shared/types';
+import type { FlamegraphSnapshot } from '../shared/flamegraph';
 import { parseRunEvent } from '../shared/run-wire';
 import { api, message } from './api';
 import { terminal } from './components/ui';
@@ -18,6 +19,7 @@ export function useRunEvidence({ activeRunId, connectionId, loadHistory, setErro
     const [snapshot, setSnapshotForRun] = useScopedValue<Result>(activeRunId);
     const [profile, setProfileForRun, profilesByRun] = useScopedValue<QueryProfile>(activeRunId);
     const [pipeline, setPipelineForRun, pipelinesByRun] = useScopedValue<ProfilePipeline>(activeRunId);
+    const [flamegraph, setFlamegraphForRun, flamegraphsByRun] = useScopedValue<FlamegraphSnapshot>(activeRunId);
     const [page, setPage] = useState(0);
     const [eventState, setEventState] = useState<RunEventState>('idle');
     const resultPage = resultPageState?.page === page ? resultPageState.value : undefined;
@@ -76,5 +78,5 @@ export function useRunEvidence({ activeRunId, connectionId, loadHistory, setErro
         }, { intervalMs: 1500, immediate: false });
     }, [activeRunId, connectionId, eventState, loadHistory, running, setRunForRun]);
 
-    return { run, setRunForRun, page, setPage, resultPage, snapshot, setSnapshotForRun, profile, setProfileForRun, pipeline, setPipelineForRun, profilesByRun, pipelinesByRun, eventState };
+    return { run, setRunForRun, page, setPage, resultPage, snapshot, setSnapshotForRun, profile, setProfileForRun, pipeline, setPipelineForRun, flamegraph, setFlamegraphForRun, profilesByRun, pipelinesByRun, flamegraphsByRun, eventState };
 }

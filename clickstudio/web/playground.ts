@@ -55,6 +55,8 @@ export const PLAYGROUND_CONNECTION: Connection & { trusted: boolean } = {
         explainPipeline: capability(true),
         pipeline: capability(false, 'The public Playground returns pipeline text, but structured pipeline profiling is unavailable in this browser connection.'),
         queryLog: capability(false, 'Query-log profiling is not enabled in this browser preview.'),
+        traceLog: capability(false, 'Trace-log profiling is not enabled in the public Playground browser connection.'),
+        replication: capability(false, 'Replication system-table access is not enabled in the public Playground browser connection.'),
         documentation: capability(false, 'System-table documentation is not enabled in this browser preview.'),
         import: capability(false, 'The public Playground connection is read only.'),
         scripts: capability(false, 'The public Playground accepts one read-only statement per request. Script execution is unavailable in this browser connection.'),

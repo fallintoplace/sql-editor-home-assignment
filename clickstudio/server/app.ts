@@ -17,6 +17,7 @@ import { canWrite, guardSql } from '../core/guards.js';
 import { choice, identifier, integer, record, stringMap, text } from '../core/validation.js';
 import { exportCsv } from '../shared/results.js';
 import { buildQueryProfile } from '../shared/profile.js';
+import { WORKLOAD_WINDOWS, type WorkloadWindow } from '../shared/workload.js';
 import { isReferenceCategory } from '../shared/reference.js';
 import { selectAssistantReferenceDocs } from '../shared/reference-data.js';
 import { configuredSecrets, redactor, type Config } from './config.js';
@@ -25,7 +26,7 @@ import { DemoDriver } from './demo.js';
 import { OpenAIDriver } from './openai.js';
 import { OpenAIVoiceService, safetyIdentifier, type VoiceService } from './voice.js';
 import { telemetry, recordRun } from './telemetry.js';
-type Driver = QueryDriver & ImportDriver & Pick<ClickHouseDriver, 'connection' | 'connections' | 'test' | 'targets' | 'profileEvidence' | 'profilePipeline' | 'queryTree' | 'tableParts' | 'nativeExplorer' | 'searchDocumentation' | 'documentationEntry' | 'close'>;
+type Driver = QueryDriver & ImportDriver & Pick<ClickHouseDriver, 'connection' | 'connections' | 'test' | 'targets' | 'profileEvidence' | 'profilePipeline' | 'profileFlamegraph' | 'workload' | 'replication' | 'queryTree' | 'tableParts' | 'nativeExplorer' | 'searchDocumentation' | 'documentationEntry' | 'close'>;
 const MAX_WASM_PARSER_BYTES = 64 * 1024 * 1024;
 const ASSISTANT_ACTIONS = ['generate', 'explain', 'repair', 'result', 'performance', 'review'] as const satisfies readonly AssistantAction[];
 const IMPORT_FORMATS = ['csv', 'json', 'ndjson'] as const;
@@ -135,6 +136,22 @@ export function createApp(config: Config, overrides: {
         try { res.json(await driver.nativeExplorer(connectionId, request, controller.signal)); }
         finally { res.off('close', cancel); }
     });
+    app.get('/api/connections/:id/workload', async (req, res) => {
+        const p = principal(res), connectionId = id(req);
+        requireThat(authorized(p, connectionId), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before inspecting workload history');
+        const capability = driver.connection(p, connectionId).manifest?.queryLog;
+        requireThat(capability?.available === true, 409, 'CAPABILITY_UNAVAILABLE', capability?.reason ?? 'Query-log visibility is unavailable on this connection');
+        requireThat(req.query.minutes === undefined || typeof req.query.minutes === 'string', 400, 'INVALID_REQUEST', 'minutes must be a single value');
+        const value = choice(req.query.minutes ?? '60', WORKLOAD_WINDOWS.map(String), 400, 'INVALID_REQUEST', 'minutes must be 15, 60, 360, or 1440');
+        res.json(await driver.workload(connectionId, Number(value) as WorkloadWindow));
+    });
+    app.get('/api/connections/:id/replication', async (req, res) => {
+        const p = principal(res), connectionId = id(req);
+        requireThat(authorized(p, connectionId), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before inspecting replication health');
+        const capability = driver.connection(p, connectionId).manifest?.replication;
+        requireThat(capability?.available === true, 409, 'CAPABILITY_UNAVAILABLE', capability?.reason ?? 'Replication system tables are unavailable on this connection');
+        res.json(await driver.replication(connectionId));
+    });
     app.post('/api/connections/:id/table-parts', async (req, res) => {
         const p = principal(res), connectionId = id(req), value = body(req);
         requireThat(authorized(p, connectionId), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before inspecting table storage');
@@ -237,6 +254,14 @@ export function createApp(config: Config, overrides: {
                 traceUrl = url.toString();
         }
         res.json(buildQueryProfile(run, evidence, { queryLogAvailable: true, pipelineAvailable: Boolean(connection.manifest?.pipeline.available), traceUrl, notice: 'Query-log rows may arrive after a server flush interval. This is server evidence, not an operator-level performance model.' }));
+    });
+    app.get('/api/runs/:id/profile/flamegraph', async (req, res) => {
+        const p = principal(res), run = runs.get(p, id(req));
+        requireThat(authorized(p, run.connectionId), 403, 'WORKSPACE_UNTRUSTED', 'Trust this connection before inspecting query profiler samples');
+        requireThat(terminal(run), 409, 'RUN_IN_PROGRESS', 'Wait for the query to finish before loading its flamegraph');
+        const capability = driver.connection(p, run.connectionId).manifest?.traceLog;
+        requireThat(capability?.available === true, 409, 'CAPABILITY_UNAVAILABLE', capability?.reason ?? 'ClickHouse trace-log symbols are unavailable on this connection');
+        res.json(await driver.profileFlamegraph(run));
     });
     app.get('/api/runs/:id/profile/pipeline', async (req, res) => {
         const p = principal(res), run = runs.get(p, id(req));

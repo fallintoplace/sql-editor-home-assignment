@@ -23,6 +23,7 @@ const iconPaths = {
     assistant: <><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></>,
     chart: <><path d="M4 19V5m0 14h17"/><path d="m7 15 4-4 3 2 6-7"/></>,
     details: <><path d="M4 19V5m0 14h16"/><path d="m7 15 3-4 3 2 5-7"/><circle cx="18" cy="6" r="1"/></>,
+    observability: <><path d="M3 12h4l2.2-6 4.1 12 2.4-7H21"/><circle cx="9.2" cy="6" r="1"/><circle cx="13.3" cy="18" r="1"/></>,
     pipeline: <><rect x="3" y="4" width="6" height="5" rx="1"/><rect x="15" y="15" width="6" height="5" rx="1"/><rect x="15" y="4" width="6" height="5" rx="1"/><path d="M9 6.5h3a3 3 0 0 1 3 3V15"/></>,
     parser: <><path d="m8 5-5 7 5 7m8-14 5 7-5 7m-1-16-4 18"/></>,
     documents: <><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7m-7 4h7"/></>,

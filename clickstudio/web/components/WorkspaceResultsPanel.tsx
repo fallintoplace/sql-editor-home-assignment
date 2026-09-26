@@ -1,4 +1,5 @@
 import type { ProfilePipeline, QueryProfile, ResultPage, Run, Script } from '../../shared/types';
+import type { FlamegraphSnapshot } from '../../shared/flamegraph';
 import type { NativeParseSnapshot, NativeParserStatus } from '../../shared/native-parser';
 import type { Copy, ExperienceLevel, Locale } from '../i18n';
 import type { BusyAction, Connected, ResultsView } from '../workspace-types';
@@ -27,6 +28,7 @@ export type WorkspaceResultsPanelState = Readonly<{
     resultPage?: ResultPage;
     profile?: QueryProfile;
     pipeline?: ProfilePipeline;
+    flamegraph?: FlamegraphSnapshot;
     profilesByRun: Readonly<Record<string, QueryProfile>>;
     pipelinesByRun: Readonly<Record<string, ProfilePipeline>>;
     nativeParserEnabled: boolean;
@@ -46,6 +48,7 @@ export type WorkspaceResultsPanelActions = Readonly<{
     onPatch: (values: Partial<Draft>) => void;
     onLoadProfile: () => void;
     onLoadPipeline: () => void;
+    onLoadFlamegraph: () => void;
     onRevealRange: (from: number, to: number) => void;
 }>;
 
@@ -72,6 +75,7 @@ export function WorkspaceResultsPanel({
         resultPage,
         profile,
         pipeline,
+        flamegraph,
         profilesByRun,
         pipelinesByRun,
         nativeParserEnabled,
@@ -156,7 +160,7 @@ export function WorkspaceResultsPanel({
                 ? <div className="chart-table-fallback"><div className="chart-table-notice" role="status">{copy.chart.fallbackNoMeasure}</div><ResultGrid key={`${run.id}-chart-table`} run={run} page={resultPage} pageIndex={page} loading={!resultPage && run.resultState === 'reopenable'} onPage={actions.onPage}/></div>
                 : run && visibleResultsView === 'chart' && <ChartView result={retainedSnapshot} loading={!retainedSnapshot && run.resultState === 'reopenable'} chart={active.chart} onChart={chart => actions.onPatch({ chart })} copy={copy} locale={locale}/>}
             {run && visibleResultsView === 'map' && <GeoView result={retainedSnapshot} loading={!retainedSnapshot && run.resultState === 'reopenable'} locale={locale}/>}
-            {run && visibleResultsView === 'insights' && <InsightsView comparison={{ connectionId: connection.id, trusted, history, initialRun: run, profiles: profilesByRun, pipelines: pipelinesByRun, queryLogAvailable: connection.manifest?.queryLog.available === true }} run={run} profile={profile} pipeline={pipeline} pipelineAvailable={Boolean(trusted && connection.manifest?.pipeline.available)} onLoad={actions.onLoadProfile} onLoadPipeline={actions.onLoadPipeline} loading={busy === 'save'}/>}
+            {run && visibleResultsView === 'insights' && <InsightsView comparison={{ connectionId: connection.id, trusted, history, initialRun: run, profiles: profilesByRun, pipelines: pipelinesByRun, queryLogAvailable: connection.manifest?.queryLog.available === true }} run={run} profile={profile} pipeline={pipeline} pipelineAvailable={Boolean(trusted && connection.manifest?.pipeline.available)} flamegraph={flamegraph} flamegraphCapability={trusted ? connection.manifest?.traceLog : { available: false, reason: 'Trust this connection to inspect profiler samples.' }} onLoad={actions.onLoadProfile} onLoadPipeline={actions.onLoadPipeline} onLoadFlamegraph={actions.onLoadFlamegraph} loading={busy === 'save'}/>}
         </div>
         {resultsMode === 'floating' && !panels.resultsCollapsed && <PanelResizeHandles onResize={(edge, event) => startPanelResize('results', edge, event)}/>}
     </section>;

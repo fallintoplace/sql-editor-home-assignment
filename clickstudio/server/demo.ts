@@ -4,6 +4,8 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import type { ClickHouseDocumentationEntry, ClickHouseDocumentationSummary, Connection, Principal, Progress, ReferenceCategory, Run, Schema } from '../shared/types.js';
 import { DEFAULT_LIMITS } from '../shared/types.js';
 import { parseMergeTreeParts, type MergeTreePartsSnapshot } from '../shared/parts.js';
+import { demoFlamegraph, demoReplication, demoWorkload } from '../shared/observability-fixtures.js';
+import type { WorkloadWindow } from '../shared/workload.js';
 import { DEMO_EXPLAIN_ANALYZE, demoMergeTreePartRows } from '../shared/demo-fixtures.js';
 import { AppError } from '../core/errors.js';
 
@@ -39,7 +41,7 @@ const demoIndexAnalysis = [
 /** Explicit UI/test fixtures, not a SQL emulator and never an automatic fallback for a real database. */
 export class DemoDriver {
     connection(_p: Principal, id: string): Connection { if (!['demo', 'demo-second'].includes(id))
-        throw new AppError(404, 'CONNECTION_NOT_FOUND', 'Fixture connection not found'); const yes = { available: true }; return { dataSource: 'fixture', id, name: id === 'demo' ? 'Demo fixtures (not live data)' : 'Second isolated fixture', host: 'fixture://local', database: 'demo', username: 'fixture-reader', readonly: true, limits: { ...DEFAULT_LIMITS }, manifest: { version: 1, serverVersion: 'fixture—not a ClickHouse server', testedAt: new Date().toISOString(), schema: yes, progress: yes, cancellation: yes, explain: yes, explainPlan: yes, explainAnalyze: yes, queryTree: yes, pipeline: yes, queryLog: yes, documentation: { available: false, reason: 'Fixture mode' }, import: { available: false, reason: 'Fixture mode never writes data' }, scripts: yes, parameters: yes } }; }
+        throw new AppError(404, 'CONNECTION_NOT_FOUND', 'Fixture connection not found'); const yes = { available: true }; return { dataSource: 'fixture', id, name: id === 'demo' ? 'Demo fixtures (not live data)' : 'Second isolated fixture', host: 'fixture://local', database: 'demo', username: 'fixture-reader', readonly: true, limits: { ...DEFAULT_LIMITS }, manifest: { version: 1, serverVersion: 'fixture—not a ClickHouse server', testedAt: new Date().toISOString(), schema: yes, progress: yes, cancellation: yes, explain: yes, explainPlan: yes, explainAnalyze: yes, queryTree: yes, pipeline: yes, queryLog: yes, queryLogSource: 'query_log', traceLog: yes, replication: yes, documentation: { available: false, reason: 'Fixture mode' }, import: { available: false, reason: 'Fixture mode never writes data' }, scripts: yes, parameters: yes } }; }
     connections(p: Principal) { return ['demo', 'demo-second'].map(id => this.connection(p, id)); }
     async test(id: string) { return this.connection({ id: 'local-owner', role: 'owner' }, id); }
     async schema(id: string): Promise<Schema> {
@@ -122,4 +124,7 @@ export class DemoDriver {
     }
     async profileEvidence(_run: Run) { return [{ notice: 'Fixture mode has no real server profile' }]; }
     async profilePipeline(_run: Run) { return ['digraph {', '  node [shape=box];', '  read [label="ReadFromFixture"];', '  filter [label="FilterTransform × 2"];', '  expression [label="ExpressionTransform × 2"];', '  resize [label="Resize 2 → 1"];', '  output [label="Output"];', '  read -> filter [label="× 2"];', '  filter -> expression [label="× 2"];', '  expression -> resize;', '  resize -> output;', '}']; }
+    async profileFlamegraph(run: Run) { return demoFlamegraph(run.queryId); }
+    async workload(id: string, minutes: WorkloadWindow) { this.connection({ id: 'local-owner', role: 'owner' }, id); return demoWorkload(id, minutes); }
+    async replication(id: string) { this.connection({ id: 'local-owner', role: 'owner' }, id); return demoReplication(id); }
 }

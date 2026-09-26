@@ -80,6 +80,7 @@ export function connection(trusted: boolean): Connection & { trusted: boolean } 
         manifest: {
             version: 1, serverVersion: 'Frontend sample data', testedAt: now(), schema: available, progress: available,
             cancellation: available, explain: available, explainAnalyze: available, queryTree: available, pipeline: available, queryLog: available,
+            queryLogSource: 'query_log', traceLog: available, replication: available,
             documentation: { available: false, reason: 'System-table documentation is not connected in preview mode.' },
             import: { available: false, reason: 'File import is not connected in preview mode.' }, scripts: available,
             parameters: { available: false, reason: 'Sample results do not evaluate SQL parameters.' },

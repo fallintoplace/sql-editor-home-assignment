@@ -41,6 +41,9 @@ export interface Manifest {
     explainPipeline?: Capability;
     pipeline: Capability;
     queryLog: Capability;
+    queryLogSource?: 'user_query_log' | 'query_log';
+    traceLog?: Capability;
+    replication?: Capability;
     documentation: Capability;
     import: Capability;
     scripts: Capability;

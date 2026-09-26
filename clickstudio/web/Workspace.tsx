@@ -11,6 +11,7 @@ import { WorkspaceHelpPanel, type HelpPanelSection } from './components/Workspac
 import { HelpButton } from './components/HelpButton';
 import { RestoreSqlMenu } from './components/RestoreSqlMenu';
 import { OverlayPortal } from './components/OverlayPortal';
+import { ObservabilityExplorer } from './components/ObservabilityExplorer';
 import { InspectorPane, type InspectorPaneProps } from './components/InspectorPane';
 import { Button, cx, Icon, terminal } from './components/ui';
 import { ExecutionBar, RailButton } from './components/WorkspaceChrome';
@@ -21,6 +22,7 @@ import { WorkspacePanelSplitter } from './components/WorkspacePanelSplitter';
 import { checkpoint, closeDraft, draftFromDocument, MAX_TABS, newDraft, reopenDraft, type Draft } from './workspace-state';
 import { rememberRunIds, sameSavedContent } from '../shared/workspace-view';
 import type { NativeParseSnapshot, NativeParserStatus } from '../shared/native-parser';
+import type { FlamegraphSnapshot } from '../shared/flamegraph';
 import { useWorkspacePersistence } from './useWorkspacePersistence';
 import { useRunEvidence } from './useRunEvidence';
 import { useResultSnapshot } from './useResultSnapshot';
@@ -103,7 +105,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [compactViewport, setCompactViewport] = useState(() => window.matchMedia('(max-width: 850px)').matches);
     const [importOpen, setImportOpen] = useState(false);
     const [helpPanelOpen, setHelpPanelOpen] = useState(false);
-    const [helpPanelSection, setHelpPanelSection] = useState<HelpPanelSection>('tour');
+    const [observabilityOpen, setObservabilityOpen] = useState(false);
+    const [helpPanelSection, setHelpPanelSection] = useState<HelpPanelSection>('examples');
     const helpPanelOpenerRef = useRef<HTMLButtonElement | null>(null);
     const openHelpPanel = useCallback((section: HelpPanelSection, opener: HTMLButtonElement) => {
         helpPanelOpenerRef.current = opener;
@@ -115,7 +118,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         if (restoreFocus) window.requestAnimationFrame(() => helpPanelOpenerRef.current?.focus());
     }, []);
     const openExamples = useCallback((opener: HTMLButtonElement) => openHelpPanel('examples', opener), [openHelpPanel]);
-    const openHelp = useCallback((opener: HTMLButtonElement) => openHelpPanel('tour', opener), [openHelpPanel]);
+    const openHelp = useCallback((opener: HTMLButtonElement) => openHelpPanel('examples', opener), [openHelpPanel]);
     const [busy, setBusy] = useState<BusyAction>('');
     const [cancelling, setCancelling] = useState(false);
     const { error, setError, notice, setNotice } = useWorkspaceNotifications();
@@ -217,7 +220,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             applyBuiltIn();
     }, [active.id, active.sql, nativeParserEnabled, nativeParserStatus]);
 
-    const { run, setRunForRun, page, setPage, resultPage, snapshot, setSnapshotForRun, profile, setProfileForRun, pipeline, setPipelineForRun, profilesByRun, pipelinesByRun, eventState } = useRunEvidence({
+    const { run, setRunForRun, page, setPage, resultPage, snapshot, setSnapshotForRun, profile, setProfileForRun, pipeline, setPipelineForRun, flamegraph, setFlamegraphForRun, profilesByRun, pipelinesByRun, eventState } = useRunEvidence({
         activeRunId,
         connectionId: connection.id,
         loadHistory,
@@ -503,6 +506,13 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         setPipelineForRun(runId, response);
     };
 
+    const loadFlamegraph = async () => {
+        if (!activeRunId || connection.manifest?.traceLog?.available !== true) return;
+        const runId = activeRunId;
+        const response = await api<FlamegraphSnapshot>(`/runs/${encodeURIComponent(runId)}/profile/flamegraph`);
+        if (activeRunIdRef.current === runId) setFlamegraphForRun(runId, response);
+    };
+
     const showInspector = (next: Inspector) => {
         setInspector(next);
         if (experience === 'beginner' || compactViewport) setDrawerOpen(true);
@@ -719,6 +729,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     onActivate={draftId => setWorkspace(current => ({ ...current, activeId: draftId }))}
                     onClose={draftId => setWorkspace(current => closeDraft(current, draftId))}
                     actions={<>
+                    {experience === 'expert' && <Button variant="ghost" className="observability-trigger" aria-label="Open observability" title="Workload and replication observability" aria-haspopup="dialog" aria-expanded={observabilityOpen} onClick={() => setObservabilityOpen(true)}><Icon name="observability"/><span>Observability</span></Button>}
                     <button className="new-tab-button new-tab-labeled" data-testid="new-sql" type="button" aria-label={copy.common.newSql} title={copy.common.newSql} aria-haspopup="dialog" aria-expanded={helpPanelOpen} aria-controls="workspace-help-panel" onClick={event => openExamples(event.currentTarget)}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
                         <WorkspaceHelpPanel
                             open={helpPanelOpen}
@@ -865,6 +876,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             resultPage,
                             profile,
                             pipeline,
+                            flamegraph,
                             profilesByRun,
                             pipelinesByRun,
                             nativeParserEnabled,
@@ -891,6 +903,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             onPatch: patch,
                             onLoadProfile: () => void perform(loadProfile, 'save'),
                             onLoadPipeline: () => void perform(loadPipeline, 'save'),
+                            onLoadFlamegraph: () => void perform(loadFlamegraph, 'save'),
                             onRevealRange: (from, to) => editor.current?.revealRange(from, to),
                         }}
                         panels={panels}
@@ -901,6 +914,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
 
             {drawerOpen && (experience === 'beginner' || compactViewport) && <OverlayPortal><><button className="drawer-backdrop" type="button" aria-label="Close panel" onClick={() => setDrawerOpen(false)}/><InspectorPane {...inspectorProps} drawer onClose={() => setDrawerOpen(false)} onInsert={value => { editor.current?.insert(value); setDrawerOpen(false); }} onOpenDocument={document => { openDocument(document); setDrawerOpen(false); }}/></></OverlayPortal>}
         </div>
+        {observabilityOpen && <OverlayPortal><ObservabilityExplorer connectionId={connection.id} connectionLabel={connectionLabel} trusted={trusted} queryLog={connection.manifest?.queryLog} replication={connection.manifest?.replication} onClose={() => setObservabilityOpen(false)}/></OverlayPortal>}
         <ImportWizard open={importOpen} connectionId={connection.id} trusted={trusted} demoMode={demoMode} onClose={() => setImportOpen(false)} onImported={() => { void loadSchema(); setNotice('Import complete. The destination schema was refreshed.'); }}/>
         <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} cancelling={cancelling} scriptRunning={script?.status === 'running'} copy={copy.common} helpButton={<HelpButton copy={copy.common} open={helpPanelOpen} onOpen={openHelp}/>}/>
     </div>;

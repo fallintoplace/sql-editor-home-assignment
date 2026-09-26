@@ -207,3 +207,5 @@ export function useWorkspacePanels({
         startPanelSplit,
     };
 }
+
+export type WorkspacePanelController = ReturnType<typeof useWorkspacePanels>;

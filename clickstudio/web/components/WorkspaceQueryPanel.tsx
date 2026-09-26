@@ -7,6 +7,7 @@ import type {
     BusyAction,
     Connected,
     Inspector,
+    ResultsView,
     WorkspaceFormatter,
     WorkspaceRunCapability,
     WorkspaceRunCapabilityAction,
@@ -33,6 +34,7 @@ export type WorkspaceQueryPanelState = Readonly<{
     busy: BusyAction;
     inspector: Inspector;
     demoMode: boolean;
+    view: ResultsView;
 }>;
 
 export type WorkspaceQueryPanelActions = Readonly<{
@@ -76,6 +78,7 @@ export function WorkspaceQueryPanel({
         busy,
         inspector,
         demoMode,
+        view,
     } = state;
     const { statementCount, editorErrorContext, editorErrorRange } = viewState;
     const {
@@ -106,7 +109,7 @@ export function WorkspaceQueryPanel({
         >
             <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">{copy.common.query}</span><input aria-label="SQL document name" value={active.name} onChange={event => actions.onPatch({ name: event.target.value })}/></label></div>
             <div className="editor-heading-tools">
-                <Button variant="ghost" className="sql-map-button" aria-label={copy.common.visualizeSqlStructure} aria-pressed={viewState.requestedResultsView === 'sqlmap'} title={copy.common.visualizeSqlStructure} onClick={actions.onToggleSqlMap}><Icon name="pipeline"/>{copy.common.sqlMap}</Button>
+                <Button variant="ghost" className="sql-map-button" aria-label={copy.common.visualizeSqlStructure} aria-pressed={view === 'sqlmap'} title={copy.common.visualizeSqlStructure} onClick={actions.onToggleSqlMap}><Icon name="pipeline"/>{copy.common.sqlMap}</Button>
                 <Button variant="ghost" className="sql-ai-button" data-testid="open-ai" aria-label={copy.common.askAi} aria-pressed={inspector === 'assistant'} onClick={actions.onOpenAssistant}><Icon name="assistant"/>{copy.common.askAi}</Button>
                 <Button variant="secondary" className="save-revision-button" data-testid="save-query" aria-label={experience === 'expert' ? copy.common.saveRevision : copy.common.save} onClick={() => void actions.onSave()} disabled={Boolean(busy)}><Icon name="documents"/>{copy.common.save}</Button>
             </div>

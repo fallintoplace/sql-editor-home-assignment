@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import type { SchemaTable } from '../../shared/types';
 import type { Copy, Locale } from '../i18n';
-import type { SqlExample, SqlExampleCategory } from '../sql-examples';
-import { localizeSqlExample, localizeSqlExampleCategory } from '../sql-examples-locales';
+import type { SqlExample } from '../sql-examples';
 import type { Connected } from '../workspace-types';
 import { GEO_HELP_EXAMPLE } from '../help-demos';
 import { MaterializedViewExplorer } from './MaterializedViewExplorer';
@@ -11,9 +10,18 @@ import { OverlayPortal } from './OverlayPortal';
 import { ReferenceExplorer } from './ReferenceExplorer';
 import { RunComparisonView, type RunComparisonProps } from './RunComparison';
 import { SqlFlowView, type SqlFlowViewProps } from './SqlFlowView';
-import { Button, Icon, cx, type IconName } from './ui';
+import { Button, Icon, cx } from './ui';
+import {
+    categoryLabel,
+    chartLabel,
+    exampleText,
+    helpCategories,
+    helpSections,
+    type CategoryFilter,
+    type HelpPanelSection,
+} from './workspace-help-model';
+export type { HelpPanelSection } from './workspace-help-model';
 
-export type HelpPanelSection = 'tour' | 'examples' | 'query' | 'geo' | 'explain' | 'storage' | 'dependencies' | 'compare' | 'reference';
 export type HelpExplainAction = {
     id: 'indexes' | 'plan' | 'pipeline' | 'analyze';
     label: string;
@@ -22,75 +30,6 @@ export type HelpExplainAction = {
     title?: string;
     onSelect: () => void;
 };
-type CategoryFilter = SqlExampleCategory | 'charts' | 'all' | 'featured';
-
-const categories: CategoryFilter[] = ['featured', 'business', 'observability', 'operations', 'engineering', 'markets', 'cities', 'openSource', 'internet', 'datasets', 'clickhouse', 'charts', 'all', 'basics', 'aggregation', 'timeSeries', 'schema'];
-
-function categoryLabel(category: CategoryFilter, copy: Copy['common'], locale: Locale) {
-    if (category === 'all') return copy.allExamples;
-    if (category === 'featured') return localizeSqlExampleCategory(category, locale, 'Featured');
-    if (category === 'business') return localizeSqlExampleCategory(category, locale, 'Business');
-    if (category === 'observability') return localizeSqlExampleCategory(category, locale, 'Observability');
-    if (category === 'operations') return localizeSqlExampleCategory(category, locale, 'Operations');
-    if (category === 'engineering') return localizeSqlExampleCategory(category, locale, 'Engineering');
-    if (category === 'markets') return localizeSqlExampleCategory(category, locale, 'Markets');
-    if (category === 'cities') return localizeSqlExampleCategory(category, locale, 'Cities');
-    if (category === 'openSource') return localizeSqlExampleCategory(category, locale, 'Open source');
-    if (category === 'internet') return localizeSqlExampleCategory(category, locale, 'Internet');
-    if (category === 'datasets') return localizeSqlExampleCategory(category, locale, 'Datasets');
-    if (category === 'basics') return copy.exampleBasics;
-    if (category === 'aggregation') return copy.exampleAggregation;
-    if (category === 'timeSeries') return copy.exampleTimeSeries;
-    if (category === 'charts') return copy.exampleCharts;
-    if (category === 'clickhouse') return copy.exampleClickHouse;
-    return copy.exampleSchema;
-}
-
-function chartLabel(example: SqlExample, copy: Copy['common']) {
-    switch (example.chart.kind) {
-        case 'table': return copy.exampleChartTable;
-        case 'number': return copy.exampleChartNumber;
-        case 'line': return copy.exampleChartLine;
-        case 'bar': return copy.exampleChartBar;
-        case 'scatter': return copy.exampleChartScatter;
-        case 'heatmap': return copy.exampleChartHeatmap;
-        case 'candlestick': return copy.exampleChartCandlestick;
-        default: return copy.chart;
-    }
-}
-
-function exampleText(example: SqlExample, locale: Locale, copy: Copy['common']) {
-    if (example.category === 'schema') {
-        const tableName = example.name.replace(/^Preview /, '');
-        return {
-            name: copy.examplePreviewTable.replace('{table}', tableName),
-            description: copy.exampleReadRows,
-        };
-    }
-    return localizeSqlExample(example, locale);
-}
-
-
-type HelpSectionDefinition = {
-    id: HelpPanelSection;
-    label: string;
-    description: string;
-    icon: IconName;
-};
-
-function helpSections(copy: Copy['common']): HelpSectionDefinition[] {
-    return [
-        { id: 'tour', label: copy.helpTour, description: copy.helpTourDescription, icon: 'help' },
-        { id: 'examples', label: copy.sqlExamples, description: copy.examplesHint, icon: 'examples' },
-        { id: 'query', label: copy.helpQueryEngine, description: copy.helpQueryEngineDescription, icon: 'parser' },
-        { id: 'geo', label: copy.helpGeo, description: copy.helpGeoDescription, icon: 'chart' },
-        { id: 'explain', label: copy.helpExplain, description: copy.helpExplainDescription, icon: 'bolt' },
-        { id: 'storage', label: copy.helpStorage, description: copy.helpStorageDescription, icon: 'database' },
-        { id: 'dependencies', label: copy.helpDependencies, description: copy.helpDependenciesDescription, icon: 'pipeline' },
-        { id: 'compare', label: copy.helpCompareRuns, description: copy.helpCompareRunsDescription, icon: 'history' },
-        { id: 'reference', label: copy.helpReference, description: copy.helpReferenceDescription, icon: 'reference' },
-    ];
-}
 
 function HelpSectionHeading({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
     return <header className="workspace-help-section-heading">
@@ -171,7 +110,7 @@ export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, 
         });
     }, [category, copy, examples, featuredExamples, locale, search]);
     const selected = filteredExamples.find(example => example.id === selectedId) ?? filteredExamples[0];
-    const availableCategories = categories.filter(value => {
+    const availableCategories = helpCategories.filter(value => {
         if (value === 'all') return true;
         if (value === 'featured') return featuredExamples.length > 0;
         if (value === 'charts') return examples.some(example => example.chart.kind !== 'table');

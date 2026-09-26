@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ApiError, ProfilePipeline, QueryDocument, QueryProfile, Result, Run, RunKind, Script } from '../shared/types';
+import type { ProfilePipeline, QueryDocument, QueryProfile, Result, Run, RunKind, Script } from '../shared/types';
 import { DEFAULT_LIMITS } from '../shared/types';
 import { parseExplainPlan } from '../shared/explain-plan';
 import { parseExplainAnalyze } from '../shared/explain-analyze';
 import { parseExplainIndexAnalysis } from '../shared/explain-indexes';
 import { parsePipelineResult } from '../shared/profile';
 import { exportCsv, recommendChart } from '../shared/results';
-import { recommendGeo } from '../shared/geo';
 import { matchesDraft } from '../shared/evidence';
 import { formatSql, hasSqlComments, parameterNames, selectedStatement, splitSql } from '../shared/sql';
-import { api, download, isFrontendDemoPreview, message, post, RequestError } from './api';
+import { api, download, isFrontendDemoPreview, message, post } from './api';
 import { PLAYGROUND_CONNECTION_ID } from './playground';
 import { SqlEditor, type EditorHandle } from './components/SqlEditor';
 import { ImportWizard } from './components/ImportWizard';
@@ -26,6 +25,7 @@ import { SqlFlowView } from './components/SqlFlowView';
 import { InspectorPane, type InspectorPaneProps } from './components/InspectorPane';
 import { Button, cx, Icon, Status, terminal } from './components/ui';
 import { ExecutionBar, RailButton, RunActionGroup, ScriptResults } from './components/WorkspaceChrome';
+import { WorkspaceDocumentTabs } from './components/WorkspaceDocumentTabs';
 import { checkpoint, closeDraft, draftFromDocument, MAX_TABS, newDraft, reopenDraft, type Draft } from './workspace-state';
 import { draftSaveStatus, rememberRunIds, sameSavedContent } from '../shared/workspace-view';
 import type { NativeParseSnapshot, NativeParserStatus } from '../shared/native-parser';
@@ -45,73 +45,26 @@ import type { BusyAction, Connected, Inspector, ResultsView } from './workspace-
 import { clampPanelSplitRatio } from './workspace-layout';
 import { initialWorkspaceState, workspaceStateKey } from './workspace-initial-state';
 
-function safeSelectedStatement(sql: string, from: number, to: number) {
-    try { return selectedStatement(sql, from, to); } catch { return undefined; }
-}
-function safeStatementCount(sql: string) {
-    try { return splitSql(sql).length; } catch { return undefined; }
-}
-type HelpStatement = { sql: string; from: number };
-function helpStatementSql(statement: HelpStatement | undefined, fallback: string) { return statement?.sql ?? fallback; }
-function helpStatementOffset(statement: HelpStatement | undefined) { return statement?.from ?? 0; }
-function helpParseResult<T>(statement: { result: T } | undefined) { return statement?.result; }
-function revealEditorRange(editor: { current: EditorHandle | null }, from: number, to: number) { editor.current?.revealRange(from, to); }
-function insertEditorText(editor: { current: EditorHandle | null }, value: string) { editor.current?.insert(value); }
-function focusEditor(editor: { current: EditorHandle | null }) { editor.current?.focus(); }
-function helpParseDuration(snapshot: NativeParseSnapshot | undefined) { return snapshot?.elapsedMs; }
-function helpQueryLogAvailable(connection: Connected) { return connection.manifest?.queryLog.available === true; }
-type FailedQueryError = { draftId: string; draftSql: string; statementSql: string; sourceFrom: number; error: ApiError };
-const TOAST_TIMEOUT_MS = 10_000;
+import {
+    apiErrorDetail,
+    focusEditor,
+    helpParseDuration,
+    helpParseResult,
+    helpQueryLogAvailable,
+    helpStatementOffset,
+    helpStatementSql,
+    insertEditorText,
+    resultPanelAriaLabel,
+    resultsTabLabel,
+    resultsViewTitle,
+    resultsViews,
+    revealEditorRange,
+    safeSelectedStatement,
+    safeStatementCount,
+    type FailedQueryError,
+} from './workspace-helpers';
+import { useWorkspaceNotifications, WORKSPACE_TOAST_TIMEOUT_MS } from './useWorkspaceNotifications';
 
-function resultsViews(run: Run | undefined, experience: ExperienceLevel): readonly ResultsView[] {
-    if (run?.kind === 'explain') return ['results', 'indexes'];
-    if (run?.kind === 'plan') return ['results', 'plan'];
-    if (run?.kind === 'pipeline') return ['results', 'pipeline'];
-    if (run?.kind === 'analyze') return ['results', 'runtime'];
-    const tabs: ResultsView[] = experience === 'beginner' ? ['results', 'chart', 'sqlmap'] : ['results', 'chart', 'sqlmap', 'insights'];
-    if (run?.kind === 'query' && recommendGeo(run.columns)) tabs.splice(2, 0, 'map');
-    return tabs;
-}
-
-function resultsViewTitle(view: ResultsView, copy: Copy['common']): string {
-    switch (view) {
-        case 'sqlmap': return copy.sqlStructure;
-        case 'map': return copy.map;
-        case 'indexes': return copy.explain;
-        case 'plan': return copy.logicalPlan;
-        case 'pipeline': return copy.pipelineGraph;
-        case 'runtime': return copy.runtimeGraph;
-        default: return copy.results;
-    }
-}
-
-function resultPanelAriaLabel(view: ResultsView, copy: Copy['common']): string {
-    if (view === 'sqlmap') return copy.sqlStructure;
-    return ['map', 'plan', 'pipeline', 'indexes', 'runtime'].includes(view) ? resultsViewTitle(view, copy) : copy.queryResults;
-}
-
-function resultsTabLabel(view: ResultsView, copy: Copy['common']): string {
-    switch (view) {
-        case 'results': return copy.results;
-        case 'chart': return copy.chart;
-        case 'map': return copy.map;
-        case 'sqlmap': return copy.sqlMap;
-        case 'indexes': return copy.explain;
-        case 'plan': return copy.logicalPlan;
-        case 'pipeline': return copy.pipelineGraph;
-        case 'runtime': return copy.runtimeGraph;
-        default: return copy.insights;
-    }
-}
-
-function apiErrorDetail(error: unknown): ApiError {
-    if (error instanceof RequestError) return error.detail;
-    const candidate = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : undefined;
-    return {
-        code: typeof candidate?.code === 'string' ? candidate.code : 'EXECUTION_FAILED',
-        message: typeof candidate?.message === 'string' ? candidate.message : message(error),
-    };
-}
 type WorkspaceProps = {
     connection: Connected;
     connectionLabel: string;
@@ -171,33 +124,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const openHelp = useCallback((opener: HTMLButtonElement) => openHelpPanel('tour', opener), [openHelpPanel]);
     const [busy, setBusy] = useState<BusyAction>('');
     const [cancelling, setCancelling] = useState(false);
-    const [error, setErrorState] = useState('');
-    const errorTimerRef = useRef<number | undefined>(undefined);
-    const setError = useCallback((message: string) => {
-        if (errorTimerRef.current !== undefined) window.clearTimeout(errorTimerRef.current);
-        errorTimerRef.current = undefined;
-        setErrorState(message);
-        if (message) errorTimerRef.current = window.setTimeout(() => {
-            errorTimerRef.current = undefined;
-            setErrorState('');
-        }, TOAST_TIMEOUT_MS);
-    }, []);
+    const { error, setError, notice, setNotice } = useWorkspaceNotifications();
     const [failedQueryError, setFailedQueryError] = useState<FailedQueryError>();
-    const [notice, setNoticeState] = useState('');
-    const noticeTimerRef = useRef<number | undefined>(undefined);
-    const setNotice = useCallback((message: string) => {
-        if (noticeTimerRef.current !== undefined) window.clearTimeout(noticeTimerRef.current);
-        noticeTimerRef.current = undefined;
-        setNoticeState(message);
-        if (message) noticeTimerRef.current = window.setTimeout(() => {
-            noticeTimerRef.current = undefined;
-            setNoticeState('');
-        }, TOAST_TIMEOUT_MS);
-    }, []);
-    useEffect(() => () => {
-        if (errorTimerRef.current !== undefined) window.clearTimeout(errorTimerRef.current);
-        if (noticeTimerRef.current !== undefined) window.clearTimeout(noticeTimerRef.current);
-    }, []);
     const [search, setSearch] = useState('');
     const storageError = useWorkspacePersistence(key, workspace);
     const parameters = useMemo(() => {
@@ -771,8 +699,8 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
 
     return <div className={cx('workspace-root', experience === 'expert' && 'is-expert', experience === 'beginner' && 'is-beginner')}>
         <OverlayPortal><div className="toast-stack">
-            {error && <div className="toast toast-error animate-enter" role="alert"><span>!</span>{error}<button onClick={() => setError('')} aria-label="Dismiss error"><Icon name="close"/></button><div key={error} className="toast-timer" style={{ animationDuration: `${TOAST_TIMEOUT_MS}ms` }} aria-hidden="true"/></div>}
-            {notice && <div className="toast toast-success animate-enter" role="status"><span>✓</span>{notice}<button onClick={() => setNotice('')} aria-label="Dismiss message"><Icon name="close"/></button><div key={notice} className="toast-timer" style={{ animationDuration: `${TOAST_TIMEOUT_MS}ms` }} aria-hidden="true"/></div>}
+            {error && <div className="toast toast-error animate-enter" role="alert"><span>!</span>{error}<button onClick={() => setError('')} aria-label="Dismiss error"><Icon name="close"/></button><div key={error} className="toast-timer" style={{ animationDuration: `${WORKSPACE_TOAST_TIMEOUT_MS}ms` }} aria-hidden="true"/></div>}
+            {notice && <div className="toast toast-success animate-enter" role="status"><span>✓</span>{notice}<button onClick={() => setNotice('')} aria-label="Dismiss message"><Icon name="close"/></button><div key={notice} className="toast-timer" style={{ animationDuration: `${WORKSPACE_TOAST_TIMEOUT_MS}ms` }} aria-hidden="true"/></div>}
             {storageError && <div className="toast toast-error" role="alert">Local draft storage could not save changes: {storageError}</div>}
         </div></OverlayPortal>
 
@@ -795,149 +723,99 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             {experience === 'expert' && <InspectorPane {...inspectorProps}/>}
 
             <main className="workspace-main">
-                <div className={cx('document-tabs', tabScrollState.overflow && 'has-tab-overflow')}>
-                    <div
-                        ref={tabScrollerRef}
-                        className="document-tabs-scroll"
-                        role="tablist"
-                        aria-label="SQL documents"
-                        onScroll={updateTabScrollState}
-                    >
-                    {workspace.tabs.map((draft, index) => <div key={draft.id} id={`document-tab-${draft.id}`} className={cx('document-tab', draft.id === active.id && 'is-active')} role="tab" aria-label={draft.name} aria-selected={draft.id === active.id} aria-controls="sql-document-panel" tabIndex={draft.id === active.id ? 0 : -1} onClick={() => setWorkspace(current => ({ ...current, activeId: draft.id }))} onKeyDown={event => {
-                        if (event.target !== event.currentTarget) return;
-                        if (event.key === 'F2') {
-                            event.preventDefault();
-                            beginTabRename(draft);
-                            return;
-                        }
-                        if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            setWorkspace(current => ({ ...current, activeId: draft.id }));
-                            return;
-                        }
-                        let nextIndex: number | undefined;
-                        if (event.key === 'ArrowRight') nextIndex = (index + 1) % workspace.tabs.length;
-                        else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + workspace.tabs.length) % workspace.tabs.length;
-                        else if (event.key === 'Home') nextIndex = 0;
-                        else if (event.key === 'End') nextIndex = workspace.tabs.length - 1;
-                        if (nextIndex === undefined) return;
-                        event.preventDefault();
-                        const nextDraft = workspace.tabs[nextIndex]!;
-                        setWorkspace(current => ({ ...current, activeId: nextDraft.id }));
-                        window.requestAnimationFrame(() => document.getElementById(`document-tab-${nextDraft.id}`)?.focus());
-                    }}>
-                        {renamingTabId === draft.id
-                            ? <input className="document-tab-rename" aria-label={`Rename ${draft.name}`} value={tabRenameValue} autoFocus onFocus={event => event.currentTarget.select()} onClick={event => event.stopPropagation()} onChange={event => setTabRenameValue(event.target.value)} onBlur={event => finishTabRename(draft.id, event.currentTarget.value)} onKeyDown={event => {
-                                if (event.key === 'Enter') {
-                                    event.preventDefault();
-                                    finishTabRename(draft.id, event.currentTarget.value, true);
-                                } else if (event.key === 'Escape') {
-                                    event.preventDefault();
-                                    cancelTabRename(draft.id);
-                                }
-                            }}/>
-                            : <span className="document-tab-name" title={`Double-click to rename ${draft.name} · F2`} onDoubleClick={event => { event.stopPropagation(); beginTabRename(draft); }}>{draft.name}</span>}{(() => {
-                            const status = draftSaveStatus(draft, connection.id, documents.find(document => document.id === draft.serverId), {
-                                saving: Boolean(savingDraftIds[draft.id]), pending: !documentsLoaded, readError: documentsReadError,
-                            });
-                            const unsaved = ['local', 'changed', 'conflict', 'deleted', 'unavailable'].includes(status.state);
-                            return unsaved ? <span className="tab-unsaved" title={status.label} aria-hidden="true"/> : null;
-                        })()}<button type="button" aria-label={`Close ${draft.name}`} onClick={event => { event.stopPropagation(); setWorkspace(current => closeDraft(current, draft.id)); }}>×</button>
-                    </div>)}
-                    </div>
-                    <div className="document-tab-actions">
-                        {tabScrollState.overflow && <>
-                            <button
-                                className="document-tabs-scroll-button is-left"
-                                data-testid="scroll-sql-tabs-left"
-                                type="button"
-                                aria-label="Scroll SQL tabs left"
-                                title="More SQL tabs to the left"
-                                disabled={!tabScrollState.canScrollLeft}
-                                onClick={() => scrollTabs(-1)}
-                            ><Icon name="chevron"/></button>
-                            <button
-                                className="document-tabs-scroll-button is-right"
-                                data-testid="scroll-sql-tabs-right"
-                                type="button"
-                                aria-label="Scroll SQL tabs right"
-                                title="More SQL tabs to the right"
-                                disabled={!tabScrollState.canScrollRight}
-                                onClick={() => scrollTabs(1)}
-                            ><Icon name="chevron"/></button>
-                        </>}
+                <WorkspaceDocumentTabs
+                    workspace={workspace}
+                    activeId={active.id}
+                    connectionId={connection.id}
+                    documents={documents}
+                    documentsLoaded={documentsLoaded}
+                    documentsReadError={documentsReadError}
+                    savingDraftIds={savingDraftIds}
+                    tabScrollerRef={tabScrollerRef}
+                    tabScrollState={tabScrollState}
+                    updateTabScrollState={updateTabScrollState}
+                    scrollTabs={scrollTabs}
+                    renamingTabId={renamingTabId}
+                    tabRenameValue={tabRenameValue}
+                    setTabRenameValue={setTabRenameValue}
+                    beginTabRename={beginTabRename}
+                    finishTabRename={finishTabRename}
+                    cancelTabRename={cancelTabRename}
+                    onActivate={draftId => setWorkspace(current => ({ ...current, activeId: draftId }))}
+                    onClose={draftId => setWorkspace(current => closeDraft(current, draftId))}
+                    actions={<>
                     <button className="new-tab-button new-tab-labeled" data-testid="new-sql" type="button" aria-label={copy.common.newSql} title={copy.common.newSql} aria-haspopup="dialog" aria-expanded={helpPanelOpen} aria-controls="workspace-help-panel" onClick={event => openExamples(event.currentTarget)}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
-                    <WorkspaceHelpPanel
-                        open={helpPanelOpen}
-                        section={helpPanelSection}
-                        onSectionChange={setHelpPanelSection}
-                        onClose={closeHelpPanel}
-                        examples={sqlExamples}
-                        sourceLabel={connectionLabel}
-                        copy={copy.common}
-                        locale={locale}
-                        connection={connection}
-                        tables={schema?.tables ?? []}
-                        schemaLoading={schemaLoading}
-                        trusted={trusted}
-                        queryEngine={{
-                            copy: copy.common,
-                            sql: helpStatementSql(sqlMapStatement, active.sql),
-                            sourceOffset: helpStatementOffset(sqlMapStatement),
-                            parseResult: helpParseResult(sqlMapParseStatement),
-                            parserEnabled: nativeParserEnabled,
-                            parserStatus: nativeParserStatus,
-                            parseDurationMs: helpParseDuration(nativeParseSnapshot),
-                            connectionId: connection.id,
-                            parameters: active.parameters,
-                            analyzerAvailable: queryTreeAvailable,
-                            analyzerUnavailableReason: queryTreeUnavailableReason,
-                            onRevealRange: (from, to) => {
+                        <WorkspaceHelpPanel
+                            open={helpPanelOpen}
+                            section={helpPanelSection}
+                            onSectionChange={setHelpPanelSection}
+                            onClose={closeHelpPanel}
+                            examples={sqlExamples}
+                            sourceLabel={connectionLabel}
+                            copy={copy.common}
+                            locale={locale}
+                            connection={connection}
+                            tables={schema?.tables ?? []}
+                            schemaLoading={schemaLoading}
+                            trusted={trusted}
+                            queryEngine={{
+                                copy: copy.common,
+                                sql: helpStatementSql(sqlMapStatement, active.sql),
+                                sourceOffset: helpStatementOffset(sqlMapStatement),
+                                parseResult: helpParseResult(sqlMapParseStatement),
+                                parserEnabled: nativeParserEnabled,
+                                parserStatus: nativeParserStatus,
+                                parseDurationMs: helpParseDuration(nativeParseSnapshot),
+                                connectionId: connection.id,
+                                parameters: active.parameters,
+                                analyzerAvailable: queryTreeAvailable,
+                                analyzerUnavailableReason: queryTreeUnavailableReason,
+                                onRevealRange: (from, to) => {
+                                    closeHelpPanel(false);
+                                    window.requestAnimationFrame(() => revealEditorRange(editor, from, to));
+                                },
+                            }}
+                            busy={Boolean(busy)}
+                            unsupportedParameters={unsupportedParameters}
+                            onRunExplain={kind => void execute(false, kind)}
+                            comparison={{
+                                connectionId: connection.id,
+                                trusted,
+                                history,
+                                initialRun: run,
+                                profiles: profilesByRun,
+                                pipelines: pipelinesByRun,
+                                queryLogAvailable: helpQueryLogAvailable(connection),
+                            }}
+                            onReferenceInsert={value => {
+                                insertEditorText(editor, value);
                                 closeHelpPanel(false);
-                                window.requestAnimationFrame(() => revealEditorRange(editor, from, to));
-                            },
-                        }}
-                        busy={Boolean(busy)}
-                        unsupportedParameters={unsupportedParameters}
-                        onRunExplain={kind => void execute(false, kind)}
-                        comparison={{
-                            connectionId: connection.id,
-                            trusted,
-                            history,
-                            initialRun: run,
-                            profiles: profilesByRun,
-                            pipelines: pipelinesByRun,
-                            queryLogAvailable: helpQueryLogAvailable(connection),
-                        }}
-                        onReferenceInsert={value => {
-                            insertEditorText(editor, value);
-                            closeHelpPanel(false);
-                            window.requestAnimationFrame(() => focusEditor(editor));
-                        }}
-                        onOpenExample={example => {
-                            const draft = createExampleDraft(example);
-                            if (!openNewDraft(draft)) return false;
+                                window.requestAnimationFrame(() => focusEditor(editor));
+                            }}
+                            onOpenExample={example => {
+                                const draft = createExampleDraft(example);
+                                if (!openNewDraft(draft)) return false;
+                                window.requestAnimationFrame(() => editor.current?.focus());
+                                return true;
+                            }}
+                            onRunExample={runExample}
+                            onStartBlankSql={() => {
+                                if (!openNewDraft(newDraft())) return false;
+                                window.requestAnimationFrame(() => editor.current?.focus());
+                                return true;
+                            }}
+                        />
+                        {!!workspace.closedTabs?.length && <RestoreSqlMenu closedTabs={workspace.closedTabs} copy={copy.common} onRestore={draftId => {
+                            if (workspaceRef.current.tabs.length >= MAX_TABS) { setError(`Close a tab before restoring one. This workspace supports ${MAX_TABS} open drafts.`); return false; }
+                            setWorkspace(current => reopenDraft(current, draftId));
                             window.requestAnimationFrame(() => editor.current?.focus());
                             return true;
-                        }}
-                        onRunExample={runExample}
-                        onStartBlankSql={() => {
-                            if (!openNewDraft(newDraft())) return false;
-                            window.requestAnimationFrame(() => editor.current?.focus());
-                            return true;
-                        }}
-                    />
-                    {!!workspace.closedTabs?.length && <RestoreSqlMenu closedTabs={workspace.closedTabs} copy={copy.common} onRestore={draftId => {
-                        if (workspaceRef.current.tabs.length >= MAX_TABS) { setError(`Close a tab before restoring one. This workspace supports ${MAX_TABS} open drafts.`); return false; }
-                        setWorkspace(current => reopenDraft(current, draftId));
-                        window.requestAnimationFrame(() => editor.current?.focus());
-                        return true;
-                    }}/>}
-                    <span className="draft-status" data-save-state={saveStatus.state} title={`${saveStatus.label}. ${saveStatus.detail}`}><span className={cx('status-light', saveStatus.state === 'saved' ? 'is-trusted' : ['changed', 'conflict', 'deleted', 'unavailable'].includes(saveStatus.state) ? 'is-warning' : '')}/>{saveStatusLabel}</span>
-                    {active.serverId && <Button variant="ghost" className="revision-history-trigger" aria-label={`Version history for ${active.name}`} aria-pressed={inspector === 'revisions'} title="View saved versions" onClick={() => showInspector('revisions')}><Icon name="history"/><span>Versions</span></Button>}
-                    </div>
-                </div>
+                        }}/>}
+                        <span className="draft-status" data-save-state={saveStatus.state} title={`${saveStatus.label}. ${saveStatus.detail}`}><span className={cx('status-light', saveStatus.state === 'saved' ? 'is-trusted' : ['changed', 'conflict', 'deleted', 'unavailable'].includes(saveStatus.state) ? 'is-warning' : '')}/>{saveStatusLabel}</span>
+                        {active.serverId && <Button variant="ghost" className="revision-history-trigger" aria-label={`Version history for ${active.name}`} aria-pressed={inspector === 'revisions'} title="View saved versions" onClick={() => showInspector('revisions')}><Icon name="history"/><span>Versions</span></Button>}
 
+                    </>}
+                />
                 <div
                     ref={workspaceContentRef}
                     id="sql-document-panel"

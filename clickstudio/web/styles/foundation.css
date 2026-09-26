@@ -38,6 +38,8 @@
     --accent-ink: var(--accent-cyan-ink);
     --green: #35e978;
     --signal-accent: var(--accent);
+    --scrollbar-thumb: color-mix(in srgb, var(--accent) 35%, var(--muted));
+    --scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 55%, var(--muted));
     --amber: #ffad52;
     --red: #ff6b75;
     --violet: #c598ff;
@@ -175,7 +177,7 @@
 }
 
 @layer base {
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; scrollbar-color: var(--scrollbar-thumb) transparent; scrollbar-width: thin; }
     html, body, #root { width: 100%; min-width: 320px; min-height: 100%; margin: 0; }
     body { min-height: 100vh; overflow: hidden; background: var(--page); }
     button, input, select, textarea { font: inherit; }
@@ -184,8 +186,7 @@
     button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
     ::selection { background: color-mix(in srgb, var(--accent) 40%, transparent); }
     ::-webkit-scrollbar { width: 9px; height: 9px; }
-    ::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 9px; background: color-mix(in srgb, var(--muted) 38%, transparent); background-clip: padding-box; }
-    ::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--muted) 58%, transparent); background-clip: padding-box; }
+    ::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 9px; background: var(--scrollbar-thumb); background-clip: padding-box; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); background-clip: padding-box; }
     ::-webkit-scrollbar-track { background: transparent; }
 }
-

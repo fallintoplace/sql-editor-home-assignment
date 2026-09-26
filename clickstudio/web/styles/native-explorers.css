@@ -436,7 +436,7 @@
     flex-direction: column;
     gap: 10px;
     padding-bottom: 4px;
-    scrollbar-color: var(--help-border-strong) transparent;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
     scrollbar-width: thin;
 }
 .workspace-help-dependencies .native-lineage-meta-toolbar,
@@ -580,7 +580,7 @@
         linear-gradient(90deg, color-mix(in srgb, var(--help-border) 22%, transparent) 1px, transparent 1px),
         var(--help-code-surface);
     background-size: auto, 32px 32px, 32px 32px, auto;
-    scrollbar-color: var(--help-border-strong) transparent;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
     scrollbar-width: thin;
 }
 .workspace-help-dependencies .native-edge {
@@ -609,7 +609,7 @@
     border-color: var(--help-border-strong);
     border-radius: var(--help-radius-card);
     background: linear-gradient(150deg, color-mix(in srgb, var(--accent) 4%, var(--help-surface)), var(--help-surface) 46%);
-    scrollbar-color: var(--help-border-strong) transparent;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
     scrollbar-width: thin;
 }
 .workspace-help-dependencies .native-node-details.is-beginner > .eyebrow {
@@ -808,7 +808,7 @@
     align-items: flex-start;
     overflow-x: hidden;
     overflow-y: auto;
-    scrollbar-color: var(--help-border-strong) transparent;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
     scrollbar-width: thin;
 }
 .workspace-help-storage .parts-explorer-dialog.is-embedded {

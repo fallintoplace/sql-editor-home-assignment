@@ -35,6 +35,48 @@ export interface PreparedGeoFeatures {
 }
 
 const GEO_TYPES = new Set<NativeGeoType>(['Point', 'Ring', 'LineString', 'MultiLineString', 'Polygon', 'MultiPolygon', 'Geometry']);
+const MAX_GEO_LITERAL_LENGTH = 1_000_000;
+const MAX_GEO_LITERAL_VALUES = 200_000;
+const MAX_GEO_LITERAL_DEPTH = 8;
+const geoNumberPattern = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/;
+
+function parseGeoLiteral(input: string): Json | undefined {
+    if (!input.length || input.length > MAX_GEO_LITERAL_LENGTH) return undefined;
+    let index = 0, values = 0;
+    const whitespace = () => { while (index < input.length && /\s/.test(input[index]!)) index++; };
+    const parseNumber = (): number | undefined => {
+        const match = input.slice(index).match(geoNumberPattern);
+        if (!match) return undefined;
+        const number = Number(match[0]);
+        if (!Number.isFinite(number)) return undefined;
+        index += match[0].length;
+        return ++values <= MAX_GEO_LITERAL_VALUES ? number : undefined;
+    };
+    const parseValue = (depth: number): Json | undefined => {
+        if (depth > MAX_GEO_LITERAL_DEPTH) return undefined;
+        whitespace();
+        const open = input[index];
+        if (open !== '(' && open !== '[') return parseNumber();
+        const close = open === '(' ? ')' : ']';
+        index++;
+        whitespace();
+        const items: Json[] = [];
+        if (input[index] === close) { index++; return items; }
+        while (index < input.length) {
+            const item = parseValue(depth + 1);
+            if (item === undefined) return undefined;
+            items.push(item);
+            whitespace();
+            if (input[index] === close) { index++; return items; }
+            if (input[index] !== ',') return undefined;
+            index++;
+        }
+        return undefined;
+    };
+    const parsed = parseValue(0);
+    whitespace();
+    return parsed !== undefined && index === input.length ? parsed : undefined;
+}
 const coordinateToken = (name: string, role: 'longitude' | 'latitude') => {
     const pattern = role === 'longitude' ? /(^|_)(longitude|lon|lng)($|_)/i : /(^|_)(latitude|lat)($|_)/i;
     const match = name.match(pattern);
@@ -165,7 +207,7 @@ function inferredGeometry(value: Json | undefined, swapCoordinates: boolean): Ge
     return manyPolygons ? { type: 'MultiPolygon', coordinates: manyPolygons } : undefined;
 }
 
-export function normalizeGeoGeometry(value: Json | undefined, type: string, swapCoordinates = false): GeoGeometry | undefined {
+function normalizeStructuredGeoGeometry(value: Json | undefined, type: string, swapCoordinates = false): GeoGeometry | undefined {
     const native = nativeGeoType(type);
     if (!native) return undefined;
     if (native === 'Geometry') return inferredGeometry(value, swapCoordinates);
@@ -191,6 +233,17 @@ export function normalizeGeoGeometry(value: Json | undefined, type: string, swap
     }
     const coordinates = polygons(value, swapCoordinates);
     return coordinates ? { type: 'MultiPolygon', coordinates } : undefined;
+}
+
+export function parseNativeGeoText(value: string, type: string): Json | undefined {
+    if (!nativeGeoType(type)) return undefined;
+    const parsed = parseGeoLiteral(value);
+    return parsed !== undefined && normalizeStructuredGeoGeometry(parsed, type) ? parsed : undefined;
+}
+
+export function normalizeGeoGeometry(value: Json | undefined, type: string, swapCoordinates = false): GeoGeometry | undefined {
+    const structured = typeof value === 'string' ? parseNativeGeoText(value, type) : value;
+    return normalizeStructuredGeoGeometry(structured, type, swapCoordinates);
 }
 
 function coordinateGeometry(row: Row, source: Extract<GeoSource, { mode: 'coordinates' }>): GeoGeometry | undefined {

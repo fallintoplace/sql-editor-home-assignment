@@ -16,7 +16,7 @@ type WorkspaceDocumentTabsProps = {
     connectionId: string;
     documents: QueryDocument[];
     documentsLoaded: boolean;
-    documentsReadError: string;
+    documentsReadError: boolean;
     savingDraftIds: Record<string, boolean>;
     tabScrollerRef: RefObject<HTMLDivElement | null>;
     tabScrollState: TabScrollState;

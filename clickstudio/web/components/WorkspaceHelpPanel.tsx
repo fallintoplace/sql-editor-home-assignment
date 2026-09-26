@@ -7,6 +7,7 @@ import { GEO_HELP_CITIES, GEO_HELP_EXAMPLE } from '../help-demos';
 import { geoHueForValue } from '../geo-color';
 import { MaterializedViewExplorer } from './MaterializedViewExplorer';
 import { MergeTreePartsPanel } from './MergeTreePartsPanel';
+import { MonitoringHelpPreview } from './MonitoringHelpPreview';
 import { OverlayPortal } from './OverlayPortal';
 import { ReferenceExplorer } from './ReferenceExplorer';
 import { RunComparisonView, type RunComparisonProps } from './RunComparison';
@@ -304,11 +305,15 @@ export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, 
                                         <span className="eyebrow">REPLICA STATUS</span>
                                         <h4>Replication</h4>
                                         <p>Review replica state and queued work reported by the connected server.</p>
-                                        <ul><li>Check active replicas, delay, and read-only or expired sessions.</li><li>Inspect queued inserts and merges, plus errors and postponed tasks.</li><li>View local replica rows; cluster-wide state is not inferred.</li></ul>
+                                        <ul><li>Check active replicas, delay, and read-only or expired sessions.</li><li>Inspect queued inserts and merges, plus errors and postponed tasks.</li><li>Explore replica rows and the tasks waiting in the queue.</li></ul>
                                     </article>
                                 </div>
+                                <MonitoringHelpPreview
+                                    connectionId={connection.id}
+                                    workloadSample={!trusted || connection.manifest?.queryLog.available !== true}
+                                    replicationSample={!trusted || connection.manifest?.replication.available !== true}
+                                />
                                 <div className="workspace-help-monitoring-actions">
-                                    <p className="workspace-help-safe-note"><span className="status-light is-trusted"/>Uses the trusted connection. Available metrics depend on ClickHouse permissions and system-table support.</p>
                                     <Button variant="secondary" onClick={() => { onClose(false); onOpenMonitoring(); }}><Icon name="observability"/>{copy.helpOpenMonitoring}</Button>
                                 </div>
                             </div>

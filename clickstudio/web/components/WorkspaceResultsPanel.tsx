@@ -1,6 +1,6 @@
 import type { ProfilePipeline, QueryProfile, ResultPage, Run, Script } from '../../shared/types';
 import type { NativeParseSnapshot, NativeParserStatus } from '../../shared/native-parser';
-import type { Copy, Locale } from '../i18n';
+import type { Copy, ExperienceLevel, Locale } from '../i18n';
 import type { BusyAction, Connected, ResultsView } from '../workspace-types';
 import type { Draft } from '../workspace-state';
 import { PanelResizeHandles, panelTargetIsInteractive, type WorkspacePanelController } from '../useWorkspacePanels';
@@ -35,6 +35,7 @@ export type WorkspaceResultsPanelState = Readonly<{
     trusted: boolean;
     busy: BusyAction;
     cancelling: boolean;
+    experience: ExperienceLevel;
 }>;
 
 export type WorkspaceResultsPanelActions = Readonly<{
@@ -79,6 +80,7 @@ export function WorkspaceResultsPanel({
         trusted,
         busy,
         cancelling,
+        experience,
     } = state;
     const {
         resultTabs,
@@ -115,7 +117,7 @@ export function WorkspaceResultsPanel({
 
     return <section
         ref={resultsPanelRef}
-        className={cx('results-surface', state.busy && 'has-work', panels.resultsCollapsed && 'is-collapsed', resultsFloating && 'is-floating', resultsMode === 'maximized' && 'is-maximized', activeFloatingPanel === 'results' && resultsFloating && 'is-front')}
+        className={cx('results-surface', experience === 'expert' && 'results-expert', panels.resultsCollapsed && 'is-collapsed', resultsFloating && 'is-floating', resultsMode === 'maximized' && 'is-maximized', activeFloatingPanel === 'results' && resultsFloating && 'is-front')}
         style={panelStyle('results', resultsMode)}
         aria-label={resultsPanelLabel}
         onPointerDownCapture={() => { if (resultsFloating) setActiveFloatingPanel('results'); }}

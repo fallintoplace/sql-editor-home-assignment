@@ -2,7 +2,7 @@ import { StateField, Transaction, type Extension } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { isolateHistory } from '@codemirror/commands';
 import { snippet, snippetCompletion } from '@codemirror/autocomplete';
-import { activeStatementIndex, appendQuerySeparator, CLICKHOUSE_SNIPPETS, type StatementOutline } from '../../shared/editor-tools';
+import { activeStatementIndex, appendQuerySeparator, CLICKHOUSE_SNIPPETS, statementOutline, type StatementOutline } from '../../shared/editor-tools';
 
 // Cursor movement reuses the outline; only document edits invoke the boundary lexer.
 export const sqlStatementOutline = StateField.define<StatementOutline>({

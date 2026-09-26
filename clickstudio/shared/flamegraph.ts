@@ -32,7 +32,14 @@ type Row = Record<string, unknown>;
 type MutableFrame = Omit<FlamegraphFrame, 'children'> & { children: Map<string, MutableFrame> };
 
 const safeLabel = (value: unknown) => {
-    const label = (typeof value === 'string' ? value : '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 240);
+    const label = Array.from(typeof value === 'string' ? value : '')
+        .filter(character => {
+            const code = character.codePointAt(0) ?? 0;
+            return code > 0x1f && code !== 0x7f;
+        })
+        .join('')
+        .trim()
+        .slice(0, 240);
     return label === '??' || label === '<unknown>' ? '' : label;
 };
 const sampleCount = (value: unknown) => {
@@ -106,7 +113,7 @@ export function parseFlamegraphRows(queryId: string, rows: readonly Row[]): Flam
     }
     const series: FlamegraphSnapshot['series'] = {};
     for (const type of ['CPU', 'Real'] as const) {
-        if (!samples[type]) continue;
+        if (!roots[type].children.size) continue;
         series[type] = { type, root: freezeFrame(roots[type]), samples: samples[type] };
     }
     return { queryId, series, samples, symbolizedSamples, truncated };

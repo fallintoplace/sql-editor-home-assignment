@@ -90,7 +90,7 @@ test('Compact AI proposal becomes the same query and run in Advanced mode', asyn
     expect(contexts[0]).toMatchObject({ action: 'generate', question: 'Show event counts by day', connectionId: 'demo' });
 
     page.on('dialog', dialog => dialog.accept());
-    await page.getByRole('button', { name: 'Send to AI & propose', exact: true }).click();
+    await page.getByRole('button', { name: 'Ask AI for a proposal', exact: true }).click();
     await expect(page.getByText('Show the sample event counts by day.', { exact: true })).toBeVisible();
     expect(proposals).toEqual([{ contextId: 'test-context', consent: true }]);
     await page.getByRole('button', { name: 'Use this query', exact: true }).click();
@@ -160,15 +160,15 @@ test('Advanced editor, insights, pipeline and AI copilot stay read-only until a 
     await page.getByRole('button', { name: 'Open operator graph in Insights', exact: true }).click();
     await expect(results.getByRole('region', { name: 'Scrollable operator graph', exact: true })).toBeVisible();
     await page.getByTestId('open-ai').click();
-    await page.locator('.assistant-panel select').selectOption('performance');
+    await page.locator('.assistant-panel input[type="radio"][value="performance"]').check();
     await page.locator('.assistant-panel textarea').fill('Why is this query slow?');
     await page.getByRole('checkbox').check();
-    await page.getByRole('button', { name: 'Preview what will be shared', exact: true }).click();
+    await page.getByRole('button', { name: 'Preview context', exact: true }).click();
     await expect(page.getByText(/Current SQL, schema/)).toBeVisible();
     expect(contexts[0]).toMatchObject({ action: 'performance', question: 'Why is this query slow?', runId: activeRunId, includeResult: true });
 
     page.on('dialog', dialog => dialog.accept());
-    await page.getByRole('button', { name: 'Send to AI & propose', exact: true }).click();
+    await page.getByRole('button', { name: 'Ask AI for a proposal', exact: true }).click();
     await expect(page.getByText('The fixture has no measured performance data.', { exact: true })).toBeVisible();
     expect(proposalRequests).toBe(1);
     expect(runRequests).toHaveLength(1);

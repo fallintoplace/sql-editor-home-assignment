@@ -1,4 +1,4 @@
-import express, { type Request, type Response, type ErrorRequestHandler } from 'express';
+import express, { type ErrorRequestHandler, type Express, type Request, type Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
@@ -67,21 +67,7 @@ async function assistantReferenceDocs(driver: Driver, p: Principal, connectionId
         }
     }));
 }
-export function createApp(config: Config, overrides: {
-    store?: Store;
-    driver?: Driver;
-    assistant?: AssistantDriver;
-    voice?: VoiceService;
-    parserWasm?: () => Promise<Uint8Array>;
-} = {}) {
-    const app = express(), store = overrides.store ?? new FileStore(config.dataDir), driver: Driver = overrides.driver ?? (config.demo ? new DemoDriver() : new ClickHouseDriver(config));
-    const runs = new RunService(store, driver, (p, c) => driver.connection(p, c)), artifacts = new ArtifactService(store, runs, (p, c) => driver.connection(p, c));
-    const authorized = (p: Principal, c: string) => { driver.connection(p, c); return runs.isTrusted(p, c); };
-    const ai = new AssistantService(store, overrides.assistant ?? new OpenAIDriver(config.demo ? undefined : config.openaiKey, config.openaiModel), authorized);
-    const voice = overrides.voice ?? new OpenAIVoiceService(config.demo ? undefined : config.openaiKey, config.openaiRealtimeModel);
-    const imports = new ImportService(store, driver, authorized), monitors = new MonitorService(store, runs, artifacts), sessions = new SessionService(config.token), redact = redactor(config), parserWasm = overrides.parserWasm ?? cachedClickHouseParserWasm;
-    const secretFree = (value: unknown) => !configuredSecrets(config).some(secret => JSON.stringify(value).includes(secret));
-    const safeExport = (value: unknown) => requireThat(secretFree(value), 400, 'SECRET_IN_EXPORT', 'This data contains a configured secret and cannot be exported or shared');
+function configureHttp(app: Express, config: Config, runs: RunService, artifacts: ArtifactService, sessions: SessionService, parserWasm: () => Promise<Uint8Array>) {
     app.disable('x-powered-by');
     app.set('trust proxy', false);
     app.use((req, res, next) => {
@@ -120,6 +106,23 @@ export function createApp(config: Config, overrides: {
             next(error);
         }
     });
+}
+export function createApp(config: Config, overrides: {
+    store?: Store;
+    driver?: Driver;
+    assistant?: AssistantDriver;
+    voice?: VoiceService;
+    parserWasm?: () => Promise<Uint8Array>;
+} = {}) {
+    const app = express(), store = overrides.store ?? new FileStore(config.dataDir), driver: Driver = overrides.driver ?? (config.demo ? new DemoDriver() : new ClickHouseDriver(config));
+    const runs = new RunService(store, driver, (p, c) => driver.connection(p, c)), artifacts = new ArtifactService(store, runs, (p, c) => driver.connection(p, c));
+    const authorized = (p: Principal, c: string) => { driver.connection(p, c); return runs.isTrusted(p, c); };
+    const ai = new AssistantService(store, overrides.assistant ?? new OpenAIDriver(config.demo ? undefined : config.openaiKey, config.openaiModel), authorized);
+    const voice = overrides.voice ?? new OpenAIVoiceService(config.demo ? undefined : config.openaiKey, config.openaiRealtimeModel);
+    const imports = new ImportService(store, driver, authorized), monitors = new MonitorService(store, runs, artifacts), sessions = new SessionService(config.token), redact = redactor(config), parserWasm = overrides.parserWasm ?? cachedClickHouseParserWasm;
+    const secretFree = (value: unknown) => !configuredSecrets(config).some(secret => JSON.stringify(value).includes(secret));
+    const safeExport = (value: unknown) => requireThat(secretFree(value), 400, 'SECRET_IN_EXPORT', 'This data contains a configured secret and cannot be exported or shared');
+    configureHttp(app, config, runs, artifacts, sessions, parserWasm);
     app.get('/api/connections', (_req, res) => { const p = principal(res); res.json(driver.connections(p).map(c => ({ ...c, trusted: runs.isTrusted(p, c.id) }))); });
     app.post('/api/connections/:id/test', async (req, res) => { canWrite(principal(res)); res.json(await driver.test(id(req))); });
     app.post('/api/connections/:id/trust', (req, res) => { const p = principal(res), v = body(req), connectionId = id(req); requireThat(v.confirmation === connectionId, 400, 'TRUST_CONFIRMATION', 'Confirm the selected connection ID'); runs.trust(p, connectionId, boolean(v.trusted, 'trusted')); res.json({ trusted: runs.isTrusted(p, connectionId) }); });

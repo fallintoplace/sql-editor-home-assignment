@@ -7,11 +7,12 @@ import { hasSqlExampleTranslation, localizeSqlExample } from '../../.workspace-b
 test('SQL example catalogs match the selected Playground or fixture source', () => {
     const playground = sqlExamplesFor({ id: 'playground', dataSource: 'clickhouse' });
     const fixtures = sqlExamplesFor({ id: 'demo', dataSource: 'fixture' });
+    const starter = playground.find(example => example.id === 'github-recent-events');
 
-    assert.equal(playground[0]?.sql, PLAYGROUND_STARTER_SQL);
+    assert.equal(starter?.sql, PLAYGROUND_STARTER_SQL);
     assert.ok(playground.some(example => example.name === 'Daily activity' && example.sql.includes('FROM github.events')));
     assert.ok(fixtures.some(example => example.name === 'Top countries' && example.sql.includes('FROM events')));
-    assert.notEqual(fixtures[0]?.sql, playground[0]?.sql);
+    assert.notEqual(fixtures[0]?.sql, starter?.sql);
     assert.equal(new Set(playground.map(example => example.id)).size, playground.length);
     assert.equal(new Set(fixtures.map(example => example.id)).size, fixtures.length);
 });
@@ -133,7 +134,10 @@ test('curated, fixture, and generic SQL examples have localized titles and descr
 test('SQL examples use safe generic queries until a real connection schema is available', () => {
     const connection = { id: 'production', dataSource: 'clickhouse' };
     const generic = sqlExamplesFor(connection);
-    assert.deepEqual(generic.map(example => example.name), ['ClickHouse version', 'Server time', 'Generate a number series']);
+    assert.deepEqual(generic.map(example => example.name), [
+        'ClickHouse version', 'Server time', 'Generate a number series',
+        'Native Point cities', 'Intercontinental flight paths', 'Colorful delivery zones',
+    ]);
     assert.ok(generic.every(example => /^SELECT/.test(example.sql)));
 
     const schema = {

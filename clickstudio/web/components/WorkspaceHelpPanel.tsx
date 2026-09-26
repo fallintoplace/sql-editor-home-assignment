@@ -344,7 +344,7 @@ export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, 
                                 <MonitoringHelpPreview
                                     connectionId={connection.id}
                                     workloadSample={!trusted || connection.manifest?.queryLog.available !== true}
-                                    replicationSample={!trusted || connection.manifest?.replication.available !== true}
+                                    replicationSample={!trusted || connection.manifest?.replication?.available !== true}
                                 />
                                 <div className="workspace-help-monitoring-actions">
                                     <Button variant="secondary" onClick={() => { onClose(false); onOpenMonitoring(); }}><Icon name="observability"/>{copy.helpOpenMonitoring}</Button>

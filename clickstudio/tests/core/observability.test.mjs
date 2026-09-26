@@ -97,12 +97,17 @@ test('flamegraph parser ignores unresolved frames and bounds deep or oversized s
 });
 
 test('flamegraph parser caps node growth and ignores malformed sample counts', () => {
-    const unique = Array.from({ length: MAX_FLAMEGRAPH_NODES }, (_, index) => ({
-        trace_type: 'CPU', symbols: [`frame-${index}`], lines: [], samples: index === 0 ? 'bad' : 1,
+    const unique = Array.from({ length: MAX_FLAMEGRAPH_STACKS + 1 }, (_, index) => ({
+        trace_type: 'CPU',
+        symbols: Array.from({ length: MAX_FLAMEGRAPH_DEPTH }, (_, depth) => `frame-${index}-${depth}`),
+        lines: [], samples: index === 0 ? 'bad' : 1,
     }));
     const snapshot = parseFlamegraphRows('q', unique);
     assert.equal(snapshot.truncated, true);
-    assert.equal(snapshot.samples.CPU, MAX_FLAMEGRAPH_NODES - 2);
+    assert.equal(snapshot.samples.CPU, MAX_FLAMEGRAPH_STACKS - 1);
+    assert.equal(snapshot.symbolizedSamples, MAX_FLAMEGRAPH_STACKS - 1);
+    const countNodes = frame => 1 + frame.children.reduce((count, child) => count + countNodes(child), 0);
+    assert.equal(countNodes(snapshot.series.CPU.root), MAX_FLAMEGRAPH_NODES - 1);
 });
 
 test('replication queries stay node-local and bounded', () => {

@@ -338,7 +338,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         return draft;
     };
 
-    const runExample = (example: SqlExample, output: 'results' | 'chart') => {
+    const runExample = (example: SqlExample, output: 'results' | 'chart' | 'map') => {
         if (busy) { setError(copy.common.runActionWait); return true; }
         if (!trusted) { setError(copy.common.runActionTrustRequired); return true; }
 

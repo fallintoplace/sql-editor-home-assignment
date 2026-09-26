@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ProfilePipeline, QueryDocument, QueryProfile, Result, Run, RunKind, Script } from '../shared/types';
 import { DEFAULT_LIMITS } from '../shared/types';
-import { parseExplainPlan } from '../shared/explain-plan';
-import { parseExplainAnalyze } from '../shared/explain-analyze';
-import { parseExplainIndexAnalysis } from '../shared/explain-indexes';
-import { parsePipelineResult } from '../shared/profile';
 import { exportCsv, recommendChart } from '../shared/results';
-import { matchesDraft } from '../shared/evidence';
 import { formatSql, hasSqlComments, parameterNames, selectedStatement, splitSql } from '../shared/sql';
 import { api, download, isFrontendDemoPreview, message, post } from './api';
 import { PLAYGROUND_CONNECTION_ID } from './playground';
@@ -39,7 +34,6 @@ import { PanelResizeHandles, panelTargetIsInteractive, useWorkspacePanels } from
 import { useScriptExecution } from './useScriptExecution';
 import { sqlExamplesFor, type SqlExample } from './sql-examples';
 import { localizeSqlExample } from './sql-examples-locales';
-import { sqlErrorRangeInDraft, type SqlErrorRange } from './sql-error';
 import type { Copy, ExperienceLevel, Locale } from './i18n';
 import type { BusyAction, Connected, Inspector, ResultsView } from './workspace-types';
 import { clampPanelSplitRatio } from './workspace-layout';
@@ -54,16 +48,12 @@ import {
     helpStatementOffset,
     helpStatementSql,
     insertEditorText,
-    resultPanelAriaLabel,
     resultsTabLabel,
-    resultsViewTitle,
-    resultsViews,
     revealEditorRange,
-    safeSelectedStatement,
-    safeStatementCount,
     type FailedQueryError,
 } from './workspace-helpers';
 import { useWorkspaceNotifications, WORKSPACE_TOAST_TIMEOUT_MS } from './useWorkspaceNotifications';
+import { useWorkspaceViewState } from './useWorkspaceViewState';
 
 type WorkspaceProps = {
     connection: Connected;
@@ -531,68 +521,50 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     }, 'save');
     testConnectionActionRef.current = testConnection;
 
-    const sortedHistory = useMemo(() => [...history].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [history]);
-    const savedDocument = documents.find(document => document.id === active.serverId);
-    const saveStatus = draftSaveStatus(active, connection.id, savedDocument, { saving: Boolean(savingDraftIds[active.id]), pending: !documentsLoaded, readError: documentsReadError });
-    const statementCount = safeStatementCount(active.sql);
-    const runSourceSql = run && run.sourceFrom !== undefined && run.sourceTo !== undefined && run.sourceTo <= active.sql.length
-        ? active.sql.slice(run.sourceFrom, run.sourceTo)
-        : safeSelectedStatement(active.sql, active.from, active.to)?.sql;
-    const selectedRunStatement = safeSelectedStatement(active.sql, active.from, active.to);
-    const runErrorContext = run?.error && (run.sql === active.sql || run.sql === selectedRunStatement?.sql)
-        ? { draftId: active.id, draftSql: active.sql, statementSql: run.sql, sourceFrom: run.sourceFrom ?? (run.sql === active.sql ? 0 : selectedRunStatement?.from ?? 0), error: run.error }
-        : undefined;
-    const requestErrorContext = failedQueryError?.draftId === active.id && failedQueryError.draftSql === active.sql ? failedQueryError : undefined;
-    const editorErrorContext = requestErrorContext ?? runErrorContext;
-    const editorErrorRange: SqlErrorRange | undefined = editorErrorContext
-        ? sqlErrorRangeInDraft(active.sql, editorErrorContext.statementSql, editorErrorContext.sourceFrom, editorErrorContext.error)
-        : undefined;
-    const staleResult = Boolean(run && (!runSourceSql || run.connectionId !== connection.id || !matchesDraft(run, runSourceSql, active.parameters)));
-    const saveStatusLabel = saveStatus.state === 'local' ? copy.common.localDraft : ({
-        local: 'Local draft', checking: 'Checking save…', saving: 'Saving…', saved: `Saved r${active.baseRevision}`,
-        changed: 'Unsaved changes', conflict: 'Newer revision available', deleted: 'Saved file in trash', unavailable: 'Save status unavailable',
-    } as const)[saveStatus.state];
-    const requestedResultsView = experience === 'beginner' && view === 'insights' ? 'results' : view;
     const {
-        panelLayout, setPanelLayout, activeFloatingPanel, setActiveFloatingPanel,
-        queryPanelRef, resultsPanelRef, workspaceContentRef,
-        queryMode, resultsMode, queryFloating, resultsFloating,
-        panelStyle, togglePanelFloating, togglePanelMaximized,
-        startPanelDrag, startPanelResize, canSplitPanels,
-        workspaceLayoutStyle, startPanelSplit,
-    } = useWorkspacePanels({
-        compactViewport,
-        queryCollapsed,
-        setQueryCollapsed,
-        resultsCollapsed,
-        setResultsCollapsed,
-        hasOutput: Boolean(run || requestedResultsView === 'sqlmap'),
+        sortedHistory,
+        savedDocument,
+        saveStatus,
+        saveStatusLabel,
+        statementCount,
+        editorErrorContext,
+        editorErrorRange,
+        staleResult,
+        requestedResultsView,
+        sqlMapStatement,
+        queryTreeAvailable,
+        queryTreeUnavailableReason,
+        sqlMapParseStatement,
+        resultTabs,
+        visibleResultsView,
+        retainedSnapshot,
+        explainPlan,
+        explainIndexAnalysis,
+        pipelineResult,
+        analyzeEvidence,
+        resultsTitle,
+        resultsEyebrow,
+        resultsPanelLabel,
+        snapshotChart,
+    } = useWorkspaceViewState({
+        active,
+        connection,
+        documents,
+        documentsLoaded,
+        documentsReadError,
+        savingDraftIds,
+        history,
+        run,
+        failedQueryError,
+        copy,
+        experience,
+        view,
+        trusted,
+        unsupportedParameters,
+        nativeParseSnapshot,
+        snapshot,
     });
-    const sqlMapStatement = safeSelectedStatement(active.sql, active.from, active.from);
-    const queryTreeCapability = connection.manifest?.queryTree ?? connection.manifest?.explain;
-    const queryTreeAvailable = trusted && !unsupportedParameters && queryTreeCapability?.available !== false;
-    const queryTreeUnavailableReason = !trusted ? copy.common.runActionTrustRequired
-        : unsupportedParameters ? connection.manifest?.parameters.reason ?? copy.common.runActionRemoveParameters
-            : queryTreeCapability?.reason;
-    const sqlMapParseStatement = sqlMapStatement && nativeParseSnapshot?.statements.find(statement =>
-        statement.from === sqlMapStatement.from && statement.to === sqlMapStatement.to && active.sql.slice(statement.from, statement.to) === statement.sql);
-    const resultTabs = resultsViews(run, experience);
-    const visibleResultsView = resultTabs.includes(requestedResultsView) ? requestedResultsView : 'results';
-    const retainedSnapshot = run && snapshot?.runId === run.id ? snapshot : undefined;
-    const explainPlanOutput = run?.kind === 'plan' ? retainedSnapshot?.rows[0]?.[0] : undefined;
-    const explainPlan = useMemo(() => parseExplainPlan(explainPlanOutput), [explainPlanOutput]);
-    const explainIndexRows = run?.kind === 'explain' ? retainedSnapshot?.rows : undefined;
-    const explainIndexAnalysis = useMemo(() => explainIndexRows ? parseExplainIndexAnalysis(explainIndexRows) : undefined, [explainIndexRows]);
-    const pipelineOutputRows = run?.kind === 'pipeline' ? retainedSnapshot?.rows : undefined;
-    const pipelineResult = useMemo(() => pipelineOutputRows
-        ? parsePipelineResult(pipelineOutputRows.map(row => row[0]).filter((value): value is string => typeof value === 'string'))
-        : undefined, [pipelineOutputRows]);
-    const analyzeOutput = run?.kind === 'analyze' ? retainedSnapshot?.rows.map(row => row[0]).filter((value): value is string => typeof value === 'string').join('\n') : undefined;
-    const analyzeEvidence = useMemo(() => parseExplainAnalyze(analyzeOutput), [analyzeOutput]);
-    const resultsTitle = resultsViewTitle(visibleResultsView, copy.common);
-    const resultsEyebrow = visibleResultsView === 'sqlmap' ? copy.common.queryVisualization : copy.common.workspaceOutput;
-    const resultsPanelLabel = resultPanelAriaLabel(visibleResultsView, copy.common);
-    const snapshotChart = retainedSnapshot ? recommendChart(retainedSnapshot.columns, retainedSnapshot.rows) : undefined;
+
     const openDocument = (document: QueryDocument) => {
         addDraft(draftFromDocument(document));
     };

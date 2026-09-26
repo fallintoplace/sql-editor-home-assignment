@@ -12,6 +12,7 @@ type TabScrollState = {
 
 type WorkspaceDocumentTabsProps = {
     workspace: WorkspaceState;
+    experience: 'beginner' | 'expert';
     activeId: string;
     connectionId: string;
     documents: QueryDocument[];
@@ -35,6 +36,7 @@ type WorkspaceDocumentTabsProps = {
 
 export function WorkspaceDocumentTabs({
     workspace,
+    experience,
     activeId,
     connectionId,
     documents,
@@ -55,15 +57,17 @@ export function WorkspaceDocumentTabs({
     onClose,
     actions,
 }: WorkspaceDocumentTabsProps) {
-    return <div className={cx('document-tabs', tabScrollState.overflow && 'has-tab-overflow')}>
+    const compactSingleTab = experience === 'beginner' && workspace.tabs.length === 1;
+    return <div className={cx('document-tabs', tabScrollState.overflow && !compactSingleTab && 'has-tab-overflow', compactSingleTab && 'is-compact-single')}>
         <div
             ref={tabScrollerRef}
             className="document-tabs-scroll"
             role="tablist"
             aria-label="SQL documents"
+            aria-hidden={compactSingleTab || undefined}
             onScroll={updateTabScrollState}
         >
-            {workspace.tabs.map((draft, index) => <div
+            {!compactSingleTab && workspace.tabs.map((draft, index) => <div
                 key={draft.id}
                 id={`document-tab-${draft.id}`}
                 className={cx('document-tab', draft.id === activeId && 'is-active')}

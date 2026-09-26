@@ -58,11 +58,12 @@ export type FailedQueryError = {
 };
 
 export function resultsViews(run: Run | undefined, experience: ExperienceLevel): readonly ResultsView[] {
+    if (experience === 'beginner') return ['results'];
     if (run?.kind === 'explain') return ['results', 'indexes'];
     if (run?.kind === 'plan') return ['results', 'plan'];
     if (run?.kind === 'pipeline') return ['results', 'pipeline'];
     if (run?.kind === 'analyze') return ['results', 'runtime'];
-    const tabs: ResultsView[] = experience === 'beginner' ? ['results', 'chart', 'sqlmap'] : ['results', 'chart', 'sqlmap', 'insights'];
+    const tabs: ResultsView[] = ['results', 'chart', 'sqlmap', 'insights'];
     if (run?.kind === 'query' && recommendGeo(run.columns)) tabs.splice(2, 0, 'map');
     return tabs;
 }

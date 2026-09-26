@@ -33,6 +33,11 @@ export async function trust(page: Page) {
     await expect(runStatementButton(page)).toBeEnabled();
 }
 
+export async function useAdvancedMode(page: Page) {
+    await page.getByText('Advanced', { exact: true }).click();
+    await expect(page.locator('.workspace-root')).toHaveClass(/is-expert/);
+}
+
 export async function trustCurrentConnection(page: Page) {
     const trigger = page.locator('.connection-trigger');
     await expect(trigger).toBeVisible();

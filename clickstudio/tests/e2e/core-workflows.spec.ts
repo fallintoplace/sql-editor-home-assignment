@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { openBlankSql, openWorkspacePanel, runIdentity, runScript, runStatementButton, trust, trustCurrentConnection } from './helpers.js';
+import { openBlankSql, openWorkspacePanel, runIdentity, runScript, runStatementButton, trust, trustCurrentConnection, useAdvancedMode } from './helpers.js';
 
 declare global {
     interface Window {
@@ -73,6 +73,7 @@ test('Run evidence stays with its draft through tab and mode switches', async ({
         if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/runs') runRequests++;
     });
     await trust(page);
+    await useAdvancedMode(page);
     const results = await runQuery(page);
     const firstQueryId = await page.locator('.execution-bar code').innerText();
 
@@ -432,6 +433,7 @@ test('Refreshing a pipeline selects the first operator in the new graph', async 
         } });
     });
     await trust(page);
+    await useAdvancedMode(page);
     const results = await runQuery(page);
     await results.getByRole('tab', { name: 'Insights', exact: true }).click();
     const section = page.getByRole('region', { name: 'Run and query plan comparison' });
@@ -481,6 +483,7 @@ test('SQL and parameter edits label old results without changing their run evide
         }
     });
     await trust(page);
+    await useAdvancedMode(page);
     const results = await runQuery(page);
     const queryId = await page.locator('.execution-bar code').innerText();
 
@@ -512,6 +515,7 @@ test('Charts keep NULL missing and plot nullable negative values from zero', asy
         } });
     });
     await trust(page);
+    await useAdvancedMode(page);
     const results = await runQuery(page);
     await results.getByRole('tab', { name: 'Chart', exact: true }).click();
     await expect(results.locator('.chart-canvas svg[role="img"]')).toBeVisible();
@@ -537,6 +541,7 @@ test('Charts sample the full retained range and report the sampled row count', a
         } });
     });
     await trust(page);
+    await useAdvancedMode(page);
     const results = await runQuery(page);
     await results.getByRole('tab', { name: 'Chart', exact: true }).click();
     await expect(results.locator('.chart-bar')).toHaveCount(240);
@@ -627,6 +632,7 @@ test('A delayed chart snapshot cannot update the draft after selecting another s
     });
     try {
         await trust(page);
+        await useAdvancedMode(page);
         await replaceSql(page, 'SELECT 1; SELECT 2;');
         await runScript(page);
         const results = page.getByRole('region', { name: 'Query results', exact: true });
@@ -676,11 +682,11 @@ test('A late AI context preview cannot attach to an edited question', async ({ p
         await route.fulfill({ status: 201, json: { id: 'old-context', summary: ['Context for the old question'] } });
     });
     await trust(page);
-    await page.getByText('Compact', { exact: true }).click();
+    await useAdvancedMode(page);
     await page.getByTestId('open-ai').click();
-    const question = page.getByRole('textbox', { name: 'Describe your data question', exact: true });
+    const question = page.getByRole('textbox', { name: 'YOUR QUESTION OR FOCUS', exact: true });
     await question.fill('Show the old question');
-    await page.getByRole('button', { name: 'Review context', exact: true }).click();
+    await page.getByRole('button', { name: 'Preview context', exact: true }).click();
     await received;
     await question.fill('Show a different question');
     release();

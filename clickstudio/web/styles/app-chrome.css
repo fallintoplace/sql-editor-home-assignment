@@ -78,7 +78,10 @@
     .rail-icon-button:hover .rail-tooltip { opacity: 1; transform: translate(0, -50%); }
     .workspace-main { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; }
     .document-tabs { display: flex; min-width: 0; min-height: 40px; flex: none; align-items: stretch; overflow: hidden; padding: 4px 10px 0; border-bottom: 1px solid var(--line); background: var(--surface-glass); }
+    .document-tabs.is-compact-single { min-height: 34px; padding-top: 1px; }
     .document-tabs-scroll { display: flex; min-width: 0; flex: 1 1 auto; align-items: stretch; gap: 2px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain; scrollbar-width: none; }
+    .document-tabs.is-compact-single .document-tabs-scroll { display: none; }
+    .document-tabs.is-compact-single .document-tab-actions { margin-left: auto; }
     .document-tabs-scroll::-webkit-scrollbar { display: none; }
     .document-tab { position: relative; display: flex; width: max-content; min-width: 160px; max-width: 340px; flex: 0 0 auto; align-items: center; gap: 7px; padding: 0 9px; border: 1px solid transparent; border-bottom: 0; border-radius: 7px 7px 0 0; color: var(--muted); font-size: 10px; cursor: pointer; transition: .18s ease; }
     .document-tab-actions { position: relative; z-index: 1; display: flex; flex: none; align-items: stretch; gap: 2px; padding-left: 5px; background: color-mix(in srgb, var(--page-raised) 94%, transparent); }

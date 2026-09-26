@@ -153,6 +153,7 @@
     .toolbar-small { min-height: 25px; padding: 0 5px; font-size: 7px; }
     .revision-history-trigger span { display: none; }
     .editor-workspace-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(180px, 1fr) auto; overflow: auto; }
+    .workspace-root.is-beginner .editor-workspace-layout { grid-template-rows: minmax(0, 1fr); overflow: hidden; }
     .editor-main-column { min-height: 180px; }
     .editor-control-rail { display: grid; grid-template-columns: 84px minmax(0, 1fr); align-items: start; overflow: visible; border-top: 1px solid var(--line); border-left: 0; }
     .editor-rail-status { align-self: start; padding: 4px 2px; border-bottom: 0; }

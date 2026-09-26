@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { jsonRecord, openWorkspacePanel, runIdentity, trust, trustCurrentConnection } from './helpers.js';
+import { jsonRecord, openBlankSql, openWorkspacePanel, runIdentity, trust, trustCurrentConnection, useAdvancedMode } from './helpers.js';
 
 const generatedSql = 'SELECT day, events FROM demo.events ORDER BY day';
 
@@ -7,7 +7,17 @@ async function beginInCompactMode(page: Page) {
     await page.addInitScript(() => localStorage.setItem('clickstudio:experience', 'beginner'));
     await page.goto('/');
     await expect(page.getByRole('textbox', { name: 'SQL editor', exact: true })).toBeVisible();
-    await expect(page.getByTestId('open-ai')).toBeVisible();
+    await expect(page.getByTestId('open-ai')).toHaveCount(0);
+    await expect(page.getByTestId('save-query')).toHaveCount(0);
+    await expect(page.locator('.draft-status')).toHaveCount(0);
+    await expect(page.locator('.restore-sql-trigger')).toHaveCount(0);
+    await expect(page.locator('.revision-history-trigger')).toHaveCount(0);
+    await expect(page.locator('.editor-control-rail')).toHaveCount(0);
+    await expect(page.locator('.editor-heading-tools')).toHaveCount(0);
+    await expect(page.getByTestId('run-statement')).toBeVisible();
+    await expect(page.getByTestId('new-sql')).toBeVisible();
+    await expect(page.locator('.document-tabs.is-compact-single')).toBeVisible();
+    await expect(page.getByRole('tablist', { name: 'SQL documents', exact: true }).getByRole('tab')).toHaveCount(0);
     await expect(page.getByRole('textbox', { name: 'Describe your data question', exact: true })).toHaveCount(0);
     await trustCurrentConnection(page);
 }
@@ -24,7 +34,8 @@ test('Compact opens on SQL and can run a query without opening AI', async ({ pag
     const editor = page.getByRole('textbox', { name: 'SQL editor', exact: true });
     await expect(editor).toBeVisible();
     await expect(editor).toContainText('SELECT');
-    await expect(page.getByTestId('open-ai')).toBeVisible();
+    await expect(page.getByTestId('open-ai')).toHaveCount(0);
+    await expect(page.locator('.editor-control-rail')).toHaveCount(0);
     await expect(page.getByRole('textbox', { name: 'Describe your data question', exact: true })).toHaveCount(0);
 
     const runQuery = page.getByTestId('run-statement');
@@ -35,19 +46,43 @@ test('Compact opens on SQL and can run a query without opening AI', async ({ pag
     await runQuery.click();
     const results = page.getByRole('region', { name: 'Query results', exact: true });
     await expect(results.getByRole('table', { name: 'Retained query rows', exact: true })).toBeVisible();
+    await expect(results.locator('.results-tabs')).toHaveCount(0);
     await expect(page.getByRole('status').filter({ hasText: 'Sample results were generated. Query SQL was not sent to ClickHouse.' })).toBeVisible();
     expect(contextRequests).toBe(0);
     await expect(results.getByRole('tab', { name: 'Insights', exact: true })).toHaveCount(0);
 
     const queryId = await page.locator('.execution-bar code').innerText();
-    await page.getByText('Advanced', { exact: true }).click();
+    await useAdvancedMode(page);
     await expect(page.locator('.cm-content')).toContainText('SELECT');
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
+    await expect(page.getByTestId('open-ai')).toBeVisible();
+    await expect(page.getByTestId('save-query')).toBeVisible();
+    await expect(page.locator('.editor-control-rail')).toBeVisible();
+    await expect(results.locator('.results-tabs')).toBeVisible();
+    await expect(page.getByRole('tablist', { name: 'SQL documents', exact: true }).getByRole('tab')).toHaveCount(1);
     await page.getByText('Compact', { exact: true }).click();
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
+    await expect(results.getByRole('table', { name: 'Retained query rows', exact: true })).toBeVisible();
+    await expect(results.locator('.results-tabs')).toHaveCount(0);
+    await expect(page.getByTestId('open-ai')).toHaveCount(0);
 });
 
-test('Compact AI proposal becomes the same query and run in Advanced mode', async ({ page }) => {
+test('Compact hides a single document tab and keeps tabs for multiple queries', async ({ page }) => {
+    await beginInCompactMode(page);
+    await expect(page.locator('.document-tabs.is-compact-single')).toBeVisible();
+    await openBlankSql(page);
+    const tabs = page.getByRole('tablist', { name: 'SQL documents', exact: true }).getByRole('tab');
+    await expect(page.locator('.document-tabs.is-compact-single')).toHaveCount(0);
+    await expect(tabs).toHaveCount(2);
+    await expect(page.getByTestId('new-sql')).toBeVisible();
+    await expect(page.getByTestId('save-query')).toHaveCount(0);
+    await tabs.last().getByRole('button', { name: /^Close / }).click();
+    await expect(page.locator('.document-tabs.is-compact-single')).toBeVisible();
+    await expect(page.getByRole('tablist', { name: 'SQL documents', exact: true }).getByRole('tab')).toHaveCount(0);
+    await expect(page.locator('.restore-sql-trigger')).toHaveCount(0);
+});
+
+test('Switching to Advanced keeps the same AI question, query and run evidence', async ({ page }) => {
     const contexts: Record<string, unknown>[] = [];
     const proposals: Record<string, unknown>[] = [];
     let proposalBaseSql = '';
@@ -79,12 +114,13 @@ test('Compact AI proposal becomes the same query and run in Advanced mode', asyn
     });
 
     await beginInCompactMode(page);
-    await page.getByRole('button', { name: 'Save', exact: true }).click();
+    await useAdvancedMode(page);
+    await page.getByTestId('save-query').click();
     await expect(page.getByRole('status').filter({ hasText: 'revision 1' })).toBeVisible();
     await page.getByTestId('open-ai').click();
-    const prompt = page.getByRole('textbox', { name: 'Describe your data question', exact: true });
+    const prompt = page.getByRole('textbox', { name: 'YOUR QUESTION OR FOCUS', exact: true });
     await prompt.fill('Show event counts by day');
-    await page.getByRole('button', { name: 'Review context', exact: true }).click();
+    await page.getByRole('button', { name: 'Preview context', exact: true }).click();
     await expect(page.getByText(/Schema: demo\.events/)).toBeVisible();
     expect(contexts).toHaveLength(1);
     expect(contexts[0]).toMatchObject({ action: 'generate', question: 'Show event counts by day', connectionId: 'demo' });
@@ -93,9 +129,9 @@ test('Compact AI proposal becomes the same query and run in Advanced mode', asyn
     await page.getByRole('button', { name: 'Ask AI for a proposal', exact: true }).click();
     await expect(page.getByText('Show the sample event counts by day.', { exact: true })).toBeVisible();
     expect(proposals).toEqual([{ contextId: 'test-context', consent: true }]);
-    await page.getByRole('button', { name: 'Use this query', exact: true }).click();
-    await expect(page.getByText('Added to your SQL draft', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: 'Run this query', exact: true }).click();
+    await page.getByRole('button', { name: 'Apply to editor', exact: true }).click();
+    await expect(page.locator('.cm-content')).toContainText(generatedSql);
+    await page.getByTestId('run-statement').click();
 
     const results = page.getByRole('region', { name: 'Query results', exact: true });
     await expect(results.locator('[data-run-status="succeeded"]')).toBeVisible();
@@ -103,8 +139,7 @@ test('Compact AI proposal becomes the same query and run in Advanced mode', asyn
     const queryId = await page.locator('.execution-bar code').innerText();
     await results.getByRole('tab', { name: 'Chart', exact: true }).click();
     await expect(results.locator('.chart-canvas svg[role="img"]')).toBeVisible();
-    await expect(results.getByRole('tab', { name: 'Insights', exact: true })).toHaveCount(0);
-    await page.getByText('Advanced', { exact: true }).click();
+    await expect(results.getByRole('tab', { name: 'Insights', exact: true })).toBeVisible();
     await results.getByRole('tab', { name: 'Insights', exact: true }).click();
     const loadDetails = results.getByRole('button', { name: 'Load execution details', exact: true });
     if (await loadDetails.count()) await loadDetails.click();
@@ -113,9 +148,13 @@ test('Compact AI proposal becomes the same query and run in Advanced mode', asyn
     await expect(page.locator('.cm-content')).toContainText(generatedSql);
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
     await page.getByText('Compact', { exact: true }).click();
-    await page.getByTestId('open-ai').click();
-    await expect(prompt).toHaveValue('Show event counts by day');
+    await expect(page.getByTestId('open-ai')).toHaveCount(0);
+    await expect(results.locator('.results-tabs')).toHaveCount(0);
+    await expect(results.getByRole('table', { name: 'Retained query rows', exact: true })).toBeVisible();
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
+    await useAdvancedMode(page);
+    await expect(prompt).toHaveValue('Show event counts by day');
+    await expect(results.getByRole('tab', { name: 'Insights', exact: true })).toHaveAttribute('aria-selected', 'true');
 });
 
 test('Advanced editor, insights, pipeline and AI copilot stay read-only until a user runs SQL', async ({ page }) => {
@@ -140,6 +179,7 @@ test('Advanced editor, insights, pipeline and AI copilot stay read-only until a 
     });
 
     await trust(page);
+    await useAdvancedMode(page);
     const editor = page.getByRole('textbox', { name: 'SQL editor', exact: true });
     await expect(editor).toBeVisible();
     const startedRun = page.waitForResponse(response =>
@@ -175,7 +215,7 @@ test('Advanced editor, insights, pipeline and AI copilot stay read-only until a 
     await expect(page.locator('.execution-bar code')).toHaveText(queryId);
 });
 
-test('Compact voice dictation fills the question without sending it automatically', async ({ page }) => {
+test('Advanced voice dictation fills the question without sending it automatically', async ({ page }) => {
     await page.addInitScript(() => {
         class MockRecognition {
             continuous = false;
@@ -194,9 +234,10 @@ test('Compact voice dictation fills the question without sending it automaticall
         if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/assistant/context') contextRequests++;
     });
 
-    await beginInCompactMode(page);
+    await trust(page);
+    await useAdvancedMode(page);
     await page.getByTestId('open-ai').click();
-    const prompt = page.getByRole('textbox', { name: 'Describe your data question', exact: true });
+    const prompt = page.getByRole('textbox', { name: 'YOUR QUESTION OR FOCUS', exact: true });
     await page.getByRole('button', { name: 'Dictate question', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toBeVisible();
     await page.evaluate(() => {

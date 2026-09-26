@@ -710,6 +710,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             <main className="workspace-main">
                 <WorkspaceDocumentTabs
                     workspace={workspace}
+                    experience={experience}
                     activeId={active.id}
                     connectionId={connection.id}
                     documents={documents}
@@ -729,7 +730,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     onActivate={draftId => setWorkspace(current => ({ ...current, activeId: draftId }))}
                     onClose={draftId => setWorkspace(current => closeDraft(current, draftId))}
                     actions={<>
-                    <button className="new-tab-button new-tab-labeled" data-testid="new-sql" type="button" aria-label={copy.common.newSql} title={copy.common.newSql} aria-haspopup="dialog" aria-expanded={helpPanelOpen} aria-controls="workspace-help-panel" onClick={event => openExamples(event.currentTarget)}><Icon name="plus"/><span>{copy.common.newSql}</span></button>
+                    <button className={cx('new-tab-button', experience === 'expert' && 'new-tab-labeled')} data-testid="new-sql" type="button" aria-label={copy.common.newSql} title={copy.common.newSql} aria-haspopup="dialog" aria-expanded={helpPanelOpen} aria-controls="workspace-help-panel" onClick={event => openExamples(event.currentTarget)}><Icon name="plus"/>{experience === 'expert' && <span>{copy.common.newSql}</span>}</button>
                         <WorkspaceHelpPanel
                             open={helpPanelOpen}
                             section={helpPanelSection}
@@ -792,14 +793,14 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                                 return true;
                             }}
                         />
-                        {!!workspace.closedTabs?.length && <RestoreSqlMenu closedTabs={workspace.closedTabs} copy={copy.common} onRestore={draftId => {
+                        {experience === 'expert' && !!workspace.closedTabs?.length && <RestoreSqlMenu closedTabs={workspace.closedTabs} copy={copy.common} onRestore={draftId => {
                             if (workspaceRef.current.tabs.length >= MAX_TABS) { setError(`Close a tab before restoring one. This workspace supports ${MAX_TABS} open drafts.`); return false; }
                             setWorkspace(current => reopenDraft(current, draftId));
                             window.requestAnimationFrame(() => editor.current?.focus());
                             return true;
                         }}/>}
-                        <span className="draft-status" data-save-state={saveStatus.state} title={`${saveStatus.label}. ${saveStatus.detail}`}><span className={cx('status-light', saveStatus.state === 'saved' ? 'is-trusted' : ['changed', 'conflict', 'deleted', 'unavailable'].includes(saveStatus.state) ? 'is-warning' : '')}/>{saveStatusLabel}</span>
-                        {active.serverId && <Button variant="ghost" className="revision-history-trigger" aria-label={`Version history for ${active.name}`} aria-pressed={inspector === 'revisions'} title="View saved versions" onClick={() => showInspector('revisions')}><Icon name="history"/><span>Versions</span></Button>}
+                        {experience === 'expert' && <span className="draft-status" data-save-state={saveStatus.state} title={`${saveStatus.label}. ${saveStatus.detail}`}><span className={cx('status-light', saveStatus.state === 'saved' ? 'is-trusted' : ['changed', 'conflict', 'deleted', 'unavailable'].includes(saveStatus.state) ? 'is-warning' : '')}/>{saveStatusLabel}</span>}
+                        {experience === 'expert' && active.serverId && <Button variant="ghost" className="revision-history-trigger" aria-label={`Version history for ${active.name}`} aria-pressed={inspector === 'revisions'} title="View saved versions" onClick={() => showInspector('revisions')}><Icon name="history"/><span>Versions</span></Button>}
 
                     </>}
                 />
@@ -807,7 +808,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     ref={panels.workspaceContentRef}
                     id="sql-document-panel"
                     role="tabpanel"
-                    aria-labelledby={`document-tab-${active.id}`}
+                    aria-labelledby={experience === 'beginner' && workspace.tabs.length === 1 ? 'active-query-title' : `document-tab-${active.id}`}
                     tabIndex={0}
                     style={panels.workspaceLayoutStyle}
                     className={cx(

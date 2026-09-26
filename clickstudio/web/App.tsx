@@ -157,17 +157,19 @@ function App() {
                         <RadioGroup.Item value="expert" className={`navbar-mode-option is-expert ${experience === 'expert' ? 'is-active' : ''}`} label={copy.app.expert}/>
                     </RadioGroup>
                 </div>
-                <div className="topbar-divider topbar-divider-short"/>
-                <div className="experience-switch parser-switch">
-                    <span className="mode-caption">{copy.common.parserMode}</span>
-                    <RadioGroup className="navbar-mode-control" value={parserMode} onValueChange={value => {
-                        if (value === 'wasm' || value === 'basic') setParserMode(value);
-                    }} aria-label={copy.common.parserMode} inline orientation="horizontal" dir="end">
-                        <RadioGroup.Item value="wasm" className={`navbar-mode-option parser-mode-option is-wasm ${parserMode === 'wasm' ? 'is-active' : ''}`} label="WASM"/>
-                        <RadioGroup.Item value="basic" className={`navbar-mode-option parser-mode-option is-basic ${parserMode === 'basic' ? 'is-active' : ''}`} label="CodeMirror"/>
-                    </RadioGroup>
-                </div>
-                <div className="topbar-divider topbar-divider-short"/>
+                {experience === 'expert' && <>
+                    <div className="topbar-divider topbar-divider-short"/>
+                    <div className="experience-switch parser-switch">
+                        <span className="mode-caption">{copy.common.parserMode}</span>
+                        <RadioGroup className="navbar-mode-control" value={parserMode} onValueChange={value => {
+                            if (value === 'wasm' || value === 'basic') setParserMode(value);
+                        }} aria-label={copy.common.parserMode} inline orientation="horizontal" dir="end">
+                            <RadioGroup.Item value="wasm" className={`navbar-mode-option parser-mode-option is-wasm ${parserMode === 'wasm' ? 'is-active' : ''}`} label="WASM"/>
+                            <RadioGroup.Item value="basic" className={`navbar-mode-option parser-mode-option is-basic ${parserMode === 'basic' ? 'is-active' : ''}`} label="CodeMirror"/>
+                        </RadioGroup>
+                    </div>
+                    <div className="topbar-divider topbar-divider-short"/>
+                </>}
                 <div className="topbar-preferences">
                     <SelectControl label={copy.app.language} value={locale} options={localeOptions} onChange={setLocale}/>
                     <div className="accent-mode-control" role="group" aria-label={copy.app.accent}>

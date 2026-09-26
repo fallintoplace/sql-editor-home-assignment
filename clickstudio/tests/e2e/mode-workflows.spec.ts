@@ -14,6 +14,7 @@ async function beginInCompactMode(page: Page) {
     await expect(page.locator('.revision-history-trigger')).toHaveCount(0);
     await expect(page.locator('.editor-control-rail')).toHaveCount(0);
     await expect(page.locator('.editor-heading-tools')).toHaveCount(0);
+    await expect(page.locator('.parser-switch')).toHaveCount(0);
     await expect(page.getByTestId('run-statement')).toBeVisible();
     await expect(page.getByTestId('new-sql')).toBeVisible();
     await expect(page.locator('.document-tabs.is-compact-single')).toBeVisible();
@@ -64,6 +65,7 @@ test('Compact opens on SQL and can run a query without opening AI', async ({ pag
     await expect(page.getByTestId('open-ai')).toBeVisible();
     await expect(page.getByTestId('save-query')).toBeVisible();
     await expect(page.locator('.editor-control-rail')).toBeVisible();
+    await expect(page.locator('.parser-switch')).toBeVisible();
     await expect(results.locator('.results-tabs')).toBeVisible();
     await expect(page.getByRole('tablist', { name: 'SQL documents', exact: true }).getByRole('tab')).toHaveCount(1);
     await page.getByText('Compact', { exact: true }).click();
@@ -71,6 +73,7 @@ test('Compact opens on SQL and can run a query without opening AI', async ({ pag
     await expect(results.getByRole('table', { name: 'Retained query rows', exact: true })).toBeVisible();
     await expect(results.locator('.results-tabs')).toHaveCount(0);
     await expect(page.getByTestId('open-ai')).toHaveCount(0);
+    await expect(page.locator('.parser-switch')).toHaveCount(0);
 });
 
 test('Compact shows a single document tab and keeps tabs for multiple queries', async ({ page }) => {

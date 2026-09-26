@@ -12,7 +12,10 @@ test('SQL examples open in a new tab without changing or running the current que
     const originalTab = tabs.first();
     const originalName = await originalTab.getAttribute('aria-label');
     const originalSql = await page.locator('.cm-content').innerText();
-    await page.getByRole('button', { name: 'Collapse SQL query', exact: true }).click();
+    const collapseButton = page.getByRole('button', { name: 'Collapse SQL query', exact: true });
+    const collapseButtonRight = await collapseButton.evaluate(element => element.getBoundingClientRect().right);
+    expect(collapseButtonRight).toBeLessThanOrEqual(page.viewportSize()!.width);
+    await collapseButton.click();
     await expect(page.locator('#sql-editor-content')).toBeHidden();
 
     await page.getByTestId('new-sql').click();

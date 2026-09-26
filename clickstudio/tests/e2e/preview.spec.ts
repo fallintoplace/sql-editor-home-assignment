@@ -153,7 +153,7 @@ test('Static preview includes materialized views and storage activity in sample 
     await expect(storage).toContainText('SAMPLE DATA');
 });
 
-test('Geo Help demo runs native Point values and renders four cities', async ({ page }) => {
+test('Geo Help demo runs native Point values and renders twenty cities', async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: 'Help', exact: true }).click();
 
@@ -165,7 +165,7 @@ test('Geo Help demo runs native Point values and renders four cities', async ({ 
     await expect(page.getByRole('tab', { name: 'Native Point cities.sql', exact: true })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('.execution-bar')).toHaveAttribute('data-run-status', 'succeeded', { timeout: 30_000 });
     await expect(page.locator('.geo-map')).toBeVisible({ timeout: 30_000 });
-    await expect(page.locator('.geo-feature.geo-point')).toHaveCount(4);
-    await expect(page.locator('.geo-map-caption')).toContainText('4 valid features');
+    await expect(page.locator('.geo-feature.geo-point')).toHaveCount(20);
+    await expect(page.locator('.geo-map-caption')).toContainText('20 valid features');
     await expect(page.getByText('No returned rows contain valid longitude/latitude geometry for this selection.', { exact: true })).toHaveCount(0);
 });

@@ -106,7 +106,7 @@ export function WorkspaceQueryPanel({
                 if (queryFloating && !panelTargetIsInteractive(event.target)) togglePanelMaximized('query');
             }}
         >
-            <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label id="active-query-title" className="document-name"><span className="eyebrow">{copy.common.query}</span><input aria-label="SQL document name" value={active.name} onChange={event => actions.onPatch({ name: event.target.value })}/></label></div>
+            <div className="editor-file-heading"><span className="file-type-icon">SQL</span><label className="document-name"><span className="eyebrow">{copy.common.query}</span><input aria-label="SQL document name" value={active.name} onChange={event => actions.onPatch({ name: event.target.value })}/></label></div>
             {experience === 'expert' && <div className="editor-heading-tools">
                 <Button variant="ghost" className="sql-map-button" aria-label={copy.common.visualizeSqlStructure} aria-pressed={view === 'sqlmap'} title={copy.common.visualizeSqlStructure} onClick={actions.onToggleSqlMap}><Icon name="pipeline"/>{copy.common.sqlMap}</Button>
                 <Button variant="ghost" className="sql-ai-button" data-testid="open-ai" aria-label={copy.common.askAi} aria-pressed={inspector === 'assistant'} onClick={actions.onOpenAssistant}><Icon name="assistant"/>{copy.common.askAi}</Button>

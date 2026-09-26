@@ -58,16 +58,15 @@ export function WorkspaceDocumentTabs({
     actions,
 }: WorkspaceDocumentTabsProps) {
     const compactSingleTab = experience === 'beginner' && workspace.tabs.length === 1;
-    return <div className={cx('document-tabs', tabScrollState.overflow && !compactSingleTab && 'has-tab-overflow', compactSingleTab && 'is-compact-single')}>
+    return <div className={cx('document-tabs', tabScrollState.overflow && 'has-tab-overflow', compactSingleTab && 'is-compact-single')}>
         <div
             ref={tabScrollerRef}
             className="document-tabs-scroll"
             role="tablist"
             aria-label="SQL documents"
-            aria-hidden={compactSingleTab || undefined}
             onScroll={updateTabScrollState}
         >
-            {!compactSingleTab && workspace.tabs.map((draft, index) => <div
+            {workspace.tabs.map((draft, index) => <div
                 key={draft.id}
                 id={`document-tab-${draft.id}`}
                 className={cx('document-tab', draft.id === activeId && 'is-active')}
@@ -138,10 +137,10 @@ export function WorkspaceDocumentTabs({
                     const unsaved = ['local', 'changed', 'conflict', 'deleted', 'unavailable'].includes(status.state);
                     return unsaved ? <span className="tab-unsaved" title={status.label} aria-hidden="true"/> : null;
                 })()}
-                <button type="button" aria-label={`Close ${draft.name}`} onClick={event => {
+                {!compactSingleTab && <button type="button" aria-label={`Close ${draft.name}`} onClick={event => {
                     event.stopPropagation();
                     onClose(draft.id);
-                }}>×</button>
+                }}>×</button>}
             </div>)}
         </div>
         <div className="document-tab-actions">

@@ -808,7 +808,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     ref={panels.workspaceContentRef}
                     id="sql-document-panel"
                     role="tabpanel"
-                    aria-labelledby={experience === 'beginner' && workspace.tabs.length === 1 ? 'active-query-title' : `document-tab-${active.id}`}
+                    aria-labelledby={`document-tab-${active.id}`}
                     tabIndex={0}
                     style={panels.workspaceLayoutStyle}
                     className={cx(

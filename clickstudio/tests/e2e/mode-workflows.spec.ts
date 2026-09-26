@@ -17,7 +17,13 @@ async function beginInCompactMode(page: Page) {
     await expect(page.getByTestId('run-statement')).toBeVisible();
     await expect(page.getByTestId('new-sql')).toBeVisible();
     await expect(page.locator('.document-tabs.is-compact-single')).toBeVisible();
-    await expect(page.getByRole('tablist', { name: 'SQL documents', exact: true }).getByRole('tab')).toHaveCount(0);
+    const tab = page.getByRole('tablist', { name: 'SQL documents', exact: true }).getByRole('tab');
+    const documentName = await page.getByRole('textbox', { name: 'SQL document name', exact: true }).inputValue();
+    await expect(tab).toHaveCount(1);
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+    await expect(tab).toHaveAttribute('aria-label', documentName);
+    await expect(tab.getByRole('button', { name: /^Close / })).toHaveCount(0);
+    await expect(page.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', /^document-tab-/);
     await expect(page.getByRole('textbox', { name: 'Describe your data question', exact: true })).toHaveCount(0);
     await trustCurrentConnection(page);
 }
@@ -67,7 +73,7 @@ test('Compact opens on SQL and can run a query without opening AI', async ({ pag
     await expect(page.getByTestId('open-ai')).toHaveCount(0);
 });
 
-test('Compact hides a single document tab and keeps tabs for multiple queries', async ({ page }) => {
+test('Compact shows a single document tab and keeps tabs for multiple queries', async ({ page }) => {
     await beginInCompactMode(page);
     await expect(page.locator('.document-tabs.is-compact-single')).toBeVisible();
     await openBlankSql(page);
@@ -78,7 +84,9 @@ test('Compact hides a single document tab and keeps tabs for multiple queries', 
     await expect(page.getByTestId('save-query')).toHaveCount(0);
     await tabs.last().getByRole('button', { name: /^Close / }).click();
     await expect(page.locator('.document-tabs.is-compact-single')).toBeVisible();
-    await expect(page.getByRole('tablist', { name: 'SQL documents', exact: true }).getByRole('tab')).toHaveCount(0);
+    await expect(tabs).toHaveCount(1);
+    await expect(tabs).toHaveAttribute('aria-selected', 'true');
+    await expect(tabs.getByRole('button', { name: /^Close / })).toHaveCount(0);
     await expect(page.locator('.restore-sql-trigger')).toHaveCount(0);
 });
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerE
 import { geoCentroid, geoGraticule10, geoMercator, geoPath, type GeoPermissibleObjects } from 'd3';
 import { displayValue, numericType } from '../../shared/results';
 import { nativeGeoColumns, nativeGeoType, prepareGeoFeatures, recommendGeo, type GeoFeature, type GeoRecommendation } from '../../shared/geo';
+import { geoHueForValue } from '../geo-color';
 import type { Column, Result } from '../../shared/types';
 import type { Locale } from '../i18n';
 
@@ -141,7 +142,10 @@ function MapCanvas({ prepared, columns, measureIndex, completeness, locale }: {
                     {map.countries.map((country, index) => <path key={country.name ?? index} className="geo-country" d={country.d}>{country.name && <title>{country.name}</title>}</path>)}
                     {map.graticule && <path className="geo-graticule" d={map.graticule}/>}
                     {prepared.features.map((feature, index) => {
-                        const style = { '--geo-intensity': `${Math.round(intensity(feature))}%` } as CSSProperties;
+                        const style = {
+                            '--geo-intensity': `${Math.round(intensity(feature))}%`,
+                            '--geo-hue': geoHueForValue(feature.measure, minimum, maximum),
+                        } as CSSProperties;
                         if (feature.geometry.type === 'Point') {
                             const projected = map.projection(feature.geometry.coordinates);
                             if (!projected) return null;

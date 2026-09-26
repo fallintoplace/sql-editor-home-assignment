@@ -317,18 +317,12 @@
         background-size: auto, 36px 36px, 36px 36px, auto;
     }
 
-    .workspace-help-geo-preview::before { position: absolute; inset: 18% 10% 15%; border: 1px solid color-mix(in srgb, var(--help-border-strong) 75%, transparent); border-radius: 47% 53% 42% 58% / 56% 38% 62% 44%; content: ""; opacity: .55; transform: rotate(-7deg); }
-    .geo-demo-point { position: absolute; display: grid; min-width: 64px; gap: 3px; padding: 7px 9px; border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--help-border)); border-radius: var(--help-radius-control); background: color-mix(in srgb, var(--panel-raised) 92%, transparent); color: var(--text); font-size: var(--help-text-meta); box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 9%, transparent); }
-    .geo-demo-point::before { position: absolute; width: 8px; height: 8px; border: 2px solid var(--panel-raised); border-radius: 50%; background: var(--accent); content: ""; box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 65%, transparent); }
-    .geo-demo-point strong { color: var(--accent); font-family: var(--font-mono); font-size: var(--help-text-meta); }
-    .point-san-francisco { top: 24%; left: 5%; }
-    .point-san-francisco::before { right: -12px; bottom: -5px; }
-    .point-sao-paulo { top: 62%; left: 24%; }
-    .point-sao-paulo::before { top: 9px; left: -11px; }
-    .point-berlin { top: 23%; left: 47%; }
-    .point-berlin::before { bottom: -7px; left: -9px; }
-    .point-singapore { top: 60%; left: 68%; }
-    .point-singapore::before { top: 8px; right: -10px; }
+    .workspace-help-geo-preview::before { position: absolute; inset: 13% 6%; border: 1px solid color-mix(in srgb, var(--help-border-strong) 70%, transparent); border-radius: 50%; background: linear-gradient(90deg, transparent 32%, color-mix(in srgb, var(--help-border-strong) 34%, transparent) 32.2%, transparent 32.5%, transparent 66%, color-mix(in srgb, var(--help-border-strong) 34%, transparent) 66.2%, transparent 66.5%), linear-gradient(transparent 49.6%, color-mix(in srgb, var(--help-border-strong) 34%, transparent) 50%, transparent 50.4%); content: ""; opacity: .48; }
+    .geo-demo-marker { position: absolute; z-index: 1; left: 0; top: 0; width: var(--geo-demo-size); height: var(--geo-demo-size); border: 2px solid color-mix(in srgb, var(--panel-raised) 84%, hsl(var(--geo-hue) 90% 70%)); border-radius: 50%; background: hsl(var(--geo-hue) 92% 58%); box-shadow: 0 0 0 4px hsl(var(--geo-hue) 90% 58% / 18%), 0 0 15px hsl(var(--geo-hue) 92% 58% / 72%); transform: translate(-50%, -50%); }
+    .geo-demo-marker.has-label { z-index: 2; }
+    .geo-demo-marker-label { position: absolute; top: 50%; left: 12px; display: grid; min-width: 72px; gap: 2px; padding: 5px 7px; border: 1px solid color-mix(in srgb, hsl(var(--geo-hue) 92% 60%) 52%, var(--help-border)); border-radius: 8px; background: color-mix(in srgb, var(--panel-raised) 94%, transparent); color: var(--text); font-size: var(--help-text-meta); line-height: 1.2; box-shadow: 0 5px 18px #00000026; transform: translateY(-50%); white-space: nowrap; }
+    .geo-demo-marker-label strong { color: hsl(var(--geo-hue) 92% 68%); font-family: var(--font-mono); font-size: var(--help-text-meta); }
+    .geo-demo-marker-label-left .geo-demo-marker-label { right: 12px; left: auto; }
     .workspace-help-geo-copy { display: flex; min-width: 0; flex-direction: column; gap: 10px; }
     .workspace-help-geo-copy pre {
         min-height: 190px;

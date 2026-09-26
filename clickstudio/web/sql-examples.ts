@@ -1,5 +1,6 @@
 import type { ChartConfig, Connection, Schema } from '../shared/types.js';
 import { DEMO_PREVIEW_STARTERS } from './demo-preview.js';
+import { GEO_HELP_EXAMPLES } from './help-demos.js';
 import { PLAYGROUND_CONNECTION_ID, PLAYGROUND_STARTER_SQL } from './playground.js';
 
 export type SqlExampleCategory = 'basics' | 'aggregation' | 'timeSeries' | 'clickhouse' | 'schema' | 'business' | 'observability' | 'operations' | 'engineering' | 'markets' | 'cities' | 'openSource' | 'internet' | 'datasets';
@@ -16,6 +17,7 @@ export type SqlExample = {
 };
 
 const playgroundExamples: SqlExample[] = [
+    ...GEO_HELP_EXAMPLES,
     {
         id: 'github-recent-events', name: 'Recent GitHub events', category: 'openSource',
         description: 'Inspect real events, repositories, actors, and timestamps.', dataset: 'GitHub', sql: PLAYGROUND_STARTER_SQL,
@@ -437,7 +439,7 @@ const quoteIdentifier = (value: string) => `\`${value.replaceAll('`', '``')}\``;
 
 export function sqlExamplesFor(connection: Pick<Connection, 'id' | 'dataSource'>, schema?: Schema): SqlExample[] {
     if (connection.id === PLAYGROUND_CONNECTION_ID) return playgroundExamples;
-    if (connection.dataSource === 'fixture') return demoExamples;
+    if (connection.dataSource === 'fixture') return [...demoExamples, ...GEO_HELP_EXAMPLES];
 
     const tableExamples: SqlExample[] = (schema?.tables ?? [])
         .filter(table => !['system', 'information_schema'].includes(table.database.toLowerCase()))
@@ -451,5 +453,5 @@ export function sqlExamplesFor(connection: Pick<Connection, 'id' | 'dataSource'>
             chart: { kind: 'table', x: 0, ys: [], title: `Preview ${table.name}` },
         }));
 
-    return [...tableExamples, ...genericExamples];
+    return [...tableExamples, ...genericExamples, ...GEO_HELP_EXAMPLES];
 }

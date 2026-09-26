@@ -66,7 +66,7 @@ export const english: Copy = {
         helpQueryEngineDescription: 'Inspect logical SQL flow, the native ClickHouse AST, and the server analyzer query tree for the current statement.',
         helpGeo: 'Geo',
         helpGeoTitle: 'Native geometry on a spatial canvas',
-        helpGeoDescription: 'Run ClickHouse Point geometry for four cities, then inspect labels and measures directly on the retained spatial result.',
+        helpGeoDescription: 'Explore a 20-city hotspot map, flight paths, and delivery zones with native ClickHouse geometry.',
         helpExplain: 'EXPLAIN',
         helpExplainDescription: 'Run the current statement through ClickHouse index analysis, logical plan, processor pipeline, or measured runtime.',
         helpExplainIndexesDescription: 'See ClickHouse index checks and how many parts and granules survive pruning.',

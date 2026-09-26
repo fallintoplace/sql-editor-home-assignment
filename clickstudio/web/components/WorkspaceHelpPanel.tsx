@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import type { SchemaTable } from '../../shared/types';
 import type { Copy, Locale } from '../i18n';
 import type { SqlExample } from '../sql-examples';
 import type { Connected } from '../workspace-types';
-import { GEO_HELP_EXAMPLE } from '../help-demos';
+import { GEO_HELP_CITIES, GEO_HELP_EXAMPLE } from '../help-demos';
+import { geoHueForValue } from '../geo-color';
 import { MaterializedViewExplorer } from './MaterializedViewExplorer';
 import { MergeTreePartsPanel } from './MergeTreePartsPanel';
 import { OverlayPortal } from './OverlayPortal';
@@ -21,6 +22,19 @@ import {
     type HelpPanelSection,
 } from './workspace-help-model';
 export type { HelpPanelSection } from './workspace-help-model';
+
+const minimumGeoPreviewEvents = Math.min(0, ...GEO_HELP_CITIES.map(city => city.events));
+const maximumGeoPreviewEvents = Math.max(0, ...GEO_HELP_CITIES.map(city => city.events));
+const geoPreviewMarkerStyle = (city: typeof GEO_HELP_CITIES[number]): CSSProperties => {
+    const range = maximumGeoPreviewEvents - minimumGeoPreviewEvents;
+    const intensity = range === 0 ? .5 : (city.events - minimumGeoPreviewEvents) / range;
+    return {
+        left: `${5 + ((city.longitude + 180) / 360) * 90}%`,
+        top: `${7 + ((90 - city.latitude) / 180) * 86}%`,
+        '--geo-hue': geoHueForValue(city.events, minimumGeoPreviewEvents, maximumGeoPreviewEvents),
+        '--geo-demo-size': `${7 + intensity * 5}px`,
+    } as CSSProperties;
+};
 
 export type HelpExplainAction = {
     id: 'indexes' | 'plan' | 'pipeline' | 'analyze';
@@ -356,13 +370,12 @@ export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, 
                             <HelpSectionHeading eyebrow="CLICKHOUSE GEO" title={copy.helpGeoTitle} description={copy.helpGeoDescription}/>
                             <div className="workspace-help-geo-demo">
                                 <div className="workspace-help-geo-preview" aria-hidden="true">
-                                    <span className="geo-demo-point point-san-francisco">San Francisco<strong>240</strong></span>
-                                    <span className="geo-demo-point point-sao-paulo">São Paulo<strong>180</strong></span>
-                                    <span className="geo-demo-point point-berlin">Berlin<strong>120</strong></span>
-                                    <span className="geo-demo-point point-singapore">Singapore<strong>310</strong></span>
+                                    {GEO_HELP_CITIES.map(city => <span key={city.city} className={cx('geo-demo-marker', city.previewLabel && 'has-label', city.previewLabel && `geo-demo-marker-label-${city.previewLabel}`)} style={geoPreviewMarkerStyle(city)}>
+                                        {city.previewLabel && <span className="geo-demo-marker-label"><span>{city.city}</span><strong>{city.events}</strong></span>}
+                                    </span>)}
                                 </div>
                                 <div className="workspace-help-geo-copy">
-                                    <div className="sql-example-option-meta"><span className="sql-example-option-category">Point</span><span className="sql-example-chart-kind">4 global cities · event volume</span></div>
+                                    <div className="sql-example-option-meta"><span className="sql-example-option-category">Point</span><span className="sql-example-chart-kind">20 global cities · event volume</span></div>
                                     <pre><code>{GEO_HELP_EXAMPLE.sql}</code></pre>
                                     <div className="sql-example-actions">
                                         <Button variant="secondary" className="sql-example-action" data-testid="open-geo-example" onClick={() => { if (onOpenExample(GEO_HELP_EXAMPLE)) onClose(false); }}><Icon name="plus"/>{copy.openExample}</Button>

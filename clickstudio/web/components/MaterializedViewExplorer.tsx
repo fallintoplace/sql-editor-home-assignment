@@ -110,7 +110,7 @@ function LineageGraph({ snapshot, beginner }: { snapshot: LineageSnapshot; begin
     const selectedNode = graph.nodes.find(node => node.id === selected) ?? graph.nodes.find(node => node.kind === 'materialized-view') ?? graph.nodes[0];
     const positions = new Map(graph.nodes.map(node => [node.id, node]));
     const curve = linkHorizontal<{ source: [number, number]; target: [number, number] }, [number, number]>().x(point => point[0]).y(point => point[1]);
-    return <>{beginner && <LineagePrimer/>}<div className="native-toolbar"><label className="native-search">Find an object<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search database or table"/></label><span>{graph.nodes.length} objects · {graph.edges.length} links</span></div>
+    return <>{beginner && <LineagePrimer/>}<div className="native-toolbar native-lineage-controls"><label className="native-search">Find an object<input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search database or table"/></label><span>{graph.nodes.length} objects · {graph.edges.length} links</span></div>
         <div className="native-lineage-map-heading"><strong>Data map</strong><span>{beginner ? 'Select an object to see what it does.' : 'Select an object to inspect its relationships.'}</span></div>
         <div className="native-lineage-legend">{Object.entries(beginner ? beginnerEdgeLabels : edgeLabels).map(([kind, label]) => <span key={kind} className={`edge-${kind}`}>{label}</span>)}</div>
         {(graph.clipped || snapshot.truncated) && <p className="native-warning">{beginner ? 'Large map: search by database or table to focus the objects shown.' : 'This graph is bounded. Search to focus the displayed objects; metadata outside the snapshot remains unavailable.'}</p>}
@@ -136,7 +136,7 @@ export function MaterializedViewExplorer({ connection, database, onClose, embedd
     const { snapshot, loading, error, refresh } = useNativeExplorer(connection.id, { kind: 'lineage', database }, active, false);
     const current = snapshot?.kind === 'lineage' ? snapshot : undefined;
     const content = <>
-        <div className="native-toolbar"><span className="native-snapshot-meta">{current?.source === 'fixture' ? 'SAMPLE DATA' : embedded ? 'LIVE SERVER DATA' : 'SERVER METADATA'}{current && ` · Updated ${nativeTime(current.observedAt)}`}</span><Button onClick={refresh} disabled={loading}>{embedded ? 'Refresh map' : 'Refresh metadata'}</Button></div>
+        <div className="native-toolbar native-lineage-meta-toolbar"><span className="native-snapshot-meta">{current?.source === 'fixture' ? 'SAMPLE DATA' : embedded ? 'LIVE SERVER DATA' : 'SERVER METADATA'}{current && ` · Updated ${nativeTime(current.observedAt)}`}</span><Button onClick={refresh} disabled={loading}>{embedded ? 'Refresh map' : 'Refresh metadata'}</Button></div>
         {error && <div role="alert" className="native-warning">{error}{current && <p>The previous snapshot is shown below.</p>}</div>}
         {loading && !current && <div className="native-empty" role="status">{embedded ? 'Loading the data map…' : 'Reading materialized-view metadata…'}</div>}
         {current && <><LineageGraph snapshot={current} beginner={embedded}/>{embedded

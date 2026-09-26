@@ -20,14 +20,11 @@ test('navigate and select statements without executing SQL', async ({ page }) =>
     const sql = "SELECT 'a;b';\nSELECT 2;\nSELECT 3;";
     await replaceSql(page, sql);
     const tools = page.getByTestId('sql-editor-tools');
-    const picker = tools.getByRole('combobox', { name: 'Jump to SQL statement' });
-    await expect(picker.locator('option')).toHaveCount(3);
-    await picker.selectOption('0');
+    await page.keyboard.press('Alt+PageUp');
+    await page.keyboard.press('Alt+PageUp');
     await expect(tools.getByRole('button', { name: /Previous SQL statement/ })).toBeDisabled();
     await tools.getByRole('button', { name: /Next SQL statement/ }).click();
-    await expect(picker).toHaveValue('1');
     await page.keyboard.press('Alt+PageDown');
-    await expect(picker).toHaveValue('2');
     await page.keyboard.press('Alt+PageUp');
     await tools.getByRole('button', { name: 'Select current SQL statement', exact: true }).click();
     await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe('SELECT 2');
@@ -42,10 +39,9 @@ test('snippets preserve the existing query, offer linked fields, and undo', asyn
     await replaceSql(page, 'SELECT 1 -- keep this');
     const editor = page.locator('.cm-content');
     const tools = page.getByTestId('sql-editor-tools');
-    await tools.getByRole('combobox', { name: 'ClickHouse snippet', exact: true }).selectOption('ch_time_series');
+    await tools.getByRole('combobox', { name: 'SQL template', exact: true }).selectOption('ch_time_series');
     await expect(editor).toHaveText('SELECT 1 -- keep this');
-    await tools.getByRole('button', { name: 'Add snippet as a new query' }).click();
-    await expect(tools.getByRole('combobox', { name: 'Jump to SQL statement' }).locator('option')).toHaveCount(2);
+    await tools.getByRole('button', { name: 'Add as new query' }).click();
     await expect.poll(async () => (await readSql(page)).split('\n').map(line => line.trim()).filter(Boolean).slice(0, 3)).toEqual(['SELECT 1 -- keep this', ';', 'SELECT']);
     await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe('event_time');
     await page.keyboard.insertText('created_at');
@@ -65,11 +61,11 @@ test('incomplete SQL disables query tools but remains editable', async ({ page }
     await trust(page);
     await replaceSql(page, "SELECT 'unfinished");
     const tools = page.getByTestId('sql-editor-tools');
-    await tools.getByRole('combobox', { name: 'ClickHouse snippet', exact: true }).selectOption('ch_top_values');
-    await expect(tools.getByRole('button', { name: 'Add snippet as a new query' })).toBeDisabled();
+    await tools.getByRole('combobox', { name: 'SQL template', exact: true }).selectOption('ch_top_values');
+    await expect(tools.getByRole('button', { name: 'Add as new query' })).toBeDisabled();
     await expect(tools.getByRole('status')).toContainText('Unclosed quoted');
     await replaceSql(page, "SELECT 'finished'");
-    await expect(tools.getByRole('button', { name: 'Add snippet as a new query' })).toBeEnabled();
+    await expect(tools.getByRole('button', { name: 'Add as new query' })).toBeEnabled();
 });
 
 test('keyword completion is available outside strings and comments', async ({ page }) => {

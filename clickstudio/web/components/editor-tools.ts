@@ -15,8 +15,8 @@ export const clickhouseSnippetCompletions = CLICKHOUSE_SNIPPETS.map(item => snip
     label: item.id,
     displayLabel: item.label,
     type: 'text',
-    detail: 'ClickHouse snippet',
-    info: `${item.detail} Edit the example table and columns with Tab. Inserting a snippet never runs SQL.`,
+    detail: 'ClickHouse SQL template',
+    info: `${item.detail} Edit the example table and columns with Tab.`,
 }));
 
 function navigateStatement(view: EditorView, direction: -1 | 1): boolean {
@@ -57,15 +57,6 @@ function editorToolsPanel(view: EditorView, copy: Copy['common']): Panel {
     const previous = button('←', copy.previousStatement, () => { navigateStatement(view, -1); });
     const next = button('→', copy.nextStatement, () => { navigateStatement(view, 1); });
     const select = button(copy.selectQuery, copy.selectCurrentSqlStatement, () => { selectStatement(view); });
-    const picker = doc.createElement('select');
-    picker.className = 'cm-sql-statement-picker';
-    picker.setAttribute('aria-label', copy.jumpToSqlStatement);
-    picker.addEventListener('change', () => {
-        const target = view.state.field(sqlStatementOutline).statements[Number(picker.value)];
-        if (!target) return;
-        view.dispatch({ selection: { anchor: target.from }, scrollIntoView: true });
-        view.focus();
-    });
 
     const snippets = doc.createElement('select');
     snippets.setAttribute('aria-label', copy.clickhouseSnippet);
@@ -80,7 +71,11 @@ function editorToolsPanel(view: EditorView, copy: Copy['common']): Panel {
         option.textContent = item.label;
         snippets.append(option);
     }
-    const insert = button(copy.addQuery, copy.addSnippetAsNewQuery, () => {
+    const templateTools = doc.createElement('div');
+    templateTools.className = 'cm-sql-template-tools';
+    templateTools.setAttribute('role', 'group');
+    templateTools.setAttribute('aria-label', copy.clickhouseSnippet);
+    const insert = button(copy.addSnippetAsNewQuery, copy.addSnippetAsNewQuery, () => {
         const chosen = CLICKHOUSE_SNIPPETS.find(item => item.id === snippets.value);
         if (!chosen || view.state.readOnly || view.state.field(sqlStatementOutline).error) return;
         const text = view.state.doc.toString();
@@ -100,7 +95,8 @@ function editorToolsPanel(view: EditorView, copy: Copy['common']): Panel {
     const note = doc.createElement('span');
     note.className = 'cm-sql-tools-note';
     note.setAttribute('role', 'status');
-    dom.append(previous, picker, next, select, snippets, insert, note);
+    templateTools.append(snippets, insert);
+    dom.append(previous, next, select, templateTools, note);
     dom.addEventListener('keydown', event => {
         if (event.key === 'Escape') {
             event.preventDefault();
@@ -109,27 +105,9 @@ function editorToolsPanel(view: EditorView, copy: Copy['common']): Panel {
         }
     });
 
-    const refresh = (rebuild: boolean) => {
+    const refresh = () => {
         const outline = view.state.field(sqlStatementOutline);
         const index = activeStatementIndex(outline.statements, view.state.selection.main.from);
-        if (rebuild) {
-            const options = doc.createDocumentFragment();
-            if (!outline.statements.length) {
-                const option = doc.createElement('option');
-                option.value = '-1';
-                option.textContent = outline.error ? copy.incompleteSql : copy.noSqlStatements;
-                options.append(option);
-            }
-            outline.statements.forEach((statement, position) => {
-                const option = doc.createElement('option');
-                option.value = String(position);
-                option.textContent = `${position + 1} / ${outline.statements.length} · ${statement.label}`;
-                options.append(option);
-            });
-            picker.replaceChildren(options);
-        }
-        picker.value = String(index);
-        picker.disabled = index < 0;
         previous.disabled = index <= 0;
         next.disabled = index < 0 || index >= outline.statements.length - 1;
         select.disabled = index < 0;
@@ -137,15 +115,15 @@ function editorToolsPanel(view: EditorView, copy: Copy['common']): Panel {
         const chosen = CLICKHOUSE_SNIPPETS.find(item => item.id === snippets.value);
         const text = outline.error
             ? `${copy.incompleteSql}: ${outline.error}`
-            : chosen ? `${chosen.detail} ${copy.snippetSelectHelp}` : '';
+            : chosen ? chosen.detail : '';
         if (note.textContent !== text) note.textContent = text;
         note.hidden = !text;
     };
-    snippets.addEventListener('change', () => refresh(false));
-    refresh(true);
+    snippets.addEventListener('change', refresh);
+    refresh();
     return {
         dom,
-        update: update => { refresh(update.docChanged); },
+        update: () => { refresh(); },
     };
 }
 
@@ -165,7 +143,9 @@ export function sqlEditorTools(copy: Copy['common']): Extension {
             '.cm-sql-tools button:hover:not(:disabled)': { backgroundColor: 'var(--panel-hover)' },
             '.cm-sql-tools button:disabled, .cm-sql-tools select:disabled': { opacity: '0.5', cursor: 'default' },
             '.cm-sql-tools button:focus-visible, .cm-sql-tools select:focus-visible': { outline: '2px solid var(--accent)', outlineOffset: '2px' },
-            '.cm-sql-statement-picker': { flex: '1 1 140px', minWidth: '0', maxWidth: '360px', textOverflow: 'ellipsis' },
+            '.cm-sql-template-tools': { display: 'flex', flex: '0 1 auto', alignItems: 'center', gap: '2px', minWidth: '0', maxWidth: '100%', padding: '2px', backgroundColor: 'var(--panel-hover)', border: '1px solid var(--line)', borderRadius: '7px' },
+            '.cm-sql-template-tools select': { flex: '1 1 150px', minWidth: '0', maxWidth: '280px', border: '0', backgroundColor: 'transparent' },
+            '.cm-sql-template-tools button': { flex: '0 0 auto', whiteSpace: 'nowrap' },
             '.cm-sql-tools-note': { flexBasis: '100%', color: 'var(--muted)', lineHeight: '1.5' },
         }),
         EditorView.theme({

@@ -60,7 +60,7 @@ export default defineConfig([
     },
     rules: {
       "complexity": ["error", 180],
-      "max-lines-per-function": ["error", { max: 500, skipBlankLines: true, skipComments: true }],
+      "max-lines-per-function": ["error", { max: 400, skipBlankLines: true, skipComments: true }],
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "error",
     },
@@ -69,7 +69,7 @@ export default defineConfig([
     files: ["web/Workspace.tsx"],
     rules: {
       "complexity": ["error", 300],
-      "max-lines-per-function": ["error", { max: 1300, skipBlankLines: true, skipComments: true }],
+      "max-lines-per-function": ["error", { max: 1000, skipBlankLines: true, skipComments: true }],
     },
   },
 ]);

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Schema } from '../../shared/types';
+import { useImportJobPolling } from './useImportJobPolling';
 import { api, message, post, RequestError } from '../api';
 import {
     MAX_FILE_BYTES,
@@ -155,31 +156,16 @@ export function useImportWizardController({ open, connectionId, trusted, demoMod
         return () => { current = false; controller.abort(); };
     }, [open, connectionId, trusted, demoMode, recoveryAttempt]);
 
-    useEffect(() => {
-        if (!open || step !== 'status' || job?.status !== 'running') return;
-        let current = true;
-        let polling = false;
-        const poll = async () => {
-            if (polling) return;
-            polling = true;
-            try {
-                const next = job.reconciliationRequired
-                    ? await post<ImportJob>(`/imports/${encodeURIComponent(job.id)}/reconcile`)
-                    : await api<ImportJob>(`/imports/${encodeURIComponent(job.id)}`);
-                if (!current) return;
-                setJob(next);
-                setRecoverableJobs(items => next.status === 'succeeded' || next.reviewedAt
-                    ? items.filter(item => item.id !== next.id)
-                    : items.map(item => item.id === next.id ? next : item));
-                setBusy('');
-                if (next.status === 'succeeded') reportImported(next.id);
-            } catch (caught) {
-                if (current) setError(`Could not refresh import status: ${message(caught)}`);
-            } finally { polling = false; }
-        };
-        const timer = window.setInterval(() => void poll(), job.reconciliationRequired ? 1500 : 900);
-        return () => { current = false; window.clearInterval(timer); };
-    }, [open, step, job?.id, job?.status, job?.reconciliationRequired]);
+    useImportJobPolling({
+        open,
+        step,
+        job,
+        setJob,
+        setRecoverableJobs,
+        setBusy,
+        setError,
+        onSucceeded: reportImported,
+    });
 
     function reportImported(id: string) {
         if (reportedJobRef.current === id) return;

@@ -3,6 +3,7 @@ import type { QueryDocument, Run, Schema } from '../shared/types';
 import { sameSavedContent } from '../shared/workspace-view';
 import { api, message } from './api';
 import type { WorkspaceState } from './workspace-state';
+import { startVisiblePolling } from './visible-polling';
 
 export function useWorkspaceData({
     connectionId,
@@ -43,13 +44,13 @@ export function useWorkspaceData({
         revisionsRequestRef.current++;
     }, []);
 
-    const loadHistory = useCallback(async () => {
+    const loadHistory = useCallback(async (signal?: AbortSignal) => {
         const requestId = ++historyRequestRef.current;
         try {
-            const next = await api<Run[]>(`/runs?connectionId=${encodeURIComponent(connectionId)}`);
-            if (historyRequestRef.current === requestId) setHistory(next);
+            const next = await api<Run[]>(`/runs?connectionId=${encodeURIComponent(connectionId)}`, { signal });
+            if (!signal?.aborted && historyRequestRef.current === requestId) setHistory(next);
         } catch (caught) {
-            if (historyRequestRef.current === requestId) throw caught;
+            if (!signal?.aborted && historyRequestRef.current === requestId) throw caught;
         }
     }, [connectionId]);
 
@@ -127,7 +128,17 @@ export function useWorkspaceData({
     }, [connectionId]);
 
     useEffect(() => {
-        void Promise.all([loadHistory(), loadDocuments()]).catch(caught => setError(message(caught)));
+        let initialHistoryLoad = true;
+        const stopHistoryPolling = startVisiblePolling(async signal => {
+            try {
+                await loadHistory(signal);
+            } catch (caught) {
+                if (initialHistoryLoad && !signal.aborted) setError(message(caught));
+            } finally {
+                if (!signal.aborted) initialHistoryLoad = false;
+            }
+        }, { intervalMs: 15000 });
+        void loadDocuments().catch(caught => setError(message(caught)));
         if (trusted) void loadSchema();
         else {
             schemaRequestRef.current++;
@@ -135,9 +146,8 @@ export function useWorkspaceData({
             setSchemaError('');
             setSchemaLoading(false);
         }
-        const interval = window.setInterval(() => { void loadHistory().catch(() => undefined); }, 15000);
         return () => {
-            window.clearInterval(interval);
+            stopHistoryPolling();
             invalidateRequests();
         };
     }, [invalidateRequests, loadDocuments, loadHistory, loadSchema, setError, trusted]);

@@ -5,6 +5,7 @@ import { api, message } from './api';
 import { terminal } from './components/ui';
 import { useScopedValue } from './useScopedValue';
 import type { RunEventState } from './workspace-types';
+import { startVisiblePolling } from './visible-polling';
 
 export function useRunEvidence({ activeRunId, connectionId, loadHistory, setError }: {
     activeRunId?: string;
@@ -67,15 +68,12 @@ export function useRunEvidence({ activeRunId, connectionId, loadHistory, setErro
 
     useEffect(() => {
         if (!running || eventState === 'live' || !activeRunId) return;
-        let closed = false;
-        const timer = window.setInterval(() => {
-            void api<Run>(`/runs/${encodeURIComponent(activeRunId)}`).then(next => {
-                if (closed || next.connectionId !== connectionId) return;
-                setRunForRun(activeRunId, current => !current || current.sequence <= next.sequence ? next : current);
-                if (terminal(next)) void loadHistory().catch(() => undefined);
-            }).catch(() => undefined);
-        }, 1500);
-        return () => { closed = true; window.clearInterval(timer); };
+        return startVisiblePolling(async signal => {
+            const next = await api<Run>(`/runs/${encodeURIComponent(activeRunId)}`, { signal });
+            if (signal.aborted || next.connectionId !== connectionId) return;
+            setRunForRun(activeRunId, current => !current || current.sequence <= next.sequence ? next : current);
+            if (terminal(next)) void loadHistory().catch(() => undefined);
+        }, { intervalMs: 1500, immediate: false });
     }, [activeRunId, connectionId, eventState, loadHistory, running, setRunForRun]);
 
     return { run, setRunForRun, page, setPage, resultPage, snapshot, setSnapshotForRun, profile, setProfileForRun, pipeline, setPipelineForRun, profilesByRun, pipelinesByRun, eventState };

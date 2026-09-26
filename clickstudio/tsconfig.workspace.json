@@ -19,6 +19,7 @@
     "web/workspace-state.ts",
     "web/workspace-layout.ts",
     "web/workspace-persistence.ts",
+    "web/visible-polling.ts",
     "web/demo-preview.ts",
     "web/sql-examples.ts",
     "web/sql-examples-locales.ts",

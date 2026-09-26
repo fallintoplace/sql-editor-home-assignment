@@ -4,6 +4,7 @@ import type { Copy, Locale } from '../i18n';
 import type { SqlExample, SqlExampleCategory } from '../sql-examples';
 import { localizeSqlExample, localizeSqlExampleCategory } from '../sql-examples-locales';
 import type { Connected } from '../workspace-types';
+import { GEO_HELP_EXAMPLE } from '../help-demos';
 import { MaterializedViewExplorer } from './MaterializedViewExplorer';
 import { MergeTreePartsPanel } from './MergeTreePartsPanel';
 import { OverlayPortal } from './OverlayPortal';
@@ -12,7 +13,7 @@ import { RunComparisonView, type RunComparisonProps } from './RunComparison';
 import { SqlFlowView, type SqlFlowViewProps } from './SqlFlowView';
 import { Button, Icon, cx, type IconName } from './ui';
 
-export type HelpPanelSection = 'tour' | 'examples' | 'query' | 'explain' | 'storage' | 'dependencies' | 'compare' | 'reference';
+export type HelpPanelSection = 'tour' | 'examples' | 'query' | 'geo' | 'explain' | 'storage' | 'dependencies' | 'compare' | 'reference';
 export type HelpExplainAction = {
     id: 'indexes' | 'plan' | 'pipeline' | 'analyze';
     label: string;
@@ -82,6 +83,7 @@ function helpSections(copy: Copy['common']): HelpSectionDefinition[] {
         { id: 'tour', label: copy.helpTour, description: copy.helpTourDescription, icon: 'help' },
         { id: 'examples', label: copy.sqlExamples, description: copy.examplesHint, icon: 'examples' },
         { id: 'query', label: copy.helpQueryEngine, description: copy.helpQueryEngineDescription, icon: 'parser' },
+        { id: 'geo', label: copy.helpGeo, description: copy.helpGeoDescription, icon: 'chart' },
         { id: 'explain', label: copy.helpExplain, description: copy.helpExplainDescription, icon: 'bolt' },
         { id: 'storage', label: copy.helpStorage, description: copy.helpStorageDescription, icon: 'database' },
         { id: 'dependencies', label: copy.helpDependencies, description: copy.helpDependenciesDescription, icon: 'pipeline' },
@@ -108,7 +110,7 @@ export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, 
     onSectionChange: (section: HelpPanelSection) => void;
     onClose: (restoreFocus?: boolean) => void;
     onOpenExample: (example: SqlExample) => boolean;
-    onRunExample: (example: SqlExample, view: 'results' | 'chart') => boolean;
+    onRunExample: (example: SqlExample, view: 'results' | 'chart' | 'map') => boolean;
     onStartBlankSql: () => boolean;
     connection: Connected;
     tables: SchemaTable[];
@@ -345,6 +347,27 @@ export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, 
                         {renderTabPanel('query', 'workspace-help-feature-view workspace-help-query', section === 'query' ? <>
                             <HelpSectionHeading eyebrow="QUERY ENGINE" title={copy.helpQueryEngine} description={copy.helpQueryEngineDescription}/>
                             <div className="workspace-help-feature-scroll"><SqlFlowView {...queryEngine}/></div>
+                        </> : null)}
+
+                        {renderTabPanel('geo', 'workspace-help-feature-view workspace-help-geo', section === 'geo' ? <>
+                            <HelpSectionHeading eyebrow="CLICKHOUSE GEO" title={copy.helpGeoTitle} description={copy.helpGeoDescription}/>
+                            <div className="workspace-help-geo-demo">
+                                <div className="workspace-help-geo-preview" aria-hidden="true">
+                                    <span className="geo-demo-point point-berlin">Berlin<strong>120</strong></span>
+                                    <span className="geo-demo-point point-paris">Paris<strong>95</strong></span>
+                                    <span className="geo-demo-point point-london">London<strong>140</strong></span>
+                                    <span className="geo-demo-point point-madrid">Madrid<strong>80</strong></span>
+                                </div>
+                                <div className="workspace-help-geo-copy">
+                                    <div className="sql-example-option-meta"><span className="sql-example-option-category">Point</span><span className="sql-example-chart-kind">4 cities · events measure</span></div>
+                                    <pre><code>{GEO_HELP_EXAMPLE.sql}</code></pre>
+                                    <div className="sql-example-actions">
+                                        <Button variant="secondary" className="sql-example-action" data-testid="open-geo-example" onClick={() => { if (onOpenExample(GEO_HELP_EXAMPLE)) onClose(false); }}><Icon name="plus"/>{copy.openExample}</Button>
+                                        <Button variant="primary" className="sql-example-action" data-testid="run-geo-example" onClick={() => { if (onRunExample(GEO_HELP_EXAMPLE, 'map')) onClose(false); }}><Icon name="play"/>Run map</Button>
+                                    </div>
+                                </div>
+                            </div>
+                            <p className="workspace-help-safe-note"><span className="status-light is-trusted"/>Uses native ClickHouse <code>Point</code> values. The map renders the bounded retained result without another SQL request or an external map service.</p>
                         </> : null)}
 
                         {renderTabPanel('explain', 'workspace-help-feature-view workspace-help-explain', section === 'explain' ? <>

@@ -170,6 +170,18 @@
     .workspace-help-feature-view { display: flex; flex-direction: column; overflow: hidden; }
     .workspace-help-feature-scroll { min-width: 0; min-height: 0; flex: 1; overflow: auto; }
     .workspace-help-query .sql-flow-view { min-height: 100%; }
+    .workspace-help-geo-demo { display: grid; min-width: 0; grid-template-columns: minmax(300px, .92fr) minmax(0, 1.08fr); gap: 12px; }
+    .workspace-help-geo-preview { position: relative; min-height: 290px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: radial-gradient(circle at 58% 44%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 24%), linear-gradient(color-mix(in srgb, var(--text) 4%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--text) 4%, transparent) 1px, transparent 1px), color-mix(in srgb, var(--page) 78%, var(--panel)); background-size: auto, 36px 36px, 36px 36px, auto; }
+    .workspace-help-geo-preview::before { position: absolute; inset: 18% 10% 15%; border: 1px solid color-mix(in srgb, var(--line-bright) 75%, transparent); border-radius: 47% 53% 42% 58% / 56% 38% 62% 44%; content: ""; opacity: .55; transform: rotate(-7deg); }
+    .geo-demo-point { position: absolute; display: grid; min-width: 58px; gap: 2px; padding: 6px 8px; border: 1px solid color-mix(in srgb, var(--accent) 46%, var(--line)); border-radius: 9px; background: color-mix(in srgb, var(--panel-raised) 90%, transparent); color: var(--text); font-size: 8px; box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 10%, transparent); }
+    .geo-demo-point::before { position: absolute; width: 8px; height: 8px; border: 2px solid var(--panel-raised); border-radius: 50%; background: var(--accent); content: ""; box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 65%, transparent); }
+    .geo-demo-point strong { color: var(--accent); font-family: var(--font-mono); font-size: 8px; }
+    .point-london { top: 27%; left: 22%; } .point-london::before { right: -12px; bottom: -5px; }
+    .point-paris { top: 43%; left: 39%; } .point-paris::before { left: -11px; top: 9px; }
+    .point-berlin { top: 25%; left: 60%; } .point-berlin::before { left: -9px; bottom: -7px; }
+    .point-madrid { top: 68%; left: 27%; } .point-madrid::before { right: -10px; top: 8px; }
+    .workspace-help-geo-copy { display: flex; min-width: 0; flex-direction: column; gap: 10px; }
+    .workspace-help-geo-copy pre { min-height: 190px; margin: 0; padding: 12px; overflow: auto; border: 1px solid var(--line); border-radius: 9px; background: color-mix(in srgb, var(--page) 78%, var(--panel)); color: var(--text-soft); font-family: var(--font-mono); font-size: 9px; line-height: 1.6; white-space: pre; }
     .workspace-help-dependencies .native-lineage-layout, .workspace-help-compare .native-comparison-columns { min-width: 0; }
     .workspace-help-reference .reference-explorer { min-height: 100%; }
     .workspace-help-explain-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }

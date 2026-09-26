@@ -59,8 +59,13 @@ test('Help tour exposes ClickStudio native workflows from one place', async ({ p
     const dialog = page.getByRole('dialog', { name: 'Explore ClickStudio', exact: true });
     await expect(dialog).toBeVisible();
 
-    for (const section of ['examples', 'query', 'explain', 'storage', 'dependencies', 'compare', 'reference'])
+    for (const section of ['examples', 'query', 'geo', 'explain', 'storage', 'dependencies', 'compare', 'reference'])
         await expect(dialog.getByTestId('help-section-' + section)).toBeVisible();
+
+    await dialog.getByTestId('help-section-geo').click();
+    await expect(dialog.getByText('Native geometry on a spatial canvas', { exact: true })).toBeVisible();
+    await expect(dialog.locator('.workspace-help-geo-copy code')).toContainText("(13.405, 52.52)::Point");
+    await expect(dialog.getByTestId('run-geo-example')).toBeVisible();
 
     await dialog.getByTestId('help-section-storage').click();
     await expect(dialog.getByRole('button', { name: 'Parts', exact: true })).toBeVisible();

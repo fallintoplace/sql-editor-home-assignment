@@ -156,11 +156,11 @@
 
     .workspace-help-tab {
         display: grid;
-        min-height: 52px;
-        grid-template-columns: 20px minmax(0, 1fr);
+        min-height: 42px;
+        grid-template-columns: 18px minmax(0, 1fr);
         align-items: center;
-        gap: 9px;
-        padding: 7px 9px;
+        gap: 10px;
+        padding: 7px 10px;
         border: 1px solid transparent;
         border-radius: var(--help-radius-control);
         background: transparent;
@@ -172,18 +172,9 @@
     }
 
     .workspace-help-tab > svg { width: 16px; height: 16px; }
-    .workspace-help-tab > span { display: grid; min-width: 0; gap: 3px; }
+    .workspace-help-tab > span { display: block; min-width: 0; }
     .workspace-help-tab strong { color: inherit; font-size: var(--help-text-body); font-weight: 680; }
-    .workspace-help-tab small {
-        display: -webkit-box;
-        overflow: hidden;
-        color: var(--muted);
-        font-size: var(--help-text-meta);
-        font-weight: 480;
-        line-height: 1.3;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
-    }
+    .workspace-help-tab small { display: none; }
 
     .workspace-help-tab:hover { background: color-mix(in srgb, var(--text) 3%, var(--panel)); color: var(--text-soft); }
 
@@ -281,6 +272,38 @@
     .workspace-help-query .sql-flow-view { min-height: 100%; }
     .workspace-help-dependencies .native-lineage-layout,
     .workspace-help-compare .native-comparison-columns { min-width: 0; }
+    .workspace-help-compare .native-run-pickers + .native-toolbar {
+        display: grid;
+        min-height: 0;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px 14px;
+        margin: 12px 0 6px;
+        padding: 9px 11px;
+        border: 1px solid var(--help-border);
+        border-radius: var(--help-radius-control);
+        background: var(--help-surface);
+    }
+    .workspace-help-compare .native-run-pickers + .native-toolbar .native-notes {
+        min-width: 0;
+        margin: 0;
+        font-size: var(--help-text-meta);
+        letter-spacing: .015em;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+    }
+    .workspace-help-compare .native-run-pickers + .native-toolbar .button-base {
+        min-height: 32px;
+        padding: 5px 10px;
+        font-size: var(--help-text-meta);
+    }
+    .workspace-help-compare .native-run-pickers + .native-toolbar + .native-notes {
+        margin: 0 0 10px;
+        padding: 0 2px;
+        font-size: var(--help-text-meta);
+        line-height: 1.45;
+    }
+    .workspace-help-compare .native-comparison-table-scroll { margin-top: 0; }
     .workspace-help-reference .reference-explorer { min-height: 100%; }
 
     .workspace-help-geo-demo { display: grid; min-width: 0; grid-template-columns: minmax(300px, .92fr) minmax(0, 1.08fr); gap: 12px; }
@@ -430,6 +453,8 @@
     .workspace-help-close { width: 34px; height: 34px; }
     .workspace-help-tabs { padding: 6px 8px; }
     .workspace-help-tab { min-height: 36px; padding: 5px 8px; }
+    .workspace-help-compare .native-run-pickers + .native-toolbar { grid-template-columns: minmax(0, 1fr); }
+    .workspace-help-compare .native-run-pickers + .native-toolbar .button-base { justify-self: start; width: auto; }
     .workspace-help-tour,
     .workspace-help-feature-view { padding: 12px; }
     .workspace-help-guide-card { padding: 12px; }

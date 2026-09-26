@@ -32,6 +32,7 @@ import { useWorkspaceAssistant } from './useWorkspaceAssistant';
 import { useWorkspacePanels } from './useWorkspacePanels';
 import { useScriptExecution } from './useScriptExecution';
 import { usePendingExecution } from './usePendingExecution';
+import { useFailedQueryErrors } from './useFailedQueryErrors';
 import { sqlExamplesFor, type SqlExample } from './sql-examples';
 import { localizeSqlExample } from './sql-examples-locales';
 import type { Copy, ExperienceLevel, Locale } from './i18n';
@@ -123,7 +124,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
     const [busy, setBusy] = useState<BusyAction>('');
     const [cancelling, setCancelling] = useState(false);
     const { error, setError, notice, setNotice } = useWorkspaceNotifications();
-    const [failedQueryError, setFailedQueryError] = useState<FailedQueryError>();
+    const { error: failedQueryError, clear: clearFailedQueryError, record: storeFailedQueryError } = useFailedQueryErrors(active.id);
     const [search, setSearch] = useState('');
     const storageError = useWorkspacePersistence(key, workspace);
     const parameters = useMemo(() => {
@@ -255,6 +256,11 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
         setQueryCollapsed(false);
         return true;
     };
+    const recordFailedQueryError = (failure: FailedQueryError) => {
+        storeFailedQueryError(failure);
+        if (workspaceRef.current.activeId !== failure.draftId) return;
+        setView('results'); setResultsCollapsed(false); setDrawerOpen(false);
+    };
 
     const createExampleDraft = (example: SqlExample) => {
         const name = example.category === 'schema'
@@ -276,6 +282,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             if (statements.length !== 1) throw new Error('An example must contain exactly one SQL statement to run directly.');
             const statement = statements[0]!;
             const requestId = crypto.randomUUID();
+            clearFailedQueryError(draft.id);
             pendingExecution.start(requestId, draft.id, statement.sql);
             let created: Run;
             try {
@@ -287,6 +294,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                 });
             } catch (caught) {
                 pendingExecution.clear(requestId);
+                recordFailedQueryError({ draftId: draft.id, draftSql: draft.sql, statementSql: statement.sql, sourceFrom: statement.from, error: apiErrorDetail(caught) });
                 throw caught;
             }
             pendingExecution.acceptRun(requestId, created.id);
@@ -333,6 +341,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             tags: { workspace: 'clickstudio', experience },
             ...(wholeScript ? {} : { sourceFrom: statement!.from, sourceTo: statement!.to }),
         };
+        clearFailedQueryError(active.id);
         if (wholeScript) {
             const previousResult = run && terminal(run) && resultPage
                 ? { draftId: active.id, run, page: resultPage, pageIndex: page }
@@ -343,6 +352,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                 created = await post<Script>('/scripts', { ...payload, stopOnError: true });
             } catch (caught) {
                 pendingExecution.clear(payload.clientRequestId);
+                recordFailedQueryError({ draftId: active.id, draftSql: active.sql, statementSql: payload.sql, sourceFrom: 0, error: apiErrorDetail(caught) });
                 throw caught;
             }
             pendingExecution.acceptScript(payload.clientRequestId, created.id);
@@ -357,13 +367,12 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                 ? { draftId: active.id, run, page: resultPage, pageIndex: page }
                 : undefined;
             pendingExecution.start(payload.clientRequestId, active.id, payload.sql, previousResult);
-            setFailedQueryError(undefined);
             let created: Run;
             try {
                 created = await post<Run>('/runs', payload);
             } catch (caught) {
                 pendingExecution.clear(payload.clientRequestId);
-                if (statement) setFailedQueryError({ draftId: active.id, draftSql: active.sql, statementSql: statement.sql, sourceFrom: statement.from, error: apiErrorDetail(caught) });
+                if (statement) recordFailedQueryError({ draftId: active.id, draftSql: active.sql, statementSql: statement.sql, sourceFrom: statement.from, error: apiErrorDetail(caught) });
                 throw caught;
             }
             pendingExecution.acceptRun(payload.clientRequestId, created.id);
@@ -756,7 +765,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                     finishTabRename={finishTabRename}
                     cancelTabRename={cancelTabRename}
                     onActivate={draftId => setWorkspace(current => ({ ...current, activeId: draftId }))}
-                    onClose={draftId => setWorkspace(current => closeDraft(current, draftId))}
+                    onClose={draftId => { setWorkspace(current => closeDraft(current, draftId)); clearFailedQueryError(draftId); }}
                     actions={<>
                     <button className={cx('new-tab-button', experience === 'expert' && 'new-tab-labeled')} data-testid="new-sql" type="button" aria-label={copy.common.newSql} title={copy.common.newSql} aria-haspopup="dialog" aria-expanded={helpPanelOpen} aria-controls="workspace-help-panel" onClick={event => openExamples(event.currentTarget)}><Icon name="plus"/>{experience === 'expert' && <span>{copy.common.newSql}</span>}</button>
                         <WorkspaceHelpPanel
@@ -900,6 +909,7 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
                             copy,
                             locale,
                             run,
+                            failedAttempt: failedQueryError,
                             script,
                             history,
                             page,
@@ -955,6 +965,6 @@ export function Workspace({ connection, connectionLabel, connections, onSelectCo
             void loadSchema();
             setNotice('Import complete. The destination schema was refreshed.');
         }}/>
-        <ExecutionBar run={run} eventState={eventState} onCancel={() => void cancel()} cancelling={cancelling} scriptRunning={script?.status === 'running'} copy={copy.common} helpButton={<HelpButton copy={copy.common} open={helpPanelOpen} onOpen={openHelp}/>}/>
+        <ExecutionBar run={run} failedAttempt={Boolean(failedQueryError)} eventState={eventState} onCancel={() => void cancel()} cancelling={cancelling} scriptRunning={script?.status === 'running'} copy={copy.common} helpButton={<HelpButton copy={copy.common} open={helpPanelOpen} onOpen={openHelp}/>}/>
     </div>;
 }

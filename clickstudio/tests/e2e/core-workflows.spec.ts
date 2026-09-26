@@ -188,9 +188,97 @@ test('The execution indicator clears when run submission fails', async ({ page }
 
         releaseFailure();
         await expect(progress).toHaveCount(0);
+        await expect(page.getByRole('region', { name: 'Query results', exact: true }).getByTestId('query-failure')).toContainText('NETWORK_RESPONSE');
     } finally {
         releaseFailure();
         await page.unroute(runRoute);
+    }
+});
+
+test('A failed query stays in Results beside the previous success until retry', async ({ page }) => {
+    await trust(page);
+    const results = await runQuery(page);
+    const failedTab = page.getByRole('tab').filter({ hasText: 'Getting started.sql' });
+    let failNextRun = true;
+    const runRoute = (url: URL) => url.pathname === '/api/runs';
+    await page.route(runRoute, async route => {
+        if (route.request().method() === 'POST' && failNextRun) {
+            failNextRun = false;
+            await route.fulfill({ status: 400, json: { error: { code: 'SYNTAX_ERROR', message: 'Syntax error at position 15', position: 15 } } });
+            return;
+        }
+        await route.continue();
+    });
+
+    try {
+        const submittedSql = 'SELECT * FROM missing_table';
+        await replaceSql(page, submittedSql);
+        const failedResponse = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/runs');
+        await runStatementButton(page).click();
+        await failedResponse;
+
+        const failure = results.getByTestId('query-failure');
+        await expect(failure).toContainText('SYNTAX_ERROR');
+        await expect(failure).toContainText('Syntax error at position 15');
+        await expect(failure.locator('details pre')).toHaveText(submittedSql);
+        await expect(results.locator('[data-run-status="failed"]')).toBeVisible();
+        await expect(results.locator('.result-provenance')).toContainText('Previous successful result');
+        await expect(results.getByRole('table', { name: 'Retained query rows' })).toBeVisible();
+        await expect(page.locator('.execution-bar')).toHaveAttribute('data-run-status', 'failed');
+        await expect(page.locator('.execution-bar code')).toHaveCount(0);
+
+        await page.getByRole('button', { name: 'Dismiss error', exact: true }).click();
+        await expect(failure).toBeVisible();
+
+        await openBlankSql(page);
+        await expect(page.locator('.execution-bar')).toHaveAttribute('data-run-status', 'ready');
+        await expect(page.getByTestId('query-failure')).toHaveCount(0);
+        await failedTab.click();
+        await expect(failure).toBeVisible();
+
+        await replaceSql(page, 'SELECT 1');
+        const retryResponse = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/runs');
+        await runStatementButton(page).click();
+        await retryResponse;
+        await expect(failure).toHaveCount(0);
+        await expect(page.locator('.execution-bar')).toHaveAttribute('data-run-status', 'succeeded');
+        await expect(results.getByRole('table', { name: 'Retained query rows' })).toBeVisible();
+    } finally {
+        await page.unroute(runRoute);
+    }
+});
+
+test('A failed saved run shows its error in Results', async ({ page }) => {
+    await trust(page);
+    let failedRun: Record<string, unknown> | undefined;
+    const runRoute = (url: URL) => url.pathname === '/api/runs';
+    const runDetailRoute = (url: URL) => /^\/api\/runs\/[^/]+$/.test(url.pathname);
+    await page.route(runDetailRoute, async route => {
+        if (route.request().method() === 'GET' && failedRun) return route.fulfill({ json: failedRun });
+        await route.continue();
+    });
+    await page.route(runRoute, async route => {
+        if (route.request().method() !== 'POST') return route.continue();
+        const response = await route.fetch();
+        const run = await response.json() as Record<string, unknown>;
+        failedRun = { ...run, status: 'failed', resultState: 'unavailable', error: { code: 'SYNTAX_ERROR', message: 'Syntax error at position 15' } };
+        await route.fulfill({ response, json: failedRun });
+    });
+
+    try {
+        await replaceSql(page, 'SELECT * FROM missing_table');
+        const submitted = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/runs');
+        await runStatementButton(page).click();
+        await submitted;
+
+        const results = page.getByRole('region', { name: 'Query results', exact: true });
+        await expect(results.getByTestId('query-failure')).toContainText('SYNTAX_ERROR');
+        await expect(results.getByTestId('query-failure')).toContainText('Syntax error at position 15');
+        await expect(results.locator('[data-run-status="failed"]')).toBeVisible();
+        await expect(page.locator('.execution-bar')).toHaveAttribute('data-run-status', 'failed');
+    } finally {
+        await page.unroute(runRoute);
+        await page.unroute(runDetailRoute);
     }
 });
 
@@ -844,7 +932,7 @@ test('Scripts show each statement outcome and open that statement’s retained r
     await expect(results.getByRole('table', { name: 'Retained query rows' })).toBeVisible();
     await expect(results.locator('.result-provenance')).toHaveCount(0);
     await second.click();
-    await expect(results.locator('.result-empty-state')).toContainText('FIXTURE_ERROR');
+    await expect(results.getByTestId('query-failure')).toContainText('FIXTURE_ERROR');
     await expect(page.locator('.cm-content')).toContainText('SELECT 1; SELECT fixture_error; SELECT 3;');
 });
 

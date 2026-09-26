@@ -74,18 +74,21 @@ export function ScriptResults({ script, runs, activeRunId, onSelectRun, onCancel
     </section>;
 }
 
-export function ExecutionBar({ run, eventState, onCancel, cancelling, scriptRunning, helpButton, copy }: { run?: Run; eventState: RunEventState; onCancel: () => void; cancelling: boolean; scriptRunning: boolean; helpButton: ReactNode; copy: Copy['common'] }) {
-    const progress = run?.progress;
-    const executionInProgress = Boolean(run && (!terminal(run) || scriptRunning));
-    const elapsedMs = run ? terminal(run) ? Math.round(run.elapsedMs) : Math.max(0, Math.round(progress?.elapsedMs ?? run.elapsedMs)) : undefined;
+export function ExecutionBar({ run, failedAttempt, eventState, onCancel, cancelling, scriptRunning, helpButton, copy }: { run?: Run; failedAttempt?: boolean; eventState: RunEventState; onCancel: () => void; cancelling: boolean; scriptRunning: boolean; helpButton: ReactNode; copy: Copy['common'] }) {
+    const currentRun = failedAttempt ? undefined : run;
+    const progress = currentRun?.progress;
+    const executionInProgress = Boolean(currentRun && (!terminal(currentRun) || scriptRunning));
+    const elapsedMs = currentRun ? terminal(currentRun) ? Math.round(currentRun.elapsedMs) : Math.max(0, Math.round(progress?.elapsedMs ?? currentRun.elapsedMs)) : undefined;
 
-    return <footer className={cx('execution-bar', executionInProgress && 'is-running')} data-run-status={run?.status ?? 'ready'}>
+    return <footer className={cx('execution-bar', executionInProgress && 'is-running')} data-run-status={failedAttempt ? 'failed' : currentRun?.status ?? 'ready'}>
         <div className="execution-state">
-            {run
-                ? <Status run={run} copy={copy}/>
+            {failedAttempt
+                ? <span className="execution-ready-state" role="status"><span className="status-light is-error"/>{copy.statusFailed}</span>
+                : currentRun
+                ? <Status run={currentRun} copy={copy}/>
                 : <span className="execution-ready-state"><span className="status-light is-trusted"/>{copy.statusReady}</span>}
-            {run && scriptRunning && <span className="execution-kind">{copy.runScript.toUpperCase()}</span>}
-            {run && <>
+            {currentRun && scriptRunning && <span className="execution-kind">{copy.runScript.toUpperCase()}</span>}
+            {currentRun && <>
                 <span className="execution-separator"/>
                 <strong>{elapsedMs?.toLocaleString()} ms</strong>
                 <span className="execution-link-state">
@@ -94,15 +97,15 @@ export function ExecutionBar({ run, eventState, onCancel, cancelling, scriptRunn
                 </span>
             </>}
         </div>
-        {run && <div className="execution-telemetry">
+        {currentRun && <div className="execution-telemetry">
             <span><strong>{progress?.readRows ? formatCount(progress.readRows) : '—'}</strong> {copy.rowsRead}</span>
             <span><strong>{progress?.readBytes ? formatBytes(progress.readBytes) : '—'}</strong> {copy.bytesRead}</span>
             <span><strong>{progress?.memory ? formatBytes(progress.memory) : '—'}</strong> {copy.memory}</span>
-            {run.kind !== 'query' && <span className="execution-kind">{run.kind.toUpperCase()}</span>}
+            {currentRun.kind !== 'query' && <span className="execution-kind">{currentRun.kind.toUpperCase()}</span>}
         </div>}
         <div className="execution-right">
-            {run && <code title={run.queryId}>{run.queryId}</code>}
-            {run && (scriptRunning || !terminal(run)) && <Button variant="danger" className="cancel-execution" onClick={onCancel} disabled={cancelling}>{cancelling ? 'Cancelling…' : scriptRunning ? `${copy.cancel} ${copy.runScript.toLowerCase()}` : copy.cancel}</Button>}
+            {currentRun && <code title={currentRun.queryId}>{currentRun.queryId}</code>}
+            {currentRun && (scriptRunning || !terminal(currentRun)) && <Button variant="danger" className="cancel-execution" onClick={onCancel} disabled={cancelling}>{cancelling ? 'Cancelling…' : scriptRunning ? `${copy.cancel} ${copy.runScript.toLowerCase()}` : copy.cancel}</Button>}
             {helpButton}
         </div>
         {executionInProgress && <span className="execution-progress-line"/>}

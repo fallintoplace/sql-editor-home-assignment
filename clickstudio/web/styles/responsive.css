@@ -26,8 +26,6 @@
     .workspace-root.is-expert .workspace-layout { grid-template-columns: minmax(250px, 280px) minmax(0, 1fr); }
     .editor-heading-tools > .button-base { width: 32px; min-width: 32px; padding-inline: 0; font-size: 0; }
     .editor-heading-tools > .button-base svg { width: 15px; height: 15px; }
-    .editor-template-select { width: 120px; }
-    .editor-template-add-label { display: none; }
     .execution-bar { gap: 9px; }
     .execution-link-state { display: none; }
     .execution-telemetry { gap: 8px; }
@@ -98,7 +96,6 @@
     .editor-heading { min-height: 47px; padding: 6px 9px; }
     .editor-mode-label { gap: 6px; font-size: 8px; }
     .editor-control-rail { gap: 7px; padding: 8px; }
-    .editor-template-select { width: 104px; font-size: 7px; }
     .editor-footer { font-size: 7px; }
     .execution-bar { min-height: 40px; flex-wrap: wrap; gap: 7px 12px; padding: 6px 10px; }
     .help-button { min-height: 27px; }
@@ -162,8 +159,6 @@
     .run-action-group > .run-query-button, .run-explain-actions { grid-column: 1 / -1; }
     .run-explain-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .run-explain-label { grid-column: 1 / -1; }
-    .editor-heading-tools .editor-template-select { width: 104px; }
-    .editor-template-add-label { display: none; }
     .sql-ai-button, .save-revision-button { width: 31px; min-width: 31px; padding: 0; font-size: 0; }
     .sql-ai-button svg, .save-revision-button svg { width: 15px; height: 15px; }
     .workspace-root.is-beginner .sql-ai-button, .workspace-root.is-beginner .save-revision-button { width: auto; min-width: 0; padding: 0 8px; font-size: 8px; }

@@ -49,12 +49,6 @@
     .editor-heading-tools { display: flex; min-width: 0; align-items: center; gap: 2px; margin-inline: auto; padding: 2px; border: 1px solid var(--line); border-radius: var(--radius-control); background: color-mix(in srgb, var(--panel-raised) 58%, transparent); }
     .editor-heading-tools > .button-base { min-height: 30px; padding-inline: 9px; }
     .editor-heading-tools > .save-revision-button { min-height: 30px; }
-    .editor-template-tools { display: flex; min-width: 0; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: var(--radius-compact); background: var(--control-well); }
-    .editor-template-select { width: 148px; min-width: 0; height: 29px; padding: 0 22px 0 7px; border: 0; outline: none; background: transparent; color: var(--text-soft); font: inherit; font-size: 8px; }
-    .editor-template-select:focus-visible { border-radius: 5px; outline: 2px solid var(--accent); outline-offset: 1px; }
-    .editor-template-select option { background: var(--panel-raised); color: var(--text); }
-    .editor-template-add { min-height: 29px; gap: 4px; padding: 0 7px; font-size: 8px; }
-    .editor-template-add svg { width: 12px; height: 12px; }
     .editor-workspace-layout { display: grid; min-width: 0; min-height: 0; flex: 1; grid-template-columns: minmax(0, 1fr) 184px; overflow: hidden; }
     .editor-main-column { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: auto; }
     .editor-control-rail { display: flex; min-width: 0; min-height: 0; flex-direction: column; gap: 9px; overflow: auto; padding: 10px; border-left: 1px solid var(--line); background: color-mix(in srgb, var(--control-well) 82%, transparent); }

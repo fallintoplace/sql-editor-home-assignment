@@ -1,7 +1,6 @@
-import { useMemo, useState, type RefObject } from 'react';
+import type { RefObject } from 'react';
 import type { RunKind, Schema } from '../../shared/types';
 import type { NativeParseSnapshot, NativeParserStatus } from '../../shared/native-parser';
-import { CLICKHOUSE_SNIPPETS, statementOutline } from '../../shared/editor-tools';
 import { hasSqlComments, type SqlParameter } from '../../shared/sql';
 import type { Copy, ExperienceLevel } from '../i18n';
 import type {
@@ -94,10 +93,6 @@ export function WorkspaceQueryPanel({
         startPanelDrag,
         startPanelResize,
     } = panels;
-    const [selectedSnippetId, setSelectedSnippetId] = useState('');
-    const selectedSnippet = CLICKHOUSE_SNIPPETS.find(item => item.id === selectedSnippetId);
-    const sqlOutline = useMemo(() => statementOutline(active.sql), [active.sql]);
-
     return <section
         ref={queryPanelRef}
         className={cx('editor-surface', panels.queryCollapsed && 'is-collapsed', queryFloating && 'is-floating', queryMode === 'maximized' && 'is-maximized', activeFloatingPanel === 'query' && queryFloating && 'is-front')}
@@ -115,13 +110,6 @@ export function WorkspaceQueryPanel({
             <div className="editor-heading-tools">
                 <Button variant="ghost" className="sql-map-button" aria-label={copy.common.visualizeSqlStructure} aria-pressed={view === 'sqlmap'} title={copy.common.visualizeSqlStructure} onClick={actions.onToggleSqlMap}><Icon name="pipeline"/>{copy.common.sqlMap}</Button>
                 <Button variant="ghost" className="sql-ai-button" data-testid="open-ai" aria-label={copy.common.askAi} aria-pressed={inspector === 'assistant'} onClick={actions.onOpenAssistant}><Icon name="assistant"/>{copy.common.askAi}</Button>
-                <div className="editor-template-tools" role="group" aria-label={copy.common.clickhouseSnippet}>
-                    <select className="editor-template-select" aria-label={copy.common.clickhouseSnippet} title={selectedSnippet?.detail ?? copy.common.snippetSelectHelp} value={selectedSnippetId} onChange={event => setSelectedSnippetId(event.target.value)}>
-                        <option value="">{copy.common.clickhouseSnippets}</option>
-                        {CLICKHOUSE_SNIPPETS.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
-                    </select>
-                    <Button variant="secondary" className="editor-template-add" aria-label={copy.common.addSnippetAsNewQuery} title={selectedSnippet?.detail ?? copy.common.addSnippetAsNewQuery} onClick={() => { if (selectedSnippet) editorRef.current?.insertSnippet(selectedSnippet.template); }} disabled={!selectedSnippet || Boolean(sqlOutline.error)}><Icon name="plus"/><span className="editor-template-add-label">{copy.common.addSnippetAsNewQuery}</span></Button>
-                </div>
                 <Button variant="secondary" className="save-revision-button" data-testid="save-query" aria-label={experience === 'expert' ? copy.common.saveRevision : copy.common.save} onClick={() => void actions.onSave()} disabled={Boolean(busy)}><Icon name="documents"/>{copy.common.save}</Button>
             </div>
             <div className="editor-heading-actions">

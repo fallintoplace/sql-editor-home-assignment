@@ -141,7 +141,9 @@
     .workspace-content.has-run { grid-template-rows: minmax(285px, 1fr) minmax(250px, .94fr); }
     .beginner-workspace-content { grid-template-rows: minmax(310px, 1fr) minmax(165px, .65fr); }
     .editor-heading-actions .icon-only { display: none; }
-    .editor-heading { flex-wrap: wrap; row-gap: 5px; }
+    .editor-heading { flex-wrap: wrap; row-gap: 5px; padding-right: 48px; }
+    .editor-heading-actions { padding-right: 0; }
+    .editor-heading .panel-collapse-button { top: 6px; right: 9px; translate: none; }
     .editor-file-heading { flex: 1 1 auto; }
     .editor-heading-tools { order: 3; flex: 1 0 100%; justify-content: flex-end; margin: 0; }
     .formatter-control { gap: 2px; padding: 2px; }

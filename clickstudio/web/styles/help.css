@@ -262,6 +262,25 @@
     .workspace-help-guide-card ul { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
     .workspace-help-guide-card li { position: relative; padding-left: 14px; color: var(--muted); font-size: var(--help-text-small); line-height: 1.5; }
     .workspace-help-guide-card li::before { position: absolute; top: .55em; left: 1px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); content: ""; }
+    .workspace-help-assistant { gap: 0; }
+    .workspace-help-assistant-scroll { min-width: 0; min-height: 0; flex: 1; overflow: auto; padding: 2px 1px 1px; }
+    .workspace-help-assistant-demo { display: grid; gap: 12px; padding: 15px; border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--help-border)); border-radius: var(--help-radius-card); background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 5%, var(--help-surface)), var(--help-surface) 58%); }
+    .workspace-help-assistant-demo-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .workspace-help-assistant-demo-heading .eyebrow { color: var(--accent); font-size: var(--help-text-meta); font-weight: 760; letter-spacing: .12em; }
+    .workspace-help-assistant-demo-tag { padding: 3px 8px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--help-border)); border-radius: 999px; color: var(--accent); font-size: 9px; font-weight: 700; letter-spacing: .08em; }
+    .workspace-help-assistant-demo-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+    .workspace-help-assistant-demo-steps article { display: flex; min-width: 0; flex-direction: column; align-items: flex-start; gap: 9px; padding: 12px; border: 1px solid var(--help-border); border-radius: var(--help-radius-card); background: color-mix(in srgb, var(--panel) 76%, transparent); }
+    .workspace-help-assistant-step { display: inline-flex; align-items: center; gap: 7px; color: var(--accent); font-size: var(--help-text-meta); font-weight: 760; letter-spacing: .1em; }
+    .workspace-help-assistant-step b { display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--help-border)); border-radius: 7px; background: color-mix(in srgb, var(--accent) 8%, var(--help-surface)); font-family: var(--font-mono); font-size: 9px; letter-spacing: 0; }
+    .workspace-help-assistant-demo-steps p { margin: 0; color: var(--text-soft); font-size: var(--help-text-small); line-height: 1.5; }
+    .workspace-help-assistant-demo-steps p.workspace-help-assistant-prompt { color: var(--text); font-weight: 650; }
+    .workspace-help-assistant-demo-steps small { color: var(--muted); font-size: var(--help-text-meta); line-height: 1.45; }
+    .workspace-help-assistant-sql { display: grid; gap: 8px; }
+    .workspace-help-assistant-sql .eyebrow { color: var(--accent); font-size: var(--help-text-meta); font-weight: 760; letter-spacing: .12em; }
+    .workspace-help-assistant-sql pre { max-height: 230px; overflow: auto; margin: 0; padding: 13px; border: 1px solid var(--help-border); border-radius: var(--help-radius-control); background: var(--help-code-surface); color: var(--text-soft); font-family: var(--font-mono); font-size: 10px; line-height: 1.65; white-space: pre; }
+    .workspace-help-assistant-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 10px; border-top: 1px solid var(--help-border); }
+    .workspace-help-assistant-footer > span { color: var(--muted); font-size: var(--help-text-small); line-height: 1.5; }
+    .workspace-help-assistant-footer .button-base { flex: none; }
     .workspace-help-shortcuts { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 2px; color: var(--muted); font-size: var(--help-text-meta); }
     .workspace-help-shortcuts > span { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
     .workspace-help-shortcuts kbd { padding: 3px 6px; border: 1px solid var(--help-border-strong); border-radius: 5px; background: var(--help-code-surface); color: var(--text-soft); font-family: var(--font-mono); }
@@ -426,6 +445,8 @@
     .workspace-help-tour,
     .workspace-help-feature-view { padding: 14px; }
     .workspace-help-guide-grid { grid-template-columns: minmax(0, 1fr); }
+    .workspace-help-assistant-demo-steps { grid-template-columns: minmax(0, 1fr); }
+    .workspace-help-assistant-footer { align-items: stretch; flex-direction: column; }
     .workspace-help-monitoring-actions { align-items: stretch; flex-direction: column; }
     .workspace-help-monitoring-preview-grid { grid-template-columns: minmax(0, 1fr); }
     .workspace-help-monitoring-preview-heading { align-items: flex-start; flex-direction: column; }

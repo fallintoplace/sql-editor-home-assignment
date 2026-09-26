@@ -80,6 +80,14 @@ export interface Copy {
         helpTourDescription: string;
         helpQueryWorkflows: string;
         helpQueryWorkflowsDescription: string;
+        helpAssistant: string;
+        helpAssistantDescription: string;
+        helpAssistantTitle: string;
+        helpAssistantExamplePrompt: string;
+        helpAssistantExampleContext: string;
+        helpAssistantExampleProposal: string;
+        helpAssistantExampleSql: string;
+        helpOpenAssistant: string;
         helpMonitoring: string;
         helpMonitoringDescription: string;
         helpOpenMonitoring: string;

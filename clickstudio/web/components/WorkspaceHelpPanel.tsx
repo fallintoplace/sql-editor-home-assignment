@@ -54,7 +54,7 @@ function HelpSectionHeading({ eyebrow, title, description }: { eyebrow: string; 
     </header>;
 }
 
-export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, section, onSectionChange, onClose, onOpenExample, onRunExample, onStartBlankSql, onOpenMonitoring, connection, tables, schemaLoading, trusted, queryEngine, busy, unsupportedParameters, onRunExplain, comparison, onReferenceInsert }: {
+export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, section, onSectionChange, onClose, onOpenExample, onRunExample, onStartBlankSql, onOpenMonitoring, onOpenAssistant, connection, tables, schemaLoading, trusted, queryEngine, busy, unsupportedParameters, onRunExplain, comparison, onReferenceInsert }: {
     examples: SqlExample[];
     sourceLabel: string;
     copy: Copy['common'];
@@ -67,6 +67,7 @@ export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, 
     onRunExample: (example: SqlExample, view: 'results' | 'chart' | 'map') => boolean;
     onStartBlankSql: () => boolean;
     onOpenMonitoring: () => void;
+    onOpenAssistant: () => void;
     connection: Connected;
     tables: SchemaTable[];
     schemaLoading: boolean;
@@ -285,6 +286,38 @@ export function WorkspaceHelpPanel({ examples, sourceLabel, copy, locale, open, 
                                         <h4>{copy.results} and execution status</h4>
                                         <p>Inspect each script statement and its run in Results, then switch to {copy.chart}, SQL map, or {copy.insights} in Advanced mode. Cancel a running query from the execution bar.</p>
                                     </article>
+                                </div>
+                            </div>
+                        </> : null)}
+
+                        {renderTabPanel('assistant', 'workspace-help-feature-view workspace-help-assistant', section === 'assistant' ? <>
+                            <HelpSectionHeading eyebrow="AI ASSISTANT" title={copy.helpAssistantTitle} description={copy.helpAssistantDescription}/>
+                            <div className="workspace-help-assistant-scroll">
+                                <div className="workspace-help-assistant-demo">
+                                    <header className="workspace-help-assistant-demo-heading"><span className="eyebrow">A QUICK EXAMPLE</span><span className="workspace-help-assistant-demo-tag">DEMO</span></header>
+                                    <div className="workspace-help-assistant-demo-steps">
+                                        <article>
+                                            <span className="workspace-help-assistant-step"><b>01</b> ASK</span>
+                                            <p className="workspace-help-assistant-prompt">{copy.helpAssistantExamplePrompt}</p>
+                                        </article>
+                                        <article>
+                                            <span className="workspace-help-assistant-step"><b>02</b> REVIEW</span>
+                                            <p>{copy.helpAssistantExampleContext}</p>
+                                            <small>The preview shows the context gathered for this request.</small>
+                                        </article>
+                                        <article>
+                                            <span className="workspace-help-assistant-step"><b>03</b> PROPOSAL</span>
+                                            <p>{copy.helpAssistantExampleProposal}</p>
+                                        </article>
+                                    </div>
+                                    <div className="workspace-help-assistant-sql">
+                                        <span className="eyebrow">EXAMPLE SQL</span>
+                                        <pre><code>{copy.helpAssistantExampleSql}</code></pre>
+                                    </div>
+                                    <div className="workspace-help-assistant-footer">
+                                        <span>Open the assistant to use your current SQL draft.</span>
+                                        <Button variant="secondary" onClick={() => { onClose(false); onOpenAssistant(); }}><Icon name="assistant"/>{copy.helpOpenAssistant}</Button>
+                                    </div>
                                 </div>
                             </div>
                         </> : null)}

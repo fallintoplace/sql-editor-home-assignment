@@ -3,13 +3,26 @@ import { Button, cx, Icon } from './ui';
 import type { AssistantContext } from '../workspace-types';
 
 const assistantActionOptions = [
-    { value: 'generate', label: 'Write a query' },
-    { value: 'explain', label: 'Explain this SQL' },
-    { value: 'repair', label: 'Fix a query error' },
-    { value: 'review', label: 'Review SQL' },
-    { value: 'performance', label: 'Analyze performance' },
-    { value: 'result', label: 'Explain the result' },
-] as const satisfies readonly { value: AssistantAction; label: string }[];
+    { value: 'generate', label: 'Write SQL', description: 'Build a query from a question.' },
+    { value: 'explain', label: 'Explain SQL', description: 'Understand the current query.' },
+    { value: 'repair', label: 'Fix an error', description: 'Diagnose and repair a query.' },
+    { value: 'review', label: 'Review SQL', description: 'Check the query for issues.' },
+    { value: 'performance', label: 'Tune performance', description: 'Find ways to make it faster.' },
+    { value: 'result', label: 'Explain results', description: 'Summarize the selected result.' },
+] as const satisfies readonly { value: AssistantAction; label: string; description: string }[];
+
+function AssistantFlowSteps({ context, proposal }: { context?: AssistantContext; proposal?: Proposal }) {
+    const currentStep = proposal ? 3 : context ? 2 : 1;
+    const steps = ['Ask', 'Review', 'Use'];
+    return <ol className="assistant-flow-steps" aria-label="AI assistant steps">
+        {steps.map((step, index) => {
+            const stepNumber = index + 1;
+            return <li key={step} className={cx(stepNumber < currentStep && 'is-complete', stepNumber === currentStep && 'is-current')} aria-current={stepNumber === currentStep ? 'step' : undefined}>
+                <span>{String(stepNumber).padStart(2, '0')}</span><strong>{step}</strong>
+            </li>;
+        })}
+    </ol>;
+}
 
 export type AssistantWorkflowProps = {
     mode: 'beginner' | 'expert';
@@ -40,8 +53,27 @@ function AssistantOutput({ mode, sql, context, proposal, busy, error, onRequestP
     const beginner = mode === 'beginner';
     return <>
         {error && <div className="callout callout-error" role="alert">{error}</div>}
-        {context && <div className="context-preview animate-enter"><span className="eyebrow">CONTEXT PREVIEW</span>{context.summary.map(item => <p key={item}><span>✓</span>{item}</p>)}<Button variant="primary" className="w-full" disabled={busy} onClick={onRequestProposal}>{busy ? 'Waiting for proposal…' : 'Send to AI & propose'}</Button></div>}
-        {proposal && <div className={cx('proposal-card animate-enter', beginner && 'beginner-proposal-card')}><div className="proposal-heading"><span className={cx('proposal-quality', proposal.quality?.status)}>{proposal.quality?.score ?? '—'}<small>QUALITY</small></span><div><span className="eyebrow">PROPOSAL · {proposal.decision.toUpperCase()}</span><strong>{proposal.summary}</strong></div></div>{proposal.clarification && <div className="callout">{proposal.clarification}</div>}{proposal.assumptions.map(item => <p className="proposal-point" key={item}><span>ASSUMPTION</span>{item}</p>)}{proposal.caveats.map(item => <p className="proposal-point" key={item}><span>CAVEAT</span>{item}</p>)}{proposal.findings.map(item => <p className="proposal-finding" key={`${item.severity}-${item.message}`}><strong>{item.severity}</strong>{item.message}<small>{item.evidence}</small></p>)}{proposal.sql !== null && <><span className="eyebrow mt-4">PROPOSED SQL</span><pre className="proposal-sql">{proposal.sql}</pre>{proposal.decision === 'pending' && <>{proposal.baseSql !== sql && <div className="callout callout-error">This proposal is for an earlier SQL draft. Refresh the context before applying it.</div>}<div className="proposal-buttons"><Button variant="secondary" onClick={() => onDecideProposal('rejected')} disabled={busy}>Reject</Button><Button variant="primary" onClick={() => onDecideProposal('accepted')} disabled={busy || proposal.baseSql !== sql}>{beginner ? 'Use this query' : 'Apply to editor'}</Button></div></>}{beginner && proposal.decision === 'accepted' && <div className="beginner-run-ready"><span><span className="status-light is-trusted"/> Added to your SQL draft</span><Button variant="primary" onClick={onRunQuery} disabled={runDisabled || busy}><Icon name="play"/>{busy ? 'Starting…' : 'Run this query'}</Button></div>}</>}</div>}
+        {context && <div className="context-preview animate-enter">
+            <div className="assistant-context-heading"><span className="eyebrow">CONTEXT PREVIEW</span><small>Review what will be used</small></div>
+            {context.summary.map(item => <p key={item}><span>✓</span>{item}</p>)}
+            <Button variant="primary" className="w-full" disabled={busy} onClick={onRequestProposal}>{busy ? 'Preparing proposal…' : 'Ask AI for a proposal'}</Button>
+        </div>}
+        {proposal && <div className={cx('proposal-card animate-enter', beginner && 'beginner-proposal-card')}>
+            <div className="proposal-heading"><span className={cx('proposal-quality', proposal.quality?.status)}>{proposal.quality?.score ?? '—'}<small>QUALITY</small></span><div><span className="eyebrow">PROPOSAL · {proposal.decision.toUpperCase()}</span><strong>{proposal.summary}</strong></div></div>
+            {proposal.clarification && <div className="callout">{proposal.clarification}</div>}
+            {proposal.assumptions.map(item => <p className="proposal-point" key={item}><span>ASSUMPTION</span>{item}</p>)}
+            {proposal.caveats.map(item => <p className="proposal-point" key={item}><span>NOTE</span>{item}</p>)}
+            {proposal.findings.map(item => <p className="proposal-finding" key={`${item.severity}-${item.message}`}><strong>{item.severity}</strong>{item.message}<small>{item.evidence}</small></p>)}
+            {proposal.sql !== null && <>
+                <span className="eyebrow mt-4">PROPOSED SQL</span>
+                <pre className="proposal-sql">{proposal.sql}</pre>
+                {proposal.decision === 'pending' && <>
+                    {proposal.baseSql !== sql && <div className="callout callout-error">The SQL draft changed. Refresh the context before applying this proposal.</div>}
+                    <div className="proposal-buttons"><Button variant="secondary" onClick={() => onDecideProposal('rejected')} disabled={busy}>Reject</Button><Button variant="primary" onClick={() => onDecideProposal('accepted')} disabled={busy || proposal.baseSql !== sql}>{beginner ? 'Use this query' : 'Apply to editor'}</Button></div>
+                </>}
+                {beginner && proposal.decision === 'accepted' && <div className="beginner-run-ready"><span><span className="status-light is-trusted"/> Added to your SQL draft</span><Button variant="primary" onClick={onRunQuery} disabled={runDisabled || busy}><Icon name="play"/>{busy ? 'Starting…' : 'Run this query'}</Button></div>}
+            </>}
+        </div>}
     </>;
 }
 
@@ -49,13 +81,30 @@ export function AssistantWorkflow({ mode, sql, action, onActionChange, question,
     const beginner = mode === 'beginner';
     const speechAvailable = Boolean(window.SpeechRecognition ?? window.webkitSpeechRecognition);
     const output = <AssistantOutput mode={mode} sql={sql} context={context} proposal={proposal} busy={busy} error={error} onRequestProposal={onRequestProposal} onDecideProposal={onDecideProposal} onRunQuery={onRunQuery} runDisabled={runDisabled}/>;
+
     if (beginner) return <section className="assistant-panel beginner-ai-panel animate-enter" aria-label="Ask AI to write a query">
-        <div className="assistant-safety"><span className="assistant-glyph"><Icon name="assistant"/></span><div><strong>Ask AI to draft SQL</strong><p>Your question and schema are reviewed before anything is sent. Generated SQL never runs automatically.</p></div></div>
+        <div className="assistant-safety"><span className="assistant-glyph"><Icon name="assistant"/></span><div><strong>Start with a question</strong><p>Review the ClickHouse context and proposed SQL before adding it to your draft.</p></div></div>
+        <AssistantFlowSteps context={context} proposal={proposal}/>
         <label className="field-label" htmlFor="beginner-query-prompt">YOUR QUESTION<textarea id="beginner-query-prompt" className="field-textarea" aria-label="Describe your data question" value={question} onChange={event => onQuestionChange(event.target.value)} readOnly={voiceListening} placeholder="For example: show event counts by day" rows={4}/></label>
-        <div className="flex flex-wrap items-center justify-between gap-2"><Button variant="ghost" className={cx('voice-button', voiceListening && 'is-listening')} title={speechAvailable ? (voiceListening ? 'Stop dictation' : 'Dictate your question') : 'Voice input is not available in this browser'} aria-label={voiceListening ? 'Stop dictation' : 'Dictate question'} disabled={!speechAvailable} onClick={onVoiceInput}><Icon name="mic"/>{voiceListening ? 'Listening…' : 'Use voice'}</Button><Button variant="secondary" disabled={!trusted || busy || !question.trim()} onClick={onPreview}>{busy ? 'Preparing…' : context ? 'Refresh review' : 'Review context'}</Button></div>
-        {!trusted && <div className="callout">Review the connection before asking AI to use its schema.</div>}
+        <div className="flex flex-wrap items-center justify-between gap-2"><Button variant="ghost" className={cx('voice-button', voiceListening && 'is-listening')} title={speechAvailable ? (voiceListening ? 'Stop dictation' : 'Dictate your question') : 'Voice input is not available in this browser'} aria-label={voiceListening ? 'Stop dictation' : 'Dictate question'} disabled={!speechAvailable} onClick={onVoiceInput}><Icon name="mic"/>{voiceListening ? 'Listening…' : 'Use voice'}</Button><Button variant="secondary" disabled={!trusted || busy || !question.trim()} onClick={onPreview}>{busy ? 'Preparing…' : context ? 'Refresh preview' : 'Review context'}</Button></div>
+        {!trusted && <div className="callout">Trust this connection to include its schema.</div>}
         {voiceError && <div className="callout callout-error" role="alert">{voiceError}</div>}
         <div className="assistant-actions">{output}</div>
     </section>;
-    return <section className="assistant-panel"><div className="assistant-safety"><span className="assistant-glyph"><Icon name="assistant"/></span><div><strong>AI, with you in control.</strong><p>Review context, request a proposal, then decide whether to apply it. Nothing executes automatically.</p></div></div><label className="field-label">ACTION<select className="field-input" value={action} onChange={event => { const option = assistantActionOptions.find(candidate => candidate.value === event.target.value); if (option) onActionChange(option.value); }}>{assistantActionOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label><label className="field-label">WHAT WOULD YOU LIKE TO KNOW?<textarea className="field-textarea" value={question} onChange={event => onQuestionChange(event.target.value)} placeholder="Describe the question, error, or improvement you want…" rows={4}/></label><label className="include-result"><input type="checkbox" checked={includeResult} onChange={event => onIncludeResult(event.target.checked)} disabled={!runId}/><span><strong>Include selected retained result</strong><small>Rows may contain sensitive data. Inspect before sharing.</small></span></label>{voiceError && <div className="callout callout-error" role="alert">{voiceError}</div>}<div className="assistant-actions"><Button variant="secondary" className="w-full" disabled={!trusted || busy} onClick={onPreview}>{busy && !context ? 'Preparing context…' : context ? 'Refresh context preview' : 'Preview what will be shared'}</Button>{output}</div></section>;
+
+    return <section className="assistant-panel">
+        <div className="assistant-safety"><span className="assistant-glyph"><Icon name="assistant"/></span><div><strong>ClickHouse-aware help for your SQL</strong><p>Choose a task, preview the context, then shape the proposal for your draft.</p></div></div>
+        <AssistantFlowSteps context={context} proposal={proposal}/>
+        <fieldset className="assistant-task-picker">
+            <legend>Choose a task</legend>
+            <div>{assistantActionOptions.map(option => <label key={option.value} className="assistant-task-option">
+                <input type="radio" name="assistant-task" value={option.value} checked={action === option.value} onChange={() => onActionChange(option.value)}/>
+                <span><strong>{option.label}</strong><small>{option.description}</small></span>
+            </label>)}</div>
+        </fieldset>
+        <label className="field-label">YOUR QUESTION OR FOCUS<textarea className="field-textarea" value={question} onChange={event => onQuestionChange(event.target.value)} placeholder="Describe what you want to understand or improve…" rows={3}/></label>
+        <label className="include-result"><input type="checkbox" checked={includeResult} onChange={event => onIncludeResult(event.target.checked)} disabled={!runId}/><span><strong>Include selected result</strong><small>Its retained rows will appear in the context preview.</small></span></label>
+        {voiceError && <div className="callout callout-error" role="alert">{voiceError}</div>}
+        <div className="assistant-actions"><Button variant="secondary" className="w-full" disabled={!trusted || busy} onClick={onPreview}>{busy && !context ? 'Preparing context…' : context ? 'Refresh context preview' : 'Preview context'}</Button>{output}</div>
+    </section>;
 }
